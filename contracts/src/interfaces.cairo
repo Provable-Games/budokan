@@ -2,7 +2,7 @@ use starknet::ContractAddress;
 use budokan::models::schedule::{Phase, Schedule};
 use budokan::models::budokan::{
     EntryFee, EntryRequirement, GameConfig, Metadata, PrizeType, QualificationProof, TokenTypeData,
-    Tournament as TournamentModel, Registration, Prize,
+    Tournament as TournamentModel, Registration, RegistrationBanned, Prize,
 };
 
 #[starknet::interface]
@@ -17,6 +17,9 @@ pub trait IBudokan<TState> {
     fn get_registration(
         self: @TState, game_address: ContractAddress, token_id: u64,
     ) -> Registration;
+    fn get_registration_banned(
+        self: @TState, game_address: ContractAddress, token_id: u64,
+    ) -> RegistrationBanned;
     fn get_prize(self: @TState, prize_id: u64) -> Prize;
     fn get_tournament_id_for_token_id(
         self: @TState, game_address: ContractAddress, token_id: u64,
@@ -30,6 +33,8 @@ pub trait IBudokan<TState> {
         game_config: GameConfig,
         entry_fee: Option<EntryFee>,
         entry_requirement: Option<EntryRequirement>,
+        soulbound: bool,
+        play_url: ByteArray,
     ) -> TournamentModel;
     fn enter_tournament(
         ref self: TState,
@@ -38,6 +43,7 @@ pub trait IBudokan<TState> {
         player_address: ContractAddress,
         qualification: Option<QualificationProof>,
     ) -> (u64, u32);
+    fn validate_entries(ref self: TState, tournament_id: u64, game_token_ids: Span<u64>);
     fn submit_score(ref self: TState, tournament_id: u64, token_id: u64, position: u8);
     fn claim_prize(ref self: TState, tournament_id: u64, prize_type: PrizeType);
     fn add_prize(

@@ -528,6 +528,14 @@ const BUDOKAN_ABI = [
         name: "entry_requirement",
         type: "core::option::Option::<budokan::models::budokan::EntryRequirement>",
       },
+      {
+        name: "soulbound",
+        type: "core::bool",
+      },
+      {
+        name: "play_url",
+        type: "core::byte_array::ByteArray",
+      },
     ],
   },
   {
@@ -616,6 +624,28 @@ const BUDOKAN_ABI = [
       },
       {
         name: "has_submitted",
+        type: "core::bool",
+      },
+    ],
+  },
+  {
+    type: "struct",
+    name: "budokan::models::budokan::RegistrationBanned",
+    members: [
+      {
+        name: "game_address",
+        type: "core::starknet::contract_address::ContractAddress",
+      },
+      {
+        name: "game_token_id",
+        type: "core::integer::u64",
+      },
+      {
+        name: "tournament_id",
+        type: "core::integer::u64",
+      },
+      {
+        name: "is_banned",
         type: "core::bool",
       },
     ],
@@ -893,6 +923,26 @@ const BUDOKAN_ABI = [
       },
       {
         type: "function",
+        name: "get_registration_banned",
+        inputs: [
+          {
+            name: "game_address",
+            type: "core::starknet::contract_address::ContractAddress",
+          },
+          {
+            name: "token_id",
+            type: "core::integer::u64",
+          },
+        ],
+        outputs: [
+          {
+            type: "budokan::models::budokan::RegistrationBanned",
+          },
+        ],
+        state_mutability: "view",
+      },
+      {
+        type: "function",
         name: "get_prize",
         inputs: [
           {
@@ -955,6 +1005,14 @@ const BUDOKAN_ABI = [
             name: "entry_requirement",
             type: "core::option::Option::<budokan::models::budokan::EntryRequirement>",
           },
+          {
+            name: "soulbound",
+            type: "core::bool",
+          },
+          {
+            name: "play_url",
+            type: "core::byte_array::ByteArray",
+          },
         ],
         outputs: [
           {
@@ -989,6 +1047,22 @@ const BUDOKAN_ABI = [
             type: "(core::integer::u64, core::integer::u32)",
           },
         ],
+        state_mutability: "external",
+      },
+      {
+        type: "function",
+        name: "validate_entries",
+        inputs: [
+          {
+            name: "tournament_id",
+            type: "core::integer::u64",
+          },
+          {
+            name: "game_token_ids",
+            type: "core::array::Span::<core::integer::u64>",
+          },
+        ],
+        outputs: [],
         state_mutability: "external",
       },
       {

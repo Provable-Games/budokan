@@ -267,6 +267,8 @@ export interface Tournament {
   game_config: GameConfig;
   entry_fee: CairoOption<EntryFee>;
   entry_requirement: CairoOption<EntryRequirement>;
+  soulbound: boolean;
+  play_url: string;
 }
 
 // Type definition for `tournaments::components::models::tournament::TournamentConfig` struct
@@ -301,6 +303,8 @@ export interface TournamentValue {
   game_config: GameConfig;
   entry_fee: CairoOption<EntryFee>;
   entry_requirement: CairoOption<EntryRequirement>;
+  soulbound: boolean;
+  play_url: string;
 }
 
 export type EntryRequirement = {
@@ -708,6 +712,8 @@ export const schemaTemplate: {
       "game_config",
       "entry_fee",
       "entry_requirement",
+      "soulbound",
+      "play_url",
     ],
     id: 0,
     created_at: 0,
@@ -722,6 +728,8 @@ export const schemaTemplate: {
     game_config: { address: "", settings_id: 0, prize_spots: 0 },
     entry_fee: new CairoOption(CairoOptionVariant.None),
     entry_requirement: new CairoOption(CairoOptionVariant.None),
+    soulbound: false,
+    play_url: "",
   },
   TournamentConfig: {
     fieldOrder: ["key", "safe_mode", "test_mode"],
@@ -751,6 +759,8 @@ export const schemaTemplate: {
       "game_config",
       "entry_fee",
       "entry_requirement",
+      "soulbound",
+      "play_url",
     ],
     creator: "",
     metadata: {
@@ -769,6 +779,8 @@ export const schemaTemplate: {
     },
     entry_fee: new CairoOption(CairoOptionVariant.None),
     entry_requirement: new CairoOption(CairoOptionVariant.None),
+    soulbound: false,
+    play_url: "",
   },
 };
 

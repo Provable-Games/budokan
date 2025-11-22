@@ -82,6 +82,11 @@ pub impl ScheduleImpl of ScheduleTrait {
         self.end < tournament_end
     }
 
+    /// @notice Checks if registration ends before the game period starts
+    fn is_registration_ends_before_game_starts(self: Period, game_start: u64) -> bool {
+        self.end <= game_start
+    }
+
     /// @notice Checks if the tournament meets minimum duration
     fn is_min_duration(self: Period) -> bool {
         self.end - self.start >= MIN_TOURNAMENT_LENGTH.into()
@@ -192,6 +197,32 @@ pub impl ScheduleAssertionsImpl of ScheduleAssertionsTrait {
             "Schedule: Registration end time {} is after tournament end time {}",
             self.end,
             tournament_end,
+        );
+    }
+
+    fn assert_registration_ends_before_game_starts(self: Period, game_start: u64) {
+        assert!(
+            self.is_registration_ends_before_game_starts(game_start),
+            "Schedule: Registration end time {} is after game start time {}",
+            self.end,
+            game_start,
+        );
+    }
+
+    /// @notice Asserts that a registration period exists and ends before game starts
+    /// @dev This is used when a registration_only extension requires a gap between registration and
+    /// game
+    fn assert_has_registration_period_before_game_start(self: Schedule) {
+        assert!(
+            self.registration.is_some(),
+            "Schedule: Extension requires a registration period but none was provided",
+        );
+        let registration = self.registration.unwrap();
+        assert!(
+            registration.end < self.game.start,
+            "Schedule: Extension requires registration to end before game starts. Registration ends at {}, game starts at {}",
+            registration.end,
+            self.game.start,
         );
     }
 

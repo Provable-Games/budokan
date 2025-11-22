@@ -5,10 +5,10 @@ pub mod Budokan {
 
     use budokan::constants::{TWO_POW_128, DEFAULT_NS, SEPOLIA_CHAIN_ID, GAME_CREATOR_TOKEN_ID};
     use budokan::models::budokan::{
-        Tournament as TournamentModel, Registration, Leaderboard, Prize, Token, TokenType,
-        TokenTypeData, TournamentType, PrizeType, Role, PrizeClaim, Metadata, GameConfig, EntryFee,
-        EntryRequirement, QualificationProof, TournamentQualification, EntryRequirementType,
-        TokenData,
+        Tournament as TournamentModel, Registration, RegistrationBanned, Leaderboard, Prize, Token,
+        TokenType, TokenTypeData, TournamentType, PrizeType, Role, PrizeClaim, Metadata, GameConfig,
+        EntryFee, EntryRequirement, QualificationProof, TournamentQualification,
+        EntryRequirementType, TokenData,
     };
     use budokan::models::schedule::{Schedule, Phase};
     use budokan::interfaces::{IBudokan};
@@ -181,6 +181,13 @@ pub mod Budokan {
             let store: Store = StoreTrait::new(world);
             store.get_registration(game_address, token_id)
         }
+        fn get_registration_banned(
+            self: @ContractState, game_address: ContractAddress, token_id: u64,
+        ) -> RegistrationBanned {
+            let mut world = self.world(@DEFAULT_NS());
+            let store: Store = StoreTrait::new(world);
+            store.get_registration_banned(game_address, token_id)
+        }
         fn tournament_entries(self: @ContractState, tournament_id: u64) -> u32 {
             let mut world = self.world(@DEFAULT_NS());
             let store: Store = StoreTrait::new(world);
@@ -254,8 +261,9 @@ pub mod Budokan {
         /// @param game_config the tournament game configuration.
         /// @param entry_fee and optional entry fee for the tournament.
         /// @param entry_requirement and optional entry requirement.
-        /// @param denshokan_address the address of the denshokan contract.
-        /// @return A tuple containing the tournament and the creator's game token id.
+        /// @param soulbound if the games of the tournament should be soulbound.
+        /// @param play_url the url for which the game will be played.
+        /// @return A struct of the tournament details.
         fn create_tournament(
             ref self: ContractState,
             creator_rewards_address: ContractAddress,
@@ -264,6 +272,8 @@ pub mod Budokan {
             game_config: GameConfig,
             entry_fee: Option<EntryFee>,
             entry_requirement: Option<EntryRequirement>,
+            soulbound: bool,
+            play_url: ByteArray,
         ) -> TournamentModel {
             let mut world = self.world(@DEFAULT_NS());
             let mut store: Store = StoreTrait::new(world);
@@ -276,7 +286,7 @@ pub mod Budokan {
             }
 
             if let Option::Some(entry_requirement) = entry_requirement {
-                self._assert_valid_entry_requirement(store, entry_requirement);
+                self._assert_valid_entry_requirement(store, entry_requirement, schedule);
             }
 
             let empty_objective_ids: Span<u32> = array![].span();
@@ -299,7 +309,14 @@ pub mod Budokan {
 
             store
                 .create_tournament(
-                    creator_token_id, metadata, schedule, game_config, entry_fee, entry_requirement,
+                    creator_token_id,
+                    metadata,
+                    schedule,
+                    game_config,
+                    entry_fee,
+                    entry_requirement,
+                    soulbound,
+                    play_url,
                 )
         }
 
@@ -354,6 +371,13 @@ pub mod Budokan {
             let empty_objective_ids: Span<u32> = array![].span();
             let context = self._create_context(tournament_id);
 
+            let client_url = if tournament.play_url.len() == 0 {
+                let _tournament_id = format!("{}", tournament.id);
+                Option::Some("https://budokan.gg/tournament/" + _tournament_id)
+            } else {
+                Option::Some(tournament.play_url)
+            };
+
             // mint game to the determined recipient
             let game_token_id = self
                 ._mint_game(
@@ -364,10 +388,10 @@ pub mod Budokan {
                     Option::Some(tournament.schedule.game.end),
                     Option::Some(empty_objective_ids),
                     Option::Some(context),
-                    Option::None, // client_url
+                    client_url,
                     Option::None, // renderer_address
                     mint_to_address, // to
-                    false // soulbound
+                    tournament.soulbound // soulbound
                 );
 
             let entry_number = store.increment_and_get_tournament_entry_count(tournament_id);
@@ -386,6 +410,94 @@ pub mod Budokan {
 
             // return game token id and entry number
             (game_token_id, entry_number)
+        }
+
+        /// @title Validate entries
+        /// @notice Allows anyone to ban game IDs that do not meet entry requirements via extension
+        /// validation @dev Can only be called before the tournament game period starts
+        /// @dev Only works for tournaments with extension entry requirements
+        /// @dev Client must determine which game IDs should be validated and provide them
+        /// @param self A reference to the ContractState object.
+        /// @param tournament_id A u64 representing the unique ID of the tournament.
+        /// @param game_token_ids A Span<u64> of game token IDs to validate and potentially ban.
+        fn validate_entries(
+            ref self: ContractState, tournament_id: u64, game_token_ids: Span<u64>,
+        ) {
+            let mut world = self.world(@DEFAULT_NS());
+            let mut store: Store = StoreTrait::new(world);
+
+            let tournament = store.get_tournament(tournament_id);
+
+            // Assert tournament exists
+            self._assert_tournament_exists(store, tournament_id);
+
+            // Ensure tournament has an extension entry requirement
+            let entry_requirement = tournament.entry_requirement;
+            assert!(entry_requirement.is_some(), "Tournament: No entry requirement set");
+
+            let extension_config = match entry_requirement.unwrap().entry_requirement_type {
+                EntryRequirementType::extension(config) => config,
+                _ => panic!("Tournament: Entry requirement must be of type 'extension'"),
+            };
+
+            let extension_address = extension_config.address;
+
+            // Can only ban from registration start up until game starts
+            // Tournament must have a registration period set
+            let current_time = get_block_timestamp();
+            if let Option::Some(registration) = tournament.schedule.registration {
+                assert!(
+                    current_time >= registration.start
+                        && current_time < tournament.schedule.game.start,
+                    "Tournament: Can only ban from registration start until game starts",
+                );
+            } else {
+                panic!("Tournament: Can only ban tournaments with registration period set");
+            }
+
+            // Validate and ban each provided game token ID
+            let game_address = tournament.game_config.address;
+            let game_token_address = IMinigameDispatcher { contract_address: game_address }
+                .token_address();
+            let game_dispatcher = IERC721Dispatcher { contract_address: game_token_address };
+            let entry_validator_dispatcher = IEntryValidatorDispatcher {
+                contract_address: extension_address,
+            };
+
+            let mut i = 0;
+            loop {
+                if i >= game_token_ids.len() {
+                    break;
+                }
+                let game_token_id = *game_token_ids.at(i);
+                let mut registration = store.get_registration(game_address, game_token_id);
+                let mut registration_banned = store
+                    .get_registration_banned(game_address, game_token_id);
+
+                // Verify this registration belongs to this tournament
+                assert!(
+                    registration.tournament_id == tournament_id,
+                    "Tournament: Game ID not registered for this tournament",
+                );
+
+                // Assert game ID is not already banned
+                assert!(!registration_banned.is_banned, "Tournament: Game ID is already banned");
+
+                // Get the owner of this game token
+                let token_owner = game_dispatcher.owner_of(game_token_id.into());
+
+                // Check if the owner has valid entry according to the extension
+                let is_valid = entry_validator_dispatcher
+                    .valid_entry(tournament_id, token_owner, extension_config.config);
+
+                // Ban if not valid
+                if !is_valid {
+                    registration_banned.is_banned = true;
+                    store.set_registration_banned(@registration_banned);
+                }
+
+                i += 1;
+            };
         }
 
         /// @title Submit score
@@ -413,6 +525,9 @@ pub mod Budokan {
             // get registration details for provided game token
             let registration = store.get_registration(tournament.game_config.address, token_id);
 
+            let registration_banned = store
+                .get_registration_banned(tournament.game_config.address, token_id);
+
             // get current leaderboard
             let mut leaderboard = store.get_leaderboard(tournament_id);
 
@@ -425,6 +540,7 @@ pub mod Budokan {
                 ._validate_score_submission(
                     @tournament,
                     @registration,
+                    @registration_banned,
                     leaderboard.span(),
                     submitted_score,
                     position,
@@ -586,9 +702,12 @@ pub mod Budokan {
 
         #[inline(always)]
         fn _assert_valid_entry_requirement(
-            self: @ContractState, store: Store, entry_requirement: EntryRequirement,
+            self: @ContractState,
+            store: Store,
+            entry_requirement: EntryRequirement,
+            schedule: Schedule,
         ) {
-            self._assert_gated_type_validates(store, entry_requirement);
+            self._assert_gated_type_validates(store, entry_requirement, schedule);
         }
 
         #[inline(always)]
@@ -803,7 +922,10 @@ pub mod Budokan {
 
 
         fn _assert_gated_type_validates(
-            self: @ContractState, store: Store, entry_requirement: EntryRequirement,
+            self: @ContractState,
+            store: Store,
+            entry_requirement: EntryRequirement,
+            schedule: Schedule,
         ) {
             match entry_requirement.entry_requirement_type {
                 EntryRequirementType::token(token) => {
@@ -857,6 +979,10 @@ pub mod Budokan {
                     let entry_validator_dispatcher = IEntryValidatorDispatcher {
                         contract_address: extension_address,
                     };
+                    let registration_only = entry_validator_dispatcher.registration_only();
+                    if registration_only {
+                        schedule.assert_has_registration_period_before_game_start();
+                    }
                     let tournament_id = store.get_tournament_count();
                     entry_validator_dispatcher
                         .add_config(
@@ -1328,6 +1454,7 @@ pub mod Budokan {
             self: @ContractState,
             tournament: @TournamentModel,
             registration: @Registration,
+            registration_banned: @RegistrationBanned,
             current_leaderboard: Span<u64>,
             submitted_score: u32,
             submitted_position: u8,
@@ -1354,6 +1481,9 @@ pub mod Budokan {
 
             // Score can only be submitted once
             assert!(!*registration.has_submitted, "Tournament: Score already submitted");
+
+            // Banned game IDs cannot submit scores
+            assert!(!*registration_banned.is_banned, "Tournament: Game ID is banned");
 
             // Prevent gaps in leaderboard
             let position_index: u32 = submitted_position.into() - 1;

@@ -195,6 +195,8 @@ export const processTournamentData = (
     entry_requirement: formData.enableGating
       ? new CairoOption(CairoOptionVariant.Some, entryRequirement)
       : new CairoOption(CairoOptionVariant.None),
+    soulbound: false,
+    play_url: "",
   };
 };
 
@@ -808,6 +810,8 @@ export const processTournamentFromSql = (tournament: any): Tournament => {
       tournament["entry_requirement"] === "Some"
         ? new CairoOption(CairoOptionVariant.Some, entryRequirement)
         : new CairoOption(CairoOptionVariant.None),
+    soulbound: tournament.soulbound ?? false,
+    play_url: tournament.play_url ?? "",
   };
 };
 

@@ -2,9 +2,9 @@ use starknet::ContractAddress;
 use dojo::world::{WorldStorage};
 use dojo::model::{ModelStorage};
 use budokan::models::budokan::{
-    Tournament, EntryCount, Prize, Leaderboard, Token, Registration, TournamentTokenMetrics,
-    PlatformMetrics, PrizeMetrics, PrizeClaim, PrizeType, Metadata, GameConfig, EntryFee,
-    EntryRequirement, QualificationEntries, QualificationProof,
+    Tournament, EntryCount, Prize, Leaderboard, Token, Registration, RegistrationBanned,
+    TournamentTokenMetrics, PlatformMetrics, PrizeMetrics, PrizeClaim, PrizeType, Metadata,
+    GameConfig, EntryFee, EntryRequirement, QualificationEntries, QualificationProof,
 };
 use budokan::models::schedule::Schedule;
 use budokan::constants::{VERSION};
@@ -65,6 +65,14 @@ pub impl StoreImpl of StoreTrait {
     }
 
     #[inline(always)]
+    fn get_registration_banned(
+        self: Store, game_address: ContractAddress, token_id: u64,
+    ) -> RegistrationBanned {
+        (self.world.read_model((game_address, token_id)))
+    }
+
+
+    #[inline(always)]
     fn get_leaderboard(self: Store, tournament_id: u64) -> Array<u64> {
         let leaderboard: Leaderboard = (self.world.read_model(tournament_id));
         leaderboard.token_ids
@@ -107,6 +115,8 @@ pub impl StoreImpl of StoreTrait {
         game_config: GameConfig,
         entry_fee: Option<EntryFee>,
         entry_requirement: Option<EntryRequirement>,
+        soulbound: bool,
+        play_url: ByteArray,
     ) -> Tournament {
         let tournament = Tournament {
             id: self.increment_and_get_tournament_count(),
@@ -118,6 +128,8 @@ pub impl StoreImpl of StoreTrait {
             game_config,
             entry_fee,
             entry_requirement,
+            soulbound,
+            play_url,
         };
         self.world.write_model(@tournament);
         tournament
@@ -143,6 +155,11 @@ pub impl StoreImpl of StoreTrait {
 
     #[inline(always)]
     fn set_registration(ref self: Store, model: @Registration) {
+        self.world.write_model(model);
+    }
+
+    #[inline(always)]
+    fn set_registration_banned(ref self: Store, model: @RegistrationBanned) {
         self.world.write_model(model);
     }
 
