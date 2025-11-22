@@ -16,7 +16,7 @@ use budokan::libs::store::{Store as BudokanStore, StoreTrait as BudokanStoreTrai
 
 use budokan::models::{
     budokan::{
-        m_Tournament, m_Registration, m_EntryCount, m_Leaderboard, m_Prize, m_Token, m_PrizeMetrics,
+        m_Tournament, m_Registration, m_RegistrationBanned, m_EntryCount, m_Leaderboard, m_Prize, m_Token, m_PrizeMetrics,
         m_PlatformMetrics, m_TournamentTokenMetrics, m_PrizeClaim, m_QualificationEntries,
         ERC20Data, ERC721Data, EntryFee, TokenType, EntryRequirement, EntryRequirementType,
         TournamentType, Prize, PrizeType, Role, QualificationProof, TournamentQualification,
@@ -129,6 +129,7 @@ fn setup_uninitialized(
             // tournament models
             TestResource::Model(m_Tournament::TEST_CLASS_HASH.try_into().unwrap()),
             TestResource::Model(m_Registration::TEST_CLASS_HASH.try_into().unwrap()),
+            TestResource::Model(m_RegistrationBanned::TEST_CLASS_HASH.try_into().unwrap()),
             TestResource::Model(m_EntryCount::TEST_CLASS_HASH.try_into().unwrap()),
             TestResource::Model(m_Leaderboard::TEST_CLASS_HASH.try_into().unwrap()),
             TestResource::Model(m_Prize::TEST_CLASS_HASH.try_into().unwrap()),
@@ -1511,7 +1512,7 @@ fn extension_gated_tournament() {
 #[test]
 #[should_panic(
     expected: (
-        "Tournament: Invalid entry according to extension 52004105143137317898334440167967868501861926697731354698114748791298123814",
+        "Tournament: Invalid entry according to extension 3007414460181774009432052108111073619606548326168429821767862854774080769195",
         'ENTRYPOINT_FAILED',
     ),
 )]
@@ -1631,7 +1632,7 @@ fn extension_gated_tournament_with_entry_limit() {
 #[test]
 #[should_panic(
     expected: (
-        "Tournament: No entries left according to extension 915960288299125589146002760203428766136104152285523726041674420806756759859",
+        "Tournament: No entries left according to extension 1516414728364900522454652391976133241843660233759942797917340069442079625664",
         'ENTRYPOINT_FAILED',
     ),
 )]
@@ -1773,7 +1774,7 @@ fn extension_gated_caller_qualifies_different_player() {
 #[test]
 #[should_panic(
     expected: (
-        "Tournament: Invalid entry according to extension 52004105143137317898334440167967868501861926697731354698114748791298123814",
+        "Tournament: Invalid entry according to extension 3007414460181774009432052108111073619606548326168429821767862854774080769195",
         'ENTRYPOINT_FAILED',
     ),
 )]
@@ -4863,29 +4864,29 @@ fn test_ban_game_ids_during_registration() {
     denshokan_erc721.transfer_from(valid_player, invalid_player, game_id_1.into());
 
     // // Verify registrations exist and are not banned initially
-    let registration_1 = contracts
+    let registration_banned_1 = contracts
         .budokan
-        .get_registration(contracts.minigame.contract_address, game_id_1);
-    assert!(!registration_1.is_banned, "Registration should not be banned initially");
+        .get_registration_banned(contracts.minigame.contract_address, game_id_1);
+    assert!(!registration_banned_1.is_banned, "Registration should not be banned initially");
 
     // Call validate_and_ban - should ban game_id_1 because owner doesn't have qualifying token
     contracts.budokan.validate_entries(tournament.id, array![game_id_1, game_id_2].span());
 
     // Verify game_id_1 is now banned (owned by invalid_player)
-    let registration_1_after = contracts
+    let registration_banned_1_after = contracts
         .budokan
-        .get_registration(contracts.minigame.contract_address, game_id_1);
+        .get_registration_banned(contracts.minigame.contract_address, game_id_1);
     assert!(
-        registration_1_after.is_banned,
+        registration_banned_1_after.is_banned,
         "Game ID 1 should be banned - owner doesn't have qualifying token",
     );
 
     // Verify game_id_2 is NOT banned (still owned by valid_player)
-    let registration_2 = contracts
+    let registration_banned_2 = contracts
         .budokan
-        .get_registration(contracts.minigame.contract_address, game_id_2);
+        .get_registration_banned(contracts.minigame.contract_address, game_id_2);
     assert!(
-        !registration_2.is_banned, "Game ID 2 should not be banned - owner has qualifying token",
+        !registration_banned_2.is_banned, "Game ID 2 should not be banned - owner has qualifying token",
     );
 }
 
@@ -4996,10 +4997,10 @@ fn test_anyone_can_ban() {
     contracts.budokan.validate_entries(tournament.id, array![game_id].span());
 
     // Verify game ID is now banned
-    let registration = contracts
+    let registration_banned = contracts
         .budokan
-        .get_registration(contracts.minigame.contract_address, game_id);
-    assert!(registration.is_banned, "Registration should be banned");
+        .get_registration_banned(contracts.minigame.contract_address, game_id);
+    assert!(registration_banned.is_banned, "Registration should be banned");
 }
 
 #[test]
@@ -5118,10 +5119,10 @@ fn test_can_ban_during_staging_phase() {
     contracts.budokan.validate_entries(tournament.id, array![game_id].span());
 
     // Verify game ID is now banned
-    let registration = contracts
+    let registration_banned = contracts
         .budokan
-        .get_registration(contracts.minigame.contract_address, game_id);
-    assert!(registration.is_banned, "Registration should be banned during staging phase");
+        .get_registration_banned(contracts.minigame.contract_address, game_id);
+    assert!(registration_banned.is_banned, "Registration should be banned during staging phase");
 }
 
 #[test]
@@ -5231,15 +5232,15 @@ fn test_ban_multiple_game_ids() {
         .validate_entries(tournament.id, array![game_id_1, game_id_2, game_id_3].span());
 
     // Verify correct IDs are banned
-    let reg_1 = contracts.budokan.get_registration(contracts.minigame.contract_address, game_id_1);
-    let reg_2 = contracts.budokan.get_registration(contracts.minigame.contract_address, game_id_2);
-    let reg_3 = contracts.budokan.get_registration(contracts.minigame.contract_address, game_id_3);
+    let reg_banned_1 = contracts.budokan.get_registration_banned(contracts.minigame.contract_address, game_id_1);
+    let reg_banned_2 = contracts.budokan.get_registration_banned(contracts.minigame.contract_address, game_id_2);
+    let reg_banned_3 = contracts.budokan.get_registration_banned(contracts.minigame.contract_address, game_id_3);
 
     assert!(
-        reg_1.is_banned, "Registration 1 should be banned - owner doesn't have qualifying token",
+        reg_banned_1.is_banned, "Registration 1 should be banned - owner doesn't have qualifying token",
     );
-    assert!(!reg_2.is_banned, "Registration 2 should not be banned");
-    assert!(reg_3.is_banned, "Registration 3 should be banned");
+    assert!(!reg_banned_2.is_banned, "Registration 2 should not be banned");
+    assert!(reg_banned_3.is_banned, "Registration 3 should be banned");
 }
 
 #[test]
@@ -5289,10 +5290,10 @@ fn test_cannot_ban_already_banned_game_id() {
     contracts.budokan.validate_entries(tournament.id, array![game_id].span());
 
     // Verify game ID is banned
-    let registration = contracts
+    let registration_banned = contracts
         .budokan
-        .get_registration(contracts.minigame.contract_address, game_id);
-    assert!(registration.is_banned, "Game ID should be banned");
+        .get_registration_banned(contracts.minigame.contract_address, game_id);
+    assert!(registration_banned.is_banned, "Game ID should be banned");
 
     // Attempt to ban the same game ID again - should panic
     contracts.budokan.validate_entries(tournament.id, array![game_id].span());

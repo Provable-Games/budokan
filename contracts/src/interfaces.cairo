@@ -2,7 +2,7 @@ use starknet::ContractAddress;
 use budokan::models::schedule::{Phase, Schedule};
 use budokan::models::budokan::{
     EntryFee, EntryRequirement, GameConfig, Metadata, PrizeType, QualificationProof, TokenTypeData,
-    Tournament as TournamentModel, Registration, Prize,
+    Tournament as TournamentModel, Registration, RegistrationBanned, Prize,
 };
 
 #[starknet::interface]
@@ -17,6 +17,9 @@ pub trait IBudokan<TState> {
     fn get_registration(
         self: @TState, game_address: ContractAddress, token_id: u64,
     ) -> Registration;
+    fn get_registration_banned(
+        self: @TState, game_address: ContractAddress, token_id: u64,
+    ) -> RegistrationBanned;
     fn get_prize(self: @TState, prize_id: u64) -> Prize;
     fn get_tournament_id_for_token_id(
         self: @TState, game_address: ContractAddress, token_id: u64,

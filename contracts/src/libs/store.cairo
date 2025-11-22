@@ -2,9 +2,9 @@ use starknet::ContractAddress;
 use dojo::world::{WorldStorage};
 use dojo::model::{ModelStorage};
 use budokan::models::budokan::{
-    Tournament, EntryCount, Prize, Leaderboard, Token, Registration, TournamentTokenMetrics,
-    PlatformMetrics, PrizeMetrics, PrizeClaim, PrizeType, Metadata, GameConfig, EntryFee,
-    EntryRequirement, QualificationEntries, QualificationProof,
+    Tournament, EntryCount, Prize, Leaderboard, Token, Registration, RegistrationBanned,
+    TournamentTokenMetrics, PlatformMetrics, PrizeMetrics, PrizeClaim, PrizeType, Metadata,
+    GameConfig, EntryFee, EntryRequirement, QualificationEntries, QualificationProof,
 };
 use budokan::models::schedule::Schedule;
 use budokan::constants::{VERSION};
@@ -63,6 +63,14 @@ pub impl StoreImpl of StoreTrait {
     fn get_registration(self: Store, game_address: ContractAddress, token_id: u64) -> Registration {
         (self.world.read_model((game_address, token_id)))
     }
+
+    #[inline(always)]
+    fn get_registration_banned(
+        self: Store, game_address: ContractAddress, token_id: u64,
+    ) -> RegistrationBanned {
+        (self.world.read_model((game_address, token_id)))
+    }
+
 
     #[inline(always)]
     fn get_leaderboard(self: Store, tournament_id: u64) -> Array<u64> {
@@ -147,6 +155,11 @@ pub impl StoreImpl of StoreTrait {
 
     #[inline(always)]
     fn set_registration(ref self: Store, model: @Registration) {
+        self.world.write_model(model);
+    }
+
+    #[inline(always)]
+    fn set_registration_banned(ref self: Store, model: @RegistrationBanned) {
         self.world.write_model(model);
     }
 
