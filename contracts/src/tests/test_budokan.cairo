@@ -16,11 +16,11 @@ use budokan::libs::store::{Store as BudokanStore, StoreTrait as BudokanStoreTrai
 
 use budokan::models::{
     budokan::{
-        m_Tournament, m_Registration, m_RegistrationBanned, m_EntryCount, m_Leaderboard, m_Prize, m_Token, m_PrizeMetrics,
-        m_PlatformMetrics, m_TournamentTokenMetrics, m_PrizeClaim, m_QualificationEntries,
-        ERC20Data, ERC721Data, EntryFee, TokenType, EntryRequirement, EntryRequirementType,
-        TournamentType, Prize, PrizeType, Role, QualificationProof, TournamentQualification,
-        NFTQualification, TokenData, TokenTypeData, ExtensionConfig,
+        m_Tournament, m_Registration, m_RegistrationBanned, m_EntryCount, m_Leaderboard, m_Prize,
+        m_Token, m_PrizeMetrics, m_PlatformMetrics, m_TournamentTokenMetrics, m_PrizeClaim,
+        m_QualificationEntries, ERC20Data, ERC721Data, EntryFee, TokenType, EntryRequirement,
+        EntryRequirementType, TournamentType, Prize, PrizeType, Role, QualificationProof,
+        TournamentQualification, NFTQualification, TokenData, TokenTypeData, ExtensionConfig,
     },
 };
 use budokan::models::schedule::{Schedule, Period, Phase};
@@ -4886,7 +4886,8 @@ fn test_ban_game_ids_during_registration() {
         .budokan
         .get_registration_banned(contracts.minigame.contract_address, game_id_2);
     assert!(
-        !registration_banned_2.is_banned, "Game ID 2 should not be banned - owner has qualifying token",
+        !registration_banned_2.is_banned,
+        "Game ID 2 should not be banned - owner has qualifying token",
     );
 }
 
@@ -5232,12 +5233,19 @@ fn test_ban_multiple_game_ids() {
         .validate_entries(tournament.id, array![game_id_1, game_id_2, game_id_3].span());
 
     // Verify correct IDs are banned
-    let reg_banned_1 = contracts.budokan.get_registration_banned(contracts.minigame.contract_address, game_id_1);
-    let reg_banned_2 = contracts.budokan.get_registration_banned(contracts.minigame.contract_address, game_id_2);
-    let reg_banned_3 = contracts.budokan.get_registration_banned(contracts.minigame.contract_address, game_id_3);
+    let reg_banned_1 = contracts
+        .budokan
+        .get_registration_banned(contracts.minigame.contract_address, game_id_1);
+    let reg_banned_2 = contracts
+        .budokan
+        .get_registration_banned(contracts.minigame.contract_address, game_id_2);
+    let reg_banned_3 = contracts
+        .budokan
+        .get_registration_banned(contracts.minigame.contract_address, game_id_3);
 
     assert!(
-        reg_banned_1.is_banned, "Registration 1 should be banned - owner doesn't have qualifying token",
+        reg_banned_1.is_banned,
+        "Registration 1 should be banned - owner doesn't have qualifying token",
     );
     assert!(!reg_banned_2.is_banned, "Registration 2 should not be banned");
     assert!(reg_banned_3.is_banned, "Registration 3 should be banned");
