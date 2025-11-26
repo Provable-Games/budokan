@@ -1329,7 +1329,7 @@
   "contracts": [
     {
       "address": "0x58f888ba5897efa811eca5e5818540d35b664f4281660cd839cd5a4b0bf4582",
-      "class_hash": "0x71a7f04495838d92054f2bcb7a7bd2f7601e31767306417a55076f6d482af0c",
+      "class_hash": "0x5aad9432315f6e29165f3790bd94d8518a1fce2e3d1285d987108d0409285dc",
       "abi": [
         {
           "type": "impl",
@@ -2381,15 +2381,19 @@
             },
             {
               "type": "function",
-              "name": "validate_entries",
+              "name": "validate_entry",
               "inputs": [
                 {
                   "name": "tournament_id",
                   "type": "core::integer::u64"
                 },
                 {
-                  "name": "game_token_ids",
-                  "type": "core::array::Span::<core::integer::u64>"
+                  "name": "game_token_id",
+                  "type": "core::integer::u64"
+                },
+                {
+                  "name": "proof",
+                  "type": "core::array::Span::<core::felt252>"
                 }
               ],
               "outputs": [],
@@ -2693,7 +2697,7 @@
         "register_token",
         "create_tournament",
         "enter_tournament",
-        "validate_entries",
+        "validate_entry",
         "submit_score",
         "claim_prize",
         "add_prize",
