@@ -1512,7 +1512,7 @@ fn extension_gated_tournament() {
 #[test]
 #[should_panic(
     expected: (
-        "Tournament: Invalid entry according to extension 3007414460181774009432052108111073619606548326168429821767862854774080769195",
+        "Tournament: Invalid entry according to extension 3114703716670002838543706180323789869237115963791615648566042311144074293536",
         'ENTRYPOINT_FAILED',
     ),
 )]
@@ -1632,7 +1632,7 @@ fn extension_gated_tournament_with_entry_limit() {
 #[test]
 #[should_panic(
     expected: (
-        "Tournament: No entries left according to extension 1516414728364900522454652391976133241843660233759942797917340069442079625664",
+        "Tournament: No entries left according to extension 3230168874117229589911359654565752973944545982930500339962146962742781729897",
         'ENTRYPOINT_FAILED',
     ),
 )]
@@ -1774,7 +1774,7 @@ fn extension_gated_caller_qualifies_different_player() {
 #[test]
 #[should_panic(
     expected: (
-        "Tournament: Invalid entry according to extension 3007414460181774009432052108111073619606548326168429821767862854774080769195",
+        "Tournament: Invalid entry according to extension 3114703716670002838543706180323789869237115963791615648566042311144074293536",
         'ENTRYPOINT_FAILED',
     ),
 )]
@@ -4870,7 +4870,8 @@ fn test_ban_game_ids_during_registration() {
     assert!(!registration_banned_1.is_banned, "Registration should not be banned initially");
 
     // Call validate_and_ban - should ban game_id_1 because owner doesn't have qualifying token
-    contracts.budokan.validate_entries(tournament.id, array![game_id_1, game_id_2].span());
+    contracts.budokan.validate_entry(tournament.id, game_id_1, array![].span());
+    contracts.budokan.validate_entry(tournament.id, game_id_2, array![].span());
 
     // Verify game_id_1 is now banned (owned by invalid_player)
     let registration_banned_1_after = contracts
@@ -4935,7 +4936,7 @@ fn test_banned_game_id_cannot_submit_score() {
     denshokan_erc721.transfer_from(valid_player, invalid_player, game_id.into());
 
     // Ban the game ID (will be banned because owner doesn't have qualifying token)
-    contracts.budokan.validate_entries(tournament.id, array![game_id].span());
+    contracts.budokan.validate_entry(tournament.id, game_id, array![].span());
 
     // Set score for the game (would happen during game period)
     testing::set_block_timestamp(TEST_START_TIME().into());
@@ -4995,7 +4996,7 @@ fn test_anyone_can_ban() {
     utils::impersonate(non_creator);
 
     // Anyone can ban - should succeed
-    contracts.budokan.validate_entries(tournament.id, array![game_id].span());
+    contracts.budokan.validate_entry(tournament.id, game_id, array![].span());
 
     // Verify game ID is now banned
     let registration_banned = contracts
@@ -5048,7 +5049,7 @@ fn test_cannot_ban_after_game_starts() {
     testing::set_block_timestamp(TEST_START_TIME().into());
 
     // Attempt to ban after game starts - should panic
-    contracts.budokan.validate_entries(tournament.id, array![game_id].span());
+    contracts.budokan.validate_entry(tournament.id, game_id, array![].span());
 }
 
 #[test]
@@ -5117,7 +5118,7 @@ fn test_can_ban_during_staging_phase() {
     );
 
     // Banning should succeed during staging phase
-    contracts.budokan.validate_entries(tournament.id, array![game_id].span());
+    contracts.budokan.validate_entry(tournament.id, game_id, array![].span());
 
     // Verify game ID is now banned
     let registration_banned = contracts
@@ -5175,7 +5176,7 @@ fn test_ban_without_registration_period() {
         .enter_tournament(tournament.id, 'player1', valid_player, Option::Some(qualification));
 
     // Attempt to ban without registration period - should panic
-    contracts.budokan.validate_entries(tournament.id, array![game_id].span());
+    contracts.budokan.validate_entry(tournament.id, game_id, array![].span());
 }
 
 #[test]
@@ -5228,9 +5229,9 @@ fn test_ban_multiple_game_ids() {
     denshokan_erc721.transfer_from(valid_player, invalid_player, game_id_3.into());
 
     // Ban multiple game IDs at once
-    contracts
-        .budokan
-        .validate_entries(tournament.id, array![game_id_1, game_id_2, game_id_3].span());
+    contracts.budokan.validate_entry(tournament.id, game_id_1, array![].span());
+    contracts.budokan.validate_entry(tournament.id, game_id_2, array![].span());
+    contracts.budokan.validate_entry(tournament.id, game_id_3, array![].span());
 
     // Verify correct IDs are banned
     let reg_banned_1 = contracts
@@ -5295,7 +5296,7 @@ fn test_cannot_ban_already_banned_game_id() {
     denshokan_erc721.transfer_from(valid_player, invalid_player, game_id.into());
 
     // Ban the game ID for the first time
-    contracts.budokan.validate_entries(tournament.id, array![game_id].span());
+    contracts.budokan.validate_entry(tournament.id, game_id, array![].span());
 
     // Verify game ID is banned
     let registration_banned = contracts
@@ -5304,5 +5305,5 @@ fn test_cannot_ban_already_banned_game_id() {
     assert!(registration_banned.is_banned, "Game ID should be banned");
 
     // Attempt to ban the same game ID again - should panic
-    contracts.budokan.validate_entries(tournament.id, array![game_id].span());
+    contracts.budokan.validate_entry(tournament.id, game_id, array![].span());
 }

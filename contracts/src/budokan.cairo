@@ -419,9 +419,11 @@ pub mod Budokan {
         /// @dev Client must determine which game IDs should be validated and provide them
         /// @param self A reference to the ContractState object.
         /// @param tournament_id A u64 representing the unique ID of the tournament.
-        /// @param game_token_ids A Span<u64> of game token IDs to validate and potentially ban.
-        fn validate_entries(
-            ref self: ContractState, tournament_id: u64, game_token_ids: Span<u64>,
+        /// @param game_token_id A u64 representing the game token ID to validate and potentially
+        /// ban.
+        /// @param proof A Span<felt252> containing proof data for validation.
+        fn validate_entry(
+            ref self: ContractState, tournament_id: u64, game_token_id: u64, proof: Span<felt252>,
         ) {
             let mut world = self.world(@DEFAULT_NS());
             let mut store: Store = StoreTrait::new(world);
@@ -455,7 +457,7 @@ pub mod Budokan {
                 panic!("Tournament: Can only ban tournaments with registration period set");
             }
 
-            // Validate and ban each provided game token ID
+            // Validate and potentially ban the provided game token ID
             let game_address = tournament.game_config.address;
             let game_token_address = IMinigameDispatcher { contract_address: game_address }
                 .token_address();
@@ -464,40 +466,31 @@ pub mod Budokan {
                 contract_address: extension_address,
             };
 
-            let mut i = 0;
-            loop {
-                if i >= game_token_ids.len() {
-                    break;
-                }
-                let game_token_id = *game_token_ids.at(i);
-                let mut registration = store.get_registration(game_address, game_token_id);
-                let mut registration_banned = store
-                    .get_registration_banned(game_address, game_token_id);
+            let mut registration = store.get_registration(game_address, game_token_id);
+            let mut registration_banned = store
+                .get_registration_banned(game_address, game_token_id);
 
-                // Verify this registration belongs to this tournament
-                assert!(
-                    registration.tournament_id == tournament_id,
-                    "Tournament: Game ID not registered for this tournament",
-                );
+            // Verify this registration belongs to this tournament
+            assert!(
+                registration.tournament_id == tournament_id,
+                "Tournament: Game ID not registered for this tournament",
+            );
 
-                // Assert game ID is not already banned
-                assert!(!registration_banned.is_banned, "Tournament: Game ID is already banned");
+            // Assert game ID is not already banned
+            assert!(!registration_banned.is_banned, "Tournament: Game ID is already banned");
 
-                // Get the owner of this game token
-                let token_owner = game_dispatcher.owner_of(game_token_id.into());
+            // Get the owner of this game token
+            let token_owner = game_dispatcher.owner_of(game_token_id.into());
 
-                // Check if the owner has valid entry according to the extension
-                let is_valid = entry_validator_dispatcher
-                    .valid_entry(tournament_id, token_owner, extension_config.config);
+            // Check if the owner has valid entry according to the extension
+            let is_valid = entry_validator_dispatcher
+                .valid_entry(tournament_id, token_owner, proof);
 
-                // Ban if not valid
-                if !is_valid {
-                    registration_banned.is_banned = true;
-                    store.set_registration_banned(@registration_banned);
-                }
-
-                i += 1;
-            };
+            // Ban if not valid
+            if !is_valid {
+                registration_banned.is_banned = true;
+                store.set_registration_banned(@registration_banned);
+            }
         }
 
         /// @title Submit score

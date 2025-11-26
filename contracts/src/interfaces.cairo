@@ -43,7 +43,9 @@ pub trait IBudokan<TState> {
         player_address: ContractAddress,
         qualification: Option<QualificationProof>,
     ) -> (u64, u32);
-    fn validate_entries(ref self: TState, tournament_id: u64, game_token_ids: Span<u64>);
+    fn validate_entry(
+        ref self: TState, tournament_id: u64, game_token_id: u64, proof: Span<felt252>,
+    );
     fn submit_score(ref self: TState, tournament_id: u64, token_id: u64, position: u8);
     fn claim_prize(ref self: TState, tournament_id: u64, prize_type: PrizeType);
     fn add_prize(
