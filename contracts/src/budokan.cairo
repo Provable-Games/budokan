@@ -490,6 +490,10 @@ pub mod Budokan {
             if !is_valid {
                 registration_banned.is_banned = true;
                 store.set_registration_banned(@registration_banned);
+
+                // Decrement the player's entry count in the extension
+                // This ensures subsequent validations for the same player reflect the banned entry
+                entry_validator_dispatcher.remove_entry(tournament_id, token_owner, proof);
             }
         }
 
