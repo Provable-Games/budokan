@@ -5,7 +5,7 @@ description = "DNC"
 seed = "DNC"
 
 [env]
-rpc_url = "https://api.cartridge.gg/x/starknet/sepolia/rpc/v0_8"
+rpc_url = "https://api.cartridge.gg/x/starknet/sepolia/rpc/v0_9"
 world_address = "0x785401cf74071ec444e37dbbd87281aba48afc86570b1a1537193d1ce39086f"
 
 [namespace]

@@ -1,0 +1,18 @@
+[package]
+name = "budokan_token_validator"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+
+[cairo]
+sierra-replace-ids = true
+
+[dependencies]
+starknet.workspace = true
+openzeppelin_interfaces.workspace = true
+openzeppelin_introspection.workspace = true
+budokan_interfaces = { path = "../interfaces" }
+
+[dev-dependencies]
+snforge_std.workspace = true

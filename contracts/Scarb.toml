@@ -1,40 +1,40 @@
-[package]
-cairo-version = "=2.10.1"
-name = "budokan"
-version = "0.0.1"
-edition = "2024_07"
-
-[lib]
-
-[[target.starknet-contract]]
-sierra = true
-casm = true
-build-external-contracts = [
-    "dojo::world::world_contract::world",
-    "game_components_test_starknet::minigame::mocks::minigame_starknet_mock::minigame_starknet_mock",
-    "game_components_test_starknet::metagame::mocks::metagame_starknet_mock::metagame_starknet_mock",
-    "game_components_token::examples::full_token_contract::FullTokenContract",
-    "game_components_token::examples::minigame_registry_contract::MinigameRegistryContract",
+[workspace]
+members = [
+    "packages/distribution",
+    "packages/interfaces",
+    "packages/entry_fee",
+    "packages/entry_requirement",
+    "packages/prize",
+    "packages/registration",
+    "packages/token_validator",
+    "packages/event_relayer",
+    "packages/budokan",
 ]
 
-[dependencies]
-openzeppelin_introspection = "1.0.0"
-openzeppelin_token = "1.0.0"
-dojo = { git = "https://github.com/dojoengine/dojo", tag = "v1.6.2" }
-game_components_metagame = { git = "https://github.com/Provable-Games/game-components", tag = "0.0.9" }
-game_components_minigame = { git = "https://github.com/Provable-Games/game-components", tag = "0.0.9" }
-game_components_utils = { git = "https://github.com/Provable-Games/game-components", tag = "0.0.9" }
-game_components_test_starknet = { git = "https://github.com/Provable-Games/game-components", tag = "0.0.9" }
-game_components_token = { git = "https://github.com/Provable-Games/game-components", tag = "0.0.9" }
-budokan_extensions = { git = "https://github.com/Provable-Games/budokan_extensions", tag = "v2.10.1" }
-starknet = "2.10.1"
+[workspace.package]
+version = "0.0.1"
+edition = "2024_07"
+cairo-version = "2.13.1"
 
-[dev-dependencies]
-dojo_cairo_test = { git = "https://github.com/dojoengine/dojo.git", tag = "v1.6.2" }
-cairo_test = "2.10.1"
+[workspace.dependencies]
+starknet = "2.13.1"
+cairo_test = "2.13.1"
+snforge_std = { git = "https://github.com/foundry-rs/starknet-foundry", tag = "v0.53.0" }
+dojo = { git = "https://github.com/dojoengine/dojo", tag = "v1.8.0" }
+openzeppelin_access = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0-alpha.3" }
+openzeppelin_introspection = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0-alpha.3" }
+openzeppelin_token = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0-alpha.3" }
+openzeppelin_interfaces = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0-alpha.3" }
+openzeppelin_upgrades = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0-alpha.3" }
+game_components_metagame = { path = "../../game-components/packages/metagame" }
+game_components_minigame = { path = "../../game-components/packages/minigame" }
+game_components_utils = { path = "../../game-components/packages/utils" }
+game_components_test_starknet = { path = "../../game-components/packages/test_starknet" }
+game_components_token = { path = "../../game-components/packages/token" }
+game_components_leaderboard = { path = "../../game-components/packages/leaderboard" }
 
-[features]
-default = []
+[scripts]
+test = "snforge test"
 
 [profile.dev]
 [profile.slot]
