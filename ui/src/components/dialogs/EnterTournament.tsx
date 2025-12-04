@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -8,7 +8,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
-import { useAccount, useConnect } from "@starknet-react/core";
+import { useAccount, useConnect, useProvider } from "@starknet-react/core";
 import { Tournament, Token } from "@/generated/models.gen";
 import {
   feltToString,
@@ -27,10 +27,10 @@ import { useGetUsernames, isControllerAccount } from "@/hooks/useController";
 import { lookupUsernames } from "@cartridge/controller";
 import { CHECK, X, COIN, USER, FAT_ARROW_RIGHT } from "@/components/Icons";
 import {
-  useGetAccountTokenIds,
   useGetTournamentRegistrants,
   useGetTournamentLeaderboards,
   useGetTournamentQualificationEntries,
+  useGetTokenByAddress,
 } from "@/dojo/hooks/useSqlQueries";
 import { useGameTokens } from "metagame-sdk";
 import { useDojo } from "@/context/dojo";
@@ -38,6 +38,7 @@ import { processQualificationProof } from "@/lib/utils/formatting";
 import { getTokenLogoUrl, getTokenDecimals } from "@/lib/tokensMeta";
 import { LoadingSpinner } from "@/components/ui/spinner";
 import { getExtensionProof } from "@/lib/extensionConfig";
+import { useVoyagerNfts } from "@/hooks/useVoyagerNfts";
 
 interface EnterTournamentDialogProps {
   open: boolean;
@@ -85,6 +86,7 @@ export function EnterTournamentDialog({
   const { address } = useAccount();
   const { connect } = useConnectToSelectedChain();
   const { connector } = useConnect();
+  const { provider } = useProvider();
   const {
     approveAndEnterTournament,
     getBalanceGeneral,
@@ -104,6 +106,12 @@ export function EnterTournamentDialog({
   const [extensionEntriesLeft, setExtensionEntriesLeft] = useState<
     number | null
   >(null);
+  const [manualTokenId, setManualTokenId] = useState("");
+  const [isVerifyingTokenOwnership, setIsVerifyingTokenOwnership] =
+    useState(false);
+  const [manualTokenOwnershipVerified, setManualTokenOwnershipVerified] =
+    useState(false);
+  const [showManualTokenInput, setShowManualTokenInput] = useState(false);
 
   const chainId = selectedChainConfig?.chainId ?? "";
   const isController = connector ? isControllerAccount(connector) : false;
@@ -253,7 +261,55 @@ export function EnterTournamentDialog({
     tournamentModel?.entry_requirement.Some?.entry_requirement_type?.variant
       ?.token;
 
-  const token = tokens.find((token) => token.address === requiredTokenAddress);
+  // Verify manual token ownership via on-chain call
+  const verifyTokenOwnership = useCallback(
+    async (tokenId: string) => {
+      if (!provider || !address || !requiredTokenAddress) return false;
+
+      setIsVerifyingTokenOwnership(true);
+      try {
+        // Convert token ID to Uint256 format (low, high)
+        const tokenIdBigInt = BigInt(tokenId);
+        const low = tokenIdBigInt & ((1n << 128n) - 1n);
+        const high = tokenIdBigInt >> 128n;
+
+        // Call owner_of on the NFT contract
+        const result = await provider.callContract({
+          contractAddress: requiredTokenAddress,
+          entrypoint: "owner_of",
+          calldata: [low.toString(), high.toString()],
+        });
+
+        if (result && result.length > 0) {
+          const owner = addAddressPadding(result[0]);
+          const isOwner =
+            owner.toLowerCase() === addAddressPadding(address).toLowerCase();
+          setManualTokenOwnershipVerified(isOwner);
+          return isOwner;
+        }
+        setManualTokenOwnershipVerified(false);
+        return false;
+      } catch (error) {
+        console.error("Failed to verify token ownership:", error);
+        setManualTokenOwnershipVerified(false);
+        return false;
+      } finally {
+        setIsVerifyingTokenOwnership(false);
+      }
+    },
+    [provider, address, requiredTokenAddress]
+  );
+
+  // Fetch token data using SQL query for entry requirement token
+  const { data: tokenData } = useGetTokenByAddress({
+    namespace: namespace ?? "",
+    address: requiredTokenAddress || "",
+    active: requirementVariant === "token" && !!requiredTokenAddress,
+  });
+
+  const token =
+    (tokenData as Token) ||
+    tokens.find((token) => token.address === requiredTokenAddress);
 
   const tournamentRequirementVariant =
     tournamentModel?.entry_requirement.Some?.entry_requirement_type?.variant?.tournament?.activeVariant();
@@ -323,20 +379,60 @@ export function EnterTournamentDialog({
     getExtensionEntriesLeft,
   ]);
 
-  const { data: ownedTokens } = useGetAccountTokenIds(
-    indexAddress(address ?? ""),
-    requiredTokenAddresses,
-    requiredTokenAddresses.length > 0
-  );
+  // Fetch NFTs using Voyager API with pagination
+  const {
+    nfts,
+    loading: nftsLoading,
+    hasMore,
+  } = useVoyagerNfts({
+    contractAddress: requiredTokenAddress ?? "",
+    owner: address,
+    limit: 100,
+    fetchAll: true, // Fetch all pages
+    maxPages: 20, // Allow up to 20 pages (2000 NFTs max)
+    delayMs: 500, // 500ms delay between requests
+    active:
+      requirementVariant === "token" &&
+      requiredTokenAddress !== undefined &&
+      address !== undefined,
+  });
 
   const ownedTokenIds = useMemo(() => {
-    return ownedTokens
-      ?.map((token) => {
-        const parts = token.token_id?.split(":");
-        return parts?.[1] ?? null;
-      })
-      .filter(Boolean);
-  }, [ownedTokens]);
+    // Use Voyager NFT data - tokenId is already a string
+    return nfts?.map((nft) => nft.tokenId).filter(Boolean);
+  }, [nfts]);
+
+  // Verify manual token ownership when user enters a token ID
+  useEffect(() => {
+    // Reset verification state when dialog closes or token changes
+    if (!open || requirementVariant !== "token") {
+      setManualTokenId("");
+      setManualTokenOwnershipVerified(false);
+      setShowManualTokenInput(false);
+      return;
+    }
+
+    // Only verify if we have a manual token ID and no indexed tokens
+    if (!manualTokenId.trim() || (ownedTokenIds && ownedTokenIds.length > 0)) {
+      setManualTokenOwnershipVerified(false);
+      return;
+    }
+
+    // Debounce the verification
+    const timeoutId = setTimeout(async () => {
+      await verifyTokenOwnership(manualTokenId.trim());
+    }, 500);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [
+    manualTokenId,
+    open,
+    requirementVariant,
+    ownedTokenIds,
+    verifyTokenOwnership,
+  ]);
 
   const requiredTournamentGameAddresses = tournamentsData.map((tournament) =>
     indexAddress(tournament.game_config?.address ?? "")
@@ -578,7 +674,38 @@ export function EnterTournamentDialog({
 
     // Handle token-based entry requirements
     if (requirementVariant === "token") {
-      // If no owned tokens, can't enter
+      // Check if we have manual token verification
+      if (
+        manualTokenOwnershipVerified &&
+        manualTokenId &&
+        (!ownedTokenIds || ownedTokenIds.length === 0)
+      ) {
+        // Use manually verified token
+        const currentEntryCount =
+          qualificationEntries?.find(
+            (entry) =>
+              entry["qualification_proof.NFT.token_id"] === manualTokenId
+          )?.entry_count ?? 0;
+
+        const remaining = hasEntryLimit
+          ? Number(entryLimit) - currentEntryCount
+          : Infinity;
+
+        if (remaining > 0) {
+          return {
+            meetsEntryRequirements: true,
+            proof: { tokenId: manualTokenId },
+            entriesLeftByTournament: [
+              {
+                token: requiredTokenAddresses[0],
+                entriesLeft: remaining,
+              },
+            ],
+          };
+        }
+      }
+
+      // If no owned tokens and no manual verification, can't enter
       if (!ownedTokenIds || ownedTokenIds.length === 0) {
         return {
           meetsEntryRequirements: false,
@@ -872,6 +999,8 @@ export function EnterTournamentDialog({
     entryCount,
     extensionValidEntry,
     extensionEntriesLeft,
+    manualTokenOwnershipVerified,
+    manualTokenId,
   ]);
 
   // display the entry fee distribution
@@ -1049,43 +1178,131 @@ export function EnterTournamentDialog({
                 )}
               </span>
               {requirementVariant === "token" ? (
-                <div className="flex flex-row items-center gap-2 px-4">
-                  <span className="w-8">
-                    <COIN />
-                  </span>
-                  <span>{token?.name}</span>
-                  <span className="text-neutral">{token?.symbol}</span>
-                  {address ? (
-                    meetsEntryRequirements ? (
-                      <div className="flex flex-row items-center gap-2">
-                        <span className="w-5">
-                          <CHECK />
-                        </span>
-                        <span>
-                          {`${
-                            entriesLeftByTournament.find(
-                              (entry) =>
-                                entry.token === requiredTokenAddresses[0]
-                            )?.entriesLeft
-                          } ${
-                            entriesLeftByTournament.find(
-                              (entry) =>
-                                entry.token === requiredTokenAddresses[0]
-                            )?.entriesLeft === 1
-                              ? "entry"
-                              : "entries"
-                          } left`}
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="w-5">
-                        <X />
+                <>
+                  <div className="flex flex-col gap-2 px-4">
+                    <div className="flex flex-row items-center gap-2">
+                      <span className="w-8">
+                        <COIN />
                       </span>
-                    )
-                  ) : (
-                    <span className="text-warning">Connect Account</span>
-                  )}
-                </div>
+                      <span>{token?.name}</span>
+                      <span className="text-neutral">{token?.symbol}</span>
+                      {address ? (
+                        nftsLoading ? (
+                          <div className="flex flex-row items-center gap-2">
+                            <LoadingSpinner />
+                            <span className="text-brand-muted text-sm">
+                              Checking NFTs...
+                            </span>
+                          </div>
+                        ) : meetsEntryRequirements ? (
+                          <div className="flex flex-row items-center gap-2">
+                            <span className="w-5">
+                              <CHECK />
+                            </span>
+                            <span>
+                              {`${
+                                entriesLeftByTournament.find(
+                                  (entry) =>
+                                    entry.token === requiredTokenAddresses[0]
+                                )?.entriesLeft
+                              } ${
+                                entriesLeftByTournament.find(
+                                  (entry) =>
+                                    entry.token === requiredTokenAddresses[0]
+                                )?.entriesLeft === 1
+                                  ? "entry"
+                                  : "entries"
+                              } left`}
+                            </span>
+                            {ownedTokenIds && ownedTokenIds.length > 0 && (
+                              <>
+                                <span className="text-neutral">|</span>
+                                <span className="text-brand-muted text-sm">
+                                  {ownedTokenIds.length} NFT
+                                  {ownedTokenIds.length === 1 ? "" : "s"} found
+                                  {hasMore && "+"}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        ) : (
+                          <>
+                            <span className="w-5">
+                              <X />
+                            </span>
+                            {/* Manual token ID trigger when no indexed tokens found */}
+                            {(!ownedTokenIds || ownedTokenIds.length === 0) && (
+                              <>
+                                <span className="text-neutral">|</span>
+                                <button
+                                  onClick={() =>
+                                    setShowManualTokenInput(
+                                      !showManualTokenInput
+                                    )
+                                  }
+                                  className="text-brand-muted hover:text-brand text-sm underline decoration-dotted underline-offset-2 transition-colors"
+                                >
+                                  {showManualTokenInput
+                                    ? "Hide manual entry"
+                                    : "Enter token ID manually"}
+                                </button>
+                              </>
+                            )}
+                          </>
+                        )
+                      ) : (
+                        <span className="text-warning">Connect Account</span>
+                      )}
+                    </div>
+                    {/* Manual token ID input section */}
+                    {address &&
+                      (!ownedTokenIds || ownedTokenIds.length === 0) &&
+                      showManualTokenInput && (
+                        <div className="flex flex-col gap-2 pl-10 mt-2">
+                          <Label htmlFor="manualTokenId" className="text-sm">
+                            Token ID
+                          </Label>
+                          <Input
+                            id="manualTokenId"
+                            placeholder="Enter token ID"
+                            value={manualTokenId}
+                            onChange={(e) => setManualTokenId(e.target.value)}
+                            className="w-full"
+                          />
+                          {manualTokenId.trim() && (
+                            <div className="flex flex-row items-center gap-2">
+                              {isVerifyingTokenOwnership ? (
+                                <>
+                                  <LoadingSpinner />
+                                  <span className="text-brand-muted text-sm">
+                                    Verifying ownership...
+                                  </span>
+                                </>
+                              ) : manualTokenOwnershipVerified ? (
+                                <>
+                                  <span className="w-5 text-success">
+                                    <CHECK />
+                                  </span>
+                                  <span className="text-success text-sm">
+                                    Token ownership verified
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="w-5 text-warning">
+                                    <X />
+                                  </span>
+                                  <span className="text-warning text-sm">
+                                    You don't own this token
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                  </div>
+                </>
               ) : requirementVariant === "tournament" ? (
                 <div className="flex flex-col gap-2 px-4">
                   {tournamentsData.map((tournament) => {

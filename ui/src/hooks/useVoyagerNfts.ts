@@ -1,0 +1,170 @@
+import { useState, useEffect, useCallback } from "react";
+import { addAddressPadding } from "starknet";
+
+export interface VoyagerNftItem {
+  tokenId: string;
+  contract_address: string;
+  owner: string;
+  name?: string;
+  image?: string;
+  metadata?: Record<string, any>;
+}
+
+interface VoyagerPagination {
+  prev?: string;
+  next?: string;
+}
+
+interface VoyagerNftResponse {
+  items: VoyagerNftItem[];
+  pagination?: VoyagerPagination;
+}
+
+interface UseVoyagerNftsProps {
+  contractAddress: string;
+  owner?: string;
+  limit?: number;
+  active?: boolean;
+  fetchAll?: boolean; // If true, automatically fetches all pages
+  maxPages?: number; // Maximum number of pages to fetch (safety limit)
+  delayMs?: number; // Delay between pagination requests in milliseconds
+}
+
+interface UseVoyagerNftsResult {
+  nfts: VoyagerNftItem[];
+  loading: boolean;
+  error: Error | null;
+  refetch: () => void;
+  hasMore: boolean;
+}
+
+const VOYAGER_API_KEY = import.meta.env.VITE_VOYAGER_API_KEY;
+const VOYAGER_API_BASE_URL = "https://api.voyager.online/beta";
+
+export const useVoyagerNfts = ({
+  contractAddress,
+  owner,
+  limit = 100,
+  active = true,
+  fetchAll = true,
+  maxPages = 10,
+  delayMs = 500, // Default 500ms delay between requests
+}: UseVoyagerNftsProps): UseVoyagerNftsResult => {
+  const [nfts, setNfts] = useState<VoyagerNftItem[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<Error | null>(null);
+  const [hasMore, setHasMore] = useState<boolean>(false);
+
+  const fetchNfts = useCallback(async () => {
+    if (!active || !contractAddress) {
+      return;
+    }
+
+    if (!VOYAGER_API_KEY) {
+      console.warn("Voyager API key not configured");
+      setError(new Error("Voyager API key not configured"));
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Normalize addresses
+      const normalizedContract =
+        addAddressPadding(contractAddress).toLowerCase();
+      const normalizedOwner = owner
+        ? addAddressPadding(owner).toLowerCase()
+        : undefined;
+
+      const allNfts: VoyagerNftItem[] = [];
+      let currentUrl: string | null = null;
+      let pageCount = 0;
+
+      // Build initial query parameters
+      const params = new URLSearchParams({
+        contract_address: normalizedContract,
+      });
+
+      if (normalizedOwner) {
+        params.append("owner_address", normalizedOwner);
+      }
+
+      params.append("limit", limit.toString());
+
+      currentUrl = `${VOYAGER_API_BASE_URL}/nft-items?${params.toString()}`;
+
+      console.log("Fetching NFTs:", {
+        contract: normalizedContract,
+        owner: normalizedOwner,
+        fetchAll,
+      });
+
+      // Fetch pages
+      while (currentUrl && pageCount < maxPages) {
+        // Add delay between requests (except for the first one)
+        if (pageCount > 0 && delayMs > 0) {
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+        }
+
+        const response = await fetch(currentUrl, {
+          method: "GET",
+          headers: {
+            "x-api-key": VOYAGER_API_KEY,
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            `Voyager API error: ${response.status} ${response.statusText}`
+          );
+        }
+
+        const data: VoyagerNftResponse = await response.json();
+        allNfts.push(...(data.items || []));
+        pageCount++;
+
+        console.log(
+          `Fetched page ${pageCount}: ${data.items?.length || 0} items (total: ${allNfts.length})`
+        );
+
+        // Check if we should continue fetching
+        if (fetchAll && data.pagination?.next) {
+          // Extract the next page URL
+          currentUrl = `${VOYAGER_API_BASE_URL}${data.pagination.next}`;
+        } else {
+          setHasMore(!!data.pagination?.next);
+          currentUrl = null;
+        }
+      }
+
+      console.log(`Total NFTs fetched: ${allNfts.length}`);
+      setNfts(allNfts);
+      setHasMore(!!currentUrl); // If we stopped due to maxPages, there might be more
+    } catch (err) {
+      console.error("Error fetching NFTs from Voyager:", err);
+      setError(err instanceof Error ? err : new Error("Unknown error"));
+      setNfts([]);
+      setHasMore(false);
+    } finally {
+      setLoading(false);
+    }
+  }, [contractAddress, owner, limit, active, fetchAll, maxPages, delayMs]);
+
+  useEffect(() => {
+    fetchNfts();
+  }, [fetchNfts]);
+
+  const refetch = useCallback(() => {
+    fetchNfts();
+  }, [fetchNfts]);
+
+  return {
+    nfts,
+    loading,
+    error,
+    refetch,
+    hasMore,
+  };
+};
