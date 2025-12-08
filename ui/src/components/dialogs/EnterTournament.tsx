@@ -577,7 +577,7 @@ export function EnterTournamentDialog({
       for (const tokenId of ownedTokenIds) {
         methods.push({
           type: "token",
-          tokenId: tokenId,
+          tokenId: addAddressPadding(tokenId),
         });
       }
     }
@@ -723,7 +723,9 @@ export function EnterTournamentDialog({
         // Get current entry count for this token
         const currentEntryCount =
           qualificationEntries?.find(
-            (entry) => entry["qualification_proof.NFT.token_id"] === tokenId
+            (entry) =>
+              entry["qualification_proof.NFT.token_id"] ===
+              addAddressPadding(tokenId)
           )?.entry_count ?? 0;
 
         // Calculate remaining entries
