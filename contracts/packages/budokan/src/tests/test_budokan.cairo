@@ -802,7 +802,7 @@ fn test_create_tournament_with_prizes() {
             tournament.id,
             contracts.erc20.contract_address,
             TokenTypeData::erc20(
-                ERC20Data { amount: STARTING_BALANCE.low, distribution: Option::None },
+                ERC20Data { amount: STARTING_BALANCE.low, distribution: Option::None, distribution_count: Option::None },
             ),
             Option::Some(1),
         );
@@ -2056,7 +2056,7 @@ fn test_claim_prizes_with_sponsored_prizes() {
             tournament.id,
             contracts.erc20.contract_address,
             TokenTypeData::erc20(
-                ERC20Data { amount: STARTING_BALANCE.low, distribution: Option::None },
+                ERC20Data { amount: STARTING_BALANCE.low, distribution: Option::None, distribution_count: Option::None },
             ),
             Option::Some(1),
         );
@@ -2133,7 +2133,7 @@ fn test_claim_prizes_prize_already_claimed() {
             tournament.id,
             contracts.erc20.contract_address,
             TokenTypeData::erc20(
-                ERC20Data { amount: STARTING_BALANCE.low, distribution: Option::None },
+                ERC20Data { amount: STARTING_BALANCE.low, distribution: Option::None, distribution_count: Option::None },
             ),
             Option::Some(1),
         );
@@ -2981,7 +2981,7 @@ fn test_get_prize_basic() {
         .add_prize(
             tournament.id,
             contracts.erc20.contract_address,
-            TokenTypeData::erc20(ERC20Data { amount: 1000, distribution: Option::None }),
+            TokenTypeData::erc20(ERC20Data { amount: 1000, distribution: Option::None, distribution_count: Option::None }),
             Option::Some(1),
         );
 
@@ -3070,7 +3070,7 @@ fn test_add_prize_records_sponsor_address() {
         .add_prize(
             tournament.id,
             contracts.erc20.contract_address,
-            TokenTypeData::erc20(ERC20Data { amount: 500, distribution: Option::None }),
+            TokenTypeData::erc20(ERC20Data { amount: 500, distribution: Option::None, distribution_count: Option::None }),
             Option::Some(1),
         );
 

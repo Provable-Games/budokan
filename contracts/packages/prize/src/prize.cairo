@@ -11,10 +11,8 @@
 pub mod PrizeComponent {
     use budokan_interfaces::prize::IPrize;
     use budokan_prize::models::{
-        CUSTOM_SHARES_PER_SLOT, ERC20Data, PAYOUT_TYPE_CUSTOM, PAYOUT_TYPE_EXPONENTIAL,
-        PAYOUT_TYPE_LINEAR, PAYOUT_TYPE_POSITION, PAYOUT_TYPE_UNIFORM, PackedCustomShares,
-        PackedCustomSharesImpl, PackedCustomSharesTrait, Prize, PrizeType, StoredERC20Data,
-        StoredPrize, StoredTokenTypeData, TokenTypeData,
+        CUSTOM_SHARES_PER_SLOT, CustomShares, CustomSharesImpl, CustomSharesTrait, ERC20Data,
+        Prize, PrizeType, TokenTypeData,
     };
     use core::num::traits::Zero;
     use core::poseidon::poseidon_hash_span;
@@ -27,18 +25,19 @@ pub mod PrizeComponent {
 
     #[storage]
     pub struct Storage {
-        /// Prize data keyed by prize_id (stored without redundant id)
-        /// For ERC20: amount + payout config packed into u256
-        Prize_prizes: Map<u64, StoredPrize>,
+        /// Prize data keyed by prize_id
+        /// Uses StorePacking to pack Prize without the id field
+        /// For ERC20: amount + distribution config packed efficiently
+        Prize_prizes: Map<u64, Prize>,
         /// Prize claims keyed by (context_id, prize_type_hash)
         /// where prize_type_hash is poseidon hash of serialized PrizeType
         Prize_claims: Map<(u64, felt252), bool>,
         /// Total prizes created across all contexts
         Prize_total_prizes: u64,
-        /// Packed custom distribution shares: (prize_id, slot_index) -> PackedCustomShares
+        /// Packed custom distribution shares: (prize_id, slot_index) -> CustomShares
         /// Each slot packs up to 15 u16 shares (16 bits each = 240 bits per felt252)
         /// slot_index = share_index / 15
-        Prize_custom_shares_packed: Map<(u64, u8), PackedCustomShares>,
+        Prize_custom_shares_packed: Map<(u64, u8), CustomShares>,
         /// Number of custom shares for a prize
         Prize_custom_shares_count: Map<u64, u32>,
     }
@@ -70,53 +69,43 @@ pub mod PrizeComponent {
     pub impl PrizeInternalImpl<
         TContractState, +HasComponent<TContractState>,
     > of PrizeInternalTrait<TContractState> {
-        /// Get a prize by its ID (returns Prize with id included)
-        /// Note: For distributed ERC20 prizes, the distribution is reconstructed from stored data
+        /// Get a prize by its ID
+        /// The Prize struct is unpacked from storage and the id field is set
         fn _get_prize(self: @ComponentState<TContractState>, prize_id: u64) -> Prize {
-            let stored = self.Prize_prizes.entry(prize_id).read();
+            let mut prize = self.Prize_prizes.entry(prize_id).read();
+            // StorePacking sets id to 0, so we need to restore it
+            prize.id = prize_id;
 
-            // Convert stored token type back to API token type
-            let token_type = match stored.token_type {
-                StoredTokenTypeData::erc20(erc20_data) => {
-                    // Reconstruct distribution from stored payout_type and param
-                    let distribution = if erc20_data.payout_type == PAYOUT_TYPE_POSITION {
-                        Option::None
-                    } else if erc20_data.payout_type == PAYOUT_TYPE_LINEAR {
-                        Option::Some(
-                            budokan_distribution::models::Distribution::Linear(erc20_data.param),
-                        )
-                    } else if erc20_data.payout_type == PAYOUT_TYPE_EXPONENTIAL {
-                        Option::Some(
-                            budokan_distribution::models::Distribution::Exponential(
-                                erc20_data.param,
-                            ),
-                        )
-                    } else if erc20_data.payout_type == PAYOUT_TYPE_UNIFORM {
-                        Option::Some(budokan_distribution::models::Distribution::Uniform)
-                    } else {
-                        // Custom - reconstruct from stored shares
-                        let shares = self._get_custom_shares(prize_id);
-                        Option::Some(
-                            budokan_distribution::models::Distribution::Custom(shares.span()),
-                        )
+            // For custom distributions, restore the shares from separate storage
+            prize.token_type = match prize.token_type {
+                TokenTypeData::erc20(erc20_data) => {
+                    let distribution = match erc20_data.distribution {
+                        Option::Some(dist) => {
+                            match dist {
+                                budokan_distribution::models::Distribution::Custom(_) => {
+                                    // Reconstruct custom shares from storage
+                                    let shares = self._get_custom_shares(prize_id);
+                                    Option::Some(
+                                        budokan_distribution::models::Distribution::Custom(shares.span()),
+                                    )
+                                },
+                                _ => Option::Some(dist),
+                            }
+                        },
+                        Option::None => Option::None,
                     };
-                    TokenTypeData::erc20(ERC20Data { amount: erc20_data.amount, distribution })
+                    TokenTypeData::erc20(
+                        ERC20Data {
+                            amount: erc20_data.amount,
+                            distribution,
+                            distribution_count: erc20_data.distribution_count,
+                        },
+                    )
                 },
-                StoredTokenTypeData::erc721(erc721_data) => { TokenTypeData::erc721(erc721_data) },
+                TokenTypeData::erc721(erc721_data) => TokenTypeData::erc721(erc721_data),
             };
 
-            Prize {
-                id: prize_id,
-                context_id: stored.context_id,
-                token_address: stored.token_address,
-                token_type,
-                sponsor_address: stored.sponsor_address,
-            }
-        }
-
-        /// Get stored prize data directly (for internal use - includes full payout config)
-        fn _get_stored_prize(self: @ComponentState<TContractState>, prize_id: u64) -> StoredPrize {
-            self.Prize_prizes.entry(prize_id).read()
+            prize
         }
 
         /// Get custom shares for a prize (used for Custom distribution)
@@ -129,7 +118,7 @@ pub mod PrizeComponent {
             }
 
             let mut current_slot: u8 = 0;
-            let mut packed_shares: PackedCustomShares = PackedCustomSharesImpl::new();
+            let mut packed_shares: CustomShares = CustomSharesImpl::new();
 
             let mut i: u32 = 0;
             while i < count {
@@ -151,9 +140,9 @@ pub mod PrizeComponent {
             shares
         }
 
-        /// Store a prize (without redundant id)
-        fn set_prize(ref self: ComponentState<TContractState>, prize_id: u64, prize: @StoredPrize) {
-            self.Prize_prizes.entry(prize_id).write(*prize);
+        /// Store a prize (id will be managed by StorePacking)
+        fn set_prize(ref self: ComponentState<TContractState>, prize_id: u64, prize: Prize) {
+            self.Prize_prizes.entry(prize_id).write(prize);
         }
 
         /// Get total prizes count (internal)
@@ -233,82 +222,32 @@ pub mod PrizeComponent {
         }
 
         /// Add a prize: deposits tokens, increments count, and stores the prize
-        /// Payout configuration is extracted from token_type and packed into storage
+        /// Distribution configuration is packed into storage via StorePacking
         fn add_prize(
             ref self: ComponentState<TContractState>,
             context_id: u64,
             token_address: ContractAddress,
             token_type: TokenTypeData,
         ) -> Prize {
-            // Extract storage types from token_type
-            let (stored_token_type, amount_for_deposit, token_id_for_deposit) = match @token_type {
+            // Deposit the prize tokens
+            match @token_type {
                 TokenTypeData::erc20(erc20_data) => {
-                    // Pack ERC20 data with distribution config
-                    let (payout_type, param) = match erc20_data.distribution {
-                        Option::None => {
-                            // No distribution = single position payout
-                            (PAYOUT_TYPE_POSITION, 0_u16)
-                        },
-                        Option::Some(dist) => {
-                            match dist {
-                                budokan_distribution::models::Distribution::Linear(w) => {
-                                    (PAYOUT_TYPE_LINEAR, *w)
-                                },
-                                budokan_distribution::models::Distribution::Exponential(w) => {
-                                    (PAYOUT_TYPE_EXPONENTIAL, *w)
-                                },
-                                budokan_distribution::models::Distribution::Uniform => {
-                                    (PAYOUT_TYPE_UNIFORM, 0_u16)
-                                },
-                                budokan_distribution::models::Distribution::Custom(shares) => {
-                                    // Shares will be stored separately after prize ID is assigned
-                                    (PAYOUT_TYPE_CUSTOM, (*shares).len().try_into().unwrap())
-                                },
-                            }
-                        },
-                    };
-                    let stored_erc20 = StoredERC20Data {
-                        amount: *erc20_data.amount, payout_type, param,
-                    };
-                    (
-                        StoredTokenTypeData::erc20(stored_erc20),
-                        Option::Some(*erc20_data.amount),
-                        Option::None,
-                    )
+                    let amount = *erc20_data.amount;
+                    let token_dispatcher = IERC20Dispatcher { contract_address: token_address };
+                    assert!(amount > 0, "Prize: ERC20 prize token amount must be greater than 0");
+                    token_dispatcher
+                        .transfer_from(get_caller_address(), get_contract_address(), amount.into());
                 },
                 TokenTypeData::erc721(erc721_data) => {
-                    (
-                        StoredTokenTypeData::erc721(*erc721_data),
-                        Option::None,
-                        Option::Some(*erc721_data.id),
-                    )
+                    let token_id = *erc721_data.id;
+                    let token_dispatcher = IERC721Dispatcher { contract_address: token_address };
+                    token_dispatcher
+                        .transfer_from(get_caller_address(), get_contract_address(), token_id.into());
                 },
             };
-
-            // Deposit the prize tokens
-            if let Option::Some(amount) = amount_for_deposit {
-                let token_dispatcher = IERC20Dispatcher { contract_address: token_address };
-                assert!(amount > 0, "Prize: ERC20 prize token amount must be greater than 0");
-                token_dispatcher
-                    .transfer_from(get_caller_address(), get_contract_address(), amount.into());
-            }
-            if let Option::Some(token_id) = token_id_for_deposit {
-                let token_dispatcher = IERC721Dispatcher { contract_address: token_address };
-                token_dispatcher
-                    .transfer_from(get_caller_address(), get_contract_address(), token_id.into());
-            }
 
             // Get next prize ID
             let id = self.increment_prize_count();
-
-            // Create and store the prize
-            let stored = StoredPrize {
-                context_id,
-                token_address,
-                token_type: stored_token_type,
-                sponsor_address: get_caller_address(),
-            };
-            self.set_prize(id, @stored);
 
             // Store custom shares if this is a Custom distribution (using packed storage)
             if let TokenTypeData::erc20(erc20_data) = @token_type {
@@ -319,7 +258,7 @@ pub mod PrizeComponent {
 
                         // Pack shares into slots (15 shares per slot)
                         let mut current_slot: u8 = 0;
-                        let mut packed_shares: PackedCustomShares = PackedCustomSharesImpl::new();
+                        let mut packed_shares: CustomShares = CustomSharesImpl::new();
 
                         let mut i: u32 = 0;
                         for share in *shares {
@@ -336,7 +275,7 @@ pub mod PrizeComponent {
                                     .Prize_custom_shares_packed
                                     .entry((id, current_slot))
                                     .write(packed_shares);
-                                packed_shares = PackedCustomSharesImpl::new();
+                                packed_shares = CustomSharesImpl::new();
                                 current_slot = slot_index;
                             }
 
@@ -355,10 +294,15 @@ pub mod PrizeComponent {
                 }
             }
 
-            // Return Prize with id
-            Prize {
-                id, context_id, token_address, token_type, sponsor_address: get_caller_address(),
-            }
+            // Create the prize (StorePacking handles the packing in storage)
+            let sponsor = get_caller_address();
+            let prize = Prize { id, context_id, token_address, token_type, sponsor_address: sponsor };
+
+            // Store and return the prize
+            self.set_prize(id, prize);
+
+            // Return a copy by reconstructing from storage
+            self._get_prize(id)
         }
 
         /// Payout full ERC20 amount to a recipient

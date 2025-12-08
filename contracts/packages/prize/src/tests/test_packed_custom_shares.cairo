@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 use budokan_prize::models::{
-    CUSTOM_SHARES_PER_SLOT, PackedCustomShares, PackedCustomSharesImpl, PackedCustomSharesTrait,
+    CUSTOM_SHARES_PER_SLOT, CustomShares, CustomSharesImpl, CustomSharesTrait,
 };
 
 /// Test basic pack/unpack roundtrip for a single share
 #[test]
 fn test_single_share_roundtrip() {
-    let mut packed = PackedCustomSharesImpl::new();
+    let mut packed = CustomSharesImpl::new();
 
     packed.set_share(0, 1000);
     let retrieved = packed.get_share(0);
@@ -18,7 +18,7 @@ fn test_single_share_roundtrip() {
 /// Test maximum u16 value
 #[test]
 fn test_max_u16_value() {
-    let mut packed = PackedCustomSharesImpl::new();
+    let mut packed = CustomSharesImpl::new();
     let max_u16: u16 = 65535;
 
     packed.set_share(0, max_u16);
@@ -30,7 +30,7 @@ fn test_max_u16_value() {
 /// Test packing multiple shares at different indices
 #[test]
 fn test_multiple_shares_different_indices() {
-    let mut packed = PackedCustomSharesImpl::new();
+    let mut packed = CustomSharesImpl::new();
 
     // Set shares at different positions
     packed.set_share(0, 1000);
@@ -50,7 +50,7 @@ fn test_multiple_shares_different_indices() {
 /// Test that all 15 slots can be used
 #[test]
 fn test_all_15_slots() {
-    let mut packed = PackedCustomSharesImpl::new();
+    let mut packed = CustomSharesImpl::new();
 
     // Fill all 15 slots
     let mut i: u8 = 0;
@@ -75,7 +75,7 @@ fn test_all_15_slots() {
 fn test_from_array() {
     let shares: Array<u16> = array![1000, 2000, 3000, 4000, 5000];
 
-    let packed = PackedCustomSharesImpl::from_array(shares.span());
+    let packed = CustomSharesImpl::from_array(shares.span());
 
     assert!(packed.get_share(0) == 1000, "share 0 mismatch");
     assert!(packed.get_share(1) == 2000, "share 1 mismatch");
@@ -87,7 +87,7 @@ fn test_from_array() {
 /// Test to_array helper
 #[test]
 fn test_to_array() {
-    let mut packed = PackedCustomSharesImpl::new();
+    let mut packed = CustomSharesImpl::new();
     packed.set_share(0, 1000);
     packed.set_share(1, 2000);
     packed.set_share(2, 3000);
@@ -103,7 +103,7 @@ fn test_to_array() {
 /// Test updating a share (overwriting)
 #[test]
 fn test_update_share() {
-    let mut packed = PackedCustomSharesImpl::new();
+    let mut packed = CustomSharesImpl::new();
 
     // Set initial value
     packed.set_share(5, 1000);
@@ -118,7 +118,7 @@ fn test_update_share() {
 /// Test that updating one share doesn't affect others
 #[test]
 fn test_update_isolation() {
-    let mut packed = PackedCustomSharesImpl::new();
+    let mut packed = CustomSharesImpl::new();
 
     // Set multiple shares
     packed.set_share(0, 1000);
@@ -139,7 +139,7 @@ fn test_update_isolation() {
 /// Test empty packed struct has zero values
 #[test]
 fn test_empty_packed() {
-    let packed = PackedCustomSharesImpl::new();
+    let packed = CustomSharesImpl::new();
 
     let s0 = packed.get_share(0);
     assert!(s0 == 0, "empty should have zero share");
@@ -153,7 +153,7 @@ fn test_gas_pack_10_shares() {
     let shares: Array<u16> = array![5000, 2500, 1250, 625, 312, 156, 78, 39, 20, 20];
 
     // Pack 10 shares into a single felt252
-    let packed = PackedCustomSharesImpl::from_array(shares.span());
+    let packed = CustomSharesImpl::from_array(shares.span());
 
     // Unpack and verify all 10
     let result = packed.to_array(10);
@@ -175,7 +175,7 @@ fn test_gas_pack_15_shares() {
     ];
 
     // Pack 15 shares into a single felt252
-    let packed = PackedCustomSharesImpl::from_array(shares.span());
+    let packed = CustomSharesImpl::from_array(shares.span());
 
     // Unpack and verify all 15
     let result = packed.to_array(15);
@@ -214,7 +214,7 @@ fn test_exponential_distribution_pattern() {
         50, 25, 15, 10,
     ];
 
-    let packed = PackedCustomSharesImpl::from_array(shares.span());
+    let packed = CustomSharesImpl::from_array(shares.span());
     let result = packed.to_array(15);
 
     // Verify the distribution maintains its values after pack/unpack
@@ -242,7 +242,7 @@ fn test_custom_shares_per_slot_constant() {
 /// Test zero value shares
 #[test]
 fn test_zero_value_shares() {
-    let mut packed = PackedCustomSharesImpl::new();
+    let mut packed = CustomSharesImpl::new();
 
     // Set some shares to zero explicitly
     packed.set_share(0, 1000);
@@ -257,7 +257,7 @@ fn test_zero_value_shares() {
 /// Test that sparse array (gaps) works correctly
 #[test]
 fn test_sparse_shares() {
-    let mut packed = PackedCustomSharesImpl::new();
+    let mut packed = CustomSharesImpl::new();
 
     // Only set a few shares, leave gaps
     packed.set_share(0, 5000);

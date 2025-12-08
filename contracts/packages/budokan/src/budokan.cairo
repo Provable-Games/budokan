@@ -7,15 +7,14 @@ pub mod Budokan {
     };
     use budokan::models::budokan::{
         AdditionalShare, Distribution, EntryFee, EntryFeeClaimType, EntryFeeRewardType,
-        EntryRequirement, EntryRequirementType, GameConfig, Metadata, PAYOUT_TYPE_EXPONENTIAL,
-        PAYOUT_TYPE_LINEAR, PAYOUT_TYPE_POSITION, PAYOUT_TYPE_UNIFORM, Prize, PrizeType,
+        EntryRequirement, EntryRequirementType, GameConfig, Metadata, Prize, PrizeType,
         QualificationEntries, QualificationProof, Registration, RewardType, StoredEntryFee,
-        StoredTokenTypeData, TokenTypeData, Tournament as TournamentModel,
+        TokenTypeData, Tournament as TournamentModel,
     };
     use budokan::models::constants::GAME_CREATOR_TOKEN_ID;
     use budokan::models::packed_storage::{
-        PackedDistribution, PackedDistributionStorePacking, PackedSchedule,
-        PackedScheduleStorePacking, TournamentMeta, TournamentMetaStorePacking,
+        PackedDistribution, PackedDistributionStorePacking, TournamentMeta,
+        TournamentMetaStorePacking,
     };
     use budokan::models::schedule::{Period, Phase, Schedule};
     use budokan_distribution::calculator;
@@ -152,7 +151,7 @@ pub mod Budokan {
         >, // StorePacking: created_at | creator_token_id | settings_id | soulbound
         tournament_game_address: Map<u64, ContractAddress>,
         tournament_metadata: Map<u64, Metadata>,
-        tournament_schedule: Map<u64, PackedSchedule>, // StorePacking for schedule
+        tournament_schedule: Map<u64, Schedule>, // StorePacking handles packing
         tournament_play_url: Map<u64, ByteArray>,
         // Distribution config per tournament (packed into felt252)
         tournament_distribution: Map<u64, PackedDistribution>,
@@ -210,6 +209,11 @@ pub mod Budokan {
 
     #[abi(embed_v0)]
     impl UpgradeableImpl of IUpgradeable<ContractState> {
+        /// @title Upgrade contract
+        /// @notice Upgrades the contract implementation to a new class hash.
+        /// @dev Only callable by the contract owner.
+        /// @param self A reference to the ContractState object.
+        /// @param new_class_hash The new class hash to upgrade to.
         fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
             self.ownable.assert_only_owner();
             self.upgradeable.upgrade(new_class_hash);
@@ -275,6 +279,17 @@ pub mod Budokan {
         }
 
         /// @title Create tournament
+        /// @notice Allows anyone to create a new tournament with specified configuration.
+        /// @dev Validates schedule, game config, entry fees, and entry requirements before creation.
+        ///      Mints a creator token for reward distribution purposes.
+        /// @param self A reference to the ContractState object.
+        /// @param creator_rewards_address The address to mint the creator's game token to.
+        /// @param metadata The tournament metadata (name, description, etc.).
+        /// @param schedule The tournament schedule (registration, game, submission periods).
+        /// @param game_config The tournament game configuration (address, settings, soulbound flag, play URL).
+        /// @param entry_fee Optional entry fee configuration with distribution settings.
+        /// @param entry_requirement Optional entry requirement (token, allowlist, or extension-based).
+        /// @return A TournamentModel struct containing the created tournament details.
         fn create_tournament(
             ref self: ContractState,
             creator_rewards_address: ContractAddress,
@@ -333,6 +348,15 @@ pub mod Budokan {
         }
 
         /// @title Enter tournament
+        /// @notice Registers a player for a tournament and mints them a game token.
+        /// @dev Validates tournament exists, registration is open, entry requirements are met, and processes entry fees.
+        ///      The game token is minted to the qualifying address or player based on entry requirements.
+        /// @param self A reference to the ContractState object.
+        /// @param tournament_id The tournament ID to enter.
+        /// @param player_name The display name for the player.
+        /// @param player_address The address to receive the game token (if no qualification override).
+        /// @param qualification Optional qualification proof for gated tournaments.
+        /// @return A tuple of (game_token_id, entry_number) for the registered player.
         fn enter_tournament(
             ref self: ContractState,
             tournament_id: u64,
@@ -417,7 +441,14 @@ pub mod Budokan {
             (game_token_id, entry_number)
         }
 
-        /// @title Validate entries
+        /// @title Validate entry
+        /// @notice Validates a tournament entry against extension-based entry requirements and bans invalid entries.
+        /// @dev Only works with extension-based entry requirements. Can only be called between registration start and game start.
+        ///      If validation fails, the entry is marked as banned.
+        /// @param self A reference to the ContractState object.
+        /// @param tournament_id The tournament ID to validate entry for.
+        /// @param game_token_id The game token ID to validate.
+        /// @param proof Proof data to validate against the entry validator extension.
         fn validate_entry(
             ref self: ContractState, tournament_id: u64, game_token_id: u64, proof: Span<felt252>,
         ) {
@@ -501,6 +532,13 @@ pub mod Budokan {
         }
 
         /// @title Submit score
+        /// @notice Submits a player's score to the tournament leaderboard.
+        /// @dev Validates tournament phase (must be in Submission period), registration status, and leaderboard placement.
+        ///      Position parameter allows players to claim their ranking efficiently.
+        /// @param self A reference to the ContractState object.
+        /// @param tournament_id The tournament ID to submit score for.
+        /// @param token_id The game token ID containing the score.
+        /// @param position The claimed position on the leaderboard (validated against actual score).
         fn submit_score(ref self: ContractState, tournament_id: u64, token_id: u64, position: u8) {
             // assert tournament exists
             self._assert_tournament_exists(tournament_id);
@@ -559,7 +597,12 @@ pub mod Budokan {
         }
 
         /// @title Claim reward
-        /// Unified function for claiming both sponsored prizes and entry fee shares
+        /// @notice Unified function for claiming both sponsored prizes and entry fee rewards.
+        /// @dev Tournament must be finalized before any rewards can be claimed. Validates reward hasn't been claimed already.
+        ///      Supports both Prize (single/distributed) and EntryFee (position/game creator/refund/additional share) reward types.
+        /// @param self A reference to the ContractState object.
+        /// @param tournament_id The tournament ID to claim rewards from.
+        /// @param reward_type The type of reward to claim (Prize or EntryFee variant).
         fn claim_reward(ref self: ContractState, tournament_id: u64, reward_type: RewardType) {
             let tournament = self._get_tournament(tournament_id);
 
@@ -583,15 +626,17 @@ pub mod Budokan {
         }
 
         /// @title Add prize
-        /// Adds a sponsored prize to the tournament.
-        /// @param tournament_id The tournament to add the prize to
-        /// @param token_address The token address for the prize
-        /// @param token_type The token type data (ERC20 with amount/distribution, or ERC721 with
-        /// id)
-        /// @param position Position for Single prizes (None for Distributed prizes)
-        ///   - Some(n): Prize goes to position n on leaderboard (Single prize)
-        ///   - None: Prize is distributed across positions (Distributed prize, requires
-        ///   distribution in ERC20Data)
+        /// @notice Adds a sponsored prize to an active tournament.
+        /// @dev Tournament must be in the Live phase. Tokens are transferred from caller to contract upon addition.
+        ///      Position parameter determines whether prize is single-position or distributed.
+        /// @param self A reference to the ContractState object.
+        /// @param tournament_id The tournament to add the prize to.
+        /// @param token_address The token address for the prize (ERC20 or ERC721).
+        /// @param token_type The token type data (ERC20 with amount/distribution, or ERC721 with id).
+        /// @param position Position for Single prizes, None for Distributed prizes:
+        ///        - Some(n): Prize goes to position n on leaderboard (Single prize)
+        ///        - None: Prize is distributed across positions (Distributed prize, requires distribution in ERC20Data)
+        /// @return A Prize struct containing the added prize details.
         fn add_prize(
             ref self: ContractState,
             tournament_id: u64,
@@ -630,7 +675,12 @@ pub mod Budokan {
         //
 
         // Leaderboard operations
-        // This function reads from the leaderboard component using the Store trait
+        /// @title Get leaderboard (internal)
+        /// @notice Retrieves the leaderboard from the leaderboard component and converts to an array.
+        /// @dev Reads from the leaderboard component using the Store trait.
+        /// @param self A reference to the ContractState object.
+        /// @param tournament_id The tournament ID to query.
+        /// @return An array of token IDs representing the leaderboard order.
         #[inline(always)]
         fn _get_leaderboard(self: @ContractState, tournament_id: u64) -> Array<u64> {
             let span = LeaderboardStore::get_leaderboard(self.leaderboard, tournament_id);
@@ -675,6 +725,13 @@ pub mod Budokan {
         }
 
         // Tournament operations - reading from packed storage
+        /// @title Get tournament (internal)
+        /// @notice Reconstructs a complete tournament model from packed storage.
+        /// @dev Reads from multiple storage locations and unpacks compressed data structures.
+        ///      Reconstructs schedule, entry fees, distribution, and entry requirements.
+        /// @param self A reference to the ContractState object.
+        /// @param tournament_id The tournament ID to query.
+        /// @return A TournamentModel struct with all tournament data.
         #[inline(always)]
         fn _get_tournament(self: @ContractState, tournament_id: u64) -> TournamentModel {
             // Read packed meta data
@@ -686,9 +743,7 @@ pub mod Budokan {
             let metadata = self.tournament_metadata.entry(tournament_id).read();
             let packed_schedule = self.tournament_schedule.entry(tournament_id).read();
             let play_url = self.tournament_play_url.entry(tournament_id).read();
-
-            // Reconstruct schedule from packed format
-            let schedule = self._unpack_schedule(packed_schedule);
+            let schedule = packed_schedule;
 
             // Reconstruct game_config (includes soulbound and play_url)
             let game_config = GameConfig {
@@ -762,39 +817,19 @@ pub mod Budokan {
             }
         }
 
-        #[inline(always)]
-        fn _unpack_schedule(self: @ContractState, packed: PackedSchedule) -> Schedule {
-            let registration = if packed.registration_start == 0 {
-                Option::None
-            } else {
-                Option::Some(
-                    Period { start: packed.registration_start, end: packed.registration_end },
-                )
-            };
-
-            Schedule {
-                registration,
-                game: Period { start: packed.game_start, end: packed.game_end },
-                submission_duration: packed.submission_duration,
-            }
-        }
-
-        #[inline(always)]
-        fn _pack_schedule(self: @ContractState, schedule: Schedule) -> PackedSchedule {
-            let (reg_start, reg_end) = match schedule.registration {
-                Option::Some(reg) => (reg.start, reg.end),
-                Option::None => (0, 0),
-            };
-
-            PackedSchedule {
-                registration_start: reg_start,
-                registration_end: reg_end,
-                game_start: schedule.game.start,
-                game_end: schedule.game.end,
-                submission_duration: schedule.submission_duration,
-            }
-        }
-
+        /// @title Create tournament (internal)
+        /// @notice Creates and stores a new tournament with all configuration.
+        /// @dev Increments tournament counter, stores packed data, initializes leaderboard, and emits events.
+        ///      Stores entry fees, distribution, and requirements using component storage.
+        /// @param self A reference to the ContractState object.
+        /// @param creator_token_id The token ID minted for the tournament creator.
+        /// @param metadata The tournament metadata.
+        /// @param schedule The tournament schedule.
+        /// @param game_config The game configuration.
+        /// @param entry_fee Optional entry fee configuration.
+        /// @param distribution The prize distribution model.
+        /// @param entry_requirement Optional entry requirement.
+        /// @return The created TournamentModel.
         #[inline(always)]
         fn _create_tournament(
             ref self: ContractState,
@@ -830,7 +865,7 @@ pub mod Budokan {
             self.tournament_created_by.entry(tournament_id).write(created_by);
             self.tournament_game_address.entry(tournament_id).write(game_config.address);
             self.tournament_metadata.entry(tournament_id).write(metadata);
-            self.tournament_schedule.entry(tournament_id).write(self._pack_schedule(schedule));
+            self.tournament_schedule.entry(tournament_id).write(schedule);
             self.tournament_play_url.entry(tournament_id).write(game_config.play_url.clone());
 
             // Store entry fee using component (convert to storage format without distribution)
@@ -1496,14 +1531,14 @@ pub mod Budokan {
             prize_id: u64,
             position: u32,
         ) {
-            let stored_prize = self.prize._get_stored_prize(prize_id);
+            let prize = self.prize._get_prize(prize_id);
 
             // Validate prize belongs to this tournament
             assert!(
-                stored_prize.context_id == tournament_id,
+                prize.context_id == tournament_id,
                 "Tournament: Prize {} is for tournament {}",
                 prize_id,
-                stored_prize.context_id,
+                prize.context_id,
             );
 
             // Get leaderboard and validate position
@@ -1526,25 +1561,19 @@ pub mod Budokan {
             };
 
             // Handle payout based on token type
-            match stored_prize.token_type {
-                StoredTokenTypeData::erc20(erc20_data) => {
+            match prize.token_type {
+                TokenTypeData::erc20(erc20_data) => {
                     // Ensure this is NOT a distributed prize
                     assert!(
-                        erc20_data.payout_type == PAYOUT_TYPE_POSITION,
+                        erc20_data.distribution.is_none(),
                         "Tournament: Use SponsoredDistributed for distributed prizes",
                     );
                     self
                         .prize
-                        .payout_erc20(
-                            stored_prize.token_address, erc20_data.amount, recipient_address,
-                        );
+                        .payout_erc20(prize.token_address, erc20_data.amount, recipient_address);
                 },
-                StoredTokenTypeData::erc721(erc721_data) => {
-                    self
-                        .prize
-                        .payout_erc721(
-                            stored_prize.token_address, erc721_data.id, recipient_address,
-                        );
+                TokenTypeData::erc721(erc721_data) => {
+                    self.prize.payout_erc721(prize.token_address, erc721_data.id, recipient_address);
                 },
             };
         }
@@ -1558,27 +1587,27 @@ pub mod Budokan {
             prize_id: u64,
             payout_index: u32,
         ) {
-            let stored_prize = self.prize._get_stored_prize(prize_id);
+            let prize = self.prize._get_prize(prize_id);
 
             // Validate prize belongs to this tournament
             assert!(
-                stored_prize.context_id == tournament_id,
+                prize.context_id == tournament_id,
                 "Tournament: Prize {} is for tournament {}",
                 prize_id,
-                stored_prize.context_id,
+                prize.context_id,
             );
 
-            // Get ERC20 data with packed distribution info
-            let erc20_data = match stored_prize.token_type {
-                StoredTokenTypeData::erc20(data) => data,
-                StoredTokenTypeData::erc721(_) => {
+            // Get ERC20 data with distribution info
+            let erc20_data = match prize.token_type {
+                TokenTypeData::erc20(data) => data,
+                TokenTypeData::erc721(_) => {
                     panic!("Tournament: ERC721 not supported for distributed prizes")
                 },
             };
 
             // Ensure this is a distributed prize
             assert!(
-                erc20_data.payout_type != PAYOUT_TYPE_POSITION,
+                erc20_data.distribution.is_some(),
                 "Tournament: Use Sponsored for non-distributed prizes",
             );
 
@@ -1589,19 +1618,14 @@ pub mod Budokan {
             // Validate payout_index (must be >= 1)
             assert!(payout_index > 0, "Tournament: Payout index must be greater than zero");
 
-            // Use leaderboard size as total positions for distribution calculation
-            let total_positions: u32 = leaderboard_size;
-
-            // Reconstruct Distribution enum from packed data
-            let distribution = if erc20_data.payout_type == PAYOUT_TYPE_LINEAR {
-                Distribution::Linear(erc20_data.param)
-            } else if erc20_data.payout_type == PAYOUT_TYPE_EXPONENTIAL {
-                Distribution::Exponential(erc20_data.param)
-            } else if erc20_data.payout_type == PAYOUT_TYPE_UNIFORM {
-                Distribution::Uniform
-            } else {
-                Distribution::Custom(array![].span())
+            // Use fixed distribution_count if set, otherwise use actual leaderboard size
+            let total_positions: u32 = match erc20_data.distribution_count {
+                Option::Some(count) => count,
+                Option::None => leaderboard_size,
             };
+
+            // Get distribution (already validated as Some above)
+            let distribution = erc20_data.distribution.unwrap();
 
             // Calculate share for this payout_index (full 100% available for distribution)
             let share_bps = calculator::calculate_share_with_dust(
@@ -1626,7 +1650,7 @@ pub mod Budokan {
             };
 
             // Transfer calculated amount
-            self.prize.payout_erc20(stored_prize.token_address, payout_amount, recipient_address);
+            self.prize.payout_erc20(prize.token_address, payout_amount, recipient_address);
         }
 
         /// Validates tournament-specific rules for score submission

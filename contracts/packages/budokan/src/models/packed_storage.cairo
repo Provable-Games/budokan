@@ -70,67 +70,6 @@ pub impl TournamentMetaStorePacking of StorePacking<TournamentMeta, u256> {
     }
 }
 
-/// Complete schedule packed into u256
-/// Packs: registration_start | registration_end | game_start | game_end | submission_duration
-/// Timestamps use 35 bits (valid until year ~3059), submission_duration uses 25 bits (up to ~388
-/// days)
-/// Total: 4×35 + 25 = 165 bits fits in u256
-/// registration_start = 0 means no registration period.
-#[derive(Copy, Drop, Serde)]
-// TODO: offseting the timestamps from the created_at time to save bits? created_at currently in
-// TournamentMeta
-pub struct PackedSchedule {
-    // TODO: add period for where the tournament can be reconfigured? This would also allow for
-    // extra prize additions etc before registration starts.
-    pub registration_start: u64, // 35 bits, 0 = no registration period
-    pub registration_end: u64, // 35 bits
-    pub game_start: u64, // 35 bits
-    pub game_end: u64, // 35 bits
-    pub submission_duration: u64 // 25 bits (max ~388 days)
-}
-
-pub impl PackedScheduleStorePacking of StorePacking<PackedSchedule, u256> {
-    fn pack(value: PackedSchedule) -> u256 {
-        // Layout: registration_start(35) | registration_end(35) | game_start(35) | game_end(35) |
-        // submission_duration(25)
-        let packed: u256 = value.registration_start.into()
-            + (value.registration_end.into() * TWO_POW_35.into())
-            + (value.game_start.into() * TWO_POW_35.into() * TWO_POW_35.into())
-            + (value.game_end.into() * TWO_POW_35.into() * TWO_POW_35.into() * TWO_POW_35.into())
-            + (value.submission_duration.into()
-                * TWO_POW_35.into()
-                * TWO_POW_35.into()
-                * TWO_POW_35.into()
-                * TWO_POW_35.into());
-        packed
-    }
-
-    fn unpack(value: u256) -> PackedSchedule {
-        let mask_25_u256: u256 = MASK_25.into();
-        let mask_35_u256: u256 = MASK_35.into();
-        let two_pow_35_u256: u256 = TWO_POW_35.into();
-
-        let registration_start: u64 = (value & mask_35_u256).try_into().unwrap();
-        let registration_end: u64 = ((value / two_pow_35_u256) & mask_35_u256).try_into().unwrap();
-        let game_start: u64 = ((value / (two_pow_35_u256 * two_pow_35_u256)) & mask_35_u256)
-            .try_into()
-            .unwrap();
-        let game_end: u64 = ((value / (two_pow_35_u256 * two_pow_35_u256 * two_pow_35_u256))
-            & mask_35_u256)
-            .try_into()
-            .unwrap();
-        let submission_duration: u64 = ((value
-            / (two_pow_35_u256 * two_pow_35_u256 * two_pow_35_u256 * two_pow_35_u256))
-            & mask_25_u256)
-            .try_into()
-            .unwrap();
-
-        PackedSchedule {
-            registration_start, registration_end, game_start, game_end, submission_duration,
-        }
-    }
-}
-
 /// Distribution configuration packed into felt252
 /// Packs: dist_type (8 bits) | dist_param (16 bits) | positions (32 bits)
 /// Total: 8 + 16 + 32 = 56 bits fits in felt252 (251 bits)
