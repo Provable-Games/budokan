@@ -290,7 +290,6 @@ export function EnterTournamentDialog({
         setManualTokenOwnershipVerified(false);
         return false;
       } catch (error) {
-        console.error("Failed to verify token ownership:", error);
         setManualTokenOwnershipVerified(false);
         return false;
       } finally {

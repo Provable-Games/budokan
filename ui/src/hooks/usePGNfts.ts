@@ -26,17 +26,22 @@ interface UsePGNftsResult {
   refetch: () => void;
 }
 
-const PG_API_BASE_URL = "https://apibara-tokens-production.up.railway.app";
+const PG_API_BASE_URL =
+  import.meta.env.VITE_PG_API_BASE_URL ||
+  "https://apibara-tokens-production.up.railway.app";
 
 // List of contract addresses that should use the PG API
-const PG_CONTRACT_ADDRESSES = [
-  "0x0377c2d65debb3978ea81904e7d59740da1f07412e30d01c5ded1c5d6f1ddc43",
-];
+const PG_CONTRACT_ADDRESSES = (import.meta.env.VITE_PG_CONTRACT_ADDRESSES || "")
+  .split(",")
+  .filter(Boolean)
+  .concat([
+    "0x0377c2d65debb3978ea81904e7d59740da1f07412e30d01c5ded1c5d6f1ddc43",
+  ]);
 
 export const shouldUsePGApi = (contractAddress: string): boolean => {
   const normalized = addAddressPadding(contractAddress).toLowerCase();
   return PG_CONTRACT_ADDRESSES.some(
-    (addr) => addAddressPadding(addr).toLowerCase() === normalized
+    (addr: string) => addAddressPadding(addr).toLowerCase() === normalized
   );
 };
 
@@ -65,12 +70,6 @@ export const usePGNfts = ({
 
       const url = `${PG_API_BASE_URL}/owners/${normalizedContract}/${normalizedOwner}`;
 
-      console.log("Fetching NFTs from PG API:", {
-        contract: normalizedContract,
-        owner: normalizedOwner,
-        url,
-      });
-
       const response = await fetch(url, {
         method: "GET",
         headers: {
@@ -85,8 +84,8 @@ export const usePGNfts = ({
       }
 
       const data: PGNftResponse = await response.json();
-      console.log(`Total NFTs fetched from PG API: ${data.tokens.length}`);
-      setNfts(data.tokens || []);
+      const tokens = data.tokens || [];
+      setNfts(tokens);
     } catch (err) {
       console.error("Error fetching NFTs from PG API:", err);
       setError(err instanceof Error ? err : new Error("Unknown error"));

@@ -40,7 +40,9 @@ interface UseVoyagerNftsResult {
 }
 
 const VOYAGER_API_KEY = import.meta.env.VITE_VOYAGER_API_KEY;
-const VOYAGER_API_BASE_URL = "https://api.voyager.online/beta";
+const VOYAGER_API_BASE_URL =
+  import.meta.env.VITE_VOYAGER_API_BASE_URL ||
+  "https://api.voyager.online/beta";
 
 export const useVoyagerNfts = ({
   contractAddress,
@@ -66,31 +68,13 @@ export const useVoyagerNfts = ({
   const [error, setError] = useState<Error | null>(null);
   const [hasMore, setHasMore] = useState<boolean>(false);
 
-  // If using PG API, convert and return its results
-  if (usePGApi) {
-    // Convert PG NFT format to Voyager format
-    const convertedNfts: VoyagerNftItem[] = pgResult.nfts.map((nft) => ({
-      tokenId: nft.tokenId,
-      contract_address: contractAddress,
-      owner: owner || "",
-    }));
-
-    return {
-      nfts: convertedNfts,
-      loading: pgResult.loading,
-      error: pgResult.error,
-      refetch: pgResult.refetch,
-      hasMore: false, // PG API doesn't support pagination
-    };
-  }
-
   const fetchNfts = useCallback(async () => {
-    if (!active || !contractAddress) {
+    // Skip if using PG API or inactive
+    if (usePGApi || !active || !contractAddress) {
       return;
     }
 
     if (!VOYAGER_API_KEY) {
-      console.warn("Voyager API key not configured");
       setError(new Error("Voyager API key not configured"));
       return;
     }
@@ -123,12 +107,6 @@ export const useVoyagerNfts = ({
 
       currentUrl = `${VOYAGER_API_BASE_URL}/nft-items?${params.toString()}`;
 
-      console.log("Fetching NFTs:", {
-        contract: normalizedContract,
-        owner: normalizedOwner,
-        fetchAll,
-      });
-
       // Fetch pages
       while (currentUrl && pageCount < maxPages) {
         // Add delay between requests (except for the first one)
@@ -154,10 +132,6 @@ export const useVoyagerNfts = ({
         allNfts.push(...(data.items || []));
         pageCount++;
 
-        console.log(
-          `Fetched page ${pageCount}: ${data.items?.length || 0} items (total: ${allNfts.length})`
-        );
-
         // Check if we should continue fetching
         if (fetchAll && data.pagination?.next) {
           // Extract the next page URL
@@ -168,7 +142,6 @@ export const useVoyagerNfts = ({
         }
       }
 
-      console.log(`Total NFTs fetched: ${allNfts.length}`);
       setNfts(allNfts);
       setHasMore(!!currentUrl); // If we stopped due to maxPages, there might be more
     } catch (err) {
@@ -179,15 +152,47 @@ export const useVoyagerNfts = ({
     } finally {
       setLoading(false);
     }
-  }, [contractAddress, owner, limit, active, fetchAll, maxPages, delayMs]);
+  }, [
+    usePGApi,
+    contractAddress,
+    owner,
+    limit,
+    active,
+    fetchAll,
+    maxPages,
+    delayMs,
+  ]);
 
   useEffect(() => {
-    fetchNfts();
-  }, [fetchNfts]);
+    if (!usePGApi) {
+      fetchNfts();
+    }
+  }, [fetchNfts, usePGApi]);
 
   const refetch = useCallback(() => {
-    fetchNfts();
-  }, [fetchNfts]);
+    if (usePGApi) {
+      pgResult.refetch();
+    } else {
+      fetchNfts();
+    }
+  }, [usePGApi, pgResult, fetchNfts]);
+
+  // If using PG API, convert and return its results
+  if (usePGApi) {
+    const convertedNfts: VoyagerNftItem[] = pgResult.nfts.map((nft) => ({
+      tokenId: nft.tokenId,
+      contract_address: contractAddress,
+      owner: owner || "",
+    }));
+
+    return {
+      nfts: convertedNfts,
+      loading: pgResult.loading,
+      error: pgResult.error,
+      refetch,
+      hasMore: false, // PG API doesn't support pagination
+    };
+  }
 
   return {
     nfts,
