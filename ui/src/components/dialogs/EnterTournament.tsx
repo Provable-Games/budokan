@@ -1532,12 +1532,23 @@ export function EnterTournamentDialog({
             // Non-controller wallet - controller username (required) + player name (optional)
             <>
               <div className="flex flex-col gap-2">
-                <Label
-                  htmlFor="controllerUsername"
-                  className="text-lg font-brand"
-                >
-                  Controller Username
-                </Label>
+                <div className="flex flex-row items-center justify-between">
+                  <Label
+                    htmlFor="controllerUsername"
+                    className="text-lg font-brand"
+                  >
+                    Controller Username
+                  </Label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.open("https://play.cartridge.gg", "_blank");
+                    }}
+                    className="text-brand hover:text-brand-muted text-sm underline underline-offset-2 transition-colors"
+                  >
+                    Create Account →
+                  </button>
+                </div>
                 <div className="flex flex-col gap-4">
                   <Input
                     id="controllerUsername"
