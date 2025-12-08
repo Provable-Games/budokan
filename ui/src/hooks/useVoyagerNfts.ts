@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { addAddressPadding } from "starknet";
+import { usePGNfts, shouldUsePGApi } from "./usePGNfts";
 
 export interface VoyagerNftItem {
   tokenId: string;
@@ -50,10 +51,38 @@ export const useVoyagerNfts = ({
   maxPages = 10,
   delayMs = 500, // Default 500ms delay between requests
 }: UseVoyagerNftsProps): UseVoyagerNftsResult => {
+  // Check if we should use the PG API instead
+  const usePGApi = shouldUsePGApi(contractAddress);
+
+  // Use PG API hook if applicable
+  const pgResult = usePGNfts({
+    contractAddress,
+    owner,
+    active: active && usePGApi,
+  });
+
   const [nfts, setNfts] = useState<VoyagerNftItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
   const [hasMore, setHasMore] = useState<boolean>(false);
+
+  // If using PG API, convert and return its results
+  if (usePGApi) {
+    // Convert PG NFT format to Voyager format
+    const convertedNfts: VoyagerNftItem[] = pgResult.nfts.map((nft) => ({
+      tokenId: nft.tokenId,
+      contract_address: contractAddress,
+      owner: owner || "",
+    }));
+
+    return {
+      nfts: convertedNfts,
+      loading: pgResult.loading,
+      error: pgResult.error,
+      refetch: pgResult.refetch,
+      hasMore: false, // PG API doesn't support pagination
+    };
+  }
 
   const fetchNfts = useCallback(async () => {
     if (!active || !contractAddress) {
