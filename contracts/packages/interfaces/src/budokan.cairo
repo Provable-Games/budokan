@@ -2,11 +2,10 @@
 
 // Import types from component packages
 // Import budokan-specific types
-use budokan::models::budokan::{EntryFee, GameConfig, Metadata, Tournament};
+use budokan::models::budokan::{EntryFee, GameConfig, Metadata, RewardType, Tournament};
 use budokan::models::schedule::{Phase, Schedule};
 use budokan_entry_requirement::models::{EntryRequirement, QualificationProof};
-use budokan_prize::models::PrizeType;
-use budokan_token_validator::models::TokenTypeData;
+use budokan_prize::models::{Prize, TokenTypeData};
 use starknet::ContractAddress;
 
 #[starknet::interface]
@@ -17,7 +16,6 @@ pub trait IBudokan<TState> {
     // Note: get_entry_fee is exposed via IEntryFee
     // Note: get_entry_requirement, get_qualification_entries are exposed via IEntryRequirement
     // Note: get_prize, get_total_prizes, is_prize_claimed are exposed via IPrize
-    // Note: get_token, is_token_registered, register_token are exposed via ITokenValidator
     fn total_tournaments(self: @TState) -> u64;
     fn tournament(self: @TState, tournament_id: u64) -> Tournament;
     fn tournament_entries(self: @TState, tournament_id: u64) -> u32;
@@ -33,8 +31,6 @@ pub trait IBudokan<TState> {
         game_config: GameConfig,
         entry_fee: Option<EntryFee>,
         entry_requirement: Option<EntryRequirement>,
-        soulbound: bool,
-        play_url: ByteArray,
     ) -> Tournament;
 
     fn enter_tournament(
@@ -51,13 +47,22 @@ pub trait IBudokan<TState> {
 
     fn submit_score(ref self: TState, tournament_id: u64, token_id: u64, position: u8);
 
-    fn claim_prize(ref self: TState, tournament_id: u64, prize_type: PrizeType);
+    /// Claim a reward from a tournament
+    /// reward_type specifies what to claim:
+    /// - Prize: sponsored prizes (Single or Distributed)
+    /// - EntryFee: entry fee shares (Position, GameCreator, Refund, AdditionalShare)
+    fn claim_reward(ref self: TState, tournament_id: u64, reward_type: RewardType);
 
+    /// Add a sponsored prize to a tournament
+    /// @param tournament_id The tournament to add the prize to
+    /// @param token_address The token address for the prize
+    /// @param token_type The token type data (ERC20 with amount/distribution, or ERC721 with id)
+    /// @param position Position for Single prizes (None for Distributed prizes)
     fn add_prize(
         ref self: TState,
         tournament_id: u64,
         token_address: ContractAddress,
         token_type: TokenTypeData,
-        position: u8,
-    ) -> u64;
+        position: Option<u32>,
+    ) -> Prize;
 }

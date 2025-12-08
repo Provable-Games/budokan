@@ -12,6 +12,3 @@ pub const MAX_SUBMISSION_PERIOD: u64 = 7776000; // 90 days
 
 // Game creator token ID
 pub const GAME_CREATOR_TOKEN_ID: u64 = 0;
-
-// Re-export token constants for convenience
-pub use budokan_token_validator::models::{SEPOLIA_CHAIN_ID, TWO_POW_128};

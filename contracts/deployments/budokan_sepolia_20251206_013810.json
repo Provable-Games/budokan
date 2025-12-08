@@ -1,0 +1,17 @@
+{
+  "network": "sepolia",
+  "timestamp": "2025-12-06T01:38:10Z",
+  "budokan_contract": {
+    "address": "0x008142c0731b33bbd8b8fc320e969bee1f0d6dcc3816ddfdd55a01a8a6aa674a",
+    "class_hash": "0x06df1fc97153e287c8f98a07fec080484b660a87e13c4ca0cd56d3606c601dcd",
+    "constructor_args": {
+      "owner_address": "0x065d2AB17338b5AffdEbAF95E2D79834B5f30Bac596fF55563c62C3c98700150",
+      "default_token_address": "0x02334dc9c950c74c3228e2a343d495ae36f0b4edf06767a679569e9f9de08776",
+      "event_relayer_address": "0x13bcb99412d8a0e5ab93c7d7025fa5be67087f1a0bd0ed8004b0f010d5cb234"
+    }
+  },
+  "event_relayer": {
+    "address": "0x13bcb99412d8a0e5ab93c7d7025fa5be67087f1a0bd0ed8004b0f010d5cb234",
+    "configured": true
+  }
+}

@@ -18,7 +18,7 @@ pub fn test_metadata() -> Metadata {
 }
 
 pub fn test_game_config(game_address: ContractAddress) -> GameConfig {
-    GameConfig { address: game_address, settings_id: 1, prize_spots: 1 }
+    GameConfig { address: game_address, settings_id: 1, soulbound: false, play_url: "" }
 }
 
 pub fn test_schedule() -> Schedule {
@@ -103,8 +103,6 @@ pub fn create_basic_tournament(budokan: IBudokanDispatcher, game: ContractAddres
             test_game_config(game),
             Option::None,
             Option::None,
-            false,
-            "",
         )
 }
 // pub fn register_tokens_for_test(

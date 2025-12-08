@@ -50,22 +50,13 @@ pub mod entry_validator_mock {
 
     #[constructor]
     fn constructor(
-        ref self: ContractState, tournament_address: ContractAddress, registration_only: bool,
+        ref self: ContractState, budokan_address: ContractAddress, registration_only: bool,
     ) {
-        self.entry_validator.initializer(tournament_address, registration_only);
+        self.entry_validator.initializer(budokan_address, registration_only);
     }
 
     // Implement the EntryValidator trait for the contract
     impl EntryValidatorImplInternal of EntryValidator<ContractState> {
-        fn valid_entry(
-            self: @ContractState,
-            tournament_id: u64,
-            player_address: ContractAddress,
-            qualification: Span<felt252>,
-        ) -> bool {
-            self.validate_entry_internal(tournament_id, player_address, qualification)
-        }
-
         fn validate_entry(
             self: @ContractState,
             tournament_id: u64,

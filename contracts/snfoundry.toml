@@ -1,0 +1,10 @@
+[sncast.default]
+account = "deployer"
+
+[sncast.sepolia]
+account = "deployer"
+url = "https://api.cartridge.gg/x/starknet/sepolia"
+
+[sncast.mainnet]
+account = "deployer"
+url = "https://api.cartridge.gg/x/starknet/mainnet"

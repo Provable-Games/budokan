@@ -15,7 +15,6 @@ budokan_distribution = { path = "../distribution" }
 budokan_registration = { path = "../registration" }
 budokan_entry_fee = { path = "../entry_fee" }
 budokan_entry_requirement = { path = "../entry_requirement" }
-budokan_token_validator = { path = "../token_validator" }
 budokan_prize = { path = "../prize" }
 
 [dev-dependencies]

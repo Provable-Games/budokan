@@ -1,0 +1,4 @@
+bindings/
+target/
+.env
+.env.sepolia

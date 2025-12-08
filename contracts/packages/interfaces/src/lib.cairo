@@ -14,4 +14,3 @@ pub mod entry_validator;
 pub mod event_relayer;
 pub mod prize;
 pub mod registration;
-pub mod token_validator;

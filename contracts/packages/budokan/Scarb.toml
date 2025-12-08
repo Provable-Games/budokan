@@ -38,8 +38,6 @@ budokan_entry_fee = { path = "../entry_fee" }
 budokan_entry_requirement = { path = "../entry_requirement" }
 budokan_prize = { path = "../prize" }
 budokan_registration = { path = "../registration" }
-budokan_token_validator = { path = "../token_validator" }
-budokan_event_relayer = { path = "../event_relayer" }
 
 [dev-dependencies]
 cairo_test = "2.13.1"

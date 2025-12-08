@@ -2,3 +2,6 @@
 
 pub mod entry_fee;
 pub mod models;
+
+#[cfg(test)]
+mod tests;

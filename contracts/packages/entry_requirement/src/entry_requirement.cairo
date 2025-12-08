@@ -4,16 +4,15 @@
 /// etc.).
 /// This component manages:
 /// - Entry requirement configuration per context
-/// - Entry requirement type (token, context, allowlist, extension)
+/// - Entry requirement type (token, allowlist, extension)
 /// - Qualification entries tracking
 /// - Entry count management
 
 #[starknet::component]
 pub mod EntryRequirementComponent {
     use budokan_entry_requirement::models::{
-        ContextQualification, EntryRequirement, EntryRequirementMeta,
-        EntryRequirementMetaStorePacking, EntryRequirementType, ExtensionConfig,
-        QualificationEntries, QualificationProof,
+        EntryRequirement, EntryRequirementMeta, EntryRequirementMetaStorePacking,
+        EntryRequirementType, ExtensionConfig, QualificationEntries, QualificationProof,
     };
     use budokan_interfaces::entry_requirement::IEntryRequirement;
     use budokan_interfaces::entry_validator::{
@@ -28,10 +27,8 @@ pub mod EntryRequirementComponent {
 
     // Entry requirement type constants
     const REQ_TYPE_TOKEN: u8 = 0;
-    // TODO: remove CONTEXT type in favor of extension-based requirements
-    const REQ_TYPE_CONTEXT: u8 = 1;
-    const REQ_TYPE_ALLOWLIST: u8 = 2;
-    const REQ_TYPE_EXTENSION: u8 = 3;
+    const REQ_TYPE_ALLOWLIST: u8 = 1;
+    const REQ_TYPE_EXTENSION: u8 = 2;
     const REQ_TYPE_NONE: u8 = 255;
 
     #[storage]
@@ -40,11 +37,6 @@ pub mod EntryRequirementComponent {
         EntryRequirement_meta: Map<u64, EntryRequirementMeta>,
         /// Token address for token-gated requirements
         EntryRequirement_token: Map<u64, ContractAddress>,
-        // TODO: move context to extension.
-        /// Qualifying context IDs for context-based requirements (stored as Vec)
-        EntryRequirement_context_ids: Map<u64, Vec<u64>>,
-        /// Qualifier type for context-based requirements (application-defined meaning)
-        EntryRequirement_qualifier_type: Map<u64, u8>,
         /// Allowlist addresses for allowlist-gated requirements (stored as Vec)
         EntryRequirement_allowlist: Map<u64, Vec<ContractAddress>>,
         /// Extension address for extension-gated requirements
@@ -97,21 +89,11 @@ pub mod EntryRequirementComponent {
                     let token = self.EntryRequirement_token.entry(context_id).read();
                     EntryRequirementType::token(token)
                 },
-                1 => { // CONTEXT
-                    let context_ids = self.read_context_ids(context_id);
-                    let qualifier_type = self
-                        .EntryRequirement_qualifier_type
-                        .entry(context_id)
-                        .read();
-                    EntryRequirementType::context(
-                        ContextQualification { context_ids, qualifier_type },
-                    )
-                },
-                2 => { // ALLOWLIST
+                1 => { // ALLOWLIST
                     let addresses = self.read_allowlist(context_id);
                     EntryRequirementType::allowlist(addresses)
                 },
-                3 => { // EXTENSION
+                2 => { // EXTENSION
                     let address = self.EntryRequirement_extension_address.entry(context_id).read();
                     let config = self.read_extension_config(context_id);
                     EntryRequirementType::extension(ExtensionConfig { address, config })
@@ -134,14 +116,6 @@ pub mod EntryRequirementComponent {
                         EntryRequirementType::token(token) => {
                             self.EntryRequirement_token.entry(context_id).write(token);
                             (REQ_TYPE_TOKEN, req.entry_limit)
-                        },
-                        EntryRequirementType::context(context_qualification) => {
-                            self.write_context_ids(context_id, context_qualification.context_ids);
-                            self
-                                .EntryRequirement_qualifier_type
-                                .entry(context_id)
-                                .write(context_qualification.qualifier_type);
-                            (REQ_TYPE_CONTEXT, req.entry_limit)
                         },
                         EntryRequirementType::allowlist(addresses) => {
                             self.write_allowlist(context_id, addresses);
@@ -192,35 +166,6 @@ pub mod EntryRequirementComponent {
         }
 
         // Internal helper functions
-        fn read_context_ids(self: @ComponentState<TContractState>, context_id: u64) -> Span<u64> {
-            let vec = self.EntryRequirement_context_ids.entry(context_id);
-            let mut arr = ArrayTrait::new();
-            let len = vec.len();
-            let mut i: u64 = 0;
-            loop {
-                if i >= len {
-                    break;
-                }
-                arr.append(vec.at(i).read());
-                i += 1;
-            }
-            arr.span()
-        }
-
-        fn write_context_ids(
-            ref self: ComponentState<TContractState>, context_id: u64, ids: Span<u64>,
-        ) {
-            let mut vec = self.EntryRequirement_context_ids.entry(context_id);
-            let mut i: u32 = 0;
-            loop {
-                if i >= ids.len() {
-                    break;
-                }
-                vec.push(*ids.at(i));
-                i += 1;
-            };
-        }
-
         fn read_allowlist(
             self: @ComponentState<TContractState>, context_id: u64,
         ) -> Span<ContractAddress> {

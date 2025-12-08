@@ -2,3 +2,6 @@
 
 pub mod models;
 pub mod prize;
+
+#[cfg(test)]
+mod tests;

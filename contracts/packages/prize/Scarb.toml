@@ -13,7 +13,7 @@ starknet.workspace = true
 dojo.workspace = true
 openzeppelin_interfaces.workspace = true
 budokan_interfaces = { path = "../interfaces" }
-budokan_token_validator = { path = "../token_validator" }
+budokan_distribution = { path = "../distribution" }
 
 [dev-dependencies]
 snforge_std.workspace = true

@@ -13,8 +13,7 @@ pub mod EntryValidatorComponent {
 
     #[storage]
     pub struct Storage {
-        // TODO: generalise to context address?
-        tournament_address: ContractAddress,
+        budokan_address: ContractAddress,
         registration_only: bool,
     }
 
@@ -22,14 +21,10 @@ pub mod EntryValidatorComponent {
     #[derive(Drop, starknet::Event)]
     pub enum Event {}
 
+    /// Internal trait that implementors must provide.
+    /// This trait defines the validation logic that each extension implements.
     pub trait EntryValidator<TContractState> {
-        fn valid_entry(
-            self: @TContractState,
-            tournament_id: u64,
-            player_address: ContractAddress,
-            qualification: Span<felt252>,
-        ) -> bool;
-
+        /// Validate if a player can enter a tournament (implementor provides logic)
         fn validate_entry(
             self: @TContractState,
             tournament_id: u64,
@@ -37,6 +32,7 @@ pub mod EntryValidatorComponent {
             qualification: Span<felt252>,
         ) -> bool;
 
+        /// Check how many entries are left for a player
         fn entries_left(
             self: @TContractState,
             tournament_id: u64,
@@ -44,12 +40,15 @@ pub mod EntryValidatorComponent {
             qualification: Span<felt252>,
         ) -> Option<u8>;
 
+        /// Returns true if this validator only validates during registration period
         fn registration_only(self: @TContractState) -> bool;
 
+        /// Add configuration for a tournament
         fn add_config(
             ref self: TContractState, tournament_id: u64, entry_limit: u8, config: Span<felt252>,
         );
 
+        /// Add an entry for a player in a tournament
         fn add_entry(
             ref self: TContractState,
             tournament_id: u64,
@@ -57,6 +56,7 @@ pub mod EntryValidatorComponent {
             qualification: Span<felt252>,
         );
 
+        /// Remove an entry for a player in a tournament
         fn remove_entry(
             ref self: TContractState,
             tournament_id: u64,
@@ -73,17 +73,16 @@ pub mod EntryValidatorComponent {
         +SRC5Component::HasComponent<TContractState>,
         +Drop<TContractState>,
     > of IEntryValidator<ComponentState<TContractState>> {
-        fn valid_entry(
-            self: @ComponentState<TContractState>,
-            tournament_id: u64,
-            player_address: ContractAddress,
-            qualification: Span<felt252>,
-        ) -> bool {
-            let contract = self.get_contract();
-            EntryValidator::valid_entry(contract, tournament_id, player_address, qualification)
+        fn budokan_address(self: @ComponentState<TContractState>) -> ContractAddress {
+            self.budokan_address.read()
         }
 
-        fn validate_entry(
+        fn registration_only(self: @ComponentState<TContractState>) -> bool {
+            let contract = self.get_contract();
+            EntryValidator::registration_only(contract)
+        }
+
+        fn valid_entry(
             self: @ComponentState<TContractState>,
             tournament_id: u64,
             player_address: ContractAddress,
@@ -101,11 +100,6 @@ pub mod EntryValidatorComponent {
         ) -> Option<u8> {
             let contract = self.get_contract();
             EntryValidator::entries_left(contract, tournament_id, player_address, qualification)
-        }
-
-        fn registration_only(self: @ComponentState<TContractState>) -> bool {
-            let contract = self.get_contract();
-            EntryValidator::registration_only(contract)
         }
 
         fn add_config(
@@ -150,18 +144,18 @@ pub mod EntryValidatorComponent {
     > of InternalTrait<TContractState> {
         fn initializer(
             ref self: ComponentState<TContractState>,
-            tournament_address: ContractAddress,
+            budokan_address: ContractAddress,
             registration_only: bool,
         ) {
-            self.tournament_address.write(tournament_address);
+            self.budokan_address.write(budokan_address);
             self.registration_only.write(registration_only);
 
             let mut src5_component = get_dep_component_mut!(ref self, SRC5);
             src5_component.register_interface(IENTRY_VALIDATOR_ID);
         }
 
-        fn get_tournament_address(self: @ComponentState<TContractState>) -> ContractAddress {
-            self.tournament_address.read()
+        fn get_budokan_address(self: @ComponentState<TContractState>) -> ContractAddress {
+            self.budokan_address.read()
         }
 
         fn is_registration_only(self: @ComponentState<TContractState>) -> bool {

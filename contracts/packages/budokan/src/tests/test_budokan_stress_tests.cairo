@@ -22,14 +22,15 @@ fn test_create_tournament_with_100_prize_spots() {
     let mut game_config = test_game_config(contracts.minigame.contract_address);
     game_config.prize_spots = 100;
 
-    // Using basis points: 10000 = 100%, so 10000 means 100% to context creator
+    // Using basis points: 10000 = 100%, so 10000 means 100% to tournament creator
     let entry_fee = EntryFee {
         token_address: contracts.erc20.contract_address,
         amount: 10000000000,
-        distribution: Distribution::Linear,
-        context_creator_share: Option::Some(10000), // 100% to context creator
+        distribution: Distribution::Linear(10), // weight 1.0
+        tournament_creator_share: Option::Some(10000), // 100% to tournament creator
         game_creator_share: Option::None,
         refund_share: Option::None,
+        distribution_positions: Option::None // Dynamic - use actual leaderboard size
     };
 
     let tournament = contracts

@@ -55,11 +55,9 @@ dependencies = [
  "budokan_distribution",
  "budokan_entry_fee",
  "budokan_entry_requirement",
- "budokan_event_relayer",
  "budokan_interfaces",
  "budokan_prize",
  "budokan_registration",
- "budokan_token_validator",
  "dojo",
  "game_components_leaderboard",
  "game_components_metagame",
@@ -79,6 +77,8 @@ dependencies = [
 name = "budokan_distribution"
 version = "0.0.1"
 dependencies = [
+ "alexandria_math",
+ "math",
  "snforge_std",
 ]
 
@@ -96,18 +96,10 @@ name = "budokan_entry_requirement"
 version = "0.0.1"
 dependencies = [
  "budokan_interfaces",
+ "game_components_minigame",
  "openzeppelin_interfaces",
  "openzeppelin_introspection",
- "snforge_std",
-]
-
-[[package]]
-name = "budokan_event_relayer"
-version = "0.0.1"
-dependencies = [
- "budokan",
- "dojo",
- "openzeppelin_access",
+ "openzeppelin_token",
  "snforge_std",
 ]
 
@@ -121,7 +113,6 @@ dependencies = [
  "budokan_entry_requirement",
  "budokan_prize",
  "budokan_registration",
- "budokan_token_validator",
  "snforge_std",
 ]
 
@@ -129,8 +120,8 @@ dependencies = [
 name = "budokan_prize"
 version = "0.0.1"
 dependencies = [
+ "budokan_distribution",
  "budokan_interfaces",
- "budokan_token_validator",
  "dojo",
  "openzeppelin_interfaces",
  "snforge_std",
@@ -141,16 +132,6 @@ name = "budokan_registration"
 version = "0.0.1"
 dependencies = [
  "budokan_interfaces",
- "snforge_std",
-]
-
-[[package]]
-name = "budokan_token_validator"
-version = "0.0.1"
-dependencies = [
- "budokan_interfaces",
- "openzeppelin_interfaces",
- "openzeppelin_introspection",
  "snforge_std",
 ]
 
@@ -239,6 +220,10 @@ dependencies = [
 name = "graffiti"
 version = "0.1.0"
 source = "git+https://github.com/ponderingdemocritus/graffiti?rev=bc569531791dbc71c6cd8d9bc154c34eedad31fe#bc569531791dbc71c6cd8d9bc154c34eedad31fe"
+
+[[package]]
+name = "math"
+version = "0.0.1"
 
 [[package]]
 name = "openzeppelin_access"

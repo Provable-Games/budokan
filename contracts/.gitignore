@@ -2,3 +2,5 @@ bindings/
 target/
 .env
 .env.sepolia
+.snfoundry_cache/
+snfoundry_trace/

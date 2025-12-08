@@ -12,20 +12,8 @@ pub struct EntryRequirement {
 #[derive(Copy, Drop, Serde, PartialEq)]
 pub enum EntryRequirementType {
     token: ContractAddress,
-    /// Context-based qualification (e.g., previous tournament winners/participants, quest
-    /// completers)
-    /// The qualifier_type is application-defined (e.g., 0=winners, 1=participants for tournaments)
-    context: ContextQualification,
     allowlist: Span<ContractAddress>,
     extension: ExtensionConfig,
-}
-
-/// Generic context-based qualification
-/// Applications define what qualifier_type means (e.g., for tournaments: 0=winners, 1=participants)
-#[derive(Copy, Drop, Serde, PartialEq)]
-pub struct ContextQualification {
-    pub context_ids: Span<u64>,
-    pub qualifier_type: u8,
 }
 
 #[derive(Copy, Drop, Serde, PartialEq)]
@@ -43,21 +31,10 @@ pub struct QualificationEntries {
 
 #[derive(Copy, Drop, Serde, PartialEq)]
 pub enum QualificationProof {
-    /// For qualifying via previous context (tournament, quest, etc.)
-    Context: ContextProof,
     /// For qualifying via NFT ownership
     NFT: NFTQualification,
     Address: ContractAddress,
     Extension: Span<felt252>,
-}
-
-/// Proof of qualification from a previous context
-/// The data field is interpreted by the application (e.g., for tournaments it may contain token_id
-/// and position)
-#[derive(Copy, Drop, Serde, PartialEq)]
-pub struct ContextProof {
-    pub context_id: u64,
-    pub data: Span<felt252>,
 }
 
 #[derive(Copy, Drop, Serde, PartialEq, starknet::Store)]
@@ -68,7 +45,7 @@ pub struct NFTQualification {
 /// Entry requirement metadata
 /// Packs: entry_limit (u32) | req_type (u8) into a single u64
 /// Total: 32 + 8 = 40 bits -> fits in u64
-/// req_type: 0=token, 1=context, 2=allowlist, 3=extension, 255=None
+/// req_type: 0=token, 1=allowlist, 2=extension, 255=None
 #[derive(Copy, Drop, Serde)]
 pub struct EntryRequirementMeta {
     pub entry_limit: u32, // Max ~4.3B entries per qualified address
