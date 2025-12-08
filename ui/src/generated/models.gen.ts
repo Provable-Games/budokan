@@ -128,20 +128,31 @@ export interface EntryCountValue {
   count: BigNumberish;
 }
 
+// Type definition for `budokan_distribution::models::Distribution` enum
+export type Distribution = {
+  Linear: number; // u16 weight
+  Exponential: number; // u16 weight
+  Uniform: undefined;
+  Custom: Array<number>; // Array of u16 values
+};
+export type DistributionEnum = CairoCustomEnum;
+
 // Type definition for `tournaments::components::models::tournament::EntryFee` struct
 export interface EntryFee {
   token_address: string;
   amount: BigNumberish;
-  distribution: Array<BigNumberish>;
+  distribution: DistributionEnum;
   tournament_creator_share: CairoOption<BigNumberish>;
   game_creator_share: CairoOption<BigNumberish>;
+  refund_share: CairoOption<BigNumberish>;
 }
 
 // Type definition for `tournaments::components::models::tournament::GameConfig` struct
 export interface GameConfig {
   address: string;
   settings_id: BigNumberish;
-  prize_spots: BigNumberish;
+  soulbound: boolean;
+  play_url: string;
 }
 
 // Type definition for `tournaments::components::models::tournament::Leaderboard` struct
@@ -267,8 +278,6 @@ export interface Tournament {
   game_config: GameConfig;
   entry_fee: CairoOption<EntryFee>;
   entry_requirement: CairoOption<EntryRequirement>;
-  soulbound: boolean;
-  play_url: string;
 }
 
 // Type definition for `tournaments::components::models::tournament::TournamentConfig` struct
@@ -303,8 +312,6 @@ export interface TournamentValue {
   game_config: GameConfig;
   entry_fee: CairoOption<EntryFee>;
   entry_requirement: CairoOption<EntryRequirement>;
-  soulbound: boolean;
-  play_url: string;
 }
 
 export type EntryRequirement = {
@@ -568,18 +575,32 @@ export const schemaTemplate: {
       "distribution",
       "tournament_creator_share",
       "game_creator_share",
+      "refund_share",
     ],
     token_address: "",
     amount: 0,
-    distribution: [0],
+    distribution: new CairoCustomEnum({
+      Linear: undefined,
+      Exponential: 10, // Default weight 10 = 1.0
+      Uniform: undefined,
+      Custom: undefined,
+    }),
     tournament_creator_share: new CairoOption(CairoOptionVariant.None),
     game_creator_share: new CairoOption(CairoOptionVariant.None),
+    refund_share: new CairoOption(CairoOptionVariant.None),
   },
   GameConfig: {
-    fieldOrder: ["address", "settings_id", "prize_spots"],
+    fieldOrder: [
+      "address",
+      "settings_id",
+      "prize_spots",
+      "soulbound",
+      "play_url",
+    ],
     address: "",
     settings_id: 0,
-    prize_spots: 0,
+    soulbound: false,
+    play_url: "",
   },
   Leaderboard: {
     fieldOrder: ["tournament_id", "token_ids"],
@@ -725,11 +746,14 @@ export const schemaTemplate: {
       game: { start: 0, end: 0 },
       submission_duration: 0,
     },
-    game_config: { address: "", settings_id: 0, prize_spots: 0 },
+    game_config: {
+      address: "",
+      settings_id: 0,
+      soulbound: false,
+      play_url: "",
+    },
     entry_fee: new CairoOption(CairoOptionVariant.None),
     entry_requirement: new CairoOption(CairoOptionVariant.None),
-    soulbound: false,
-    play_url: "",
   },
   TournamentConfig: {
     fieldOrder: ["key", "safe_mode", "test_mode"],
@@ -775,12 +799,11 @@ export const schemaTemplate: {
     game_config: {
       address: "",
       settings_id: 0,
-      prize_spots: 0,
+      soulbound: false,
+      play_url: "",
     },
     entry_fee: new CairoOption(CairoOptionVariant.None),
     entry_requirement: new CairoOption(CairoOptionVariant.None),
-    soulbound: false,
-    play_url: "",
   },
 };
 

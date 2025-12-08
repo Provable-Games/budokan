@@ -1,24 +1,18 @@
 import { StarknetDomain } from "starknet";
 import { DojoManifest } from "@/dojo/hooks/useDojoSystem";
-import tournament_manifest_dev from "../../../../contracts/manifest_dev.json";
-import tournament_manifest_slot from "../../../../contracts/manifest_slot.json";
 import tournament_manifest_mainnet from "../../../../contracts/manifest_mainnet.json";
 import tournament_manifest_sepolia from "../../../../contracts/manifest_sepolia.json";
 import { ChainId, CHAINS } from "@/dojo/setup/networks";
 import { DojoAppConfig } from "@/context/dojo";
 
 export const manifests: Record<ChainId, DojoManifest> = {
-  [ChainId.KATANA_LOCAL]: tournament_manifest_dev as DojoManifest,
-  [ChainId.WP_PG_SLOT_2]: tournament_manifest_slot as DojoManifest,
   [ChainId.SN_MAIN]: tournament_manifest_mainnet as DojoManifest,
   [ChainId.SN_SEPOLIA]: tournament_manifest_sepolia as DojoManifest,
 };
 
 export const namespace: Record<ChainId, string> = {
-  [ChainId.KATANA_LOCAL]: "budokan_v_1_0_5",
-  [ChainId.WP_PG_SLOT_2]: "budokan_1_0_8",
   [ChainId.SN_MAIN]: "budokan_1_0_8",
-  [ChainId.SN_SEPOLIA]: "budokan_1_0_9",
+  [ChainId.SN_SEPOLIA]: "budokan_relayer_0_0_2",
 };
 
 export const isChainIdSupported = (chainId: ChainId): boolean => {

@@ -1,12 +1,17 @@
+// SPDX-License-Identifier: BUSL-1.1
+
 #[dojo::contract]
 mod BudokanEventRelayer {
     use budokan_event_relayer::constants::DEFAULT_NS;
-    use budokan_event_relayer::models::PrizeType;
     use budokan_event_relayer::events::{
-        LeaderboardUpdate, PrizeAdded, PrizeClaimed, ScoreSubmitted, TokenRegistered,
-        TournamentCreated, TournamentRegistration,
+        EntryCount, Leaderboard, PlatformMetrics, Prize, PrizeClaim, PrizeMetrics,
+        QualificationEntries, Registration, Tournament,
     };
     use budokan_event_relayer::interfaces::IBudokanEventRelayer;
+    use budokan_event_relayer::models::{
+        EntryFee, EntryRequirement, GameConfig, Metadata, PrizeType, QualificationProof, Schedule,
+        TokenTypeData,
+    };
     use dojo::event::EventStorage;
     use openzeppelin_access::ownable::OwnableComponent;
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
@@ -41,37 +46,39 @@ mod BudokanEventRelayer {
 
     #[abi(embed_v0)]
     impl BudokanEventRelayerImpl of IBudokanEventRelayer<ContractState> {
-        fn emit_tournament_created(
+        // ============ Tournament Events ============
+
+        fn emit_tournament(
             ref self: ContractState,
-            tournament_id: u64,
+            id: u64,
             created_at: u64,
             created_by: ContractAddress,
             creator_token_id: u64,
-            name: felt252,
-            description: ByteArray,
-            game_address: ContractAddress,
-            settings_id: u32,
-            prize_spots: u8,
-            soulbound: bool,
+            metadata: Metadata,
+            schedule: Schedule,
+            game_config: GameConfig,
+            entry_fee: Option<EntryFee>,
+            entry_requirement: Option<EntryRequirement>,
         ) {
             self.assert_only_budokan();
             let mut world = self.world(@DEFAULT_NS());
             world
                 .emit_event(
-                    @TournamentCreated {
-                        tournament_id,
+                    @Tournament {
+                        id,
                         created_at,
                         created_by,
                         creator_token_id,
-                        name,
-                        description,
-                        game_address,
-                        settings_id,
-                        prize_spots,
-                        soulbound,
+                        metadata,
+                        schedule,
+                        game_config,
+                        entry_fee,
+                        entry_requirement,
                     },
                 );
         }
+
+        // ============ Registration Events ============
 
         fn emit_registration(
             ref self: ContractState,
@@ -79,67 +86,98 @@ mod BudokanEventRelayer {
             game_token_id: u64,
             tournament_id: u64,
             entry_number: u32,
+            has_submitted: bool,
             is_banned: bool,
         ) {
             self.assert_only_budokan();
             let mut world = self.world(@DEFAULT_NS());
             world
                 .emit_event(
-                    @TournamentRegistration {
-                        game_address, game_token_id, tournament_id, entry_number, is_banned,
+                    @Registration {
+                        game_address,
+                        game_token_id,
+                        tournament_id,
+                        entry_number,
+                        has_submitted,
+                        is_banned,
                     },
                 );
         }
 
-        fn emit_score_submitted(
-            ref self: ContractState, tournament_id: u64, game_token_id: u64, position: u8,
-        ) {
-            self.assert_only_budokan();
-            let mut world = self.world(@DEFAULT_NS());
-            world.emit_event(@ScoreSubmitted { tournament_id, game_token_id, position });
-        }
-
-        fn emit_leaderboard_update(
-            ref self: ContractState, tournament_id: u64, token_ids: Span<u64>,
-        ) {
-            self.assert_only_budokan();
-            let mut world = self.world(@DEFAULT_NS());
-            world.emit_event(@LeaderboardUpdate { tournament_id, token_ids });
-        }
-
-        fn emit_prize_added(
+        fn emit_qualification_entries(
             ref self: ContractState,
-            prize_id: u64,
             tournament_id: u64,
+            qualification_proof: QualificationProof,
+            entry_count: u8,
+        ) {
+            self.assert_only_budokan();
+            let mut world = self.world(@DEFAULT_NS());
+            world
+                .emit_event(
+                    @QualificationEntries { tournament_id, qualification_proof, entry_count },
+                );
+        }
+
+        // ============ Leaderboard Events ============
+
+        fn emit_leaderboard(ref self: ContractState, tournament_id: u64, token_ids: Span<u64>) {
+            self.assert_only_budokan();
+            let mut world = self.world(@DEFAULT_NS());
+            world.emit_event(@Leaderboard { tournament_id, token_ids });
+        }
+
+        // ============ Prize Events ============
+
+        fn emit_prize(
+            ref self: ContractState,
+            id: u64,
+            tournament_id: u64,
+            payout_position: u32,
             token_address: ContractAddress,
-            payout_position: u8,
+            token_type: TokenTypeData,
             sponsor_address: ContractAddress,
         ) {
             self.assert_only_budokan();
             let mut world = self.world(@DEFAULT_NS());
             world
                 .emit_event(
-                    @PrizeAdded {
-                        prize_id, tournament_id, token_address, payout_position, sponsor_address,
+                    @Prize {
+                        id,
+                        tournament_id,
+                        payout_position,
+                        token_address,
+                        token_type,
+                        sponsor_address,
                     },
                 );
         }
 
-        fn emit_prize_claimed(ref self: ContractState, tournament_id: u64, prize_type: PrizeType) {
-            self.assert_only_budokan();
-            let mut world = self.world(@DEFAULT_NS());
-            world.emit_event(@PrizeClaimed { tournament_id, prize_type });
-        }
-
-        fn emit_token_registered(
-            ref self: ContractState,
-            token_address: ContractAddress,
-            name: ByteArray,
-            symbol: ByteArray,
+        fn emit_prize_claim(
+            ref self: ContractState, tournament_id: u64, prize_type: PrizeType, claimed: bool,
         ) {
             self.assert_only_budokan();
             let mut world = self.world(@DEFAULT_NS());
-            world.emit_event(@TokenRegistered { token_address, name, symbol });
+            world.emit_event(@PrizeClaim { tournament_id, prize_type, claimed });
+        }
+
+        // ============ Metrics Events ============
+
+        fn emit_platform_metrics(ref self: ContractState, key: felt252, total_tournaments: u64) {
+            self.assert_only_budokan();
+            let mut world = self.world(@DEFAULT_NS());
+            world.emit_event(@PlatformMetrics { key, total_tournaments });
+        }
+
+        fn emit_prize_metrics(ref self: ContractState, key: felt252, total_prizes: u64) {
+            self.assert_only_budokan();
+            let mut world = self.world(@DEFAULT_NS());
+            world.emit_event(@PrizeMetrics { key, total_prizes });
+        }
+
+        fn emit_entry_count(ref self: ContractState, tournament_id: u64, count: u32) {
+            self.assert_only_budokan();
+            let mut world = self.world(@DEFAULT_NS());
+            world.emit_event(@EntryCount { tournament_id, count });
         }
     }
 

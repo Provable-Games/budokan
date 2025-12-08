@@ -37,20 +37,9 @@ export const isControllerOnly = (gameAddress: string): boolean => {
 export const getGames = (): Game[] => {
   const { selectedChainConfig } = useDojo();
   const isSepolia = selectedChainConfig.chainId === ChainId.SN_SEPOLIA;
-  const isLocalKatana = selectedChainConfig.chainId === ChainId.KATANA_LOCAL;
   const isMainnet = selectedChainConfig.chainId === ChainId.SN_MAIN;
-  if (isLocalKatana) {
-    return [
-      {
-        contract_address:
-          "0x0165a0bd8cf98edcb6fd900cf10484cb73e7569676d3d13ddb28281709cfbb43",
-        name: "0x4c6f6f74205375727669766f72",
-        image: "https://lootsurvivor.io/favicon-32x32.png",
-        url: "https://lootsurvivor.io",
-        controllerOnly: true,
-      },
-    ];
-  } else if (isSepolia) {
+
+  if (isSepolia) {
     return [
       {
         contract_address:

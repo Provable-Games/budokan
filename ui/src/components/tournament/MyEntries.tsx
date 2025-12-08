@@ -14,7 +14,6 @@ import {
   TournamentCardMetric,
   TournamentCardSwitch,
 } from "./containers/TournamentCard";
-import { useTournamentContracts } from "@/dojo/hooks/useTournamentContracts";
 import { padAddress } from "@/lib/utils";
 import { useDojo } from "@/context/dojo";
 
@@ -31,9 +30,9 @@ const MyEntries = ({
   tournamentModel,
   totalEntryCount,
 }: MyEntriesProps) => {
-  const { namespace } = useDojo();
+  const { namespace, selectedChainConfig } = useDojo();
   const { address } = useAccount();
-  const { tournamentAddress } = useTournamentContracts();
+  const tournamentAddress = selectedChainConfig.budokanAddress!;
   const [showMyEntries, setShowMyEntries] = useState(false);
 
   const { count: myEntriesCount, refetch: refetchMyEntriesCount } =

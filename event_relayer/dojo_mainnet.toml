@@ -15,3 +15,8 @@ default = "budokan_relayer_0_0_1"
 "budokan_relayer_0_0_1" = [
     "budokan_relayer_0_0_1-BudokanEventRelayer",
 ]
+
+[init_call_args]
+"budokan_relayer_0_0_1-BudokanEventRelayer" = [
+    "$DOJO_ACCOUNT_ADDRESS", # deployer address (owner)
+]

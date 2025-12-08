@@ -82,7 +82,8 @@ export function ClaimPrizesDialog({
         extractEntryFeePrizes(
           tournamentModel?.id,
           tournamentModel?.entry_fee,
-          BigInt(entryCount || 0)
+          BigInt(entryCount || 0),
+          3 // Default prize positions
         ),
       [tournamentModel?.id, tournamentModel?.entry_fee, entryCount]
     );

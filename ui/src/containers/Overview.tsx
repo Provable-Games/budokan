@@ -44,7 +44,6 @@ import {
   EXCLUDED_TOURNAMENT_IDS,
 } from "@/lib/constants";
 import { LoadingSpinner } from "@/components/ui/spinner";
-import { useTournamentContracts } from "@/dojo/hooks/useTournamentContracts";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
 import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
 
@@ -69,7 +68,7 @@ const SORT_OPTIONS = {
 } as const;
 
 const Overview = () => {
-  const { namespace } = useDojo();
+  const { namespace, selectedChainConfig } = useDojo();
   const { address } = useAccount();
   const { chain } = useNetwork();
   const { getTokenDecimals } = useSystemCalls();
@@ -99,7 +98,7 @@ const Overview = () => {
     processTournamentsFromRaw,
   } = useTournamentStore();
 
-  const { tournamentAddress } = useTournamentContracts();
+  const tournamentAddress = selectedChainConfig.budokanAddress!;
 
   const [hasSelectedInitialTab, setHasSelectedInitialTab] = useState(false);
 

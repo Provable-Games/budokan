@@ -15,7 +15,7 @@ import { useGameTokens } from "metagame-sdk";
 import { getSubmittableScores } from "@/lib/utils/formatting";
 import { useState, useMemo } from "react";
 import { LoadingSpinner } from "@/components/ui/spinner";
-import { useTournamentContracts } from "@/dojo/hooks/useTournamentContracts";
+import { useDojo } from "@/context/dojo";
 
 interface SubmitScoresDialogProps {
   open: boolean;
@@ -33,12 +33,13 @@ export function SubmitScoresDialog({
   const { address } = useAccount();
   const { connect } = useConnectToSelectedChain();
   const { submitScores, submitScoresBatched } = useSystemCalls();
+  const { selectedChainConfig } = useDojo();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [batchProgress, setBatchProgress] = useState<{
     current: number;
     total: number;
   } | null>(null);
-  const { tournamentAddress } = useTournamentContracts();
+  const tournamentAddress = selectedChainConfig.budokanAddress!;
 
   const leaderboardSize = Number(tournamentModel?.game_config.prize_spots);
 

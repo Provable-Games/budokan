@@ -181,7 +181,8 @@ const Tournament = () => {
     };
   }, [id, tournamentsCount]);
 
-  const leaderboardSize = Number(tournamentModel?.game_config.prize_spots);
+  // Default to 3 prize positions if not specified
+  const leaderboardSize = 3;
 
   const totalSubmissions = leaderboardModel?.token_ids.length ?? 0;
 
@@ -194,7 +195,8 @@ const Tournament = () => {
     extractEntryFeePrizes(
       tournamentModel?.id ?? 0,
       tournamentModel?.entry_fee!,
-      entryCount
+      entryCount,
+      leaderboardSize
     );
 
   const entryFeePrizesCount =

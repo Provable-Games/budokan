@@ -154,6 +154,25 @@ const TournamentConfirmation = ({
                 <span>{hasSettings ? settings[0].name : "Default"}</span>
                 <span className="text-muted-foreground">Leaderboard Size:</span>
                 <span>{formData.leaderboardSize}</span>
+                {/* TODO: Uncomment when ready to use soulbound and play_url */}
+                {/* <span className="text-muted-foreground">Soulbound:</span>
+                <span>{formData.soulbound ? "Yes" : "No"}</span>
+                {formData.play_url && formData.play_url.trim() !== "" && (
+                  <>
+                    <span className="text-muted-foreground">Play URL:</span>
+                    <a
+                      href={formData.play_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-brand hover:underline flex items-center gap-1"
+                    >
+                      {formData.play_url}
+                      <span className="w-4 h-4">
+                        <EXTERNAL_LINK />
+                      </span>
+                    </a>
+                  </>
+                )} */}
               </div>
             </div>
 

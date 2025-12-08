@@ -147,15 +147,20 @@ const TokenDialog = ({ selectedToken, onSelect, type }: TokenDialogProps) => {
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button variant="outline" type="button" className="h-14 max-w-[200px]">
+        <Button
+          variant={selectedToken ? "default" : "outline"}
+          type="button"
+          size="sm"
+          className="h-10 w-[160px]"
+        >
           {selectedToken ? (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 overflow-hidden w-full">
               <img
                 src={selectedToken.image ?? undefined}
-                className="w-6 h-6 rounded-full"
+                className="w-4 h-4 flex-shrink-0"
                 alt="Token logo"
               />
-              <span className="text-sm text-neutral uppercase">
+              <span className="text-sm uppercase truncate">
                 {selectedToken.symbol}
               </span>
             </div>

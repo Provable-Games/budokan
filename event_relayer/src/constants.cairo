@@ -1,3 +1,3 @@
 pub fn DEFAULT_NS() -> ByteArray {
-    "budokan_relayer_0_0_1"
+    "budokan_relayer_0_0_3"
 }

@@ -18,7 +18,6 @@ import Pagination from "@/components/table/Pagination";
 import { useState, useEffect, useMemo } from "react";
 import { BigNumberish, addAddressPadding } from "starknet";
 import { useGameTokens, useGameTokensCount } from "metagame-sdk/sql";
-import { useTournamentContracts } from "@/dojo/hooks/useTournamentContracts";
 import { REFRESH, VERIFIED } from "@/components/Icons";
 import { Search } from "lucide-react";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -42,8 +41,8 @@ export const ScoreTableDialog = ({
   isStarted,
   isEnded,
 }: ScoreTableDialogProps) => {
-  const { namespace } = useDojo();
-  const { tournamentAddress } = useTournamentContracts();
+  const { namespace, selectedChainConfig } = useDojo();
+  const tournamentAddress = selectedChainConfig.budokanAddress!;
   const [searchQuery, setSearchQuery] = useState("");
 
   // Debounce search query to avoid too many requests

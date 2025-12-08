@@ -24,17 +24,16 @@ import {
   Contract,
 } from "starknet";
 import { feltToString } from "@/lib/utils";
-import { useTournamentContracts } from "@/dojo/hooks/useTournamentContracts";
 import useUIStore from "@/hooks/useUIStore";
 import { useToastMessages } from "@/components/toast";
 import { useEntityUpdates } from "@/dojo/hooks/useEntityUpdates";
 import BUDOKAN_ABI from "@/lib/abis/budokan";
 
 export const useSystemCalls = () => {
-  const { client } = useDojo();
+  const { client, selectedChainConfig } = useDojo();
   const { account, address } = useAccount();
   const { provider } = useProvider();
-  const { tournamentAddress } = useTournamentContracts();
+  const tournamentAddress = selectedChainConfig.budokanAddress!;
   const { getGameName } = useUIStore();
   const {
     waitForTournamentCreation,
@@ -473,8 +472,6 @@ export const useSystemCalls = () => {
         tournament.game_config,
         tournament.entry_fee,
         tournament.entry_requirement,
-        tournament.soulbound,
-        tournament.play_url,
       ]);
 
       let calls = [];
@@ -602,8 +599,6 @@ export const useSystemCalls = () => {
           tournament.game_config,
           tournament.entry_fee,
           tournament.entry_requirement,
-          tournament.soulbound,
-          tournament.play_url,
         ]),
       };
 

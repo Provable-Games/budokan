@@ -32,7 +32,8 @@ export function extractUniqueTokenSymbols(
     const { distributionPrizes } = extractEntryFeePrizes(
       tournament?.id,
       tournament?.entry_fee,
-      entryCount
+      entryCount,
+      3 // Default prize positions
     );
 
     // Combine all prizes

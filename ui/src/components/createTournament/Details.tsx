@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { StepProps } from "@/containers/CreateTournament";
 import TokenGameIcon from "@/components/icons/TokenGameIcon";
 import { Slider } from "@/components/ui/slider";
+// import { Switch } from "@/components/ui/switch"; // TODO: Uncomment when ready to use soulbound
 import { INFO } from "@/components/Icons";
 import {
   HoverCard,
@@ -174,91 +175,57 @@ const Details = ({ form }: StepProps) => {
                 </FormItem>
               )}
             />
-            <div className="w-full h-0.5 bg-brand/25" />
+            {/* TODO: Uncomment when ready to use soulbound and play_url */}
+            {/* <div className="w-full h-0.5 bg-brand/25" />
             <FormField
               control={form.control}
-              name="leaderboardSize"
+              name="soulbound"
               render={({ field }) => (
                 <FormItem>
-                  <div className="flex flex-row items-center gap-5 relative overflow-visible">
-                    <FormLabel className="font-brand text-lg xl:text-xl 2xl:text-2xl 3xl:text-3xl">
-                      Leaderboard Size
-                    </FormLabel>
-                    <FormDescription className="hidden sm:block sm:text-xs xl:text-sm 3xl:text-base">
-                      Size of the leaderboard
-                    </FormDescription>
-                    <div className="hidden sm:block">
-                      <HoverCard openDelay={50} closeDelay={0}>
-                        <HoverCardTrigger asChild>
-                          <span className="absolute -top-4 right-0 w-6 h-6 cursor-pointer">
-                            <INFO />
-                          </span>
-                        </HoverCardTrigger>
-                        <HoverCardContent className="w-80 p-4 text-sm z-50">
-                          <div className="div flex flex-col gap-2">
-                            <h4 className="text-lg">Leaderboard Size</h4>
-                            <p className="text-muted-foreground">
-                              Determines how many players are scored.
-                            </p>
-                            <p className="text-neutral text-wrap">
-                              The size of the leaderboard governs how many
-                              players can recieve entry fees and prizes as well
-                              as who can qualify for further tournaments.
-                            </p>
-                          </div>
-                        </HoverCardContent>
-                      </HoverCard>
+                  <div className="flex flex-row items-center justify-between">
+                    <div className="flex flex-col gap-1">
+                      <FormLabel className="font-brand text-lg xl:text-xl 2xl:text-2xl 3xl:text-3xl">
+                        Soulbound
+                      </FormLabel>
+                      <FormDescription className="text-xs">
+                        Entry tokens cannot be transferred
+                      </FormDescription>
                     </div>
-                    <div
-                      className="sm:hidden absolute -top-4 right-0 w-6 h-6 cursor-pointer"
-                      onClick={() => setIsMobileDialogOpen(true)}
-                    >
-                      <INFO />
-                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
                   </div>
-                  <FormControl>
-                    <div className="space-y-4">
-                      <div className="flex flex-row items-center justify-between w-full">
-                        <div className="flex flex-row items-center gap-2">
-                          {PREDEFINED_SIZES.map((size) => (
-                            <Button
-                              key={size}
-                              variant={
-                                field.value === size ? "default" : "outline"
-                              }
-                              className={`sm:px-2 2xl:px-4`}
-                              type="button"
-                              onClick={() => field.onChange(size)}
-                            >
-                              Top {size}
-                            </Button>
-                          ))}
-                        </div>
-                        <span className="text-lg xl:text-xl 2xl:text-2xl 3xl:text-3xl">
-                          {field.value}
-                        </span>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Slider
-                          min={1}
-                          max={255}
-                          step={1}
-                          value={[field.value]}
-                          onValueChange={(value) => field.onChange(value[0])}
-                          className="w-full"
-                        />
-                        <div className="flex justify-between text-xs text-muted-foreground">
-                          <span>1</span>
-                          <span>255</span>
-                        </div>
-                      </div>
-                    </div>
-                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
+            <FormField
+              control={form.control}
+              name="play_url"
+              render={({ field: { value, onChange, ...fieldProps } }) => (
+                <FormItem>
+                  <FormLabel className="font-brand text-lg xl:text-xl 2xl:text-2xl 3xl:text-3xl">
+                    Play URL
+                  </FormLabel>
+                  <FormDescription className="text-xs">
+                    Custom URL for playing this tournament (optional)
+                  </FormDescription>
+                  <FormControl>
+                    <Input
+                      className="h-10 text-sm sm:text-base"
+                      placeholder="https://example.com/play"
+                      {...fieldProps}
+                      value={typeof value === "string" ? value : ""}
+                      onChange={(e) => onChange(e.target.value)}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            /> */}
           </div>
         </div>
       </div>

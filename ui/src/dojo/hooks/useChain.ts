@@ -69,15 +69,8 @@ export const useSwitchNetwork = () => {
     });
   };
 
-  const switchToSlot = async () => {
-    await switchChainAsync({
-      chainId: stringToFelt(ChainId.WP_PG_SLOT_2).toString(),
-    });
-  };
-
   return {
     switchToMainnet,
     switchToSepolia,
-    switchToSlot,
   };
 };

@@ -55,7 +55,6 @@ const Header = () => {
   const isMainnet = selectedChainConfig.chainId === ChainId.SN_MAIN;
   const isSepolia = selectedChainConfig.chainId === ChainId.SN_SEPOLIA;
   const isHomeScreen = location.pathname === "/";
-  const isLocal = selectedChainConfig.chainId === ChainId.KATANA_LOCAL;
   const isController = connector ? isControllerAccount(connector) : false;
   const walletIcon =
     connector && !isController ? getConnectorIcon(connector) : null;
@@ -189,7 +188,7 @@ const Header = () => {
                 Support
               </span>
             </Button>
-            {!isLocal && account && (
+            {account && (
               <DropdownMenu>
                 <DropdownMenuTrigger>
                   <Button variant="outline">

@@ -1,107 +1,26 @@
 const BUDOKAN_ABI = [
   {
     type: "impl",
-    name: "Budokan__ContractImpl",
-    interface_name: "dojo::contract::interface::IContract",
+    name: "UpgradeableImpl",
+    interface_name: "openzeppelin_interfaces::upgrades::IUpgradeable",
   },
   {
     type: "interface",
-    name: "dojo::contract::interface::IContract",
-    items: [],
-  },
-  {
-    type: "impl",
-    name: "Budokan__DeployedContractImpl",
-    interface_name: "dojo::meta::interface::IDeployedResource",
-  },
-  {
-    type: "struct",
-    name: "core::byte_array::ByteArray",
-    members: [
-      {
-        name: "data",
-        type: "core::array::Array::<core::bytes_31::bytes31>",
-      },
-      {
-        name: "pending_word",
-        type: "core::felt252",
-      },
-      {
-        name: "pending_word_len",
-        type: "core::integer::u32",
-      },
-    ],
-  },
-  {
-    type: "interface",
-    name: "dojo::meta::interface::IDeployedResource",
+    name: "openzeppelin_interfaces::upgrades::IUpgradeable",
     items: [
       {
         type: "function",
-        name: "dojo_name",
-        inputs: [],
-        outputs: [
+        name: "upgrade",
+        inputs: [
           {
-            type: "core::byte_array::ByteArray",
+            name: "new_class_hash",
+            type: "core::starknet::class_hash::ClassHash",
           },
         ],
-        state_mutability: "view",
+        outputs: [],
+        state_mutability: "external",
       },
     ],
-  },
-  {
-    type: "enum",
-    name: "budokan::models::budokan::TokenType",
-    variants: [
-      {
-        name: "erc20",
-        type: "()",
-      },
-      {
-        name: "erc721",
-        type: "()",
-      },
-    ],
-  },
-  {
-    type: "struct",
-    name: "budokan::models::budokan::TokenData",
-    members: [
-      {
-        name: "token_address",
-        type: "core::starknet::contract_address::ContractAddress",
-      },
-      {
-        name: "token_type",
-        type: "budokan::models::budokan::TokenType",
-      },
-    ],
-  },
-  {
-    type: "struct",
-    name: "core::array::Span::<budokan::models::budokan::TokenData>",
-    members: [
-      {
-        name: "snapshot",
-        type: "@core::array::Array::<budokan::models::budokan::TokenData>",
-      },
-    ],
-  },
-  {
-    type: "function",
-    name: "dojo_init",
-    inputs: [
-      {
-        name: "default_token_address",
-        type: "core::starknet::contract_address::ContractAddress",
-      },
-      {
-        name: "registered_tokens",
-        type: "core::array::Span::<budokan::models::budokan::TokenData>",
-      },
-    ],
-    outputs: [],
-    state_mutability: "external",
   },
   {
     type: "impl",
@@ -150,6 +69,24 @@ const BUDOKAN_ABI = [
     name: "GameContextDetailsImpl",
     interface_name:
       "game_components_metagame::extensions::context::interface::IMetagameContextDetails",
+  },
+  {
+    type: "struct",
+    name: "core::byte_array::ByteArray",
+    members: [
+      {
+        name: "data",
+        type: "core::array::Array::<core::bytes_31::bytes31>",
+      },
+      {
+        name: "pending_word",
+        type: "core::felt252",
+      },
+      {
+        name: "pending_word_len",
+        type: "core::internal::bounded_int::BoundedInt::<0, 30>",
+      },
+    ],
   },
   {
     type: "enum",
@@ -236,7 +173,7 @@ const BUDOKAN_ABI = [
   {
     type: "impl",
     name: "BudokanImpl",
-    interface_name: "budokan::interfaces::IBudokan",
+    interface_name: "budokan_interfaces::budokan::IBudokan",
   },
   {
     type: "struct",
@@ -311,28 +248,54 @@ const BUDOKAN_ABI = [
         type: "core::integer::u32",
       },
       {
-        name: "prize_spots",
-        type: "core::integer::u8",
+        name: "soulbound",
+        type: "core::bool",
+      },
+      {
+        name: "play_url",
+        type: "core::byte_array::ByteArray",
       },
     ],
   },
   {
     type: "struct",
-    name: "core::array::Span::<core::integer::u8>",
+    name: "core::array::Span::<core::integer::u16>",
     members: [
       {
         name: "snapshot",
-        type: "@core::array::Array::<core::integer::u8>",
+        type: "@core::array::Array::<core::integer::u16>",
       },
     ],
   },
   {
     type: "enum",
-    name: "core::option::Option::<core::integer::u8>",
+    name: "budokan_distribution::models::Distribution",
+    variants: [
+      {
+        name: "Linear",
+        type: "core::integer::u16",
+      },
+      {
+        name: "Exponential",
+        type: "core::integer::u16",
+      },
+      {
+        name: "Uniform",
+        type: "()",
+      },
+      {
+        name: "Custom",
+        type: "core::array::Span::<core::integer::u16>",
+      },
+    ],
+  },
+  {
+    type: "enum",
+    name: "core::option::Option::<core::integer::u16>",
     variants: [
       {
         name: "Some",
-        type: "core::integer::u8",
+        type: "core::integer::u16",
       },
       {
         name: "None",
@@ -354,15 +317,19 @@ const BUDOKAN_ABI = [
       },
       {
         name: "distribution",
-        type: "core::array::Span::<core::integer::u8>",
+        type: "budokan_distribution::models::Distribution",
       },
       {
         name: "tournament_creator_share",
-        type: "core::option::Option::<core::integer::u8>",
+        type: "core::option::Option::<core::integer::u16>",
       },
       {
         name: "game_creator_share",
-        type: "core::option::Option::<core::integer::u8>",
+        type: "core::option::Option::<core::integer::u16>",
+      },
+      {
+        name: "refund_share",
+        type: "core::option::Option::<core::integer::u16>",
       },
     ],
   },
@@ -377,30 +344,6 @@ const BUDOKAN_ABI = [
       {
         name: "None",
         type: "()",
-      },
-    ],
-  },
-  {
-    type: "struct",
-    name: "core::array::Span::<core::integer::u64>",
-    members: [
-      {
-        name: "snapshot",
-        type: "@core::array::Array::<core::integer::u64>",
-      },
-    ],
-  },
-  {
-    type: "enum",
-    name: "budokan::models::budokan::TournamentType",
-    variants: [
-      {
-        name: "winners",
-        type: "core::array::Span::<core::integer::u64>",
-      },
-      {
-        name: "participants",
-        type: "core::array::Span::<core::integer::u64>",
       },
     ],
   },
@@ -426,7 +369,7 @@ const BUDOKAN_ABI = [
   },
   {
     type: "struct",
-    name: "budokan::models::budokan::ExtensionConfig",
+    name: "budokan_entry_requirement::models::ExtensionConfig",
     members: [
       {
         name: "address",
@@ -440,15 +383,11 @@ const BUDOKAN_ABI = [
   },
   {
     type: "enum",
-    name: "budokan::models::budokan::EntryRequirementType",
+    name: "budokan_entry_requirement::models::EntryRequirementType",
     variants: [
       {
         name: "token",
         type: "core::starknet::contract_address::ContractAddress",
-      },
-      {
-        name: "tournament",
-        type: "budokan::models::budokan::TournamentType",
       },
       {
         name: "allowlist",
@@ -456,31 +395,31 @@ const BUDOKAN_ABI = [
       },
       {
         name: "extension",
-        type: "budokan::models::budokan::ExtensionConfig",
+        type: "budokan_entry_requirement::models::ExtensionConfig",
       },
     ],
   },
   {
     type: "struct",
-    name: "budokan::models::budokan::EntryRequirement",
+    name: "budokan_entry_requirement::models::EntryRequirement",
     members: [
       {
         name: "entry_limit",
-        type: "core::integer::u8",
+        type: "core::integer::u32",
       },
       {
         name: "entry_requirement_type",
-        type: "budokan::models::budokan::EntryRequirementType",
+        type: "budokan_entry_requirement::models::EntryRequirementType",
       },
     ],
   },
   {
     type: "enum",
-    name: "core::option::Option::<budokan::models::budokan::EntryRequirement>",
+    name: "core::option::Option::<budokan_entry_requirement::models::EntryRequirement>",
     variants: [
       {
         name: "Some",
-        type: "budokan::models::budokan::EntryRequirement",
+        type: "budokan_entry_requirement::models::EntryRequirement",
       },
       {
         name: "None",
@@ -526,15 +465,7 @@ const BUDOKAN_ABI = [
       },
       {
         name: "entry_requirement",
-        type: "core::option::Option::<budokan::models::budokan::EntryRequirement>",
-      },
-      {
-        name: "soulbound",
-        type: "core::bool",
-      },
-      {
-        name: "play_url",
-        type: "core::byte_array::ByteArray",
+        type: "core::option::Option::<budokan_entry_requirement::models::EntryRequirement>",
       },
     ],
   },
@@ -570,136 +501,6 @@ const BUDOKAN_ABI = [
   },
   {
     type: "struct",
-    name: "budokan::models::budokan::ERC20Data",
-    members: [
-      {
-        name: "amount",
-        type: "core::integer::u128",
-      },
-    ],
-  },
-  {
-    type: "struct",
-    name: "budokan::models::budokan::ERC721Data",
-    members: [
-      {
-        name: "id",
-        type: "core::integer::u128",
-      },
-    ],
-  },
-  {
-    type: "enum",
-    name: "budokan::models::budokan::TokenTypeData",
-    variants: [
-      {
-        name: "erc20",
-        type: "budokan::models::budokan::ERC20Data",
-      },
-      {
-        name: "erc721",
-        type: "budokan::models::budokan::ERC721Data",
-      },
-    ],
-  },
-  {
-    type: "struct",
-    name: "budokan::models::budokan::Registration",
-    members: [
-      {
-        name: "game_address",
-        type: "core::starknet::contract_address::ContractAddress",
-      },
-      {
-        name: "game_token_id",
-        type: "core::integer::u64",
-      },
-      {
-        name: "tournament_id",
-        type: "core::integer::u64",
-      },
-      {
-        name: "entry_number",
-        type: "core::integer::u32",
-      },
-      {
-        name: "has_submitted",
-        type: "core::bool",
-      },
-    ],
-  },
-  {
-    type: "struct",
-    name: "budokan::models::budokan::RegistrationBanned",
-    members: [
-      {
-        name: "game_address",
-        type: "core::starknet::contract_address::ContractAddress",
-      },
-      {
-        name: "game_token_id",
-        type: "core::integer::u64",
-      },
-      {
-        name: "tournament_id",
-        type: "core::integer::u64",
-      },
-      {
-        name: "is_banned",
-        type: "core::bool",
-      },
-    ],
-  },
-  {
-    type: "struct",
-    name: "budokan::models::budokan::Prize",
-    members: [
-      {
-        name: "id",
-        type: "core::integer::u64",
-      },
-      {
-        name: "tournament_id",
-        type: "core::integer::u64",
-      },
-      {
-        name: "payout_position",
-        type: "core::integer::u8",
-      },
-      {
-        name: "token_address",
-        type: "core::starknet::contract_address::ContractAddress",
-      },
-      {
-        name: "token_type",
-        type: "budokan::models::budokan::TokenTypeData",
-      },
-      {
-        name: "sponsor_address",
-        type: "core::starknet::contract_address::ContractAddress",
-      },
-    ],
-  },
-  {
-    type: "struct",
-    name: "budokan::models::budokan::TournamentQualification",
-    members: [
-      {
-        name: "tournament_id",
-        type: "core::integer::u64",
-      },
-      {
-        name: "token_id",
-        type: "core::integer::u64",
-      },
-      {
-        name: "position",
-        type: "core::integer::u8",
-      },
-    ],
-  },
-  {
-    type: "struct",
     name: "core::integer::u256",
     members: [
       {
@@ -714,7 +515,7 @@ const BUDOKAN_ABI = [
   },
   {
     type: "struct",
-    name: "budokan::models::budokan::NFTQualification",
+    name: "budokan_entry_requirement::models::NFTQualification",
     members: [
       {
         name: "token_id",
@@ -724,15 +525,11 @@ const BUDOKAN_ABI = [
   },
   {
     type: "enum",
-    name: "budokan::models::budokan::QualificationProof",
+    name: "budokan_entry_requirement::models::QualificationProof",
     variants: [
       {
-        name: "Tournament",
-        type: "budokan::models::budokan::TournamentQualification",
-      },
-      {
         name: "NFT",
-        type: "budokan::models::budokan::NFTQualification",
+        type: "budokan_entry_requirement::models::NFTQualification",
       },
       {
         name: "Address",
@@ -746,11 +543,11 @@ const BUDOKAN_ABI = [
   },
   {
     type: "enum",
-    name: "core::option::Option::<budokan::models::budokan::QualificationProof>",
+    name: "core::option::Option::<budokan_entry_requirement::models::QualificationProof>",
     variants: [
       {
         name: "Some",
-        type: "budokan::models::budokan::QualificationProof",
+        type: "budokan_entry_requirement::models::QualificationProof",
       },
       {
         name: "None",
@@ -760,7 +557,7 @@ const BUDOKAN_ABI = [
   },
   {
     type: "enum",
-    name: "budokan::models::budokan::Role",
+    name: "budokan_prize::models::Role",
     variants: [
       {
         name: "TournamentCreator",
@@ -772,17 +569,21 @@ const BUDOKAN_ABI = [
       },
       {
         name: "Position",
-        type: "core::integer::u8",
+        type: "core::integer::u32",
+      },
+      {
+        name: "Refund",
+        type: "core::integer::u128",
       },
     ],
   },
   {
     type: "enum",
-    name: "budokan::models::budokan::PrizeType",
+    name: "budokan_prize::models::PrizeType",
     variants: [
       {
         name: "EntryFees",
-        type: "budokan::models::budokan::Role",
+        type: "budokan_prize::models::Role",
       },
       {
         name: "Sponsored",
@@ -791,8 +592,42 @@ const BUDOKAN_ABI = [
     ],
   },
   {
+    type: "struct",
+    name: "budokan_prize::models::ERC20Data",
+    members: [
+      {
+        name: "amount",
+        type: "core::integer::u128",
+      },
+    ],
+  },
+  {
+    type: "struct",
+    name: "budokan_prize::models::ERC721Data",
+    members: [
+      {
+        name: "id",
+        type: "core::integer::u128",
+      },
+    ],
+  },
+  {
+    type: "enum",
+    name: "budokan_prize::models::TokenTypeData",
+    variants: [
+      {
+        name: "erc20",
+        type: "budokan_prize::models::ERC20Data",
+      },
+      {
+        name: "erc721",
+        type: "budokan_prize::models::ERC721Data",
+      },
+    ],
+  },
+  {
     type: "interface",
-    name: "budokan::interfaces::IBudokan",
+    name: "budokan_interfaces::budokan::IBudokan",
     items: [
       {
         type: "function",
@@ -871,114 +706,6 @@ const BUDOKAN_ABI = [
       },
       {
         type: "function",
-        name: "is_token_registered",
-        inputs: [
-          {
-            name: "address",
-            type: "core::starknet::contract_address::ContractAddress",
-          },
-        ],
-        outputs: [
-          {
-            type: "core::bool",
-          },
-        ],
-        state_mutability: "view",
-      },
-      {
-        type: "function",
-        name: "register_token",
-        inputs: [
-          {
-            name: "address",
-            type: "core::starknet::contract_address::ContractAddress",
-          },
-          {
-            name: "token_type",
-            type: "budokan::models::budokan::TokenTypeData",
-          },
-        ],
-        outputs: [],
-        state_mutability: "external",
-      },
-      {
-        type: "function",
-        name: "get_registration",
-        inputs: [
-          {
-            name: "game_address",
-            type: "core::starknet::contract_address::ContractAddress",
-          },
-          {
-            name: "token_id",
-            type: "core::integer::u64",
-          },
-        ],
-        outputs: [
-          {
-            type: "budokan::models::budokan::Registration",
-          },
-        ],
-        state_mutability: "view",
-      },
-      {
-        type: "function",
-        name: "get_registration_banned",
-        inputs: [
-          {
-            name: "game_address",
-            type: "core::starknet::contract_address::ContractAddress",
-          },
-          {
-            name: "token_id",
-            type: "core::integer::u64",
-          },
-        ],
-        outputs: [
-          {
-            type: "budokan::models::budokan::RegistrationBanned",
-          },
-        ],
-        state_mutability: "view",
-      },
-      {
-        type: "function",
-        name: "get_prize",
-        inputs: [
-          {
-            name: "prize_id",
-            type: "core::integer::u64",
-          },
-        ],
-        outputs: [
-          {
-            type: "budokan::models::budokan::Prize",
-          },
-        ],
-        state_mutability: "view",
-      },
-      {
-        type: "function",
-        name: "get_tournament_id_for_token_id",
-        inputs: [
-          {
-            name: "game_address",
-            type: "core::starknet::contract_address::ContractAddress",
-          },
-          {
-            name: "token_id",
-            type: "core::integer::u64",
-          },
-        ],
-        outputs: [
-          {
-            type: "core::integer::u64",
-          },
-        ],
-        state_mutability: "view",
-      },
-      {
-        type: "function",
         name: "create_tournament",
         inputs: [
           {
@@ -1003,15 +730,7 @@ const BUDOKAN_ABI = [
           },
           {
             name: "entry_requirement",
-            type: "core::option::Option::<budokan::models::budokan::EntryRequirement>",
-          },
-          {
-            name: "soulbound",
-            type: "core::bool",
-          },
-          {
-            name: "play_url",
-            type: "core::byte_array::ByteArray",
+            type: "core::option::Option::<budokan_entry_requirement::models::EntryRequirement>",
           },
         ],
         outputs: [
@@ -1039,7 +758,7 @@ const BUDOKAN_ABI = [
           },
           {
             name: "qualification",
-            type: "core::option::Option::<budokan::models::budokan::QualificationProof>",
+            type: "core::option::Option::<budokan_entry_requirement::models::QualificationProof>",
           },
         ],
         outputs: [
@@ -1051,15 +770,19 @@ const BUDOKAN_ABI = [
       },
       {
         type: "function",
-        name: "validate_entries",
+        name: "validate_entry",
         inputs: [
           {
             name: "tournament_id",
             type: "core::integer::u64",
           },
           {
-            name: "game_token_ids",
-            type: "core::array::Span::<core::integer::u64>",
+            name: "game_token_id",
+            type: "core::integer::u64",
+          },
+          {
+            name: "proof",
+            type: "core::array::Span::<core::felt252>",
           },
         ],
         outputs: [],
@@ -1095,7 +818,7 @@ const BUDOKAN_ABI = [
           },
           {
             name: "prize_type",
-            type: "budokan::models::budokan::PrizeType",
+            type: "budokan_prize::models::PrizeType",
           },
         ],
         outputs: [],
@@ -1115,7 +838,7 @@ const BUDOKAN_ABI = [
           },
           {
             name: "token_type",
-            type: "budokan::models::budokan::TokenTypeData",
+            type: "budokan_prize::models::TokenTypeData",
           },
           {
             name: "position",
@@ -1127,62 +850,6 @@ const BUDOKAN_ABI = [
             type: "core::integer::u64",
           },
         ],
-        state_mutability: "external",
-      },
-    ],
-  },
-  {
-    type: "impl",
-    name: "WorldProviderImpl",
-    interface_name:
-      "dojo::contract::components::world_provider::IWorldProvider",
-  },
-  {
-    type: "struct",
-    name: "dojo::world::iworld::IWorldDispatcher",
-    members: [
-      {
-        name: "contract_address",
-        type: "core::starknet::contract_address::ContractAddress",
-      },
-    ],
-  },
-  {
-    type: "interface",
-    name: "dojo::contract::components::world_provider::IWorldProvider",
-    items: [
-      {
-        type: "function",
-        name: "world_dispatcher",
-        inputs: [],
-        outputs: [
-          {
-            type: "dojo::world::iworld::IWorldDispatcher",
-          },
-        ],
-        state_mutability: "view",
-      },
-    ],
-  },
-  {
-    type: "impl",
-    name: "UpgradeableImpl",
-    interface_name: "dojo::contract::components::upgradeable::IUpgradeable",
-  },
-  {
-    type: "interface",
-    name: "dojo::contract::components::upgradeable::IUpgradeable",
-    items: [
-      {
-        type: "function",
-        name: "upgrade",
-        inputs: [
-          {
-            name: "new_class_hash",
-            type: "core::starknet::class_hash::ClassHash",
-          },
-        ],
-        outputs: [],
         state_mutability: "external",
       },
     ],
@@ -1223,11 +890,11 @@ const BUDOKAN_ABI = [
   {
     type: "impl",
     name: "SRC5Impl",
-    interface_name: "openzeppelin_introspection::interface::ISRC5",
+    interface_name: "openzeppelin_interfaces::introspection::ISRC5",
   },
   {
     type: "interface",
-    name: "openzeppelin_introspection::interface::ISRC5",
+    name: "openzeppelin_interfaces::introspection::ISRC5",
     items: [
       {
         type: "function",
@@ -1248,39 +915,444 @@ const BUDOKAN_ABI = [
     ],
   },
   {
-    type: "constructor",
-    name: "constructor",
-    inputs: [],
+    type: "impl",
+    name: "OwnableImpl",
+    interface_name: "openzeppelin_interfaces::access::ownable::IOwnable",
   },
   {
-    type: "event",
-    name: "dojo::contract::components::upgradeable::upgradeable_cpt::Upgraded",
-    kind: "struct",
+    type: "interface",
+    name: "openzeppelin_interfaces::access::ownable::IOwnable",
+    items: [
+      {
+        type: "function",
+        name: "owner",
+        inputs: [],
+        outputs: [
+          {
+            type: "core::starknet::contract_address::ContractAddress",
+          },
+        ],
+        state_mutability: "view",
+      },
+      {
+        type: "function",
+        name: "transfer_ownership",
+        inputs: [
+          {
+            name: "new_owner",
+            type: "core::starknet::contract_address::ContractAddress",
+          },
+        ],
+        outputs: [],
+        state_mutability: "external",
+      },
+      {
+        type: "function",
+        name: "renounce_ownership",
+        inputs: [],
+        outputs: [],
+        state_mutability: "external",
+      },
+    ],
+  },
+  {
+    type: "impl",
+    name: "EntryFeeImpl",
+    interface_name: "budokan_interfaces::entry_fee::IEntryFee",
+  },
+  {
+    type: "struct",
+    name: "budokan_entry_fee::models::AdditionalShare",
     members: [
       {
-        name: "class_hash",
-        type: "core::starknet::class_hash::ClassHash",
-        kind: "data",
+        name: "recipient",
+        type: "core::starknet::contract_address::ContractAddress",
+      },
+      {
+        name: "share_bps",
+        type: "core::integer::u16",
       },
     ],
   },
   {
-    type: "event",
-    name: "dojo::contract::components::upgradeable::upgradeable_cpt::Event",
-    kind: "enum",
+    type: "struct",
+    name: "core::array::Span::<budokan_entry_fee::models::AdditionalShare>",
+    members: [
+      {
+        name: "snapshot",
+        type: "@core::array::Array::<budokan_entry_fee::models::AdditionalShare>",
+      },
+    ],
+  },
+  {
+    type: "struct",
+    name: "budokan_entry_fee::models::EntryFee",
+    members: [
+      {
+        name: "token_address",
+        type: "core::starknet::contract_address::ContractAddress",
+      },
+      {
+        name: "amount",
+        type: "core::integer::u128",
+      },
+      {
+        name: "game_creator_share",
+        type: "core::option::Option::<core::integer::u16>",
+      },
+      {
+        name: "refund_share",
+        type: "core::option::Option::<core::integer::u16>",
+      },
+      {
+        name: "additional_shares",
+        type: "core::array::Span::<budokan_entry_fee::models::AdditionalShare>",
+      },
+    ],
+  },
+  {
+    type: "enum",
+    name: "core::option::Option::<budokan_entry_fee::models::EntryFee>",
     variants: [
       {
-        name: "Upgraded",
-        type: "dojo::contract::components::upgradeable::upgradeable_cpt::Upgraded",
-        kind: "nested",
+        name: "Some",
+        type: "budokan_entry_fee::models::EntryFee",
+      },
+      {
+        name: "None",
+        type: "()",
       },
     ],
   },
   {
-    type: "event",
-    name: "dojo::contract::components::world_provider::world_provider_cpt::Event",
-    kind: "enum",
-    variants: [],
+    type: "interface",
+    name: "budokan_interfaces::entry_fee::IEntryFee",
+    items: [
+      {
+        type: "function",
+        name: "get_entry_fee",
+        inputs: [
+          {
+            name: "context_id",
+            type: "core::integer::u64",
+          },
+        ],
+        outputs: [
+          {
+            type: "core::option::Option::<budokan_entry_fee::models::EntryFee>",
+          },
+        ],
+        state_mutability: "view",
+      },
+    ],
+  },
+  {
+    type: "impl",
+    name: "EntryRequirementImpl",
+    interface_name: "budokan_interfaces::entry_requirement::IEntryRequirement",
+  },
+  {
+    type: "struct",
+    name: "budokan_entry_requirement::models::QualificationEntries",
+    members: [
+      {
+        name: "context_id",
+        type: "core::integer::u64",
+      },
+      {
+        name: "qualification_proof",
+        type: "budokan_entry_requirement::models::QualificationProof",
+      },
+      {
+        name: "entry_count",
+        type: "core::integer::u8",
+      },
+    ],
+  },
+  {
+    type: "interface",
+    name: "budokan_interfaces::entry_requirement::IEntryRequirement",
+    items: [
+      {
+        type: "function",
+        name: "get_entry_requirement",
+        inputs: [
+          {
+            name: "context_id",
+            type: "core::integer::u64",
+          },
+        ],
+        outputs: [
+          {
+            type: "core::option::Option::<budokan_entry_requirement::models::EntryRequirement>",
+          },
+        ],
+        state_mutability: "view",
+      },
+      {
+        type: "function",
+        name: "get_qualification_entries",
+        inputs: [
+          {
+            name: "context_id",
+            type: "core::integer::u64",
+          },
+          {
+            name: "proof",
+            type: "budokan_entry_requirement::models::QualificationProof",
+          },
+        ],
+        outputs: [
+          {
+            type: "budokan_entry_requirement::models::QualificationEntries",
+          },
+        ],
+        state_mutability: "view",
+      },
+    ],
+  },
+  {
+    type: "impl",
+    name: "PrizeImpl",
+    interface_name: "budokan_interfaces::prize::IPrize",
+  },
+  {
+    type: "struct",
+    name: "budokan_prize::models::Prize",
+    members: [
+      {
+        name: "id",
+        type: "core::integer::u64",
+      },
+      {
+        name: "context_id",
+        type: "core::integer::u64",
+      },
+      {
+        name: "payout_position",
+        type: "core::integer::u32",
+      },
+      {
+        name: "token_address",
+        type: "core::starknet::contract_address::ContractAddress",
+      },
+      {
+        name: "token_type",
+        type: "budokan_prize::models::TokenTypeData",
+      },
+      {
+        name: "sponsor_address",
+        type: "core::starknet::contract_address::ContractAddress",
+      },
+    ],
+  },
+  {
+    type: "interface",
+    name: "budokan_interfaces::prize::IPrize",
+    items: [
+      {
+        type: "function",
+        name: "get_prize",
+        inputs: [
+          {
+            name: "prize_id",
+            type: "core::integer::u64",
+          },
+        ],
+        outputs: [
+          {
+            type: "budokan_prize::models::Prize",
+          },
+        ],
+        state_mutability: "view",
+      },
+      {
+        type: "function",
+        name: "get_total_prizes",
+        inputs: [],
+        outputs: [
+          {
+            type: "core::integer::u64",
+          },
+        ],
+        state_mutability: "view",
+      },
+      {
+        type: "function",
+        name: "is_prize_claimed",
+        inputs: [
+          {
+            name: "context_id",
+            type: "core::integer::u64",
+          },
+          {
+            name: "prize_type",
+            type: "budokan_prize::models::PrizeType",
+          },
+        ],
+        outputs: [
+          {
+            type: "core::bool",
+          },
+        ],
+        state_mutability: "view",
+      },
+    ],
+  },
+  {
+    type: "impl",
+    name: "RegistrationImpl",
+    interface_name: "budokan_interfaces::registration::IRegistration",
+  },
+  {
+    type: "struct",
+    name: "budokan_registration::models::Registration",
+    members: [
+      {
+        name: "game_address",
+        type: "core::starknet::contract_address::ContractAddress",
+      },
+      {
+        name: "game_token_id",
+        type: "core::integer::u64",
+      },
+      {
+        name: "context_id",
+        type: "core::integer::u64",
+      },
+      {
+        name: "entry_number",
+        type: "core::integer::u32",
+      },
+      {
+        name: "has_submitted",
+        type: "core::bool",
+      },
+      {
+        name: "is_banned",
+        type: "core::bool",
+      },
+    ],
+  },
+  {
+    type: "interface",
+    name: "budokan_interfaces::registration::IRegistration",
+    items: [
+      {
+        type: "function",
+        name: "get_registration",
+        inputs: [
+          {
+            name: "game_address",
+            type: "core::starknet::contract_address::ContractAddress",
+          },
+          {
+            name: "token_id",
+            type: "core::integer::u64",
+          },
+        ],
+        outputs: [
+          {
+            type: "budokan_registration::models::Registration",
+          },
+        ],
+        state_mutability: "view",
+      },
+      {
+        type: "function",
+        name: "is_registration_banned",
+        inputs: [
+          {
+            name: "game_address",
+            type: "core::starknet::contract_address::ContractAddress",
+          },
+          {
+            name: "token_id",
+            type: "core::integer::u64",
+          },
+        ],
+        outputs: [
+          {
+            type: "core::bool",
+          },
+        ],
+        state_mutability: "view",
+      },
+      {
+        type: "function",
+        name: "get_context_id_for_token",
+        inputs: [
+          {
+            name: "game_address",
+            type: "core::starknet::contract_address::ContractAddress",
+          },
+          {
+            name: "token_id",
+            type: "core::integer::u64",
+          },
+        ],
+        outputs: [
+          {
+            type: "core::integer::u64",
+          },
+        ],
+        state_mutability: "view",
+      },
+      {
+        type: "function",
+        name: "get_entry_count",
+        inputs: [
+          {
+            name: "context_id",
+            type: "core::integer::u64",
+          },
+        ],
+        outputs: [
+          {
+            type: "core::integer::u32",
+          },
+        ],
+        state_mutability: "view",
+      },
+      {
+        type: "function",
+        name: "registration_exists",
+        inputs: [
+          {
+            name: "game_address",
+            type: "core::starknet::contract_address::ContractAddress",
+          },
+          {
+            name: "token_id",
+            type: "core::integer::u64",
+          },
+        ],
+        outputs: [
+          {
+            type: "core::bool",
+          },
+        ],
+        state_mutability: "view",
+      },
+    ],
+  },
+  {
+    type: "constructor",
+    name: "constructor",
+    inputs: [
+      {
+        name: "owner",
+        type: "core::starknet::contract_address::ContractAddress",
+      },
+      {
+        name: "default_token_address",
+        type: "core::starknet::contract_address::ContractAddress",
+      },
+      {
+        name: "event_relayer",
+        type: "core::starknet::contract_address::ContractAddress",
+      },
+    ],
   },
   {
     type: "event",
@@ -1302,19 +1374,218 @@ const BUDOKAN_ABI = [
   },
   {
     type: "event",
-    name: "budokan::budokan::Budokan::Event",
+    name: "game_components_leaderboard::leaderboard_component::LeaderboardComponent::TournamentConfigured",
+    kind: "struct",
+    members: [
+      {
+        name: "tournament_id",
+        type: "core::integer::u64",
+        kind: "key",
+      },
+      {
+        name: "max_entries",
+        type: "core::integer::u32",
+        kind: "data",
+      },
+      {
+        name: "ascending",
+        type: "core::bool",
+        kind: "data",
+      },
+      {
+        name: "game_address",
+        type: "core::starknet::contract_address::ContractAddress",
+        kind: "data",
+      },
+    ],
+  },
+  {
+    type: "event",
+    name: "game_components_leaderboard::leaderboard_component::LeaderboardComponent::ScoreSubmitted",
+    kind: "struct",
+    members: [
+      {
+        name: "tournament_id",
+        type: "core::integer::u64",
+        kind: "key",
+      },
+      {
+        name: "token_id",
+        type: "core::integer::u64",
+        kind: "key",
+      },
+      {
+        name: "score",
+        type: "core::integer::u32",
+        kind: "data",
+      },
+      {
+        name: "position",
+        type: "core::integer::u8",
+        kind: "data",
+      },
+    ],
+  },
+  {
+    type: "event",
+    name: "game_components_leaderboard::leaderboard_component::LeaderboardComponent::LeaderboardCleared",
+    kind: "struct",
+    members: [
+      {
+        name: "tournament_id",
+        type: "core::integer::u64",
+        kind: "key",
+      },
+    ],
+  },
+  {
+    type: "event",
+    name: "game_components_leaderboard::leaderboard_component::LeaderboardComponent::LeaderboardOwnershipTransferred",
+    kind: "struct",
+    members: [
+      {
+        name: "previous_owner",
+        type: "core::starknet::contract_address::ContractAddress",
+        kind: "key",
+      },
+      {
+        name: "new_owner",
+        type: "core::starknet::contract_address::ContractAddress",
+        kind: "key",
+      },
+    ],
+  },
+  {
+    type: "event",
+    name: "game_components_leaderboard::leaderboard_component::LeaderboardComponent::Event",
     kind: "enum",
     variants: [
       {
-        name: "UpgradeableEvent",
-        type: "dojo::contract::components::upgradeable::upgradeable_cpt::Event",
+        name: "TournamentConfigured",
+        type: "game_components_leaderboard::leaderboard_component::LeaderboardComponent::TournamentConfigured",
         kind: "nested",
       },
       {
-        name: "WorldProviderEvent",
-        type: "dojo::contract::components::world_provider::world_provider_cpt::Event",
+        name: "ScoreSubmitted",
+        type: "game_components_leaderboard::leaderboard_component::LeaderboardComponent::ScoreSubmitted",
         kind: "nested",
       },
+      {
+        name: "LeaderboardCleared",
+        type: "game_components_leaderboard::leaderboard_component::LeaderboardComponent::LeaderboardCleared",
+        kind: "nested",
+      },
+      {
+        name: "LeaderboardOwnershipTransferred",
+        type: "game_components_leaderboard::leaderboard_component::LeaderboardComponent::LeaderboardOwnershipTransferred",
+        kind: "nested",
+      },
+    ],
+  },
+  {
+    type: "event",
+    name: "openzeppelin_access::ownable::ownable::OwnableComponent::OwnershipTransferred",
+    kind: "struct",
+    members: [
+      {
+        name: "previous_owner",
+        type: "core::starknet::contract_address::ContractAddress",
+        kind: "key",
+      },
+      {
+        name: "new_owner",
+        type: "core::starknet::contract_address::ContractAddress",
+        kind: "key",
+      },
+    ],
+  },
+  {
+    type: "event",
+    name: "openzeppelin_access::ownable::ownable::OwnableComponent::OwnershipTransferStarted",
+    kind: "struct",
+    members: [
+      {
+        name: "previous_owner",
+        type: "core::starknet::contract_address::ContractAddress",
+        kind: "key",
+      },
+      {
+        name: "new_owner",
+        type: "core::starknet::contract_address::ContractAddress",
+        kind: "key",
+      },
+    ],
+  },
+  {
+    type: "event",
+    name: "openzeppelin_access::ownable::ownable::OwnableComponent::Event",
+    kind: "enum",
+    variants: [
+      {
+        name: "OwnershipTransferred",
+        type: "openzeppelin_access::ownable::ownable::OwnableComponent::OwnershipTransferred",
+        kind: "nested",
+      },
+      {
+        name: "OwnershipTransferStarted",
+        type: "openzeppelin_access::ownable::ownable::OwnableComponent::OwnershipTransferStarted",
+        kind: "nested",
+      },
+    ],
+  },
+  {
+    type: "event",
+    name: "openzeppelin_upgrades::upgradeable::UpgradeableComponent::Upgraded",
+    kind: "struct",
+    members: [
+      {
+        name: "class_hash",
+        type: "core::starknet::class_hash::ClassHash",
+        kind: "data",
+      },
+    ],
+  },
+  {
+    type: "event",
+    name: "openzeppelin_upgrades::upgradeable::UpgradeableComponent::Event",
+    kind: "enum",
+    variants: [
+      {
+        name: "Upgraded",
+        type: "openzeppelin_upgrades::upgradeable::UpgradeableComponent::Upgraded",
+        kind: "nested",
+      },
+    ],
+  },
+  {
+    type: "event",
+    name: "budokan_registration::registration::RegistrationComponent::Event",
+    kind: "enum",
+    variants: [],
+  },
+  {
+    type: "event",
+    name: "budokan_entry_fee::entry_fee::EntryFeeComponent::Event",
+    kind: "enum",
+    variants: [],
+  },
+  {
+    type: "event",
+    name: "budokan_entry_requirement::entry_requirement::EntryRequirementComponent::Event",
+    kind: "enum",
+    variants: [],
+  },
+  {
+    type: "event",
+    name: "budokan_prize::prize::PrizeComponent::Event",
+    kind: "enum",
+    variants: [],
+  },
+  {
+    type: "event",
+    name: "budokan::budokan::Budokan::Event",
+    kind: "enum",
+    variants: [
       {
         name: "MetagameEvent",
         type: "game_components_metagame::metagame::MetagameComponent::Event",
@@ -1328,6 +1599,41 @@ const BUDOKAN_ABI = [
       {
         name: "SRC5Event",
         type: "openzeppelin_introspection::src5::SRC5Component::Event",
+        kind: "flat",
+      },
+      {
+        name: "LeaderboardEvent",
+        type: "game_components_leaderboard::leaderboard_component::LeaderboardComponent::Event",
+        kind: "flat",
+      },
+      {
+        name: "OwnableEvent",
+        type: "openzeppelin_access::ownable::ownable::OwnableComponent::Event",
+        kind: "flat",
+      },
+      {
+        name: "UpgradeableEvent",
+        type: "openzeppelin_upgrades::upgradeable::UpgradeableComponent::Event",
+        kind: "flat",
+      },
+      {
+        name: "RegistrationEvent",
+        type: "budokan_registration::registration::RegistrationComponent::Event",
+        kind: "flat",
+      },
+      {
+        name: "EntryFeeEvent",
+        type: "budokan_entry_fee::entry_fee::EntryFeeComponent::Event",
+        kind: "flat",
+      },
+      {
+        name: "EntryRequirementEvent",
+        type: "budokan_entry_requirement::entry_requirement::EntryRequirementComponent::Event",
+        kind: "flat",
+      },
+      {
+        name: "PrizeEvent",
+        type: "budokan_prize::prize::PrizeComponent::Event",
         kind: "flat",
       },
     ],

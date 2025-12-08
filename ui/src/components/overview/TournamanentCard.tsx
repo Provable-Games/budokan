@@ -60,7 +60,8 @@ export const TournamentCard = ({
   const { distributionPrizes } = extractEntryFeePrizes(
     tournament?.id,
     tournament?.entry_fee,
-    entryCount
+    entryCount,
+    3 // Default prize positions
   );
 
   const allPrizes = [...distributionPrizes, ...(prizes ?? [])];
@@ -294,20 +295,6 @@ export const TournamentCard = ({
               </TooltipTrigger>
               <TooltipContent side="top" align="center">
                 <p>Tournament Status: {tournamentStatus.text}</p>
-              </TooltipContent>
-            </Tooltip>
-
-            {/* Prize Spots */}
-            <Tooltip delayDuration={50}>
-              <TooltipTrigger asChild>
-                <div className="flex-shrink-0">
-                  <Badge variant="outline" className="text-xs p-1 rounded-md">
-                    {Number(tournament.game_config.prize_spots)} Winners
-                  </Badge>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="top" align="center">
-                <p>{Number(tournament.game_config.prize_spots)} Winners</p>
               </TooltipContent>
             </Tooltip>
 

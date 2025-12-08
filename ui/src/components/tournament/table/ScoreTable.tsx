@@ -17,7 +17,6 @@ import {
 } from "@/components/tournament/containers/TournamentCard";
 import ScoreRow from "@/components/tournament/table/ScoreRow";
 import EntrantRow from "@/components/tournament/table/EntrantRow";
-import { useTournamentContracts } from "@/dojo/hooks/useTournamentContracts";
 import { padAddress } from "@/lib/utils";
 import { ScoreTableDialog } from "@/components/dialogs/ScoreTable";
 import { useGetTournamentRegistrants } from "@/dojo/hooks/useSqlQueries";
@@ -36,13 +35,13 @@ const ScoreTable = ({
   isStarted,
   isEnded,
 }: ScoreTableProps) => {
-  const { namespace } = useDojo();
+  const { namespace, selectedChainConfig } = useDojo();
   const [showScores, setShowScores] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<any>(null);
   const [isMobileDialogOpen, setIsMobileDialogOpen] = useState(false);
   const [hasInitialized, setHasInitialized] = useState(false);
   const [showTableDialog, setShowTableDialog] = useState(false);
-  const { tournamentAddress } = useTournamentContracts();
+  const tournamentAddress = selectedChainConfig.budokanAddress!;
 
   const {
     games,

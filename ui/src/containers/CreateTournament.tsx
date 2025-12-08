@@ -50,7 +50,8 @@ const formSchema = z.object({
   settings: z.string(), // Changed to string for ID
   name: z.string().min(2).max(50),
   description: z.string().min(0).max(500),
-  leaderboardSize: z.number().min(1).max(1000),
+  soulbound: z.boolean().default(false),
+  play_url: z.string().url().optional().or(z.literal("")),
 
   // Other steps
   enableGating: z.boolean().default(false),
@@ -85,8 +86,10 @@ const formSchema = z.object({
       amount: z.number().min(0).optional(),
       value: z.number().min(0).optional(),
       tokenDecimals: z.number().min(0).max(18).optional(),
-      creatorFeePercentage: z.number().min(0).max(100).optional(),
-      gameFeePercentage: z.number().min(0).max(100).optional(),
+      creatorFeePercentage: z.number().min(0).max(100).optional(), // Stored as percentage (0-100), converted to basis points (0-10000) on submit
+      gameFeePercentage: z.number().min(0).max(100).optional(), // Stored as percentage (0-100), converted to basis points (0-10000) on submit
+      refundSharePercentage: z.number().min(0).max(100).optional(), // Stored as percentage (0-100), converted to basis points (0-10000) on submit
+      prizePoolPayoutCount: z.number().min(1).max(1000).optional(), // Number of positions that receive prize pool payouts
       prizeDistribution: z
         .array(
           z.object({
@@ -95,6 +98,8 @@ const formSchema = z.object({
           })
         )
         .optional(),
+      distributionType: z.enum(["linear", "exponential", "uniform"]).optional(),
+      distributionWeight: z.number().min(0).max(50).optional(), // Weight for linear/exponential distributions (scaled by 10 for contract)
     })
     .optional(),
   bonusPrizes: z
@@ -133,7 +138,8 @@ const CreateTournament = () => {
       settings: "", // Just an ID string now
       name: "",
       description: "",
-      leaderboardSize: 10,
+      soulbound: false,
+      play_url: "",
 
       // Schedule step
       startTime: (() => {
@@ -166,6 +172,10 @@ const CreateTournament = () => {
       entryFees: {
         creatorFeePercentage: 0,
         gameFeePercentage: 1,
+        refundSharePercentage: 0,
+        prizePoolPayoutCount: 10,
+        distributionType: "exponential",
+        distributionWeight: 1,
       },
       bonusPrizes: [],
     },
@@ -313,8 +323,7 @@ const CreateTournament = () => {
           getValue("game") &&
           getValue("settings") &&
           getValue("name") &&
-          getValue("description") &&
-          getValue("leaderboardSize")
+          getValue("description")
         ),
         enabled: true,
       },
@@ -426,6 +435,9 @@ const CreateTournament = () => {
         address!,
         Number(tournamentCount)
       );
+      console.log("Processed tournament:", JSON.stringify(processedTournament, (key, value) =>
+        typeof value === 'bigint' ? value.toString() : value
+      , 2));
       // Process the prizes if they exist
       const processedPrizes = processPrizes(
         formData,
