@@ -22,7 +22,6 @@ import { addAddressPadding, CairoCustomEnum } from "starknet";
 import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
 import {
   Tournament as TournamentModel,
-  Token,
   EntryCount,
   Leaderboard,
   getModelsMapping,
@@ -46,10 +45,9 @@ import {
   useGetTournamentPrizeClaimsAggregations,
   useGetTournaments,
   useGetTournamentsCount,
-  useGetTokenByAddress,
-  useGetTokens,
   useGetTournamentLeaderboards,
 } from "@/dojo/hooks/useSqlQueries";
+import { getTokenByAddress, getTokensByAddresses } from "@/lib/tokenUtils";
 import NotFound from "@/containers/NotFound";
 import {
   Tooltip,
@@ -260,14 +258,13 @@ const Tournament = () => {
 
   const entryFeeToken = tournamentModel?.entry_fee.Some?.token_address;
 
-  // Fetch entry fee token data using SQL query
-  const { data: entryFeeTokenData } = useGetTokenByAddress({
-    namespace,
-    address: entryFeeToken || "",
-    active: hasEntryFee && !!entryFeeToken,
-  });
+  // Get entry fee token data from static tokens
+  const entryFeeTokenData = useMemo(() => {
+    if (!hasEntryFee || !entryFeeToken) return undefined;
+    return getTokenByAddress(entryFeeToken, selectedChainConfig?.chainId ?? "");
+  }, [entryFeeToken, hasEntryFee, selectedChainConfig]);
 
-  const entryFeeTokenSymbol = (entryFeeTokenData as Token)?.symbol;
+  const entryFeeTokenSymbol = entryFeeTokenData?.symbol;
 
   const tournamentId = tournamentModel?.id;
 
@@ -337,20 +334,11 @@ const Tournament = () => {
     return Array.from(addresses);
   }, [aggregations?.token_totals, entryFeeToken]);
 
-  // Fetch token data for all unique addresses in this tournament
-  const { data: tokensData } = useGetTokens({
-    namespace,
-    active: uniqueTokenAddresses.length > 0,
-    limit: 100, // Should be enough for tournament tokens
-  });
-
-  // Filter tokens to only include those used in this tournament
+  // Get token data for all unique addresses in this tournament from static tokens
   const tournamentTokens = useMemo(() => {
-    if (!tokensData) return [];
-    return (tokensData as Token[]).filter((token) =>
-      uniqueTokenAddresses.includes(token.address)
-    );
-  }, [tokensData, uniqueTokenAddresses]);
+    if (uniqueTokenAddresses.length === 0) return [];
+    return getTokensByAddresses(uniqueTokenAddresses, selectedChainConfig?.chainId ?? "");
+  }, [uniqueTokenAddresses, selectedChainConfig]);
 
   // Add entry fee token symbol to the list
   const allTokenSymbols = useMemo(() => {

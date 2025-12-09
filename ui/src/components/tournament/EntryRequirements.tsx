@@ -1,6 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { CairoCustomEnum } from "starknet";
-import { Token, Tournament } from "@/generated/models.gen";
+import { Tournament } from "@/generated/models.gen";
 import { displayAddress, feltToString } from "@/lib/utils";
 import { useDojo } from "@/context/dojo";
 import {
@@ -38,8 +38,8 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
-import { useGetTokenByAddress } from "@/dojo/hooks/useSqlQueries";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getTokenByAddress } from "@/lib/tokenUtils";
 
 // Helper component for Entry Limit display with info tooltip
 const EntryLimitInfo = ({ limit }: { limit: number }) => (
@@ -94,14 +94,13 @@ const EntryRequirements = ({
     [entryRequirement]
   );
 
-  // Fetch token data using SQL query
-  const { data: tokenData, loading: tokenLoading } = useGetTokenByAddress({
-    namespace,
-    address: tokenAddress || "",
-    active: activeVariant === "token" && !!tokenAddress,
-  });
+  // Get token data from static tokens
+  const token = useMemo(() => {
+    if (activeVariant !== "token" || !tokenAddress) return undefined;
+    return getTokenByAddress(tokenAddress, selectedChainConfig?.chainId ?? "");
+  }, [tokenAddress, activeVariant, selectedChainConfig]);
 
-  const token = tokenData as Token | undefined;
+  const tokenLoading = false; // No loading needed for static data
 
   const tournament = useMemo(
     () =>

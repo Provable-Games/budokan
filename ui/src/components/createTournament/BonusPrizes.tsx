@@ -8,11 +8,8 @@ import {
   FormDescription,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import AmountInput from "@/components/createTournament/inputs/Amount";
-import TokenDialog from "@/components/dialogs/Token";
 import { getTokenLogoUrl, getTokenSymbol } from "@/lib/tokensMeta";
 import { X } from "@/components/Icons";
-import { Slider } from "@/components/ui/slider";
 import {
   calculateDistribution,
   getOrdinalSuffix,
@@ -20,10 +17,13 @@ import {
 } from "@/lib/utils";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
 import { OptionalSection } from "@/components/createTournament/containers/OptionalSection";
-import { TokenValue } from "@/components/createTournament/containers/TokenValue";
+import { TokenSelector } from "@/components/createTournament/inputs/TokenSelector";
+import { TokenAmountInput } from "@/components/createTournament/inputs/TokenAmountInput";
+import { PrizeDistributionVisual } from "@/components/createTournament/PrizeDistributionVisual";
 import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
 import { useDojo } from "@/context/dojo";
 import { FormToken } from "@/lib/types";
+import { ChainId } from "@/dojo/setup/networks";
 
 interface NewPrize {
   token: FormToken;
@@ -38,6 +38,7 @@ const BonusPrizes = ({ form }: StepProps) => {
   const [selectedToken, setSelectedToken] = useState<FormToken | undefined>(
     undefined
   );
+  const [tokenEverSelected, setTokenEverSelected] = useState(false);
   const [newPrize, setNewPrize] = useState<NewPrize>({
     token: {
       address: "",
@@ -49,6 +50,8 @@ const BonusPrizes = ({ form }: StepProps) => {
     tokenType: "",
   });
   const [distributionWeight, setDistributionWeight] = useState(1);
+  const [distributionType, setDistributionType] = useState<"exponential" | "linear" | "uniform">("exponential");
+  const [leaderboardSize, setLeaderboardSize] = useState(10);
   const [prizeDistributions, setPrizeDistributions] = useState<
     { position: number; percentage: number }[]
   >([]);
@@ -56,6 +59,26 @@ const BonusPrizes = ({ form }: StepProps) => {
   const { selectedChainConfig } = useDojo();
 
   const chainId = selectedChainConfig?.chainId ?? "";
+  const isSepolia = selectedChainConfig?.chainId === ChainId.SN_SEPOLIA;
+
+  // Quick select token addresses for mainnet
+  const MAINNET_QUICK_SELECT_ADDRESSES = [
+    "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7", // ETH
+    "0x0124aeb495b947201f5fac96fd1138e326ad86195b98df6dec9009158a533b49", // LORDS
+    "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d", // STRK
+    "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8", // USDC
+    "0x042dd777885ad2c116be96d4d634abc90a26a790ffb5871e037dd5ae7d2ec86b", // SURVIVOR
+  ];
+
+  // Quick select token addresses for sepolia
+  const SEPOLIA_QUICK_SELECT_ADDRESSES = [
+    "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7", // ETH
+    "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d", // STRK
+  ];
+
+  const QUICK_SELECT_ADDRESSES = isSepolia
+    ? SEPOLIA_QUICK_SELECT_ADDRESSES
+    : MAINNET_QUICK_SELECT_ADDRESSES;
 
   const { getBalanceGeneral, getTokenDecimals } = useSystemCalls();
 
@@ -108,8 +131,12 @@ const BonusPrizes = ({ form }: StepProps) => {
 
   useEffect(() => {
     const distributions = calculateDistribution(
-      form.watch("leaderboardSize"),
-      distributionWeight
+      leaderboardSize,
+      distributionWeight,
+      0, // creatorFee
+      0, // gameFee
+      0, // refundShare
+      distributionType
     );
     setPrizeDistributions(
       distributions.map((percentage, index) => ({
@@ -117,7 +144,7 @@ const BonusPrizes = ({ form }: StepProps) => {
         percentage,
       }))
     );
-  }, []);
+  }, [leaderboardSize, distributionWeight, distributionType]);
 
   useEffect(() => {
     setNewPrize((prev) => ({
@@ -130,16 +157,22 @@ const BonusPrizes = ({ form }: StepProps) => {
   }, [prices, newPrize.value]);
 
   useEffect(() => {
+    if (selectedToken && !tokenEverSelected) {
+      setTokenEverSelected(true);
+    }
+  }, [selectedToken, tokenEverSelected]);
+
+  useEffect(() => {
     const checkBalances = async () => {
       if (!newPrize.token?.address || !newPrize.amount) {
         setHasInsufficientBalance(false);
         return;
       }
-      
+
       const balances = await getBalanceGeneral(newPrize.token.address);
       const decimals = await getTokenDecimals(newPrize.token.address);
       const amount = (newPrize.amount ?? 0) * 10 ** decimals;
-      
+
       if (balances < BigInt(amount)) {
         setHasInsufficientBalance(true);
       } else {
@@ -165,28 +198,106 @@ const BonusPrizes = ({ form }: StepProps) => {
           {field.value && (
             <>
               <div className="w-full h-0.5 bg-brand/25" />
-              <div className="flex flex-col gap-5">
-                <div className="flex flex-row justify-between items-center sm:px-4">
-                  <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-10 w-full">
-                    <div className="flex flex-row items-center justify-between pt-4 sm:pt-6 w-full sm:w-auto">
-                      <TokenDialog
-                        selectedToken={selectedToken}
-                        onSelect={(token) => {
-                          setSelectedToken(token);
-                          setNewPrize((prev) => ({
-                            ...prev,
-                            token: token,
-                            tokenType:
-                              token.token_type === "erc20" ? "ERC20" : "ERC721",
-                            // Reset other values when token changes
-                            amount: undefined,
-                            tokenId: undefined,
-                            position: undefined,
-                          }));
-                        }}
-                      />
+              <div className="flex flex-col gap-4">
+                {/* Token Selection and Amount in a grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:divide-x lg:divide-brand/25">
+                  {/* Token Selection */}
+                  <TokenSelector
+                    label="Prize Token"
+                    description="Select the token for bonus prize"
+                    selectedToken={selectedToken}
+                    onTokenSelect={(token) => {
+                      setSelectedToken(token);
+                      setNewPrize((prev) => ({
+                        ...prev,
+                        token: token,
+                        tokenType:
+                          token.token_type === "erc20" ? "ERC20" : "ERC721",
+                        // Reset other values when token changes
+                        amount: undefined,
+                        tokenId: undefined,
+                        position: undefined,
+                      }));
+                    }}
+                    quickSelectAddresses={QUICK_SELECT_ADDRESSES}
+                  />
+
+                  {/* Amount Input - Always rendered but hidden until token is selected */}
+                  <div className="w-full h-0.5 bg-brand/25 lg:hidden" />
+                  {newPrize.tokenType === "ERC20" ? (
+                    <TokenAmountInput
+                      label="Prize Amount"
+                      description="Prize amount in USD"
+                      value={newPrize.value || 0}
+                      onChange={(value) =>
+                        setNewPrize((prev) => ({
+                          ...prev,
+                          value: value,
+                        }))
+                      }
+                      tokenAmount={newPrize.amount ?? 0}
+                      tokenAddress={newPrize.token.address}
+                      usdValue={newPrize.value ?? 0}
+                      isLoading={pricesLoading}
+                      visible={tokenEverSelected}
+                      className="lg:pl-4"
+                    />
+                  ) : newPrize.tokenType === "ERC721" ? (
+                    <div
+                      className={`flex flex-col gap-2 transition-opacity lg:pl-4 ${
+                        !tokenEverSelected
+                          ? "opacity-0 pointer-events-none"
+                          : "opacity-100"
+                      }`}
+                    >
+                      <div className="flex flex-row items-center gap-5">
+                        <FormLabel className="text-lg font-brand">
+                          Token ID & Position
+                        </FormLabel>
+                        <FormDescription className="hidden sm:block sm:text-xs xl:text-sm">
+                          Enter token ID and leaderboard position
+                        </FormDescription>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <Input
+                          type="number"
+                          placeholder="Token ID"
+                          value={newPrize.tokenId || ""}
+                          onChange={(e) =>
+                            setNewPrize((prev) => ({
+                              ...prev,
+                              tokenId: Number(e.target.value),
+                            }))
+                          }
+                          className="w-[150px]"
+                        />
+                        <Input
+                          type="number"
+                          placeholder="Position"
+                          min={1}
+                          max={10}
+                          value={newPrize.position || ""}
+                          onChange={(e) =>
+                            setNewPrize((prev) => ({
+                              ...prev,
+                              position: Number(e.target.value),
+                            }))
+                          }
+                          className="w-[100px]"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="lg:pl-4" />
+                  )}
+                </div>
+
+                {/* Add Prize Button */}
+                {tokenEverSelected && (
+                  <>
+                    <div className="w-full h-0.5 bg-brand/25" />
+                    <div className="flex justify-end">
                       <Button
-                        className="sm:hidden"
                         type="button"
                         disabled={!isValidPrize() || hasInsufficientBalance}
                         onClick={async () => {
@@ -254,291 +365,34 @@ const BonusPrizes = ({ form }: StepProps) => {
                           : "Add Prize"}
                       </Button>
                     </div>
-                    {newPrize.token.address !== "" && (
-                      <>
-                        <div className="w-full h-0.5 bg-brand/25 sm:hidden" />
-                        <div className="flex flex-col gap-2">
-                          <div className="flex flex-row items-center gap-5">
-                            {newPrize.tokenType === "ERC20" ? (
-                              <>
-                                <FormLabel className="text-lg font-brand">
-                                  Amount ($)
-                                </FormLabel>
-                                <FormDescription className="hidden sm:block sm:text-xs xl:text-sm">
-                                  Prize amount in USD
-                                </FormDescription>
-                                <TokenValue
-                                  className="sm:hidden"
-                                  amount={newPrize.amount ?? 0}
-                                  tokenAddress={newPrize.token.address}
-                                  usdValue={newPrize.value ?? 0}
-                                  isLoading={pricesLoading}
-                                />
-                              </>
-                            ) : (
-                              <FormLabel className="text-lg font-brand">
-                                Token ID
-                              </FormLabel>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-4">
-                            {newPrize.tokenType === "ERC20" ? (
-                              <div className="flex flex-row items-center gap-2">
-                                <AmountInput
-                                  value={newPrize.value || 0}
-                                  onChange={(value) =>
-                                    setNewPrize((prev) => ({
-                                      ...prev,
-                                      value: value,
-                                    }))
-                                  }
-                                />
-                                <TokenValue
-                                  className="hidden sm:flex"
-                                  amount={newPrize.amount ?? 0}
-                                  tokenAddress={newPrize.token.address}
-                                  usdValue={newPrize.value ?? 0}
-                                  isLoading={pricesLoading}
-                                />
-                              </div>
-                            ) : (
-                              <Input
-                                type="number"
-                                placeholder="Token ID"
-                                value={newPrize.tokenId || ""}
-                                onChange={(e) =>
-                                  setNewPrize((prev) => ({
-                                    ...prev,
-                                    tokenId: Number(e.target.value),
-                                  }))
-                                }
-                                className="w-[150px]"
-                              />
-                            )}
-                            {!isERC20 && (
-                              <Input
-                                type="number"
-                                placeholder="Position"
-                                min={1}
-                                max={form.watch("leaderboardSize")}
-                                value={newPrize.position || ""}
-                                onChange={(e) =>
-                                  setNewPrize((prev) => ({
-                                    ...prev,
-                                    position: Number(e.target.value),
-                                  }))
-                                }
-                                className="w-[100px]"
-                              />
-                            )}
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  <Button
-                    className="hidden sm:block"
-                    type="button"
-                    disabled={!isValidPrize() || hasInsufficientBalance}
-                    onClick={async () => {
-                      const currentPrizes = form.watch("bonusPrizes") || [];
-                      if (
-                        newPrize.tokenType === "ERC20" &&
-                        newPrize.amount &&
-                        totalDistributionPercentage === 100
-                      ) {
-                        // Fetch token decimals for ERC20 tokens
-                        let tokenDecimals = 18;
-                        try {
-                          tokenDecimals = await getTokenDecimals(newPrize.token.address);
-                        } catch (error) {
-                          console.error("Failed to fetch token decimals:", error);
-                        }
-                        
-                        // Filter out prizes with 0 amount to avoid transaction errors
-                        const validPrizes = prizeDistributions
-                          .map((prize) => ({
-                            type: "ERC20" as const,
-                            token: newPrize.token,
-                            amount:
-                              ((newPrize.amount ?? 0) * prize.percentage) / 100,
-                            position: prize.position,
-                            tokenDecimals,
-                          }))
-                          .filter((prize) => prize.amount > 0);
-
-                        form.setValue("bonusPrizes", [
-                          ...currentPrizes,
-                          ...validPrizes,
-                        ]);
-                      } else if (
-                        newPrize.tokenType === "ERC721" &&
-                        newPrize.tokenId &&
-                        newPrize.position
-                      ) {
-                        form.setValue("bonusPrizes", [
-                          ...currentPrizes,
-                          {
-                            type: "ERC721",
-                            token: newPrize.token,
-                            tokenId: newPrize.tokenId,
-                            position: newPrize.position,
-                          },
-                        ]);
-                      }
-                      setNewPrize({
-                        token: {
-                          address: "",
-                          token_type: "",
-                          name: "",
-                          symbol: "",
-                          is_registered: false,
-                        },
-                        tokenType: "",
-                      });
-                      setSelectedToken(undefined);
-                    }}
-                  >
-                    {hasInsufficientBalance
-                      ? "Insufficient Balance"
-                      : "Add Prize"}
-                  </Button>
-                </div>
+                  </>
+                )}
                 {isERC20 && (
                   <>
                     <div className="w-full h-0.5 bg-brand/25" />
-                    <div className="flex flex-col gap-4">
-                      <div className="flex flex-col sm:flex-row justify-between">
-                        <div className="flex flex-row items-center gap-5">
-                          <FormLabel className="font-brand text-lg">
-                            Prize Distribution
-                          </FormLabel>
-                          <FormDescription className="hidden sm:block sm:text-xs xl:text-sm">
-                            Set prize percentages for each position
-                          </FormDescription>
-                        </div>
-                        <div className="flex flex-col">
-                          <div className="flex flex-row gap-2 items-center justify-between text-sm text-muted-foreground">
-                            <div className="flex flex-row items-center gap-2">
-                              <FormLabel>Distribution Weight</FormLabel>
-                              <FormDescription className="hidden sm:block sm:text-xs xl:text-sm">
-                                Adjust the spread of the distribution
-                              </FormDescription>
-                            </div>
-                            {totalDistributionPercentage !== 100 && (
-                              <span className="text-destructive">
-                                Total must equal 100%
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex flex-row items-center gap-4">
-                            <Slider
-                              min={0}
-                              max={5}
-                              step={0.1}
-                              value={[distributionWeight]}
-                              onValueChange={([value]) => {
-                                setDistributionWeight(value);
-                                const distributions = calculateDistribution(
-                                  form.watch("leaderboardSize"),
-                                  value
-                                );
-                                setPrizeDistributions(
-                                  distributions.map((percentage, index) => ({
-                                    position: index + 1,
-                                    percentage,
-                                  }))
-                                );
-                              }}
-                              className="w-[200px] h-10"
-                            />
-                            <span className="w-12 text-center">
-                              {distributionWeight.toFixed(1)}
-                            </span>
-                            <div className="flex flex-row gap-2 items-center justify-between text-sm text-muted-foreground">
-                              <span>Total: {totalDistributionPercentage}%</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-center sm:flex-row gap-4 overflow-x-auto pb-2">
-                        {Array.from({
-                          length: form.watch("leaderboardSize"),
-                        }).map((_, index) => (
-                          <div
-                            key={index}
-                            className="w-[175px] min-w-[175px] flex flex-row items-center justify-between flex-shrink-0 border border-neutral rounded-md p-2"
-                          >
-                            <span className="font-brand text-lg">
-                              {index + 1}
-                              {getOrdinalSuffix(index + 1)}
-                            </span>
-
-                            <div className="relative m-0 w-[50px]">
-                              <Input
-                                type="number"
-                                min="0"
-                                max="100"
-                                className="pr-4 px-1"
-                                onChange={(e) => {
-                                  const value = Number(e.target.value);
-                                  setPrizeDistributions((prev) =>
-                                    prev.map((item) =>
-                                      item.position === index + 1
-                                        ? { ...item, percentage: value }
-                                        : item
-                                    )
-                                  );
-                                }}
-                                value={
-                                  prizeDistributions[index]?.percentage || ""
-                                }
-                              />
-                              <span className="absolute right-1 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">
-                                %
-                              </span>
-                            </div>
-
-                            <div className="flex flex-col">
-                              <div className="flex flex-row items-center gap-1">
-                                <span className="text-xs">
-                                  {formatNumber(
-                                    ((prizeDistributions[index]?.percentage ??
-                                      0) *
-                                      (newPrize.amount ?? 0)) /
-                                      100
-                                  )}
-                                </span>
-                                <img
-                                  src={getTokenLogoUrl(
-                                    chainId,
-                                    newPrize.token.address
-                                  )}
-                                  className="w-4"
-                                />
-                              </div>
-                              {prices?.[
-                                getTokenSymbol(
-                                  chainId,
-                                  newPrize.token.address
-                                ) ?? ""
-                              ] && (
-                                <span className="text-xs text-neutral">
-                                  ~$
-                                  {(
-                                    ((prizeDistributions[index]?.percentage ??
-                                      0) *
-                                      (newPrize.value ?? 0)) /
-                                    100
-                                  ).toFixed(2)}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                    <PrizeDistributionVisual
+                      distributions={prizeDistributions}
+                      weight={distributionWeight}
+                      onWeightChange={(value) => {
+                        setDistributionWeight(value);
+                      }}
+                      onLeaderboardSizeChange={(value) => {
+                        setLeaderboardSize(value);
+                      }}
+                      distributionType={distributionType}
+                      onDistributionTypeChange={(type) => {
+                        setDistributionType(type);
+                      }}
+                      disabled={false}
+                      amount={newPrize.amount ?? 0}
+                      tokenSymbol={newPrize.token.symbol}
+                      usdValue={newPrize.value ?? 0}
+                      tokenLogoUrl={getTokenLogoUrl(
+                        chainId,
+                        newPrize.token.address
+                      )}
+                      leaderboardSize={leaderboardSize}
+                    />
                   </>
                 )}
 

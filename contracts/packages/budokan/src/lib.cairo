@@ -11,10 +11,12 @@ pub mod models {
     pub mod schedule;
 }
 
-// Libs (logic)
+// Libs (pure logic)
 pub mod libs {
+    pub mod calculations;
     pub mod lifecycle;
     pub mod schedule;
+    pub mod validations;
 }
 
 #[cfg(test)]

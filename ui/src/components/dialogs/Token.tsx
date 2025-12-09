@@ -12,16 +12,14 @@ import { Input } from "@/components/ui/input";
 import { Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { getTokenLogoUrl } from "@/lib/tokensMeta";
 import { useDojo } from "@/context/dojo";
-import { Token } from "@/generated/models.gen";
 import { ChainId } from "@/dojo/setup/networks";
 import { QUESTION } from "@/components/Icons";
-import { sepoliaTokens } from "@/lib/sepoliaTokens";
 import { indexAddress } from "@/lib/utils";
 import { FormToken } from "@/lib/types";
 import { mainnetNFTs } from "@/lib/nfts";
-import { useGetTokens, useGetTokensCount } from "@/dojo/hooks/useSqlQueries";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDebounce } from "@/hooks/useDebounce";
+import { getPaginatedTokens, TokenForDisplay } from "@/lib/tokenUtils";
 
 interface TokenDialogProps {
   selectedToken: FormToken | undefined;
@@ -44,55 +42,20 @@ const TokenDialog = ({ selectedToken, onSelect, type }: TokenDialogProps) => {
   // Debounce search query to avoid too many requests
   const debouncedSearch = useDebounce(tokenSearchQuery, 300);
 
-  const { data: newTokens, loading: newTokensLoading } = useGetTokens({
-    namespace,
-    limit: tokensPerPage,
-    offset,
-    search: debouncedSearch,
-    tokenType: type,
-    active: isMainnet && isOpen, // Only fetch when mainnet and dialog is open
-  });
+  // Use static token data
+  const { tokens: paginatedTokens, total: totalTokensCount } = useMemo(() => {
+    return getPaginatedTokens(selectedChainConfig?.chainId ?? "", {
+      tokenType: type,
+      search: debouncedSearch,
+      limit: tokensPerPage,
+      offset,
+    });
+  }, [selectedChainConfig, debouncedSearch, type, offset, tokensPerPage]);
 
-  const { data: totalTokensCount } = useGetTokensCount({
-    namespace,
-    search: debouncedSearch,
-    tokenType: type,
-    active: isMainnet && isOpen,
-  });
+  const newTokensLoading = false; // No loading needed for static data
 
-  const tokens: Token[] = useMemo(() => {
-    // Use newTokens if available, otherwise fall back to mainnetTokens
-    return isMainnet
-      ? (newTokens as Token[])
-      : isSepolia
-      ? sepoliaTokens.map((token) => ({
-          address: token.l2_token_address,
-          name: token.name,
-          symbol: token.symbol,
-          is_registered: true,
-          token_type: "erc20",
-        }))
-      : [];
-  }, [isMainnet, isSepolia, namespace, newTokens]);
-
-  // For sepolia, apply client-side filtering
-  const displayTokens = useMemo(() => {
-    if (isMainnet) {
-      return tokens; // Already filtered by SQL query
-    } else {
-      // Client-side filtering for sepolia
-      let filtered = tokens;
-      if (type) {
-        filtered = filtered.filter((token) => token.token_type === type);
-      }
-      if (tokenSearchQuery) {
-        filtered = filtered.filter((token) =>
-          token.name.toLowerCase().includes(tokenSearchQuery.toLowerCase())
-        );
-      }
-      return filtered;
-    }
-  }, [tokens, type, tokenSearchQuery, isMainnet]);
+  // Tokens are already filtered and paginated by getPaginatedTokens
+  const displayTokens = paginatedTokens;
 
   const erc721Tokens = displayTokens.filter(
     (token) => token.token_type === "erc721"
@@ -104,7 +67,7 @@ const TokenDialog = ({ selectedToken, onSelect, type }: TokenDialogProps) => {
     )
   );
 
-  const getTokenImage = (token: Token) => {
+  const getTokenImage = (token: TokenForDisplay) => {
     if (token.token_type === "erc20") {
       return getTokenLogoUrl(selectedChainConfig?.chainId ?? "", token.address);
     } else {
@@ -134,15 +97,11 @@ const TokenDialog = ({ selectedToken, onSelect, type }: TokenDialogProps) => {
     }
   };
 
-  const hasMoreTokens = isMainnet
-    ? totalTokensCount
-      ? (currentPage + 1) * tokensPerPage < totalTokensCount
-      : false
-    : displayTokens.length > (currentPage + 1) * tokensPerPage;
+  const hasMoreTokens = totalTokensCount
+    ? (currentPage + 1) * tokensPerPage < totalTokensCount
+    : false;
 
-  const totalPages = isMainnet
-    ? Math.ceil((totalTokensCount || 0) / tokensPerPage)
-    : Math.ceil(displayTokens.length / tokensPerPage);
+  const totalPages = Math.ceil((totalTokensCount || 0) / tokensPerPage);
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
@@ -185,7 +144,7 @@ const TokenDialog = ({ selectedToken, onSelect, type }: TokenDialogProps) => {
           </div>
         </DialogHeader>
         <div className="flex-1 flex flex-col min-h-0">
-          {newTokensLoading && isMainnet ? (
+          {newTokensLoading ? (
             <div className="flex-1 overflow-y-auto">
               {Array.from({ length: 10 }).map((_, index) => (
                 <div
@@ -277,7 +236,7 @@ const TokenDialog = ({ selectedToken, onSelect, type }: TokenDialogProps) => {
                 <span className="text-sm text-muted-foreground">
                   Page {currentPage + 1} of {totalPages}
                 </span>
-                {isMainnet && totalTokensCount !== undefined && (
+                {totalTokensCount !== undefined && (
                   <span className="text-xs text-muted-foreground">
                     {totalTokensCount} tokens found
                   </span>

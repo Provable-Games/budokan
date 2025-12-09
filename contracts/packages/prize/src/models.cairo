@@ -15,9 +15,8 @@ const MASK_8: u256 = 0xFF;
 const MASK_16: u256 = 0xFFFF;
 const MASK_32: u256 = 0xFFFFFFFF;
 
-/// Number of custom shares (u16) packed per storage slot
-/// Each share = 16 bits, felt252 = 252 bits, so we can fit 15 shares per slot (15 * 16 = 240 bits)
-pub const CUSTOM_SHARES_PER_SLOT: u8 = 15;
+// Re-export SHARES_PER_SLOT as CUSTOM_SHARES_PER_SLOT for backward compatibility
+pub use budokan_prize::libs::share_math::SHARES_PER_SLOT as CUSTOM_SHARES_PER_SLOT;
 
 // Payout type constants for storage
 pub const PAYOUT_TYPE_POSITION: u8 = 0;
@@ -201,6 +200,8 @@ pub struct PrizeMetrics {
     pub total_prizes: u64,
 }
 
+use budokan_prize::libs::share_math::{get_packed_share, set_packed_share, SHARES_PER_SLOT};
+
 /// Custom shares - stores up to 15 u16 shares in a single felt252
 /// Each share = 16 bits, Layout: [share0(16)] | [share1(16)] | ... | [share14(16)] = 240 bits
 /// This reduces storage operations from N reads to ceil(N/15) reads
@@ -219,31 +220,20 @@ pub impl CustomSharesImpl of CustomSharesTrait {
 
     /// Get a single share from the packed value at the given index (0-14)
     fn get_share(self: @CustomShares, index: u8) -> u16 {
-        assert!(index < CUSTOM_SHARES_PER_SLOT, "Index out of bounds");
-        let packed_u256: u256 = (*self.packed).into();
-        let shift: u256 = (index.into() * 16_u32).into();
-        let divisor: u256 = pow_2_u256_16(shift);
-        let value: u256 = (packed_u256 / divisor) & MASK_16;
-        value.try_into().unwrap()
+        get_packed_share((*self.packed).into(), index)
     }
 
     /// Set a single share in the packed value at the given index (0-14)
     fn set_share(ref self: CustomShares, index: u8, share: u16) {
-        assert!(index < CUSTOM_SHARES_PER_SLOT, "Index out of bounds");
-        let packed_u256: u256 = self.packed.into();
-        let shift: u256 = (index.into() * 16_u32).into();
-        let multiplier: u256 = pow_2_u256_16(shift);
-        let mask: u256 = MASK_16 * multiplier;
-        let shifted_value: u256 = share.into() * multiplier;
-        let new_packed: u256 = (packed_u256 & ~mask) | shifted_value;
+        let new_packed = set_packed_share(self.packed.into(), index, share);
         self.packed = new_packed.try_into().unwrap();
     }
 
     /// Pack an array of shares (up to 15) into a CustomShares
     fn from_array(shares: Span<u16>) -> CustomShares {
         let mut packed = CustomSharesImpl::new();
-        let len: u32 = if shares.len() > CUSTOM_SHARES_PER_SLOT.into() {
-            CUSTOM_SHARES_PER_SLOT.into()
+        let len: u32 = if shares.len() > SHARES_PER_SLOT.into() {
+            SHARES_PER_SLOT.into()
         } else {
             shares.len()
         };
@@ -258,8 +248,8 @@ pub impl CustomSharesImpl of CustomSharesTrait {
     /// Unpack shares to an array (returns shares up to count)
     fn to_array(self: @CustomShares, count: u8) -> Array<u16> {
         let mut result = ArrayTrait::new();
-        let len: u8 = if count > CUSTOM_SHARES_PER_SLOT {
-            CUSTOM_SHARES_PER_SLOT
+        let len: u8 = if count > SHARES_PER_SLOT {
+            SHARES_PER_SLOT
         } else {
             count
         };
@@ -270,61 +260,4 @@ pub impl CustomSharesImpl of CustomSharesTrait {
         }
         result
     }
-}
-
-/// Power of 2 for u256 (optimized for multiples of 16 used in share packing)
-fn pow_2_u256_16(exp: u256) -> u256 {
-    if exp == 0 {
-        return 1;
-    }
-    if exp == 16 {
-        return 0x10000;
-    }
-    if exp == 32 {
-        return 0x100000000;
-    }
-    if exp == 48 {
-        return 0x1000000000000;
-    }
-    if exp == 64 {
-        return 0x10000000000000000;
-    }
-    if exp == 80 {
-        return 0x100000000000000000000;
-    }
-    if exp == 96 {
-        return 0x1000000000000000000000000;
-    }
-    if exp == 112 {
-        return 0x10000000000000000000000000000;
-    }
-    if exp == 128 {
-        return 0x100000000000000000000000000000000;
-    }
-    if exp == 144 {
-        return 0x1000000000000000000000000000000000000;
-    }
-    if exp == 160 {
-        return 0x10000000000000000000000000000000000000000;
-    }
-    if exp == 176 {
-        return 0x100000000000000000000000000000000000000000000;
-    }
-    if exp == 192 {
-        return 0x1000000000000000000000000000000000000000000000000;
-    }
-    if exp == 208 {
-        return 0x10000000000000000000000000000000000000000000000000000;
-    }
-    if exp == 224 {
-        return 0x100000000000000000000000000000000000000000000000000000000;
-    }
-    // Fallback (should not be reached for valid indices 0-14)
-    let mut result: u256 = 1;
-    let mut i: u256 = 0;
-    while i < exp {
-        result = result * 2;
-        i += 1;
-    }
-    result
 }

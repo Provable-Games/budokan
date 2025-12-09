@@ -1096,25 +1096,10 @@ pub mod Budokan {
         }
 
         fn _assert_valid_entry_fee_shares(self: @ContractState, entry_fee: @EntryFee) {
-            // Validate that creator shares don't exceed 100% (BASIS_POINTS)
-            let mut total_shares: u16 = 0;
-
-            if let Option::Some(tournament_share) = *entry_fee.tournament_creator_share {
-                total_shares += tournament_share;
-            }
-
-            if let Option::Some(creator_share) = *entry_fee.game_creator_share {
-                total_shares += creator_share;
-            }
-
-            if let Option::Some(refund_share) = *entry_fee.refund_share {
-                total_shares += refund_share;
-            }
-
-            assert!(
-                total_shares <= BASIS_POINTS,
-                "Tournament: Entry fee shares exceed 100%. Total shares: {} bp",
-                total_shares,
+            budokan::libs::validations::assert_valid_entry_fee_shares(
+                *entry_fee.tournament_creator_share,
+                *entry_fee.game_creator_share,
+                *entry_fee.refund_share,
             );
         }
 
@@ -1161,7 +1146,7 @@ pub mod Budokan {
 
         #[inline(always)]
         fn _assert_prize_exists(self: @ContractState, token: ContractAddress, id: u64) {
-            assert!(!token.is_zero(), "Tournament: Prize key {} does not exist", id);
+            budokan::libs::validations::assert_prize_exists(token, id);
         }
 
         #[inline(always)]
@@ -1273,7 +1258,7 @@ pub mod Budokan {
 
         #[inline(always)]
         fn _assert_position_is_valid(self: @ContractState, position: u32, winner_count: u32) {
-            assert!(position > 0 && position <= winner_count, "Tournament: Invalid position");
+            budokan::libs::validations::assert_position_is_valid(position, winner_count);
         }
 
         //

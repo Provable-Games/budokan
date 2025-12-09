@@ -40,10 +40,9 @@ const MASK_8: u128 = 0xFF; // 8 bits
 const MASK_14: u128 = 0x3FFF; // 14 bits of 1s (max 16383)
 const MASK_15: u128 = 0x7FFF; // 15 bits of 1s
 
-/// Number of additional shares packed per storage slot
-/// Each share = 15 bits (14 bits share_bps + 1 bit claimed)
-/// felt252 = 252 bits, so we can fit 16 shares per slot (16 * 15 = 240 bits)
-pub const SHARES_PER_SLOT: u8 = 16;
+// Re-export SHARES_PER_SLOT for backward compatibility
+pub use budokan_entry_fee::libs::share_math::SHARES_PER_SLOT;
+use budokan_entry_fee::libs::share_math::{get_packed_share, set_packed_share};
 
 /// Packed entry fee data for storage
 /// Packs: amount (128) | game_creator_share (14) | refund_share (14) | game_creator_claimed (1) |
@@ -144,33 +143,15 @@ pub impl PackedAdditionalSharesImpl of PackedAdditionalSharesTrait {
 
     /// Get a single share from the packed value at the given index (0-15)
     fn get_share(self: @PackedAdditionalShares, index: u8) -> StoredAdditionalShare {
-        assert!(index < SHARES_PER_SLOT, "Index out of bounds");
-        // Convert to u256 for bit manipulation, extract 15 bits at position index*15
-        let packed_u256: u256 = (*self.packed).into();
-        let shift: u256 = (index.into() * 15_u32).into();
-        let divisor: u256 = pow_2_u256(shift);
-        let value: u256 = (packed_u256 / divisor) & MASK_15.into();
-        let share_bps: u16 = (value & MASK_14.into()).try_into().unwrap();
-        let claimed: bool = ((value / TWO_POW_14.into()) & MASK_1.into()) == 1;
+        let (share_bps, claimed) = get_packed_share((*self.packed).into(), index);
         StoredAdditionalShare { share_bps, claimed }
     }
 
     /// Set a single share in the packed value at the given index (0-15)
     fn set_share(ref self: PackedAdditionalShares, index: u8, share: StoredAdditionalShare) {
-        assert!(index < SHARES_PER_SLOT, "Index out of bounds");
-        let packed_u256: u256 = self.packed.into();
-        let shift: u256 = (index.into() * 15_u32).into();
-        let multiplier: u256 = pow_2_u256(shift);
-        let mask: u256 = MASK_15.into() * multiplier;
-        let claimed_bit: u256 = if share.claimed {
-            1
-        } else {
-            0
-        };
-        let share_value: u256 = share.share_bps.into() + (claimed_bit * TWO_POW_14.into());
-        let shifted_value: u256 = share_value * multiplier;
-        // Clear existing value at index and set new value
-        let new_packed: u256 = (packed_u256 & ~mask) | shifted_value;
+        let new_packed = set_packed_share(
+            self.packed.into(), index, share.share_bps, share.claimed,
+        );
         self.packed = new_packed.try_into().unwrap();
     }
 
@@ -205,66 +186,6 @@ pub impl PackedAdditionalSharesImpl of PackedAdditionalSharesTrait {
         }
         result
     }
-}
-
-/// Power of 2 for u256 (optimized for multiples of 15 used in share packing)
-fn pow_2_u256(exp: u256) -> u256 {
-    if exp == 0 {
-        return 1;
-    }
-    if exp == 15 {
-        return 0x8000;
-    }
-    if exp == 30 {
-        return 0x40000000;
-    }
-    if exp == 45 {
-        return 0x200000000000;
-    }
-    if exp == 60 {
-        return 0x1000000000000000;
-    }
-    if exp == 75 {
-        return 0x8000000000000000000;
-    }
-    if exp == 90 {
-        return 0x40000000000000000000000;
-    }
-    if exp == 105 {
-        return 0x200000000000000000000000000;
-    }
-    if exp == 120 {
-        return 0x1000000000000000000000000000000;
-    }
-    if exp == 135 {
-        return 0x8000000000000000000000000000000000;
-    }
-    if exp == 150 {
-        return 0x40000000000000000000000000000000000000;
-    }
-    if exp == 165 {
-        return 0x200000000000000000000000000000000000000000;
-    }
-    if exp == 180 {
-        return 0x1000000000000000000000000000000000000000000000;
-    }
-    if exp == 195 {
-        return 0x8000000000000000000000000000000000000000000000000;
-    }
-    if exp == 210 {
-        return 0x40000000000000000000000000000000000000000000000000000;
-    }
-    if exp == 225 {
-        return 0x200000000000000000000000000000000000000000000000000000000;
-    }
-    // Fallback (should not be reached for valid indices 0-15)
-    let mut result: u256 = 1;
-    let mut i: u256 = 0;
-    while i < exp {
-        result = result * 2;
-        i += 1;
-    }
-    result
 }
 
 /// Entry fee claim types for non-position-based shares

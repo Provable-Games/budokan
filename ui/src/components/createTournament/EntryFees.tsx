@@ -1,42 +1,28 @@
 import { useEffect, useMemo } from "react";
-import { Button } from "@/components/ui/button";
 import { StepProps } from "@/containers/CreateTournament";
 import {
   FormControl,
   FormField,
   FormItem,
-  FormLabel,
-  FormDescription,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import AmountInput from "@/components/createTournament/inputs/Amount";
-import TokenDialog from "@/components/dialogs/Token";
-import { Slider } from "@/components/ui/slider";
 import React from "react";
 import {
   calculateDistribution,
-  formatNumber,
-  getOrdinalSuffix,
 } from "@/lib/utils";
-import { getTokenSymbol } from "@/lib/tokensMeta";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
 import { getTokenLogoUrl } from "@/lib/tokensMeta";
 import { OptionalSection } from "@/components/createTournament/containers/OptionalSection";
-import { TokenValue } from "@/components/createTournament/containers/TokenValue";
 import { FeeDistributionVisual } from "@/components/createTournament/FeeDistributionVisual";
 import { PrizeDistributionVisual } from "@/components/createTournament/PrizeDistributionVisual";
 import { useDojo } from "@/context/dojo";
-import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
-import { mainnetTokens } from "@/lib/mainnetTokens";
-import { sepoliaTokens } from "@/lib/sepoliaTokens";
+import { TokenSelector } from "@/components/createTournament/inputs/TokenSelector";
+import { TokenAmountInput } from "@/components/createTournament/inputs/TokenAmountInput";
 import { ChainId } from "@/dojo/setup/networks";
 
 const EntryFees = ({ form }: StepProps) => {
   const { selectedChainConfig } = useDojo();
-  const { getTokenDecimals } = useSystemCalls();
 
   const chainId = selectedChainConfig?.chainId ?? "";
-  const isMainnet = selectedChainConfig?.chainId === ChainId.SN_MAIN;
   const isSepolia = selectedChainConfig?.chainId === ChainId.SN_SEPOLIA;
 
   // Quick select token addresses for mainnet
@@ -57,23 +43,6 @@ const EntryFees = ({ form }: StepProps) => {
   const QUICK_SELECT_ADDRESSES = isSepolia
     ? SEPOLIA_QUICK_SELECT_ADDRESSES
     : MAINNET_QUICK_SELECT_ADDRESSES;
-
-  const QUICK_SELECT_TOKENS = QUICK_SELECT_ADDRESSES.map((address) => {
-    const token = isMainnet
-      ? mainnetTokens.find((t) => t.l2_token_address === address)
-      : sepoliaTokens.find((t) => t.l2_token_address === address);
-    return {
-      address,
-      symbol: token?.symbol || "",
-      name: token?.name || "",
-    };
-  }).filter((t) => t.symbol); // Filter out any tokens not found
-
-  const PREDEFINED_PERCENTAGES = [
-    { value: 1, label: "1%" },
-    { value: 3, label: "3%" },
-    { value: 5, label: "5%" },
-  ];
 
   // Get distribution values from form, with fallbacks
   const distributionWeight = form.watch("entryFees.distributionWeight") ?? 1;
@@ -177,123 +146,21 @@ const EntryFees = ({ form }: StepProps) => {
                     name="entryFees.token"
                     render={({ field: tokenField }) => (
                       <FormItem>
-                        <div className="flex flex-col gap-2">
-                          <div className="flex flex-row items-center gap-5">
-                            <FormLabel className="text-lg font-brand">
-                              Entry Fee Token
-                            </FormLabel>
-                            <FormDescription className="hidden sm:block sm:text-xs xl:text-sm">
-                              Select the token players will pay as entry fee
-                            </FormDescription>
-                          </div>
-                          <FormControl>
-                            <div className="flex flex-row items-center gap-3">
-                              {/* Quick select tokens */}
-                              <div className="flex flex-row flex-wrap items-center gap-2">
-                                {QUICK_SELECT_TOKENS.map((token) => (
-                                  <Button
-                                    key={token.address}
-                                    type="button"
-                                    variant={
-                                      form.watch("entryFees.token")?.address ===
-                                      token.address
-                                        ? "default"
-                                        : "outline"
-                                    }
-                                    size="sm"
-                                    className="h-10 px-3 gap-2"
-                                    onClick={async () => {
-                                      const selectedToken = {
-                                        address: token.address,
-                                        symbol: token.symbol,
-                                        name: token.symbol,
-                                        token_type: "erc20" as const,
-                                        is_registered: true,
-                                      };
-                                      tokenField.onChange(selectedToken);
-                                      // Fetch token decimals and set it in the form
-                                      try {
-                                        const decimals = await getTokenDecimals(
-                                          token.address
-                                        );
-                                        form.setValue(
-                                          "entryFees.tokenDecimals",
-                                          decimals
-                                        );
-                                      } catch (error) {
-                                        console.error(
-                                          "Failed to fetch token decimals:",
-                                          error
-                                        );
-                                        form.setValue(
-                                          "entryFees.tokenDecimals",
-                                          18
-                                        ); // Default to 18
-                                      }
-                                    }}
-                                  >
-                                    <img
-                                      src={getTokenLogoUrl(
-                                        chainId,
-                                        token.address
-                                      )}
-                                      className="w-4 h-4"
-                                      alt={token.symbol}
-                                    />
-                                    {token.symbol}
-                                  </Button>
-                                ))}
-                              </div>
-                              {/* Vertical divider */}
-                              <div className="h-10 w-px bg-brand/25 self-end" />
-                              {/* Select Token button */}
-                              <div className="flex flex-col gap-2">
-                                <span className="text-sm font-medium text-neutral-500">
-                                  Custom
-                                </span>
-                                <TokenDialog
-                                  selectedToken={
-                                    // Only show as selected if it's NOT one of the template tokens
-                                    QUICK_SELECT_ADDRESSES.includes(
-                                      form.watch("entryFees.token")?.address ??
-                                        ""
-                                    )
-                                      ? undefined
-                                      : form.watch("entryFees.token")
-                                  }
-                                  onSelect={async (token) => {
-                                    tokenField.onChange(token);
-                                    // Fetch token decimals and set it in the form
-                                    if (
-                                      token.address &&
-                                      token.token_type === "erc20"
-                                    ) {
-                                      try {
-                                        const decimals = await getTokenDecimals(
-                                          token.address
-                                        );
-                                        form.setValue(
-                                          "entryFees.tokenDecimals",
-                                          decimals
-                                        );
-                                      } catch (error) {
-                                        console.error(
-                                          "Failed to fetch token decimals:",
-                                          error
-                                        );
-                                        form.setValue(
-                                          "entryFees.tokenDecimals",
-                                          18
-                                        ); // Default to 18
-                                      }
-                                    }
-                                  }}
-                                  type="erc20"
-                                />
-                              </div>
-                            </div>
-                          </FormControl>
-                        </div>
+                        <FormControl>
+                          <TokenSelector
+                            label="Entry Fee Token"
+                            description="Select the token players will pay as entry fee"
+                            selectedToken={form.watch("entryFees.token")}
+                            onTokenSelect={(token) => {
+                              tokenField.onChange(token);
+                            }}
+                            onTokenDecimalsChange={(decimals) => {
+                              form.setValue("entryFees.tokenDecimals", decimals);
+                            }}
+                            quickSelectAddresses={QUICK_SELECT_ADDRESSES}
+                            tokenType="erc20"
+                          />
+                        </FormControl>
                       </FormItem>
                     )}
                   />
@@ -304,50 +171,22 @@ const EntryFees = ({ form }: StepProps) => {
                     control={form.control}
                     name="entryFees.value"
                     render={({ field }) => (
-                      <FormItem
-                        className={`lg:pl-4 transition-opacity ${
-                          !tokenEverSelected
-                            ? "opacity-0 pointer-events-none"
-                            : "opacity-100"
-                        }`}
-                      >
-                        <div className="flex flex-col gap-2">
-                          <div className="flex flex-row items-center gap-5">
-                            <FormLabel className="text-lg font-brand">
-                              Entry Fee Amount
-                            </FormLabel>
-                            <FormDescription className="hidden sm:block sm:text-xs xl:text-sm">
-                              Fee per entry in USD
-                            </FormDescription>
-                            <TokenValue
-                              className="sm:hidden"
-                              amount={form.watch("entryFees.amount") ?? 0}
-                              tokenAddress={
-                                form.watch("entryFees.token")?.address ?? ""
-                              }
-                              usdValue={form.watch("entryFees.value") ?? 0}
-                              isLoading={pricesLoading}
-                            />
-                          </div>
-                          <FormControl>
-                            <div className="flex flex-row items-center gap-2">
-                              <AmountInput
-                                value={field.value || 0}
-                                onChange={field.onChange}
-                                disabled={!hasTokenSelected}
-                              />
-                              <TokenValue
-                                className="hidden sm:flex"
-                                amount={form.watch("entryFees.amount") ?? 0}
-                                tokenAddress={
-                                  form.watch("entryFees.token")?.address ?? ""
-                                }
-                                usdValue={form.watch("entryFees.value") ?? 0}
-                                isLoading={pricesLoading}
-                              />
-                            </div>
-                          </FormControl>
-                        </div>
+                      <FormItem>
+                        <FormControl>
+                          <TokenAmountInput
+                            label="Entry Fee Amount"
+                            description="Fee per entry in USD"
+                            value={field.value || 0}
+                            onChange={field.onChange}
+                            tokenAmount={form.watch("entryFees.amount") ?? 0}
+                            tokenAddress={form.watch("entryFees.token")?.address ?? ""}
+                            usdValue={form.watch("entryFees.value") ?? 0}
+                            isLoading={pricesLoading}
+                            disabled={!hasTokenSelected}
+                            visible={tokenEverSelected}
+                            className="lg:pl-4"
+                          />
+                        </FormControl>
                       </FormItem>
                     )}
                   />
@@ -384,204 +223,6 @@ const EntryFees = ({ form }: StepProps) => {
                       )}
                     />
                     <div className="w-full h-0.5 bg-brand/25" />
-                    {/* Hidden/Collapsed individual fee inputs for backward compatibility */}
-                    <div className="hidden">
-                      <FormField
-                        control={form.control}
-                        name="entryFees.creatorFeePercentage"
-                        render={({ field }) => (
-                          <FormItem>
-                            <div className="flex flex-row items-center gap-5">
-                              <FormLabel className="font-brand text-lg">
-                                Creator Fee (%)
-                              </FormLabel>
-                              <FormDescription className="hidden sm:block sm:text-xs xl:text-sm">
-                                Fee provided to you (Tournament Creator)
-                              </FormDescription>
-                              <TokenValue
-                                className="sm:hidden"
-                                amount={
-                                  ((form.watch("entryFees.amount") ?? 0) *
-                                    (field.value ?? 0)) /
-                                  100
-                                }
-                                tokenAddress={
-                                  form.watch("entryFees.token")?.address ?? ""
-                                }
-                                usdValue={
-                                  ((form.watch("entryFees.value") ?? 0) *
-                                    (field.value ?? 0)) /
-                                  100
-                                }
-                                isLoading={pricesLoading}
-                              />
-                            </div>
-                            <FormControl>
-                              <div className="div flex flex-row gap-2">
-                                <div className="flex flex-row gap-2">
-                                  {PREDEFINED_PERCENTAGES.map(
-                                    ({ value, label }) => (
-                                      <Button
-                                        key={value}
-                                        type="button"
-                                        variant={
-                                          field.value === value
-                                            ? "default"
-                                            : "outline"
-                                        }
-                                        className="px-2"
-                                        disabled={!hasTokenSelected}
-                                        onClick={() => {
-                                          field.onChange(value);
-                                        }}
-                                      >
-                                        {label}
-                                      </Button>
-                                    )
-                                  )}
-                                </div>
-                                <Input
-                                  type="number"
-                                  placeholder="0"
-                                  min="0"
-                                  max="100"
-                                  step="1"
-                                  className="w-[80px] p-1"
-                                  disabled={!hasTokenSelected}
-                                  {...field}
-                                  onChange={(e) => {
-                                    const value = Math.floor(
-                                      Number(e.target.value)
-                                    );
-                                    field.onChange(value);
-                                  }}
-                                />
-                                <TokenValue
-                                  className="hidden sm:flex"
-                                  amount={
-                                    ((form.watch("entryFees.amount") ?? 0) *
-                                      (field.value ?? 0)) /
-                                    100
-                                  }
-                                  tokenAddress={
-                                    form.watch("entryFees.token")?.address ?? ""
-                                  }
-                                  usdValue={
-                                    ((form.watch("entryFees.value") ?? 0) *
-                                      (field.value ?? 0)) /
-                                    100
-                                  }
-                                  isLoading={pricesLoading}
-                                />
-                              </div>
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="entryFees.gameFeePercentage"
-                        render={({ field }) => (
-                          <FormItem>
-                            <div className="flex flex-row items-center gap-5">
-                              <FormLabel className="font-brand text-lg">
-                                Game Fee (%)
-                              </FormLabel>
-                              <FormDescription className="hidden sm:block sm:text-xs xl:text-sm">
-                                Fee provided to the Game Creator (minimum 1%)
-                              </FormDescription>
-                              <TokenValue
-                                className="sm:hidden"
-                                amount={
-                                  ((form.watch("entryFees.amount") ?? 0) *
-                                    (field.value ?? 0)) /
-                                  100
-                                }
-                                tokenAddress={
-                                  form.watch("entryFees.token")?.address ?? ""
-                                }
-                                usdValue={
-                                  ((form.watch("entryFees.value") ?? 0) *
-                                    (field.value ?? 0)) /
-                                  100
-                                }
-                                isLoading={pricesLoading}
-                              />
-                            </div>
-                            <FormControl>
-                              <div className="div flex flex-row gap-2">
-                                <div className="flex flex-row gap-2">
-                                  {PREDEFINED_PERCENTAGES.map(
-                                    ({ value, label }) => (
-                                      <Button
-                                        key={value}
-                                        type="button"
-                                        variant={
-                                          field.value === value
-                                            ? "default"
-                                            : "outline"
-                                        }
-                                        className="px-2"
-                                        disabled={!hasTokenSelected}
-                                        onClick={() => {
-                                          field.onChange(value);
-                                        }}
-                                      >
-                                        {label}
-                                      </Button>
-                                    )
-                                  )}
-                                </div>
-                                <Input
-                                  type="number"
-                                  placeholder="1"
-                                  min="1"
-                                  max="100"
-                                  step="1"
-                                  className="w-[80px] p-1"
-                                  disabled={!hasTokenSelected}
-                                  {...field}
-                                  onChange={(e) => {
-                                    const value = Math.floor(
-                                      Number(e.target.value)
-                                    );
-                                    field.onChange(value < 1 ? 1 : value);
-                                  }}
-                                />
-                                <TokenValue
-                                  className="hidden sm:flex"
-                                  amount={
-                                    ((form.watch("entryFees.amount") ?? 0) *
-                                      (field.value ?? 0)) /
-                                    100
-                                  }
-                                  tokenAddress={
-                                    form.watch("entryFees.token")?.address ?? ""
-                                  }
-                                  usdValue={
-                                    ((form.watch("entryFees.value") ?? 0) *
-                                      (field.value ?? 0)) /
-                                    100
-                                  }
-                                  isLoading={pricesLoading}
-                                />
-                              </div>
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="entryFees.refundSharePercentage"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormControl>
-                              <input type="hidden" {...field} />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
-                    </div>
                     <PrizeDistributionVisual
                       distributions={
                         form.watch("entryFees.prizeDistribution") ?? []
