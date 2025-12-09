@@ -38,6 +38,9 @@ budokan_entry_fee = { path = "../entry_fee" }
 budokan_entry_requirement = { path = "../entry_requirement" }
 budokan_prize = { path = "../prize" }
 budokan_registration = { path = "../registration" }
+beacon_entity = { git = "https://github.com/sai-starknet/torii-beacon", tag = "v1.7.3" }
+beacon_macros = { git = "https://github.com/sai-starknet/torii-beacon", tag = "v1.7.3" }
+beacon_library = { git = "https://github.com/sai-starknet/torii-beacon", tag = "v1.7.3" }
 
 [dev-dependencies]
 cairo_test = "2.13.1"

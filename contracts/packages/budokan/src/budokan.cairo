@@ -8,8 +8,8 @@ pub mod Budokan {
     use budokan::models::budokan::{
         AdditionalShare, Distribution, EntryFee, EntryFeeClaimType, EntryFeeRewardType,
         EntryRequirement, EntryRequirementType, GameConfig, Metadata, Prize, PrizeType,
-        QualificationEntries, QualificationProof, Registration, RewardType, StoredEntryFee,
-        TokenTypeData, Tournament as TournamentModel,
+        QualificationEntries, QualificationProof, Registration, RegistrationData, RewardType, StoredEntryFee,
+        TokenTypeData, Tournament as TournamentModel, EntryCountData, Leaderboard, PlatformMetrics,
     };
     use budokan::models::constants::GAME_CREATOR_TOKEN_ID;
     use budokan::models::packed_storage::{
@@ -75,6 +75,8 @@ pub mod Budokan {
         ClassHash, ContractAddress, get_block_timestamp, get_caller_address, get_contract_address,
     };
 
+    use beacon_library::{ToriiTable, register_table_with_schema};
+
     // Components needed: metagame requires SRC5, leaderboard for tournament rankings
     component!(path: MetagameComponent, storage: metagame, event: MetagameEvent);
     component!(path: ContextComponent, storage: context, event: ContextEvent);
@@ -116,6 +118,26 @@ pub mod Budokan {
     impl PrizeImpl = PrizeComponent::PrizeImpl<ContractState>;
     #[abi(embed_v0)]
     impl RegistrationImpl = RegistrationComponent::RegistrationImpl<ContractState>;
+
+    const ENTRY_COUNT_TABLE_ID: felt252 = bytearrays_hash!("Budokan", "EntryCount");
+    const LEADERBOARD_TABLE_ID: felt252 = bytearrays_hash!("Budokan", "Leaderboard");
+    const PLATFORM_METRICS_TABLE_ID: felt252 = bytearrays_hash!("Budokan", "PlatformMetrics");
+    const PRIZE_TABLE_ID: felt252 = bytearrays_hash!("Budokan", "Prize");
+    const PRIZE_CLAIM_TABLE_ID: felt252 = bytearrays_hash!("Budokan", "PrizeClaim");
+    const PRIZE_METRICS_TABLE_ID: felt252 = bytearrays_hash!("Budokan", "PrizeMetrics");
+    const QUALIFICATION_ENTRIES_TABLE_ID: felt252 = bytearrays_hash!("Budokan", "QualificationEntries");
+    const REGISTRATION_TABLE_ID: felt252 = bytearrays_hash!("Budokan", "Registration");
+    const TOURNAMENT_TABLE_ID: felt252 = bytearrays_hash!("Budokan", "Tournament");
+
+    impl EntryCountTable = ToriiTable<ENTRY_COUNT_TABLE_ID>;
+    impl LeaderboardTable = ToriiTable<LEADERBOARD_TABLE_ID>;
+    impl PlatformMetricsTable = ToriiTable<PLATFORM_METRICS_TABLE_ID>;
+    impl PrizeTable = ToriiTable<PRIZE_TABLE_ID>;
+    impl PrizeClaimTable = ToriiTable<PRIZE_CLAIM_TABLE_ID>;
+    impl PrizeMetricsTable = ToriiTable<PRIZE_METRICS_TABLE_ID>;
+    impl QualificationEntriesTable = ToriiTable<QUALIFICATION_ENTRIES_TABLE_ID>;
+    impl RegistrationTable = ToriiTable<REGISTRATION_TABLE_ID>;
+    impl TournamentTable = ToriiTable<TOURNAMENT_TABLE_ID>;
 
     #[storage]
     struct Storage {
@@ -205,6 +227,16 @@ pub mod Budokan {
 
         // Set event relayer
         self.event_relayer.write(event_relayer);
+
+        register_table_with_schema::<EntryCountData>("Budokan", "EntryCount");
+        register_table_with_schema::<Leaderboard>("Budokan", "Leaderboard");
+        register_table_with_schema::<PlatformMetrics>("Budokan", "PlatformMetrics");
+        register_table_with_schema::<Prize>("Budokan", "Prize");
+        register_table_with_schema::<PrizeClaim>("Budokan", "PrizeClaim");
+        register_table_with_schema::<PrizeMetrics>("Budokan", "PrizeMetrics");
+        register_table_with_schema::<QualificationEntries>("Budokan", "QualificationEntries");
+        register_table_with_schema::<RegistrationData>("Budokan", "Registration");
+        register_table_with_schema::<Tournament>("Budokan", "Tournament");
     }
 
     #[abi(embed_v0)]
@@ -489,7 +521,7 @@ pub mod Budokan {
                 contract_address: extension_address,
             };
 
-            let registration = self.registration._get_registration(game_address, game_token_id);
+            let registration = self.registration.get_registration_data(game_address, game_token_id);
 
             // Verify this registration belongs to this tournament
             assert!(
@@ -512,22 +544,7 @@ pub mod Budokan {
                 // Update registration to mark as banned using component
                 self.registration.ban_registration(game_address, game_token_id);
 
-                // Emit event if relayer is configured
-                let relayer_address = self.event_relayer.read();
-                if !relayer_address.is_zero() {
-                    let relayer = IBudokanEventRelayerDispatcher {
-                        contract_address: relayer_address,
-                    };
-                    relayer
-                        .emit_registration(
-                            game_address,
-                            game_token_id,
-                            tournament_id,
-                            0, // entry_number for banned registration
-                            false, // has_submitted
-                            true // is_banned
-                        );
-                }
+                RegistrationTable::set_entity((game_address, game_token_id), @registration);
             }
         }
 

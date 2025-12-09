@@ -37,7 +37,7 @@ pub struct EntryFee {
     pub distribution_positions: Option<u32>,
 }
 
-#[derive(Drop, Serde)]
+#[derive(Drop, Serde, Introspect)]
 pub struct Tournament {
     pub id: u64,
     pub created_at: u64,
@@ -49,6 +49,19 @@ pub struct Tournament {
     pub entry_fee: Option<EntryFee>,
     pub entry_requirement: Option<EntryRequirement>,
 }
+
+#[derive(Drop, Serde, Introspect)]
+pub struct TournamentEntity {
+    pub created_at: u64,
+    pub created_by: ContractAddress,
+    pub creator_token_id: u64,
+    pub metadata: Metadata,
+    pub schedule: Schedule,
+    pub game_config: GameConfig,
+    pub entry_fee: Option<EntryFee>,
+    pub entry_requirement: Option<EntryRequirement>,
+}
+
 
 #[derive(Drop, Serde, starknet::Store)]
 pub struct Metadata {
@@ -66,27 +79,31 @@ pub struct GameConfig {
     pub play_url: ByteArray,
 }
 
-#[derive(Drop, Serde)]
+#[derive(Drop, Serde, Introspect)]
 pub struct Leaderboard {
     pub tournament_id: u64,
     pub token_ids: Array<u64>,
 }
 
-#[derive(Copy, Drop, Serde, starknet::Store)]
+#[derive(Drop, Serde, Introspect)]
+pub struct LeaderboardData {
+    pub token_ids: Array<u64>,
+}
+
+#[derive(Copy, Drop, Serde, Introspect)]
 pub struct PlatformMetrics {
     pub key: felt252,
     pub total_tournaments: u64,
 }
 
-#[derive(Copy, Drop, Serde, starknet::Store)]
-pub struct TournamentTokenMetrics {
-    pub key: felt252,
-    pub total_supply: u64,
-}
-
-#[derive(Copy, Drop, Serde, starknet::Store)]
+#[derive(Copy, Drop, Serde, Introspect)]
 pub struct EntryCount {
     pub tournament_id: u64,
+    pub count: u32,
+}
+
+#[derive(Copy, Drop, Serde, Introspect)]
+pub struct EntryCountData {
     pub count: u32,
 }
 
@@ -111,3 +128,12 @@ pub enum RewardType {
     /// Claim entry fee share
     EntryFee: EntryFeeRewardType,
 }
+
+#[derive(Copy, Drop, Serde, Introspect)]
+pub struct RegistrationData {
+    pub context_id: u64,
+    pub entry_number: u32,
+    pub has_submitted: bool,
+    pub is_banned: bool,
+}
+
