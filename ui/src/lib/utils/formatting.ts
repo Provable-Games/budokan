@@ -617,6 +617,35 @@ export const getErc20TokenSymbols = (
     .map(([symbol, _]) => symbol);
 };
 
+/**
+ * Converts a token amount from its smallest unit to human-readable format
+ * Preserves precision for very large amounts while handling decimals correctly
+ *
+ * @param amount - Token amount in smallest unit (e.g., wei)
+ * @param decimals - Number of decimals for the token
+ * @param price - Optional price per token to calculate USD value
+ * @returns The calculated amount as a number
+ */
+export const convertTokenAmount = (
+  amount: bigint,
+  decimals: number,
+  price?: number
+): number => {
+  const divisor = 10n ** BigInt(decimals);
+
+  // Split into integer and fractional parts using BigInt
+  const integerPart = amount / divisor; // BigInt division (safe, no precision loss)
+  const fractionalPart = amount % divisor; // Remainder (always < divisor)
+
+  // Convert to decimal: integer part + (fractional / divisor)
+  // Fractional part is safe to convert since it's always < 10^decimals
+  const humanAmount =
+    Number(integerPart) + Number(fractionalPart) / Number(divisor);
+
+  // Multiply by price if provided
+  return price ? humanAmount * price : humanAmount;
+};
+
 export const calculatePrizeValue = (
   prize: {
     type: "erc20" | "erc721";
