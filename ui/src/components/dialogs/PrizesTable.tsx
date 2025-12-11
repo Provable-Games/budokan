@@ -79,7 +79,10 @@ export const PrizesTableDialog = ({
   const hasDistributedPrize = (aggregations?.lowest_prize_position ?? 0) === 0;
   const endPosition = hasDistributedPrize
     ? Math.max(startPosition + positionsPerPage - 1, 50) // Fetch up to 50 positions for distributed prizes
-    : Math.min(startPosition + positionsPerPage - 1, aggregations?.lowest_prize_position || 5);
+    : Math.min(
+        startPosition + positionsPerPage - 1,
+        aggregations?.lowest_prize_position || 5
+      );
 
   // Fetch paginated prizes
   const { data: prizesData, loading: prizesLoading } = useGetTournamentPrizes({
@@ -97,8 +100,8 @@ export const PrizesTableDialog = ({
 
     // If the lowest position is 0 (distributed prize), check the fetched data for distribution_count
     if (dbLowestPosition === 0 && prizesData && prizesData.length > 0) {
-      const distributedPrize = prizesData.find((p: any) =>
-        (p.position === 0 || p.payout_position === 0)
+      const distributedPrize = prizesData.find(
+        (p: any) => p.position === 0 || p.payout_position === 0
       );
       if (distributedPrize) {
         const distributionCount = Number(
@@ -208,7 +211,12 @@ export const PrizesTableDialog = ({
     });
 
     console.log("Combined prizes after filter:", combinedPrizes);
-    console.log("Start position:", startPosition, "End position:", actualEndPosition);
+    console.log(
+      "Start position:",
+      startPosition,
+      "End position:",
+      actualEndPosition
+    );
 
     return combinedPrizes.reduce((acc: PositionPrizes, prize: any) => {
       const position = prize.position ?? prize.payout_position;

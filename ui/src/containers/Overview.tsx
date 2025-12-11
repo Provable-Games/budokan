@@ -293,21 +293,19 @@ const Overview = () => {
     setPrevSubscribedTournaments(subscribedTournaments);
   }, [subscribedTournamentsKey, prevSubscribedTournaments]);
 
-  const {
-    data: myTournaments,
-    loading: myTournamentsLoading,
-  } = useGetMyTournaments({
-    namespace: namespace,
-    address: queryAddress,
-    gameAddresses: gameAddresses,
-    tokenIds: gameTokenIds,
-    gameFilters: gameFilters,
-    limit: 12,
-    offset: currentPage * 12,
-    active: selectedTab === "my",
-    sortBy: currentSortBy,
-    fromTournamentId: fromTournamentId,
-  });
+  const { data: myTournaments, loading: myTournamentsLoading } =
+    useGetMyTournaments({
+      namespace: namespace,
+      address: queryAddress,
+      gameAddresses: gameAddresses,
+      tokenIds: gameTokenIds,
+      gameFilters: gameFilters,
+      limit: 12,
+      offset: currentPage * 12,
+      active: selectedTab === "my",
+      sortBy: currentSortBy,
+      fromTournamentId: fromTournamentId,
+    });
 
   // Extract unique token addresses from tournaments
   const uniqueTokenAddresses = useMemo(() => {
@@ -336,7 +334,10 @@ const Overview = () => {
 
   // Get token metadata for all unique addresses from static lists
   const tokensArray = useMemo(() => {
-    return getTokensByAddresses(uniqueTokenAddresses, selectedChainConfig?.chainId ?? "");
+    return getTokensByAddresses(
+      uniqueTokenAddresses,
+      selectedChainConfig?.chainId ?? ""
+    );
   }, [uniqueTokenAddresses, selectedChainConfig?.chainId]);
 
   // Extract unique token symbols for price fetching
@@ -344,7 +345,7 @@ const Overview = () => {
     return tokensArray.map((t: any) => t.symbol).filter((s: any) => s);
   }, [tokensArray]);
 
-  // Fetch prices for all unique tokens at once
+  // Fetch prices for all unique token addresses at once
   const { prices: tokenPrices, isLoading: pricesLoading } = useEkuboPrices({
     tokens: allUniqueTokens,
   });

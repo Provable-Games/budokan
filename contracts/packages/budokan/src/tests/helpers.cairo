@@ -103,6 +103,8 @@ pub fn create_basic_tournament(budokan: IBudokanDispatcher, game: ContractAddres
             test_game_config(game),
             Option::None,
             Option::None,
+            false,
+            "",
         )
 }
 // pub fn register_tokens_for_test(

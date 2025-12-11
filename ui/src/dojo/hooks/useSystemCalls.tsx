@@ -498,6 +498,8 @@ export const useSystemCalls = () => {
         tournament.game_config,
         tournament.entry_fee,
         tournament.entry_requirement,
+        tournament.soulbound,
+        tournament.play_url,
       ]);
 
       let calls = [];
@@ -630,6 +632,8 @@ export const useSystemCalls = () => {
           tournament.game_config,
           tournament.entry_fee,
           tournament.entry_requirement,
+          tournament.soulbound,
+          tournament.play_url,
         ]),
       };
 

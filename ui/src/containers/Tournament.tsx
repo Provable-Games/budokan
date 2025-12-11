@@ -307,9 +307,13 @@ const Tournament = () => {
     const positions = new Set<number>();
 
     // Add entry fee distribution positions
-    if (tournamentModel?.entry_fee?.isSome() &&
-        tournamentModel.entry_fee.Some?.distribution_positions?.isSome()) {
-      const distributionCount = Number(tournamentModel.entry_fee.Some.distribution_positions.Some);
+    if (
+      tournamentModel?.entry_fee?.isSome() &&
+      tournamentModel.entry_fee.Some?.distribution_positions?.isSome()
+    ) {
+      const distributionCount = Number(
+        tournamentModel.entry_fee.Some.distribution_positions.Some
+      );
       for (let i = 1; i <= distributionCount; i++) {
         positions.add(i);
       }
@@ -334,7 +338,11 @@ const Tournament = () => {
     }
 
     return positions.size;
-  }, [tournamentModel?.entry_fee, aggregations?.distributed_prize_count, aggregations?.lowest_prize_position]);
+  }, [
+    tournamentModel?.entry_fee,
+    aggregations?.distributed_prize_count,
+    aggregations?.lowest_prize_position,
+  ]);
 
   // Extract unique token symbols from aggregated data and entry fee prizes
   const erc20TokenSymbols = useMemo(() => {
@@ -397,8 +405,10 @@ const Tournament = () => {
     isLoading: ownPricesLoading,
     isTokenLoading,
   } = useEkuboPrices({
-    tokens: allTokenSymbols,
+    tokens: uniqueTokenAddresses,
   });
+
+  console.log(ownPrices);
 
   // Use prop prices if provided, otherwise use own prices
   const prices = ownPrices;
@@ -406,22 +416,27 @@ const Tournament = () => {
 
   // Calculate total value in USD using aggregated data
   const totalPrizesValueUSD = useMemo(() => {
-    if (pricesLoading) return 0;
+    // Return 0 if prices are loading OR if prices object is empty
+    if (pricesLoading || !prices || Object.keys(prices).length === 0) return 0;
 
     let total = 0;
+    let hasAllPrices = true;
 
     // Calculate USD from aggregated database prizes
     if (aggregations?.token_totals) {
       total += aggregations.token_totals.reduce(
         (sum: number, tokenTotal: any) => {
           if (tokenTotal.tokenType === "erc20" && tokenTotal.totalAmount) {
+            const price = prices[tokenTotal.tokenAddress];
+            // If any price is missing, mark that we don't have all prices yet
+            if (price === undefined) {
+              hasAllPrices = false;
+              return sum;
+            }
             const decimals = tokenDecimals[tokenTotal.tokenAddress] || 18;
-            const amount = BigInt(tokenTotal.totalAmount);
-            const price = prices[tokenTotal.tokenSymbol || ""] || 0;
+            const amount = Number(tokenTotal.totalAmount);
 
-            return (
-              sum + Number(amount / 10n ** BigInt(decimals)) * Number(price)
-            );
+            return sum + (amount / 10 ** decimals) * price;
           }
           return sum;
         },
@@ -433,7 +448,13 @@ const Tournament = () => {
     // Only include distributionPrizes - not creator/game shares as those are fees, not prizes
     distributionPrizes.forEach((prize) => {
       if (prize.token_type?.variant?.erc20) {
-        const amount = BigInt(prize.token_type.variant.erc20.amount || 0);
+        const price = prices[prize.token_address];
+        // If any price is missing, mark that we don't have all prices yet
+        if (price === undefined) {
+          hasAllPrices = false;
+          return;
+        }
+        const amount = Number(prize.token_type.variant.erc20.amount || 0);
         const decimals = tokenDecimals[prize.token_address] || 18;
 
         // Find the token to get its symbol
@@ -446,6 +467,9 @@ const Tournament = () => {
       }
     });
 
+    // If we don't have all prices yet, return 0 to avoid showing partial totals
+    if (!hasAllPrices) return 0;
+
     return total;
   }, [
     aggregations?.token_totals,
@@ -455,6 +479,8 @@ const Tournament = () => {
     distributionPrizes,
     tournamentTokens,
   ]);
+
+  console.log(totalPrizesValueUSD);
 
   // Fetch token decimals only for tokens used in this tournament
   useEffect(() => {
@@ -580,18 +606,21 @@ const Tournament = () => {
 
   const { usernames: creatorUsernames } = useGetUsernames(creatorAddresses);
 
-  const entryFeePrice = prices[entryFeeTokenSymbol ?? ""];
-  const entryFeeLoading = isTokenLoading(entryFeeTokenSymbol ?? "");
+  const entryFeePrice = entryFeeToken ? prices[entryFeeToken] : undefined;
+  const entryFeeLoading = entryFeeToken ? isTokenLoading(entryFeeToken) : false;
 
   const entryFee = hasEntryFee
     ? (() => {
         const entryFeeDecimals = tokenDecimals[entryFeeToken ?? ""] || 18;
-        return (
-          Number(
-            BigInt(tournamentModel?.entry_fee.Some?.amount!) /
-              10n ** BigInt(entryFeeDecimals)
-          ) * Number(entryFeePrice)
-        ).toFixed(2);
+        const amount = Number(tournamentModel?.entry_fee.Some?.amount!);
+        const humanAmount = amount / 10 ** entryFeeDecimals;
+
+        // Return "0.00" if price is not available yet
+        if (!entryFeePrice || isNaN(entryFeePrice)) {
+          return "0.00";
+        }
+
+        return (humanAmount * entryFeePrice).toFixed(2);
       })()
     : "Free";
 
@@ -858,7 +887,9 @@ const Tournament = () => {
                 )}
                 <div className="flex flex-row gap-2 hidden sm:flex">
                   <span>Paid Places:</span>
-                  <span className="text-brand">{paidPlaces > 0 ? paidPlaces : "-"}</span>
+                  <span className="text-brand">
+                    {paidPlaces > 0 ? paidPlaces : "-"}
+                  </span>
                 </div>
                 <Badge
                   variant="outline"

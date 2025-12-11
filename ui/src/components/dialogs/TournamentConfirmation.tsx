@@ -59,13 +59,7 @@ const TournamentConfirmation = ({
 
   const { prices, isLoading: _pricesLoading } = useEkuboPrices({
     tokens: [
-      ...(formData.bonusPrizes?.map(
-        (prize) =>
-          getTokenSymbol(
-            selectedChainConfig.chainId ?? "",
-            prize.token.address
-          ) ?? ""
-      ) ?? []),
+      ...(formData.bonusPrizes?.map((prize) => prize.token.address) ?? []),
       ...(formData.entryFees?.token?.address
         ? [formData.entryFees.token.address]
         : []),
@@ -95,7 +89,12 @@ const TournamentConfirmation = ({
         value: (prize.percentage * (formData.entryFees?.value ?? 0)) / 100,
       };
     });
-  }, [prizeDistributionString, formData.entryFees?.amount, formData.entryFees?.value, formData.entryFees?.token?.address]);
+  }, [
+    prizeDistributionString,
+    formData.entryFees?.amount,
+    formData.entryFees?.value,
+    formData.entryFees?.token?.address,
+  ]);
 
   const handleConfirm = async () => {
     setIsCreating(true);
@@ -203,20 +202,27 @@ const TournamentConfirmation = ({
                   Registration Type:
                 </span>
                 <span className="capitalize">{formData.type}</span>
-                {formData.type === "fixed" && formData.registrationStartTime && (
-                  <>
-                    <span className="text-muted-foreground">Registration Start:</span>
-                    <div className="flex flex-col">
-                      <span className="font-semibold">
-                        {format(formData.registrationStartTime, "PPP")}
+                {formData.type === "fixed" &&
+                  formData.registrationStartTime && (
+                    <>
+                      <span className="text-muted-foreground">
+                        Registration Start:
                       </span>
-                      <span>{format(formData.registrationStartTime, "p")}</span>
-                    </div>
-                  </>
-                )}
+                      <div className="flex flex-col">
+                        <span className="font-semibold">
+                          {format(formData.registrationStartTime, "PPP")}
+                        </span>
+                        <span>
+                          {format(formData.registrationStartTime, "p")}
+                        </span>
+                      </div>
+                    </>
+                  )}
                 {formData.type === "fixed" && formData.registrationEndTime && (
                   <>
-                    <span className="text-muted-foreground">Registration End:</span>
+                    <span className="text-muted-foreground">
+                      Registration End:
+                    </span>
                     <div className="flex flex-col">
                       <span className="font-semibold">
                         {format(formData.registrationEndTime, "PPP")}
@@ -273,14 +279,15 @@ const TournamentConfirmation = ({
                     <span className="capitalize">
                       {formData.gatingOptions.type}
                     </span>
-                    {formData.enableEntryLimit && formData.gatingOptions.type !== "extension" && (
-                      <>
-                        <span className="text-muted-foreground">
-                          Entry Limit:
-                        </span>
-                        <span>{formData.gatingOptions.entry_limit}</span>
-                      </>
-                    )}
+                    {formData.enableEntryLimit &&
+                      formData.gatingOptions.type !== "extension" && (
+                        <>
+                          <span className="text-muted-foreground">
+                            Entry Limit:
+                          </span>
+                          <span>{formData.gatingOptions.entry_limit}</span>
+                        </>
+                      )}
                     {formData.gatingOptions.type === "token" ? (
                       <>
                         <span className="text-muted-foreground">
@@ -330,7 +337,9 @@ const TournamentConfirmation = ({
                               <th className="px-4 py-2 text-left">Id</th>
                               <th className="px-4 py-2 text-left">Name</th>
                               <th className="px-4 py-2 text-left">Game</th>
-                              <th className="px-4 py-2 text-left">Paid Places</th>
+                              <th className="px-4 py-2 text-left">
+                                Paid Places
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
@@ -590,20 +599,10 @@ const TournamentConfirmation = ({
                               className="w-6 h-6 rounded-full"
                             />
                             <span className="text-neutral">
-                              {prices?.[
-                                getTokenSymbol(
-                                  selectedChainConfig.chainId ?? "",
-                                  prize.token.address
-                                ) ?? ""
-                              ] &&
+                              {prices?.[prize.token.address] &&
                                 `~$${(
                                   prize.amount *
-                                  (prices?.[
-                                    getTokenSymbol(
-                                      selectedChainConfig.chainId ?? "",
-                                      prize.token.address
-                                    ) ?? ""
-                                  ] ?? 0)
+                                  (prices?.[prize.token.address] ?? 0)
                                 ).toFixed(2)}`}
                             </span>
                           </div>

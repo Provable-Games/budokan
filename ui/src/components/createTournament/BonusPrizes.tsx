@@ -1,8 +1,5 @@
 import { StepProps } from "@/containers/CreateTournament";
-import {
-  FormField,
-  FormItem,
-} from "@/components/ui/form";
+import { FormField, FormItem } from "@/components/ui/form";
 import { OptionalSection } from "@/components/createTournament/containers/OptionalSection";
 import { PrizeManager } from "@/components/shared/PrizeManager";
 import { useDojo } from "@/context/dojo";
@@ -34,7 +31,9 @@ const BonusPrizes = ({ form }: StepProps) => {
                 chainId={chainId}
                 isSepolia={isSepolia}
                 prizes={form.watch("bonusPrizes") || []}
-                onPrizesChange={(prizes) => form.setValue("bonusPrizes", prizes)}
+                onPrizesChange={(prizes) =>
+                  form.setValue("bonusPrizes", prizes)
+                }
                 checkBalance={true}
               />
             </>

@@ -1,14 +1,8 @@
 import { useEffect } from "react";
 import { StepProps } from "@/containers/CreateTournament";
-import {
-  FormControl,
-  FormField,
-  FormItem,
-} from "@/components/ui/form";
+import { FormControl, FormField, FormItem } from "@/components/ui/form";
 import React from "react";
-import {
-  calculateDistribution,
-} from "@/lib/utils";
+import { calculateDistribution } from "@/lib/utils";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
 import { getTokenLogoUrl } from "@/lib/tokensMeta";
 import { OptionalSection } from "@/components/createTournament/containers/OptionalSection";
@@ -46,10 +40,11 @@ const EntryFees = ({ form }: StepProps) => {
 
   // Get distribution values from form, with fallbacks
   const distributionWeight = form.watch("entryFees.distributionWeight") ?? 1;
-  const distributionType = form.watch("entryFees.distributionType") ?? "exponential";
+  const distributionType =
+    form.watch("entryFees.distributionType") ?? "exponential";
 
   const { prices, isLoading: pricesLoading } = useEkuboPrices({
-    tokens: [form.watch("entryFees.token")?.symbol ?? ""],
+    tokens: [form.watch("entryFees.token")?.address ?? ""],
   });
 
   const creatorFee = form.watch("entryFees.creatorFeePercentage") || 0;
@@ -97,7 +92,7 @@ const EntryFees = ({ form }: StepProps) => {
     form.setValue(
       "entryFees.amount",
       (form.watch("entryFees.value") ?? 0) /
-        (prices?.[form.watch("entryFees.token")?.symbol ?? ""] ?? 1)
+        (prices?.[form.watch("entryFees.token")?.address ?? ""] ?? 1)
     );
   }, [form.watch("entryFees.value"), prices]);
 
@@ -147,7 +142,10 @@ const EntryFees = ({ form }: StepProps) => {
                               tokenField.onChange(token);
                             }}
                             onTokenDecimalsChange={(decimals) => {
-                              form.setValue("entryFees.tokenDecimals", decimals);
+                              form.setValue(
+                                "entryFees.tokenDecimals",
+                                decimals
+                              );
                             }}
                             quickSelectAddresses={QUICK_SELECT_ADDRESSES}
                             tokenType="erc20"
@@ -171,7 +169,9 @@ const EntryFees = ({ form }: StepProps) => {
                             value={field.value || 0}
                             onChange={field.onChange}
                             tokenAmount={form.watch("entryFees.amount") ?? 0}
-                            tokenAddress={form.watch("entryFees.token")?.address ?? ""}
+                            tokenAddress={
+                              form.watch("entryFees.token")?.address ?? ""
+                            }
                             usdValue={form.watch("entryFees.value") ?? 0}
                             isLoading={pricesLoading}
                             disabled={!hasTokenSelected}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -28,10 +28,10 @@ import { useGetUsernames, isControllerAccount } from "@/hooks/useController";
 import { lookupUsernames } from "@cartridge/controller";
 import { CHECK, X, COIN, USER, FAT_ARROW_RIGHT } from "@/components/Icons";
 import {
-  useGetAccountTokenIds,
   useGetTournamentRegistrants,
   useGetTournamentLeaderboards,
   useGetTournamentQualificationEntries,
+  useGetTokenByAddress,
 } from "@/dojo/hooks/useSqlQueries";
 import { useGameTokens } from "metagame-sdk";
 import { useDojo } from "@/context/dojo";
@@ -39,6 +39,7 @@ import { processQualificationProof } from "@/lib/utils/formatting";
 import { getTokenLogoUrl, getTokenDecimals } from "@/lib/tokensMeta";
 import { LoadingSpinner } from "@/components/ui/spinner";
 import { getExtensionProof } from "@/lib/extensionConfig";
+import { useVoyagerNfts } from "@/hooks/useVoyagerNfts";
 
 interface EnterTournamentDialogProps {
   open: boolean;
@@ -86,6 +87,7 @@ export function EnterTournamentDialog({
   const { address } = useAccount();
   const { connect } = useConnectToSelectedChain();
   const { connector } = useConnect();
+  const { provider } = useProvider();
   const {
     approveAndEnterTournament,
     getBalanceGeneral,
@@ -105,6 +107,12 @@ export function EnterTournamentDialog({
   const [extensionEntriesLeft, setExtensionEntriesLeft] = useState<
     number | null
   >(null);
+  const [manualTokenId, setManualTokenId] = useState("");
+  const [isVerifyingTokenOwnership, setIsVerifyingTokenOwnership] =
+    useState(false);
+  const [manualTokenOwnershipVerified, setManualTokenOwnershipVerified] =
+    useState(false);
+  const [showManualTokenInput, setShowManualTokenInput] = useState(false);
 
   const chainId = selectedChainConfig?.chainId ?? "";
   const isController = connector ? isControllerAccount(connector) : false;
@@ -222,10 +230,13 @@ export function EnterTournamentDialog({
 
   const entryToken = tournamentModel?.entry_fee?.Some?.token_address;
   const entryAmount = tournamentModel?.entry_fee?.Some?.amount;
+  const entryTokenDecimals = entryToken
+    ? getTokenDecimals(chainId, entryToken)
+    : 18;
   const entryFeeUsdCost = entryToken
-    ? Number(
-        BigInt(tournamentModel?.entry_fee.Some?.amount ?? 0n) / 10n ** 18n
-      ) * Number(entryFeePrice)
+    ? (Number(tournamentModel?.entry_fee.Some?.amount ?? 0) /
+        10 ** entryTokenDecimals) *
+      Number(entryFeePrice)
     : 0;
 
   const getBalance = async () => {
@@ -254,7 +265,9 @@ export function EnterTournamentDialog({
     tournamentModel?.entry_requirement.Some?.entry_requirement_type?.variant
       ?.token;
 
-  const token = tokens.find((token) => token.token_address === requiredTokenAddress);
+  const token = tokens.find(
+    (token) => token.token_address === requiredTokenAddress
+  );
 
   const tournamentRequirementVariant =
     tournamentModel?.entry_requirement.Some?.entry_requirement_type?.variant?.tournament?.activeVariant();
@@ -324,20 +337,60 @@ export function EnterTournamentDialog({
     getExtensionEntriesLeft,
   ]);
 
-  const { data: ownedTokens } = useGetAccountTokenIds(
-    indexAddress(address ?? ""),
-    requiredTokenAddresses,
-    requiredTokenAddresses.length > 0
-  );
+  // Fetch NFTs using Voyager API with pagination
+  const {
+    nfts,
+    loading: nftsLoading,
+    hasMore,
+  } = useVoyagerNfts({
+    contractAddress: requiredTokenAddress ?? "0x0",
+    owner: address,
+    limit: 100,
+    fetchAll: true, // Fetch all pages
+    maxPages: 20, // Allow up to 20 pages (2000 NFTs max)
+    delayMs: 500, // 500ms delay between requests
+    active:
+      requirementVariant === "token" &&
+      requiredTokenAddress !== undefined &&
+      address !== undefined,
+  });
 
   const ownedTokenIds = useMemo(() => {
-    return ownedTokens
-      ?.map((token) => {
-        const parts = token.token_id?.split(":");
-        return parts?.[1] ?? null;
-      })
-      .filter(Boolean);
-  }, [ownedTokens]);
+    // Use Voyager NFT data - tokenId is already a string
+    return nfts?.map((nft) => nft.tokenId).filter(Boolean);
+  }, [nfts]);
+
+  // Verify manual token ownership when user enters a token ID
+  useEffect(() => {
+    // Reset verification state when dialog closes or token changes
+    if (!open || requirementVariant !== "token") {
+      setManualTokenId("");
+      setManualTokenOwnershipVerified(false);
+      setShowManualTokenInput(false);
+      return;
+    }
+
+    // Only verify if we have a manual token ID and no indexed tokens
+    if (!manualTokenId.trim() || (ownedTokenIds && ownedTokenIds.length > 0)) {
+      setManualTokenOwnershipVerified(false);
+      return;
+    }
+
+    // Debounce the verification
+    const timeoutId = setTimeout(async () => {
+      await verifyTokenOwnership(manualTokenId.trim());
+    }, 500);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [
+    manualTokenId,
+    open,
+    requirementVariant,
+    ownedTokenIds,
+    verifyTokenOwnership,
+  ]);
 
   const requiredTournamentGameAddresses = tournamentsData.map((tournament) =>
     indexAddress(tournament.game_config?.address ?? "")
@@ -483,7 +536,7 @@ export function EnterTournamentDialog({
       for (const tokenId of ownedTokenIds) {
         methods.push({
           type: "token",
-          tokenId: tokenId,
+          tokenId: addAddressPadding(tokenId),
         });
       }
     }
@@ -579,7 +632,38 @@ export function EnterTournamentDialog({
 
     // Handle token-based entry requirements
     if (requirementVariant === "token") {
-      // If no owned tokens, can't enter
+      // Check if we have manual token verification
+      if (
+        manualTokenOwnershipVerified &&
+        manualTokenId &&
+        (!ownedTokenIds || ownedTokenIds.length === 0)
+      ) {
+        // Use manually verified token
+        const currentEntryCount =
+          qualificationEntries?.find(
+            (entry) =>
+              entry["qualification_proof.NFT.token_id"] === manualTokenId
+          )?.entry_count ?? 0;
+
+        const remaining = hasEntryLimit
+          ? Number(entryLimit) - currentEntryCount
+          : Infinity;
+
+        if (remaining > 0) {
+          return {
+            meetsEntryRequirements: true,
+            proof: { tokenId: manualTokenId },
+            entriesLeftByTournament: [
+              {
+                token: requiredTokenAddresses[0],
+                entriesLeft: remaining,
+              },
+            ],
+          };
+        }
+      }
+
+      // If no owned tokens and no manual verification, can't enter
       if (!ownedTokenIds || ownedTokenIds.length === 0) {
         return {
           meetsEntryRequirements: false,
@@ -598,7 +682,9 @@ export function EnterTournamentDialog({
         // Get current entry count for this token
         const currentEntryCount =
           qualificationEntries?.find(
-            (entry) => entry["qualification_proof.NFT.token_id"] === tokenId
+            (entry) =>
+              entry["qualification_proof.NFT.token_id"] ===
+              addAddressPadding(tokenId)
           )?.entry_count ?? 0;
 
         // Calculate remaining entries
@@ -873,6 +959,8 @@ export function EnterTournamentDialog({
     entryCount,
     extensionValidEntry,
     extensionEntriesLeft,
+    manualTokenOwnershipVerified,
+    manualTokenId,
   ]);
 
   // display the entry fee distribution
@@ -937,8 +1025,9 @@ export function EnterTournamentDialog({
 
                       <span>
                         {
-                          tokens.find((token) => token.token_address === entryToken)
-                            ?.symbol
+                          tokens.find(
+                            (token) => token.token_address === entryToken
+                          )?.symbol
                         }
                       </span>
                     </div>
@@ -990,7 +1079,9 @@ export function EnterTournamentDialog({
                   )}
                   {gameShare > 0 && (
                     <div className="flex flex-col items-center gap-1 border border-brand-muted rounded-md p-2 flex-1">
-                      <span className="text-sm sm:text-base">{(gameShare / 100).toFixed(2)}%</span>
+                      <span className="text-sm sm:text-base">
+                        {(gameShare / 100).toFixed(2)}%
+                      </span>
                       <span className="text-xs sm:text-sm">Game Fee</span>
                       <div className="flex flex-row items-center gap-1">
                         <span className="text-xs sm:text-sm">
@@ -1009,7 +1100,9 @@ export function EnterTournamentDialog({
                   )}
                   {refundShare > 0 && (
                     <div className="flex flex-col items-center gap-1 border border-brand-muted rounded-md p-2 flex-1">
-                      <span className="text-sm sm:text-base">{(refundShare / 100).toFixed(2)}%</span>
+                      <span className="text-sm sm:text-base">
+                        {(refundShare / 100).toFixed(2)}%
+                      </span>
                       <span className="text-xs sm:text-sm">Refund</span>
                       <div className="flex flex-row items-center gap-1">
                         <span className="text-xs sm:text-sm">
@@ -1042,7 +1135,8 @@ export function EnterTournamentDialog({
                           className="w-5"
                         />
                         <span className="hidden sm:block text-xs sm:text-sm text-neutral">
-                          ~${formatNumber(prizePoolAmount * (entryFeePrice ?? 0))}
+                          ~$
+                          {formatNumber(prizePoolAmount * (entryFeePrice ?? 0))}
                         </span>
                       </div>
                     </div>
@@ -1073,43 +1167,131 @@ export function EnterTournamentDialog({
                 )}
               </span>
               {requirementVariant === "token" ? (
-                <div className="flex flex-row items-center gap-2 px-4">
-                  <span className="w-8">
-                    <COIN />
-                  </span>
-                  <span>{token?.name}</span>
-                  <span className="text-neutral">{token?.symbol}</span>
-                  {address ? (
-                    meetsEntryRequirements ? (
-                      <div className="flex flex-row items-center gap-2">
-                        <span className="w-5">
-                          <CHECK />
-                        </span>
-                        <span>
-                          {`${
-                            entriesLeftByTournament.find(
-                              (entry) =>
-                                entry.token === requiredTokenAddresses[0]
-                            )?.entriesLeft
-                          } ${
-                            entriesLeftByTournament.find(
-                              (entry) =>
-                                entry.token === requiredTokenAddresses[0]
-                            )?.entriesLeft === 1
-                              ? "entry"
-                              : "entries"
-                          } left`}
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="w-5">
-                        <X />
+                <>
+                  <div className="flex flex-col gap-2 px-4">
+                    <div className="flex flex-row items-center gap-2">
+                      <span className="w-8">
+                        <COIN />
                       </span>
-                    )
-                  ) : (
-                    <span className="text-warning">Connect Account</span>
-                  )}
-                </div>
+                      <span>{token?.name}</span>
+                      <span className="text-neutral">{token?.symbol}</span>
+                      {address ? (
+                        nftsLoading ? (
+                          <div className="flex flex-row items-center gap-2">
+                            <LoadingSpinner />
+                            <span className="text-brand-muted text-sm">
+                              Checking NFTs...
+                            </span>
+                          </div>
+                        ) : meetsEntryRequirements ? (
+                          <div className="flex flex-row items-center gap-2">
+                            <span className="w-5">
+                              <CHECK />
+                            </span>
+                            <span>
+                              {`${
+                                entriesLeftByTournament.find(
+                                  (entry) =>
+                                    entry.token === requiredTokenAddresses[0]
+                                )?.entriesLeft
+                              } ${
+                                entriesLeftByTournament.find(
+                                  (entry) =>
+                                    entry.token === requiredTokenAddresses[0]
+                                )?.entriesLeft === 1
+                                  ? "entry"
+                                  : "entries"
+                              } left`}
+                            </span>
+                            {ownedTokenIds && ownedTokenIds.length > 0 && (
+                              <>
+                                <span className="text-neutral">|</span>
+                                <span className="text-brand-muted text-sm">
+                                  {ownedTokenIds.length} NFT
+                                  {ownedTokenIds.length === 1 ? "" : "s"} found
+                                  {hasMore && "+"}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        ) : (
+                          <>
+                            <span className="w-5">
+                              <X />
+                            </span>
+                            {/* Manual token ID trigger when no indexed tokens found */}
+                            {(!ownedTokenIds || ownedTokenIds.length === 0) && (
+                              <>
+                                <span className="text-neutral">|</span>
+                                <button
+                                  onClick={() =>
+                                    setShowManualTokenInput(
+                                      !showManualTokenInput
+                                    )
+                                  }
+                                  className="text-brand-muted hover:text-brand text-sm underline decoration-dotted underline-offset-2 transition-colors"
+                                >
+                                  {showManualTokenInput
+                                    ? "Hide manual entry"
+                                    : "Enter token ID manually"}
+                                </button>
+                              </>
+                            )}
+                          </>
+                        )
+                      ) : (
+                        <span className="text-warning">Connect Account</span>
+                      )}
+                    </div>
+                    {/* Manual token ID input section */}
+                    {address &&
+                      (!ownedTokenIds || ownedTokenIds.length === 0) &&
+                      showManualTokenInput && (
+                        <div className="flex flex-col gap-2 pl-10 mt-2">
+                          <Label htmlFor="manualTokenId" className="text-sm">
+                            Token ID
+                          </Label>
+                          <Input
+                            id="manualTokenId"
+                            placeholder="Enter token ID"
+                            value={manualTokenId}
+                            onChange={(e) => setManualTokenId(e.target.value)}
+                            className="w-full"
+                          />
+                          {manualTokenId.trim() && (
+                            <div className="flex flex-row items-center gap-2">
+                              {isVerifyingTokenOwnership ? (
+                                <>
+                                  <LoadingSpinner />
+                                  <span className="text-brand-muted text-sm">
+                                    Verifying ownership...
+                                  </span>
+                                </>
+                              ) : manualTokenOwnershipVerified ? (
+                                <>
+                                  <span className="w-5 text-success">
+                                    <CHECK />
+                                  </span>
+                                  <span className="text-success text-sm">
+                                    Token ownership verified
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="w-5 text-warning">
+                                    <X />
+                                  </span>
+                                  <span className="text-warning text-sm">
+                                    You don't own this token
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                  </div>
+                </>
               ) : requirementVariant === "tournament" ? (
                 <div className="flex flex-col gap-2 px-4">
                   {tournamentsData.map((tournament) => {
@@ -1338,12 +1520,23 @@ export function EnterTournamentDialog({
             // Non-controller wallet - controller username (required) + player name (optional)
             <>
               <div className="flex flex-col gap-2">
-                <Label
-                  htmlFor="controllerUsername"
-                  className="text-lg font-brand"
-                >
-                  Controller Username
-                </Label>
+                <div className="flex flex-row items-center justify-between">
+                  <Label
+                    htmlFor="controllerUsername"
+                    className="text-lg font-brand"
+                  >
+                    Controller Username
+                  </Label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.open("https://play.cartridge.gg", "_blank");
+                    }}
+                    className="text-brand hover:text-brand-muted text-sm underline underline-offset-2 transition-colors"
+                  >
+                    Create Account →
+                  </button>
+                </div>
                 <div className="flex flex-col gap-4">
                   <Input
                     id="controllerUsername"

@@ -24,4 +24,9 @@ export const mainnetNFTs = [
     image:
       "https://gateway.pinata.cloud/ipfs/bafybeigf3hnqeu52erejskxicys5q5oqnfvbkj2o6w7jer5xpna4gpgk2i",
   },
+  {
+    address:
+      "0x0377c2d65debb3978ea81904e7d59740da1f07412e30d01c5ded1c5d6f1ddc43",
+    image: "https://claim.focustree.app/focus-tree-logo.svg",
+  },
 ];

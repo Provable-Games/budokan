@@ -870,6 +870,10 @@ const BUDOKAN_ABI = [
             name: "position",
             type: "core::integer::u8",
           },
+          {
+            name: "reward_type",
+            type: "budokan::models::budokan::RewardType",
+          },
         ],
         outputs: [],
         state_mutability: "external",

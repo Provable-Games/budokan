@@ -244,6 +244,8 @@ export const processTournamentData = (
     entry_requirement: formData.enableGating
       ? new CairoOption(CairoOptionVariant.Some, entryRequirement)
       : new CairoOption(CairoOptionVariant.None),
+    soulbound: false,
+    play_url: "",
   };
 };
 
@@ -778,27 +780,54 @@ export const getErc20TokenSymbols = (
     .map(([symbol, _]) => symbol);
 };
 
+/**
+ * Converts a token amount from its smallest unit to human-readable format
+ * Preserves precision for very large amounts while handling decimals correctly
+ *
+ * @param amount - Token amount in smallest unit (e.g., wei)
+ * @param decimals - Number of decimals for the token
+ * @param price - Optional price per token to calculate USD value
+ * @returns The calculated amount as a number
+ */
+export const convertTokenAmount = (
+  amount: bigint,
+  decimals: number,
+  price?: number
+): number => {
+  const divisor = 10n ** BigInt(decimals);
+
+  // Split into integer and fractional parts using BigInt
+  const integerPart = amount / divisor; // BigInt division (safe, no precision loss)
+  const fractionalPart = amount % divisor; // Remainder (always < divisor)
+
+  // Convert to decimal: integer part + (fractional / divisor)
+  // Fractional part is safe to convert since it's always < 10^decimals
+  const humanAmount =
+    Number(integerPart) + Number(fractionalPart) / Number(divisor);
+
+  // Multiply by price if provided
+  return price ? humanAmount * price : humanAmount;
+};
+
 export const calculatePrizeValue = (
   prize: {
     type: "erc20" | "erc721";
     value: bigint[] | bigint;
     address?: string;
   },
-  symbol: string,
+  tokenAddress: string,
   prices: Record<string, number | undefined>,
   tokenDecimals?: Record<string, number>
 ): number => {
   if (prize.type !== "erc20") return 0;
 
-  const price = prices[symbol];
+  const price = prices[tokenAddress];
   const decimals = tokenDecimals?.[prize.address || ""] || 18;
-  const amount = Number(prize.value) / 10 ** decimals;
+  // Handle array or single bigint value
+  const amount = Array.isArray(prize.value) ? prize.value[0] : prize.value;
 
-  // If no price is available, just return the token amount
-  if (price === undefined) return amount;
-
-  // Otherwise calculate the value using the price
-  return price * amount;
+  // Use precision-safe conversion
+  return convertTokenAmount(amount, decimals, price);
 };
 
 export const calculateTotalValue = (
@@ -808,14 +837,17 @@ export const calculateTotalValue = (
 ) => {
   return Object.entries(groupedPrizes)
     .filter(([_, prize]) => prize.type === "erc20")
-    .reduce((total, [symbol, prize]) => {
-      const price = prices[symbol];
+    .reduce((total, [_symbol, prize]) => {
+      // Use prize address to look up price (prices are now keyed by address)
+      const price = prize.address ? prices[prize.address] : undefined;
       const decimals = tokenDecimals?.[prize.address || ""] || 18;
-      const amount = Number(prize.value) / 10 ** decimals;
+      // Handle array or single bigint value
+      const amount = Array.isArray(prize.value) ? prize.value[0] : prize.value;
 
       if (price === undefined) return total;
 
-      return total + price * amount;
+      // Use precision-safe conversion
+      return total + convertTokenAmount(amount, decimals, price);
     }, 0);
 };
 
@@ -1080,6 +1112,8 @@ export const processTournamentFromSql = (tournament: any): Tournament => {
       tournament["entry_requirement"] === "Some"
         ? new CairoOption(CairoOptionVariant.Some, entryRequirement)
         : new CairoOption(CairoOptionVariant.None),
+    soulbound: tournament.soulbound ?? false,
+    play_url: tournament.play_url ?? "",
   };
 };
 
