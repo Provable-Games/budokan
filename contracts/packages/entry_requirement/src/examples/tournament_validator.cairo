@@ -62,9 +62,6 @@ pub mod TournamentValidator {
         entry_validator: EntryValidatorComponent::Storage,
         #[substorage(v0)]
         src5: SRC5Component::Storage,
-        /// The Budokan contract address
-        #[allow(starknet::colliding_storage_paths)]
-        budokan_address: ContractAddress,
         /// Qualifier type per tournament (0 = participants, 1 = winners)
         qualifier_type: Map<u64, felt252>,
         /// Qualifying tournament IDs per tournament
@@ -88,10 +85,8 @@ pub mod TournamentValidator {
     fn constructor(
         ref self: ContractState,
         budokan_address: ContractAddress,
-        tournament_address: ContractAddress,
         registration_only: bool,
     ) {
-        self.budokan_address.write(budokan_address);
         self.entry_validator.initializer(budokan_address, registration_only);
     }
 
@@ -201,7 +196,7 @@ pub mod TournamentValidator {
                 return false;
             }
 
-            let budokan_address = self.budokan_address.read();
+            let budokan_address = self.entry_validator.get_budokan_address();
             let budokan = IBudokanDispatcher { contract_address: budokan_address };
             let registration_dispatcher = IRegistrationDispatcher {
                 contract_address: budokan_address,
@@ -287,7 +282,7 @@ pub mod TournamentValidator {
     #[abi(embed_v0)]
     impl TournamentValidatorImpl of ITournamentValidator<ContractState> {
         fn get_budokan_address(self: @ContractState) -> ContractAddress {
-            self.budokan_address.read()
+            self.entry_validator.get_budokan_address()
         }
 
         fn get_qualifier_type(self: @ContractState, tournament_id: u64) -> felt252 {

@@ -897,19 +897,28 @@ export const useGetTournamentPrizesAggregations = ({
       FROM prize_data
     ),
     final_aggregates AS (
-      SELECT 
+      SELECT
         COUNT(*) as total_prizes,
         MAX(payout_position) as lowest_prize_position,
         SUM(is_nft) as total_nfts,
         COUNT(DISTINCT token_address) as unique_tokens
       FROM prize_data
+    ),
+    distributed_prize_info AS (
+      SELECT
+        CAST(pd."token_type.erc20.distribution_count.Some" AS INTEGER) as distribution_count
+      FROM prize_data pd
+      WHERE pd.payout_position = 0
+        AND pd."token_type.erc20.distribution_count" = 'Some'
+      LIMIT 1
     )
-    SELECT 
+    SELECT
       fa.total_prizes,
       fa.lowest_prize_position,
       fa.total_nfts,
       fa.unique_tokens,
       pc.distinct_positions,
+      COALESCE(dpi.distribution_count, 0) as distributed_prize_count,
       (
         SELECT GROUP_CONCAT(
           json_object(
@@ -927,6 +936,7 @@ export const useGetTournamentPrizesAggregations = ({
       ) as token_totals
     FROM final_aggregates fa
     CROSS JOIN position_count pc
+    LEFT JOIN distributed_prize_info dpi ON 1=1
   `
         : null,
     [namespace, tournamentId, active]

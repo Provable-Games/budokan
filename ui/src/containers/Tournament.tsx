@@ -316,16 +316,25 @@ const Tournament = () => {
     }
 
     // Add bonus prize positions from aggregations
-    // We don't have the exact positions here, but we can estimate based on total prizes
-    // This is a rough approximation - actual calculation would need Prize objects
-    const bonusPrizesCount = aggregations?.total_prizes || 0;
-    const startPosition = positions.size > 0 ? positions.size + 1 : 1;
-    for (let i = 0; i < bonusPrizesCount; i++) {
-      positions.add(startPosition + i);
+    // Check if there's a distributed prize (position 0) that expands into multiple positions
+    const distributedPrizeCount = aggregations?.distributed_prize_count || 0;
+    if (distributedPrizeCount > 0) {
+      // Add positions 1 through distribution_count
+      for (let i = 1; i <= distributedPrizeCount; i++) {
+        positions.add(i);
+      }
+    } else {
+      // No distributed prize, use lowest_prize_position for regular prizes
+      const lowestPrizePosition = aggregations?.lowest_prize_position || 0;
+      if (lowestPrizePosition > 0) {
+        for (let i = 1; i <= lowestPrizePosition; i++) {
+          positions.add(i);
+        }
+      }
     }
 
     return positions.size;
-  }, [tournamentModel?.entry_fee, aggregations?.total_prizes]);
+  }, [tournamentModel?.entry_fee, aggregations?.distributed_prize_count, aggregations?.lowest_prize_position]);
 
   // Extract unique token symbols from aggregated data and entry fee prizes
   const erc20TokenSymbols = useMemo(() => {

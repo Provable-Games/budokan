@@ -70,13 +70,11 @@ export function AddPrizesDialog({
   onOpenChange,
   tournamentId,
   tournamentName,
-  leaderboardSize,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   tournamentId: BigNumberish;
   tournamentName: string;
-  leaderboardSize: number;
 }) {
   // Initialize form
   const form = useForm<AddPrizesFormData>({
@@ -122,6 +120,8 @@ export function AddPrizesDialog({
   });
 
   const prizeCount = Number(prizeMetricsModel?.total_prizes ?? 0);
+
+  console.log("currentPrizes", prizeMetricsModel);
 
   useEffect(() => {
     if (!open) {
@@ -214,15 +214,22 @@ export function AddPrizesDialog({
           }
 
           // Create distribution_count as CairoOption
-          const distribution_count: CairoOption<BigNumberish> = prize.distributionCount
-            ? new CairoOption(CairoOptionVariant.Some, prize.distributionCount)
-            : new CairoOption(CairoOptionVariant.None);
+          const distribution_count: CairoOption<BigNumberish> =
+            prize.distributionCount
+              ? new CairoOption(
+                  CairoOptionVariant.Some,
+                  prize.distributionCount
+                )
+              : new CairoOption(CairoOptionVariant.None);
 
           const erc20Data: ERC20Data = {
             amount: BigInt(
               Math.floor(
                 prize.amount! *
-                  10 ** (newDecimals[prize.token.address] || prize.tokenDecimals || 18)
+                  10 **
+                    (newDecimals[prize.token.address] ||
+                      prize.tokenDecimals ||
+                      18)
               )
             ).toString(),
             distribution,
@@ -298,7 +305,8 @@ export function AddPrizesDialog({
       };
     } else {
       if (prize.type === "ERC20") {
-        acc[key].amount = (acc[key].amount || 0) + (prize.type === "ERC20" ? prize.amount : 0);
+        acc[key].amount =
+          (acc[key].amount || 0) + (prize.type === "ERC20" ? prize.amount : 0);
       } else if (prize.type === "ERC721") {
         acc[key].tokenIds = [...(acc[key].tokenIds || []), prize.tokenId];
       }
@@ -313,52 +321,57 @@ export function AddPrizesDialog({
 
   return (
     <FormProvider {...form}>
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[900px] max-h-[80vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle>Add Prizes to Tournament</DialogTitle>
-        </DialogHeader>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-[900px] max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Add Prizes to Tournament</DialogTitle>
+          </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto pr-2">
-          {batchProgress && (
-            <div className="bg-brand/10 border border-brand p-4 rounded-lg mb-4">
-              <div className="flex items-center gap-3">
-                <LoadingSpinner />
-                <div>
-                  <p className="font-semibold">Processing Transactions</p>
-                  <p className="text-sm text-muted-foreground">
-                    Batch {batchProgress.current} of {batchProgress.total} - Please do not close this window
-                  </p>
+          <div className="flex-1 overflow-y-auto pr-2">
+            {batchProgress && (
+              <div className="bg-brand/10 border border-brand p-4 rounded-lg mb-4">
+                <div className="flex items-center gap-3">
+                  <LoadingSpinner />
+                  <div>
+                    <p className="font-semibold">Processing Transactions</p>
+                    <p className="text-sm text-muted-foreground">
+                      Batch {batchProgress.current} of {batchProgress.total} -
+                      Please do not close this window
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          <PrizeManager
-            prizes={currentPrizes}
-            onPrizesChange={setCurrentPrizes}
-            chainId={chainId}
-            isSepolia={isSepolia}
-          />
-        </div>
+            <PrizeManager
+              prizes={currentPrizes}
+              onPrizesChange={setCurrentPrizes}
+              chainId={chainId}
+              isSepolia={isSepolia}
+            />
+          </div>
 
-        <DialogFooter className="flex justify-end w-full">
-          {currentPrizes.length > 0 &&
-            (address ? (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={submitPrizes}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? "Submitting..." : `Submit ${currentPrizes.length} prize${currentPrizes.length !== 1 ? 's' : ''}`}
-              </Button>
-            ) : (
-              <Button onClick={() => connect()}>Connect Wallet</Button>
-            ))}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <DialogFooter className="flex justify-end w-full">
+            {currentPrizes.length > 0 &&
+              (address ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={submitPrizes}
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting
+                    ? "Submitting..."
+                    : `Submit ${currentPrizes.length} prize${
+                        currentPrizes.length !== 1 ? "s" : ""
+                      }`}
+                </Button>
+              ) : (
+                <Button onClick={() => connect()}>Connect Wallet</Button>
+              ))}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </FormProvider>
   );
 }

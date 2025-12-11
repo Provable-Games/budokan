@@ -5,3 +5,5 @@ target/
 .snfoundry_cache/
 snfoundry_trace/
 deployments/
+
+argent_account_*.json

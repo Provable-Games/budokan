@@ -2,17 +2,43 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FormLabel, FormDescription } from "@/components/ui/form";
-import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
+import {
+  HoverCard,
+  HoverCardTrigger,
+  HoverCardContent,
+} from "@/components/ui/hover-card";
 import { INFO } from "@/components/Icons";
 import { StepProps } from "@/containers/CreateTournament";
 import ScheduleSlider from "@/components/createTournament/ScheduleSlider";
 import TournamentTimeline from "@/components/TournamentTimeline";
 import { SECONDS_IN_DAY } from "@/lib/constants";
+import { useAccount } from "@starknet-react/core";
+import { indexAddress } from "@/lib/utils";
+
+// Privileged addresses that can set submission period < 1 day
+const PRIVILEGED_ADDRESSES = [
+  "0x077b8Ed8356a7C1F0903Fc4bA6E15F9b09CF437ce04f21B2cBf32dC2790183d0", // Realms World address
+  // Add more addresses here as needed
+];
 
 const Schedule = ({ form }: StepProps) => {
+  const { address } = useAccount();
+
+  // Check if current account is privileged (can set submission period < 1 day)
+  const isPrivileged =
+    address &&
+    PRIVILEGED_ADDRESSES.some(
+      (privilegedAddr) =>
+        indexAddress(privilegedAddr).toLowerCase() === indexAddress(address)
+    );
+
   const [enableRegistration, setEnableRegistration] = useState(false);
-  const [registrationStartTime, setRegistrationStartTime] = useState<Date | undefined>(undefined);
-  const [registrationEndTime, setRegistrationEndTime] = useState<Date | undefined>(undefined);
+  const [registrationStartTime, setRegistrationStartTime] = useState<
+    Date | undefined
+  >(undefined);
+  const [registrationEndTime, setRegistrationEndTime] = useState<
+    Date | undefined
+  >(undefined);
   const [hasInitializedFixedMode, setHasInitializedFixedMode] = useState(false);
   const [minStartTime, setMinStartTime] = useState<Date>(() => {
     const now = new Date();
@@ -21,7 +47,7 @@ const Schedule = ({ form }: StepProps) => {
   });
   const [minEndTime, setMinEndTime] = useState<Date>(() => {
     const startTime = form.watch("startTime");
-    startTime.setMinutes(startTime.getMinutes() + 15);
+    startTime.setHours(startTime.getHours() + 1); // Minimum 1 hour duration
     return startTime;
   });
 
@@ -107,7 +133,13 @@ const Schedule = ({ form }: StepProps) => {
       // Mark as initialized
       setHasInitializedFixedMode(true);
     }
-  }, [registrationType, hasInitializedFixedMode, form, registrationStartTime, registrationEndTime]);
+  }, [
+    registrationType,
+    hasInitializedFixedMode,
+    form,
+    registrationStartTime,
+    registrationEndTime,
+  ]);
 
   const startTime = form.watch("startTime");
 
@@ -115,9 +147,9 @@ const Schedule = ({ form }: StepProps) => {
     // Get current end time from form
     const currentEndTime = form.watch("endTime");
 
-    // Calculate minimum required end time (start time + 15 minutes)
+    // Calculate minimum required end time (start time + 1 hour)
     const minRequiredEndTime = new Date(startTime);
-    minRequiredEndTime.setMinutes(startTime.getMinutes() + 15);
+    minRequiredEndTime.setHours(startTime.getHours() + 1);
     minRequiredEndTime.setSeconds(0);
     minRequiredEndTime.setMilliseconds(0);
 
@@ -152,18 +184,20 @@ const Schedule = ({ form }: StepProps) => {
         (endTime.getTime() - startTime.getTime()) / 1000
       );
 
-      // Only update if it's a valid duration (at least 15 minutes)
-      if (durationInSeconds >= 900) {
+      // Only update if it's a valid duration (at least 1 hour)
+      if (durationInSeconds >= 3600) {
         form.setValue("duration", durationInSeconds);
 
-        // Always enforce minimum 24-hour submission period
-        const currentSubmissionPeriod = form.watch("submissionPeriod");
-        if (currentSubmissionPeriod < SECONDS_IN_DAY) {
-          form.setValue("submissionPeriod", SECONDS_IN_DAY);
+        // Enforce minimum 24-hour submission period only for non-privileged accounts
+        if (!isPrivileged) {
+          const currentSubmissionPeriod = form.watch("submissionPeriod");
+          if (currentSubmissionPeriod < SECONDS_IN_DAY) {
+            form.setValue("submissionPeriod", SECONDS_IN_DAY);
+          }
         }
       }
     }
-  }, [form.watch("endTime"), form]);
+  }, [form.watch("endTime"), form, isPrivileged]);
 
   useEffect(() => {
     const startTime = form.watch("startTime");
@@ -213,7 +247,9 @@ const Schedule = ({ form }: StepProps) => {
                 const minutesToAdd = remainder === 0 ? 15 : 5 - remainder + 15;
 
                 const roundedFifteenMinutesFromNow = new Date(now);
-                roundedFifteenMinutesFromNow.setMinutes(now.getMinutes() + minutesToAdd);
+                roundedFifteenMinutesFromNow.setMinutes(
+                  now.getMinutes() + minutesToAdd
+                );
                 roundedFifteenMinutesFromNow.setSeconds(0);
                 roundedFifteenMinutesFromNow.setMilliseconds(0);
 
@@ -228,7 +264,9 @@ const Schedule = ({ form }: StepProps) => {
                   oneDayFromNow.setMilliseconds(0);
 
                   tournamentStartTime = oneDayFromNow;
-                  tournamentEndTime = new Date(oneDayFromNow.getTime() + 24 * 60 * 60 * 1000);
+                  tournamentEndTime = new Date(
+                    oneDayFromNow.getTime() + 24 * 60 * 60 * 1000
+                  );
 
                   // Reset registration times
                   setRegistrationStartTime(now);
@@ -236,7 +274,9 @@ const Schedule = ({ form }: StepProps) => {
                 } else {
                   // For open tournaments, start 15 minutes from now
                   tournamentStartTime = roundedFifteenMinutesFromNow;
-                  tournamentEndTime = new Date(roundedFifteenMinutesFromNow.getTime() + 24 * 60 * 60 * 1000);
+                  tournamentEndTime = new Date(
+                    roundedFifteenMinutesFromNow.getTime() + 24 * 60 * 60 * 1000
+                  );
                 }
 
                 // Reset all times to defaults
@@ -260,14 +300,18 @@ const Schedule = ({ form }: StepProps) => {
           <div className="hidden lg:flex flex-row items-center justify-between gap-6 mb-6 overflow-visible">
             {/* Duration Presets - Left */}
             <div className="flex flex-row items-center gap-3">
-              <span className="text-sm font-medium text-neutral">Duration:</span>
+              <span className="text-sm font-medium text-neutral">
+                Duration:
+              </span>
               <div className="flex flex-row items-center gap-2">
                 {PREDEFINED_DURATIONS.map(({ value, label }) => (
                   <Button
                     key={value}
                     type="button"
                     size="sm"
-                    variant={form.watch("duration") === value ? "default" : "outline"}
+                    variant={
+                      form.watch("duration") === value ? "default" : "outline"
+                    }
                     className="px-3"
                     onClick={() => {
                       form.setValue("duration", value);
@@ -306,7 +350,9 @@ const Schedule = ({ form }: StepProps) => {
                 <Checkbox
                   id="fixed-registration"
                   checked={registrationType === "fixed"}
-                  onCheckedChange={(checked: boolean) => form.setValue("type", checked ? "fixed" : "open")}
+                  onCheckedChange={(checked: boolean) =>
+                    form.setValue("type", checked ? "fixed" : "open")
+                  }
                 />
                 <label
                   htmlFor="fixed-registration"
@@ -317,18 +363,34 @@ const Schedule = ({ form }: StepProps) => {
               </div>
               <HoverCard openDelay={50} closeDelay={0}>
                 <HoverCardTrigger asChild>
-                  <button type="button" className="w-5 h-5 text-neutral hover:text-brand transition-colors cursor-pointer">
+                  <button
+                    type="button"
+                    className="w-5 h-5 text-neutral hover:text-brand transition-colors cursor-pointer"
+                  >
                     <INFO />
                   </button>
                 </HoverCardTrigger>
-                <HoverCardContent side="bottom" align="end" className="w-80 xl:w-96 p-4 text-sm z-[9999] whitespace-normal">
+                <HoverCardContent
+                  side="bottom"
+                  align="end"
+                  className="w-80 xl:w-96 p-4 text-sm z-[9999] whitespace-normal"
+                >
                   <div className="flex flex-col gap-3">
-                    <h4 className="text-base font-semibold whitespace-normal break-words">Pre-registration</h4>
+                    <h4 className="text-base font-semibold whitespace-normal break-words">
+                      Pre-registration
+                    </h4>
                     <p className="text-sm text-neutral leading-relaxed whitespace-normal break-words">
-                      <span className="font-medium text-brand">Unchecked (Open):</span> Users can register anytime during the tournament
+                      <span className="font-medium text-brand">
+                        Unchecked (Open):
+                      </span>{" "}
+                      Users can register anytime during the tournament
                     </p>
                     <p className="text-sm text-neutral leading-relaxed whitespace-normal break-words">
-                      <span className="font-medium text-brand">Checked (Pre-register):</span> Set a specific registration period before the tournament with capped entries
+                      <span className="font-medium text-brand">
+                        Checked (Pre-register):
+                      </span>{" "}
+                      Set a specific registration period before the tournament
+                      with capped entries
                     </p>
                   </div>
                 </HoverCardContent>
@@ -338,7 +400,9 @@ const Schedule = ({ form }: StepProps) => {
             {/* Registration Period Presets - Right (only for fixed registration) */}
             {registrationType === "fixed" && enableRegistration ? (
               <div className="flex flex-row items-center gap-3">
-                <span className="text-sm font-medium text-neutral">Reg Period:</span>
+                <span className="text-sm font-medium text-neutral">
+                  Reg Period:
+                </span>
                 <div className="flex flex-row items-center gap-2">
                   {PREDEFINED_DURATIONS.map(({ value, label }) => (
                     <Button
@@ -348,14 +412,20 @@ const Schedule = ({ form }: StepProps) => {
                       variant={
                         registrationStartTime &&
                         registrationEndTime &&
-                        Math.floor((registrationEndTime.getTime() - registrationStartTime.getTime()) / 1000) === value
+                        Math.floor(
+                          (registrationEndTime.getTime() -
+                            registrationStartTime.getTime()) /
+                            1000
+                        ) === value
                           ? "default"
                           : "outline"
                       }
                       className="px-3"
                       onClick={() => {
                         if (registrationStartTime) {
-                          const newRegEndTime = new Date(registrationStartTime.getTime() + value * 1000);
+                          const newRegEndTime = new Date(
+                            registrationStartTime.getTime() + value * 1000
+                          );
                           setRegistrationEndTime(newRegEndTime);
 
                           // Also update tournament start to match new registration end
@@ -363,7 +433,9 @@ const Schedule = ({ form }: StepProps) => {
 
                           // Update tournament end to maintain current duration
                           const currentDuration = form.watch("duration");
-                          const newTournamentEndTime = new Date(newRegEndTime.getTime() + currentDuration * 1000);
+                          const newTournamentEndTime = new Date(
+                            newRegEndTime.getTime() + currentDuration * 1000
+                          );
                           form.setValue("endTime", newTournamentEndTime);
                         }
                       }}
@@ -376,10 +448,17 @@ const Schedule = ({ form }: StepProps) => {
             ) : (
               // Spacer to maintain layout when registration period is hidden
               <div className="flex flex-row items-center gap-3 invisible">
-                <span className="text-sm font-medium text-neutral">Reg Period:</span>
+                <span className="text-sm font-medium text-neutral">
+                  Reg Period:
+                </span>
                 <div className="flex flex-row items-center gap-2">
                   {PREDEFINED_DURATIONS.map(({ value, label }) => (
-                    <Button key={value} size="sm" variant="outline" className="px-3">
+                    <Button
+                      key={value}
+                      size="sm"
+                      variant="outline"
+                      className="px-3"
+                    >
                       {label}
                     </Button>
                   ))}
@@ -396,7 +475,9 @@ const Schedule = ({ form }: StepProps) => {
                 <Checkbox
                   id="fixed-registration-mobile"
                   checked={registrationType === "fixed"}
-                  onCheckedChange={(checked: boolean) => form.setValue("type", checked ? "fixed" : "open")}
+                  onCheckedChange={(checked: boolean) =>
+                    form.setValue("type", checked ? "fixed" : "open")
+                  }
                 />
                 <label
                   htmlFor="fixed-registration-mobile"
@@ -410,7 +491,9 @@ const Schedule = ({ form }: StepProps) => {
             {/* Registration Period Presets (if pre-register is checked) */}
             {registrationType === "fixed" && enableRegistration && (
               <div className="flex flex-col gap-2">
-                <span className="text-sm font-medium text-neutral">Reg Period:</span>
+                <span className="text-sm font-medium text-neutral">
+                  Reg Period:
+                </span>
                 <div className="grid grid-cols-4 gap-2">
                   {PREDEFINED_DURATIONS.map(({ value, label }) => (
                     <Button
@@ -420,17 +503,25 @@ const Schedule = ({ form }: StepProps) => {
                       variant={
                         registrationStartTime &&
                         registrationEndTime &&
-                        Math.floor((registrationEndTime.getTime() - registrationStartTime.getTime()) / 1000) === value
+                        Math.floor(
+                          (registrationEndTime.getTime() -
+                            registrationStartTime.getTime()) /
+                            1000
+                        ) === value
                           ? "default"
                           : "outline"
                       }
                       onClick={() => {
                         if (registrationStartTime) {
-                          const newRegEndTime = new Date(registrationStartTime.getTime() + value * 1000);
+                          const newRegEndTime = new Date(
+                            registrationStartTime.getTime() + value * 1000
+                          );
                           setRegistrationEndTime(newRegEndTime);
                           form.setValue("startTime", newRegEndTime);
                           const currentDuration = form.watch("duration");
-                          const newTournamentEndTime = new Date(newRegEndTime.getTime() + currentDuration * 1000);
+                          const newTournamentEndTime = new Date(
+                            newRegEndTime.getTime() + currentDuration * 1000
+                          );
                           form.setValue("endTime", newTournamentEndTime);
                         }
                       }}
@@ -444,17 +535,23 @@ const Schedule = ({ form }: StepProps) => {
 
             {/* Duration Presets */}
             <div className="flex flex-col gap-2">
-              <span className="text-sm font-medium text-neutral">Duration:</span>
+              <span className="text-sm font-medium text-neutral">
+                Duration:
+              </span>
               <div className="grid grid-cols-4 gap-2">
                 {PREDEFINED_DURATIONS.map(({ value, label }) => (
                   <Button
                     key={value}
                     type="button"
                     size="sm"
-                    variant={form.watch("duration") === value ? "default" : "outline"}
+                    variant={
+                      form.watch("duration") === value ? "default" : "outline"
+                    }
                     onClick={() => {
                       form.setValue("duration", value);
-                      const selectedDuration = PREDEFINED_DURATIONS.find((d) => d.value === value);
+                      const selectedDuration = PREDEFINED_DURATIONS.find(
+                        (d) => d.value === value
+                      );
                       const durationLabel = selectedDuration?.label;
                       if (
                         durationLabel &&
@@ -507,6 +604,7 @@ const Schedule = ({ form }: StepProps) => {
               minEndTime={minEndTime}
               disablePastStartDates={disablePastStartDates}
               disablePastEndDates={disablePastEndDates}
+              allowShortSubmissionPeriod={isPrivileged}
             />
           </div>
 
@@ -515,17 +613,28 @@ const Schedule = ({ form }: StepProps) => {
             {form.watch("startTime") && form.watch("endTime") && (
               <TournamentTimeline
                 type={form.watch("type")}
-                createdTime={registrationStartTime ? Math.floor(registrationStartTime.getTime() / 1000) : Math.floor(Date.now() / 1000)}
+                createdTime={
+                  registrationStartTime
+                    ? Math.floor(registrationStartTime.getTime() / 1000)
+                    : Math.floor(Date.now() / 1000)
+                }
                 startTime={Math.floor(form.watch("startTime").getTime() / 1000)}
-                duration={Math.floor((form.watch("endTime").getTime() - form.watch("startTime").getTime()) / 1000)}
+                duration={Math.floor(
+                  (form.watch("endTime").getTime() -
+                    form.watch("startTime").getTime()) /
+                    1000
+                )}
                 submissionPeriod={form.watch("submissionPeriod")}
-                registrationEndTime={registrationEndTime ? Math.floor(registrationEndTime.getTime() / 1000) : undefined}
+                registrationEndTime={
+                  registrationEndTime
+                    ? Math.floor(registrationEndTime.getTime() / 1000)
+                    : undefined
+                }
                 pulse={false}
               />
             )}
           </div>
         </div>
-
       </div>
     </>
   );

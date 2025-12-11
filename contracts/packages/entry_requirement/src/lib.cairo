@@ -8,9 +8,9 @@ pub mod examples {
     pub mod erc20_balance_validator;
     pub mod governance_validator;
     pub mod tournament_validator;
+    pub mod snapshot_validator;
     // The following validators require external dependencies not in this package:
 // pub mod opus_troves_validator;     // requires opus, wadray
-// pub mod snapshot_validator;        // requires snapshot contracts
 // pub mod snapshot_ETHEREUM_validator; // requires snapshot contracts
 }
 

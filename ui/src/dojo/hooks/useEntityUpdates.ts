@@ -45,6 +45,7 @@ export const useEntityUpdates = () => {
     const prizeMetricsEntityId = getEntityIdFromKeys([
       BigInt(TOURNAMENT_VERSION_KEY),
     ]);
+    console.log("prize params", prizeMetricsEntityId, prizeCount);
     await state.waitForEntityChange(
       prizeMetricsEntityId,
       (entity) => {
