@@ -79,10 +79,8 @@ const Prize = ({
   // Calculate total USD value with proper token symbol lookup
   const totalPrizesValueUSD = Object.entries(prizes)
     .filter(([_, prize]) => prize.type === "erc20")
-    .reduce((total, [key, prize]) => {
-      const token = tokens.find((t) => t.address === prize.address);
-      const symbol = token?.symbol || key;
-      const price = prices[symbol];
+    .reduce((total, [_key, prize]) => {
+      const price = prices[prize.address];
       const decimals = tokenDecimals[prize.address] || 18;
       const amount = Number(prize.value) / 10 ** decimals;
       if (price === undefined) return total;
@@ -106,10 +104,10 @@ const Prize = ({
           .map(([key, prize]) => {
             const token = tokens.find((t) => t.address === prize.address);
             const symbol = token?.symbol || key;
-            const hasPrice = prices[symbol] !== undefined;
+            const hasPrice = prices[prize.address] !== undefined;
             const USDValue = calculatePrizeValue(
               prize,
-              symbol,
+              prize.address,
               prices,
               tokenDecimals
             );

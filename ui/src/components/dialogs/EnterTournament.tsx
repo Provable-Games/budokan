@@ -229,10 +229,13 @@ export function EnterTournamentDialog({
 
   const entryToken = tournamentModel?.entry_fee?.Some?.token_address;
   const entryAmount = tournamentModel?.entry_fee?.Some?.amount;
+  const entryTokenDecimals = entryToken
+    ? getTokenDecimals(chainId, entryToken)
+    : 18;
   const entryFeeUsdCost = entryToken
-    ? Number(
-        BigInt(tournamentModel?.entry_fee.Some?.amount ?? 0n) / 10n ** 18n
-      ) * Number(entryFeePrice)
+    ? (Number(tournamentModel?.entry_fee.Some?.amount ?? 0) /
+        10 ** entryTokenDecimals) *
+      Number(entryFeePrice)
     : 0;
 
   const getBalance = async () => {
@@ -1014,19 +1017,18 @@ export function EnterTournamentDialog({
   );
   const prizePoolShare = 100 - creatorShare - gameShare;
   const creatorAmount =
-    (Number(BigInt(tournamentModel?.entry_fee.Some?.amount ?? 0)) *
+    (Number(tournamentModel?.entry_fee.Some?.amount ?? 0) *
       (creatorShare / 100)) /
-    10 ** 18;
+    10 ** entryTokenDecimals;
 
   const gameAmount =
-    (Number(BigInt(tournamentModel?.entry_fee.Some?.amount ?? 0)) *
-      (gameShare / 100)) /
-    10 ** 18;
+    (Number(tournamentModel?.entry_fee.Some?.amount ?? 0) * (gameShare / 100)) /
+    10 ** entryTokenDecimals;
 
   const prizePoolAmount =
-    (Number(BigInt(tournamentModel?.entry_fee.Some?.amount ?? 0)) *
+    (Number(tournamentModel?.entry_fee.Some?.amount ?? 0) *
       (prizePoolShare / 100)) /
-    10 ** 18;
+    10 ** entryTokenDecimals;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

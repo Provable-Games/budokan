@@ -23,7 +23,7 @@ import { Prize } from "@/generated/models.gen";
 import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
 import { addAddressPadding, BigNumberish } from "starknet";
 import { CairoCustomEnum } from "starknet";
-import { getTokenLogoUrl, getTokenSymbol } from "@/lib/tokensMeta";
+import { getTokenLogoUrl } from "@/lib/tokensMeta";
 import { ALERT, CHECK, QUESTION, X } from "@/components/Icons";
 import { useAccount } from "@starknet-react/core";
 import { useConnectToSelectedChain } from "@/dojo/hooks/useChain";
@@ -504,26 +504,26 @@ export function AddPrizesDialog({
     return sum;
   }, 0);
 
-  const uniqueTokenSymbols = useMemo(() => {
-    // Filter to only include ERC20 tokens, then map to get symbols
-    const symbols = currentPrizes
+  const uniqueTokenAddresses = useMemo(() => {
+    // Filter to only include ERC20 tokens, then get unique addresses
+    const addresses = currentPrizes
       .filter((prize) => prize.tokenType === "ERC20")
-      .map((prize) => getTokenSymbol(chainId, prize.tokenAddress))
+      .map((prize) => prize.tokenAddress)
       .filter(
-        (symbol): symbol is string =>
-          typeof symbol === "string" && symbol !== ""
+        (address): address is string =>
+          typeof address === "string" && address !== ""
       );
 
     // Create a Set from the filtered array to get unique values
-    return [...new Set(symbols)];
+    return [...new Set(addresses)];
   }, [currentPrizes]);
 
   const { prices, isLoading: pricesLoading } = useEkuboPrices({
     tokens: [
-      ...uniqueTokenSymbols,
+      ...uniqueTokenAddresses,
       // Only include new prize if it's ERC20
       ...(newPrize.tokenAddress && newPrize.tokenType === "ERC20"
-        ? [getTokenSymbol(chainId, newPrize.tokenAddress) ?? ""]
+        ? [newPrize.tokenAddress]
         : []),
     ],
   });
@@ -535,8 +535,8 @@ export function AddPrizesDialog({
         ...prev,
         amount:
           (prev.value ?? 0) /
-          (prices?.[getTokenSymbol(chainId, prev.tokenAddress) ?? ""] ?? 1),
-        hasPrice: !!prices?.[getTokenSymbol(chainId, prev.tokenAddress) ?? ""],
+          (prices?.[prev.tokenAddress] ?? 1),
+        hasPrice: !!prices?.[prev.tokenAddress],
       }));
     }
   }, [prices, newPrize.value, newPrize.tokenType]);
@@ -1140,10 +1140,7 @@ Examples:
                                 className="w-4 h-4 rounded-full"
                               />
                             </div>
-                            {prices?.[
-                              getTokenSymbol(chainId, newPrize.tokenAddress) ??
-                                ""
-                            ] && (
+                            {prices?.[newPrize.tokenAddress] && (
                               <span className="text-xs text-neutral">
                                 ~$
                                 {(
@@ -1193,16 +1190,10 @@ Examples:
                         <span className="text-sm text-neutral">
                           {pricesLoading
                             ? "Loading..."
-                            : prices?.[
-                                getTokenSymbol(chainId, prize.tokenAddress) ??
-                                  ""
-                              ] &&
+                            : prices?.[prize.tokenAddress] &&
                               `~$${(
                                 (prize.amount ?? 0) *
-                                (prices?.[
-                                  getTokenSymbol(chainId, prize.tokenAddress) ??
-                                    ""
-                                ] ?? 0)
+                                (prices?.[prize.tokenAddress] ?? 0)
                               ).toFixed(2)}`}
                         </span>
                       </div>

@@ -153,7 +153,7 @@ const snMainnetConfig: DojoChainConfig = {
   blastRpc:
     "https://starknet-mainnet.blastapi.io/5ef61753-e7c1-4593-bc62-97fdf96f8de5",
   blockExplorerUrl: "https://voyager.online",
-  ekuboPriceAPI: "https://mainnet-api.ekubo.org/price",
+  ekuboPriceAPI: "https://prod-api-quoter.ekubo.org",
   masterAddress: undefined,
   masterPrivateKey: undefined,
   accountClassHash: undefined,

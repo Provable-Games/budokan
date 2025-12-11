@@ -20,7 +20,7 @@ import {
   getOrdinalSuffix,
   displayAddress,
 } from "@/lib/utils";
-import { getTokenLogoUrl, getTokenSymbol } from "@/lib/tokensMeta";
+import { getTokenLogoUrl } from "@/lib/tokensMeta";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
 import { useMemo, useState } from "react";
 import { useDojo } from "@/context/dojo";
@@ -58,13 +58,7 @@ const TournamentConfirmation = ({
 
   const { prices, isLoading: _pricesLoading } = useEkuboPrices({
     tokens: [
-      ...(formData.bonusPrizes?.map(
-        (prize) =>
-          getTokenSymbol(
-            selectedChainConfig.chainId ?? "",
-            prize.token.address
-          ) ?? ""
-      ) ?? []),
+      ...(formData.bonusPrizes?.map((prize) => prize.token.address) ?? []),
       ...(formData.entryFees?.token?.address
         ? [formData.entryFees.token.address]
         : []),
@@ -564,20 +558,9 @@ const TournamentConfirmation = ({
                               className="w-6 h-6 rounded-full"
                             />
                             <span className="text-neutral">
-                              {prices?.[
-                                getTokenSymbol(
-                                  selectedChainConfig.chainId ?? "",
-                                  prize.token.address
-                                ) ?? ""
-                              ] &&
+                              {prices?.[prize.token.address] &&
                                 `~$${(
-                                  prize.amount *
-                                  (prices?.[
-                                    getTokenSymbol(
-                                      selectedChainConfig.chainId ?? "",
-                                      prize.token.address
-                                    ) ?? ""
-                                  ] ?? 0)
+                                  prize.amount * (prices?.[prize.token.address] ?? 0)
                                 ).toFixed(2)}`}
                             </span>
                           </div>

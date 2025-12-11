@@ -18,7 +18,6 @@ import {
   formatNumber,
   getOrdinalSuffix,
 } from "@/lib/utils";
-import { getTokenSymbol } from "@/lib/tokensMeta";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
 import { getTokenLogoUrl } from "@/lib/tokensMeta";
 import { OptionalSection } from "@/components/createTournament/containers/OptionalSection";
@@ -41,7 +40,7 @@ const EntryFees = ({ form }: StepProps) => {
   const [distributionWeight, setDistributionWeight] = React.useState(1);
 
   const { prices, isLoading: pricesLoading } = useEkuboPrices({
-    tokens: [form.watch("entryFees.token")?.symbol ?? ""],
+    tokens: [form.watch("entryFees.token")?.address ?? ""],
   });
 
   const creatorFee = form.watch("entryFees.creatorFeePercentage") || 0;
@@ -75,7 +74,7 @@ const EntryFees = ({ form }: StepProps) => {
     form.setValue(
       "entryFees.amount",
       (form.watch("entryFees.value") ?? 0) /
-        (prices?.[form.watch("entryFees.token")?.symbol ?? ""] ?? 1)
+        (prices?.[form.watch("entryFees.token")?.address ?? ""] ?? 1)
     );
   }, [form.watch("entryFees.value"), prices]);
 
@@ -124,7 +123,7 @@ const EntryFees = ({ form }: StepProps) => {
                               }}
                               type="erc20"
                             />
-                            {form.watch("entryFees.token") && prices?.[form.watch("entryFees.token")?.symbol ?? ""] && (
+                            {form.watch("entryFees.token") && prices?.[form.watch("entryFees.token")?.address ?? ""] && (
                               <div className="flex flex-row items-center gap-1">
                                 <img
                                   src={getTokenLogoUrl(
@@ -135,7 +134,7 @@ const EntryFees = ({ form }: StepProps) => {
                                   alt={form.watch("entryFees.token")?.symbol}
                                 />
                                 <span className="text-sm text-muted-foreground">
-                                  1 {form.watch("entryFees.token")?.symbol} ≈ ${(prices[form.watch("entryFees.token")?.symbol ?? ""] ?? 0).toFixed(2)}
+                                  1 {form.watch("entryFees.token")?.symbol} ≈ ${(prices[form.watch("entryFees.token")?.address ?? ""] ?? 0).toFixed(2)}
                                 </span>
                               </div>
                             )}
@@ -500,11 +499,7 @@ const EntryFees = ({ form }: StepProps) => {
                                         />
                                       </div>
                                       {prices?.[
-                                        getTokenSymbol(
-                                          chainId,
-                                          form.watch("entryFees.token")
-                                            ?.address ?? ""
-                                        ) ?? ""
+                                        form.watch("entryFees.token")?.address ?? ""
                                       ] && (
                                         <span className="text-xs text-neutral">
                                           ~$

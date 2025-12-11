@@ -311,19 +311,18 @@ const Overview = () => {
     fromTournamentId: fromTournamentId,
   });
 
-  // Combine unique tokens from both regular and "my" tournaments
-  const allUniqueTokens = useMemo(() => {
+  // Extract unique token addresses for decimal fetching and price fetching
+  const allUniqueTokenAddresses = useMemo(() => {
     const tokens = selectedTab === "my" ? myTournamentTokens : tournamentTokens;
-    // Extract unique token symbols
-    const uniqueSymbols = new Set<string>();
+    const uniqueAddresses = new Set<string>();
     if (tokens && Array.isArray(tokens)) {
       tokens.forEach((token: any) => {
-        if (token?.symbol) {
-          uniqueSymbols.add(token.symbol);
+        if (token?.address && token?.type === "erc20") {
+          uniqueAddresses.add(token.address);
         }
       });
     }
-    return Array.from(uniqueSymbols);
+    return Array.from(uniqueAddresses);
   }, [selectedTab, tournamentTokens, myTournamentTokens]);
 
   // Create tokens array from SQL data for passing to TournamentCard
@@ -340,24 +339,10 @@ const Overview = () => {
     }));
   }, [selectedTab, tournamentTokens, myTournamentTokens]);
 
-  // Fetch prices for all unique tokens at once
+  // Fetch prices for all unique token addresses at once
   const { prices: tokenPrices, isLoading: pricesLoading } = useEkuboPrices({
-    tokens: allUniqueTokens,
+    tokens: allUniqueTokenAddresses,
   });
-
-  // Extract unique token addresses for decimal fetching
-  const allUniqueTokenAddresses = useMemo(() => {
-    const tokens = selectedTab === "my" ? myTournamentTokens : tournamentTokens;
-    const uniqueAddresses = new Set<string>();
-    if (tokens && Array.isArray(tokens)) {
-      tokens.forEach((token: any) => {
-        if (token?.address && token?.type === "erc20") {
-          uniqueAddresses.add(token.address);
-        }
-      });
-    }
-    return Array.from(uniqueAddresses);
-  }, [selectedTab, tournamentTokens, myTournamentTokens]);
 
   // Fetch decimals for all unique tokens
   useEffect(() => {

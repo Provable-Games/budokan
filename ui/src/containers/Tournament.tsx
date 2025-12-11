@@ -46,7 +46,6 @@ import {
   useGetTournamentPrizeClaimsAggregations,
   useGetTournaments,
   useGetTournamentsCount,
-  useGetTokenByAddress,
   useGetTokens,
   useGetTournamentLeaderboards,
 } from "@/dojo/hooks/useSqlQueries";
@@ -258,15 +257,6 @@ const Tournament = () => {
 
   const entryFeeToken = tournamentModel?.entry_fee.Some?.token_address;
 
-  // Fetch entry fee token data using SQL query
-  const { data: entryFeeTokenData } = useGetTokenByAddress({
-    namespace,
-    address: entryFeeToken || "",
-    active: hasEntryFee && !!entryFeeToken,
-  });
-
-  const entryFeeTokenSymbol = (entryFeeTokenData as Token)?.symbol;
-
   const tournamentId = tournamentModel?.id;
 
   // Fetch aggregated data
@@ -297,22 +287,6 @@ const Tournament = () => {
   const claimablePrizesCount = claimsAggregations
     ? claimsAggregations.total_unclaimed
     : 0;
-
-  // Extract unique token symbols from aggregated data and entry fee prizes
-  const erc20TokenSymbols = useMemo(() => {
-    const symbols = new Set<string>();
-
-    // From aggregated data
-    if (aggregations?.token_totals) {
-      aggregations.token_totals.forEach((tokenTotal: any) => {
-        if (tokenTotal.tokenSymbol && tokenTotal.tokenType === "erc20") {
-          symbols.add(tokenTotal.tokenSymbol);
-        }
-      });
-    }
-
-    return Array.from(symbols);
-  }, [aggregations?.token_totals]);
 
   // Extract unique token addresses for fetching token data
   const uniqueTokenAddresses = useMemo(() => {
@@ -350,23 +324,16 @@ const Tournament = () => {
     );
   }, [tokensData, uniqueTokenAddresses]);
 
-  // Add entry fee token symbol to the list
-  const allTokenSymbols = useMemo(() => {
-    const symbols = [...erc20TokenSymbols];
-    if (entryFeeTokenSymbol && !symbols.includes(entryFeeTokenSymbol)) {
-      symbols.push(entryFeeTokenSymbol);
-    }
-    return symbols;
-  }, [erc20TokenSymbols, entryFeeTokenSymbol]);
-
-  // Fetch prices for all ERC20 tokens
+  // Fetch prices for all ERC20 tokens using addresses
   const {
     prices: ownPrices,
     isLoading: ownPricesLoading,
     isTokenLoading,
   } = useEkuboPrices({
-    tokens: allTokenSymbols,
+    tokens: uniqueTokenAddresses,
   });
+
+  console.log(ownPrices);
 
   // Use prop prices if provided, otherwise use own prices
   const prices = ownPrices;
@@ -374,22 +341,27 @@ const Tournament = () => {
 
   // Calculate total value in USD using aggregated data
   const totalPrizesValueUSD = useMemo(() => {
-    if (pricesLoading) return 0;
+    // Return 0 if prices are loading OR if prices object is empty
+    if (pricesLoading || !prices || Object.keys(prices).length === 0) return 0;
 
     let total = 0;
+    let hasAllPrices = true;
 
     // Calculate USD from aggregated database prizes
     if (aggregations?.token_totals) {
       total += aggregations.token_totals.reduce(
         (sum: number, tokenTotal: any) => {
           if (tokenTotal.tokenType === "erc20" && tokenTotal.totalAmount) {
+            const price = prices[tokenTotal.tokenAddress];
+            // If any price is missing, mark that we don't have all prices yet
+            if (price === undefined) {
+              hasAllPrices = false;
+              return sum;
+            }
             const decimals = tokenDecimals[tokenTotal.tokenAddress] || 18;
-            const amount = BigInt(tokenTotal.totalAmount);
-            const price = prices[tokenTotal.tokenSymbol || ""] || 0;
+            const amount = Number(tokenTotal.totalAmount);
 
-            return (
-              sum + Number(amount / 10n ** BigInt(decimals)) * Number(price)
-            );
+            return sum + (amount / 10 ** decimals) * price;
           }
           return sum;
         },
@@ -401,18 +373,21 @@ const Tournament = () => {
     // Only include distributionPrizes - not creator/game shares as those are fees, not prizes
     distributionPrizes.forEach((prize) => {
       if (prize.token_type?.variant?.erc20) {
-        const amount = BigInt(prize.token_type.variant.erc20.amount || 0);
+        const price = prices[prize.token_address];
+        // If any price is missing, mark that we don't have all prices yet
+        if (price === undefined) {
+          hasAllPrices = false;
+          return;
+        }
+        const amount = Number(prize.token_type.variant.erc20.amount || 0);
         const decimals = tokenDecimals[prize.token_address] || 18;
 
-        // Find the token to get its symbol
-        const token = tournamentTokens.find(
-          (t) => t.address === prize.token_address
-        );
-        const price = token?.symbol ? prices[token.symbol] || 0 : 0;
-
-        total += Number(amount / 10n ** BigInt(decimals)) * Number(price);
+        total += (amount / 10 ** decimals) * price;
       }
     });
+
+    // If we don't have all prices yet, return 0 to avoid showing partial totals
+    if (!hasAllPrices) return 0;
 
     return total;
   }, [
@@ -423,6 +398,8 @@ const Tournament = () => {
     distributionPrizes,
     tournamentTokens,
   ]);
+
+  console.log(totalPrizesValueUSD);
 
   // Fetch token decimals only for tokens used in this tournament
   useEffect(() => {
@@ -548,18 +525,21 @@ const Tournament = () => {
 
   const { usernames: creatorUsernames } = useGetUsernames(creatorAddresses);
 
-  const entryFeePrice = prices[entryFeeTokenSymbol ?? ""];
-  const entryFeeLoading = isTokenLoading(entryFeeTokenSymbol ?? "");
+  const entryFeePrice = entryFeeToken ? prices[entryFeeToken] : undefined;
+  const entryFeeLoading = entryFeeToken ? isTokenLoading(entryFeeToken) : false;
 
   const entryFee = hasEntryFee
     ? (() => {
         const entryFeeDecimals = tokenDecimals[entryFeeToken ?? ""] || 18;
-        return (
-          Number(
-            BigInt(tournamentModel?.entry_fee.Some?.amount!) /
-              10n ** BigInt(entryFeeDecimals)
-          ) * Number(entryFeePrice)
-        ).toFixed(2);
+        const amount = Number(tournamentModel?.entry_fee.Some?.amount!);
+        const humanAmount = amount / 10 ** entryFeeDecimals;
+
+        // Return "0.00" if price is not available yet
+        if (!entryFeePrice || isNaN(entryFeePrice)) {
+          return "0.00";
+        }
+
+        return (humanAmount * entryFeePrice).toFixed(2);
       })()
     : "Free";
 

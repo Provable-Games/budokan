@@ -3,26 +3,26 @@ import { useDojo } from "@/context/dojo";
 import { ChainId } from "@/dojo/setup/networks";
 
 export interface TokenPrices {
-  [key: string]: number | undefined;
+  [address: string]: number | undefined;
 }
 
 interface TokenLoadingStates {
-  [key: string]: boolean;
+  [address: string]: boolean;
 }
 
 interface TokenErrorStates {
-  [key: string]: boolean;
+  [address: string]: boolean;
 }
 
 interface PriceResult {
-  token: string;
+  tokenAddress: string;
   price: number | undefined;
   timedOut: boolean;
   error: boolean;
 }
 
 interface EkuboPriceProps {
-  tokens: string[];
+  tokens: string[]; // Array of token addresses
   timeoutMs?: number; // Optional timeout parameter
 }
 
@@ -37,31 +37,35 @@ export const useEkuboPrices = ({
   // Initialize loading states to true for all tokens
   const [tokenLoadingStates, setTokenLoadingStates] =
     useState<TokenLoadingStates>(() =>
-      tokens.reduce((acc, token) => ({ ...acc, [token]: true }), {})
+      tokens.reduce((acc, address) => ({ ...acc, [address]: true }), {})
     );
 
   const [tokenErrorStates, setTokenErrorStates] = useState<TokenErrorStates>(
-    () => tokens.reduce((acc, token) => ({ ...acc, [token]: false }), {})
+    () => tokens.reduce((acc, address) => ({ ...acc, [address]: false }), {})
   );
 
   const isMainnet = selectedChainConfig.chainId === ChainId.SN_MAIN;
-  // Sort tokens to ensure consistent key regardless of order
+  // Convert chainId to decimal format for API request
+  const chainIdDecimal = "23448594291968334";
+  // Standard amount: 1 token with 18 decimals (10^18)
+  const standardAmount = "1000000000000000000";
+  // Sort token addresses to ensure consistent key regardless of order
   const tokensKey = JSON.stringify([...tokens].sort());
 
   // Safe check if a token is available (has price, not loading, no error)
   const isTokenAvailable = useCallback(
-    (token: string): boolean => {
+    (tokenAddress: string): boolean => {
       // If the token isn't in our list, it's not available
-      if (!tokens.includes(token)) return false;
+      if (!tokens.includes(tokenAddress)) return false;
 
       // If it's loading, it's not available yet
-      if (tokenLoadingStates[token] === true) return false;
+      if (tokenLoadingStates[tokenAddress] === true) return false;
 
       // If it has an error, it's not available
-      if (tokenErrorStates[token] === true) return false;
+      if (tokenErrorStates[tokenAddress] === true) return false;
 
       // If it doesn't have a price, it's not available
-      if (prices[token] === undefined) return false;
+      if (prices[tokenAddress] === undefined) return false;
 
       // Otherwise, it's available
       return true;
@@ -71,34 +75,34 @@ export const useEkuboPrices = ({
 
   // Helper function that considers a token loading if it's marked as loading
   const isTokenLoading = useCallback(
-    (token: string): boolean => {
+    (tokenAddress: string): boolean => {
       // If the token isn't in our list, consider it loading
-      if (!tokens.includes(token)) return true;
+      if (!tokens.includes(tokenAddress)) return true;
 
-      return tokenLoadingStates[token] === true;
+      return tokenLoadingStates[tokenAddress] === true;
     },
     [tokens, tokenLoadingStates]
   );
 
   // Helper function to check if a token has an error
   const hasTokenError = useCallback(
-    (token: string): boolean => {
+    (tokenAddress: string): boolean => {
       // If the token isn't in our list, it doesn't have an error yet
-      if (!tokens.includes(token)) return false;
+      if (!tokens.includes(tokenAddress)) return false;
 
-      return tokenErrorStates[token] === true;
+      return tokenErrorStates[tokenAddress] === true;
     },
     [tokens, tokenErrorStates]
   );
 
   // Safe getter that only returns a price if the token is available
   const getPrice = useCallback(
-    (token: string): number | undefined => {
-      if (!isTokenAvailable(token)) {
+    (tokenAddress: string): number | undefined => {
+      if (!isTokenAvailable(tokenAddress)) {
         return undefined;
       }
 
-      return prices[token];
+      return prices[tokenAddress];
     },
     [isTokenAvailable, prices]
   );
@@ -113,18 +117,18 @@ export const useEkuboPrices = ({
       return;
     }
 
-    console.log('useEkuboPrices: Fetching prices for tokens:', tokens);
+    console.log("useEkuboPrices: Fetching prices for token addresses:", tokens);
 
     // Reset all states when tokens change
     setIsLoading(true);
 
     // Initialize all tokens as loading and not in error state
     setTokenLoadingStates(
-      tokens.reduce((acc, token) => ({ ...acc, [token]: true }), {})
+      tokens.reduce((acc, address) => ({ ...acc, [address]: true }), {})
     );
 
     setTokenErrorStates(
-      tokens.reduce((acc, token) => ({ ...acc, [token]: false }), {})
+      tokens.reduce((acc, address) => ({ ...acc, [address]: false }), {})
     );
 
     const fetchPrices = async () => {
@@ -132,38 +136,55 @@ export const useEkuboPrices = ({
         if (!isMainnet) {
           // For non-mainnet, set all token prices to 1
           const mockPrices = tokens.reduce(
-            (acc, token) => ({ ...acc, [token]: 1 }),
+            (acc, address) => ({ ...acc, [address]: 1 }),
             {}
           );
           setPrices(mockPrices);
 
           // Set all tokens as loaded and not in error
           setTokenLoadingStates(
-            tokens.reduce((acc, token) => ({ ...acc, [token]: false }), {})
+            tokens.reduce((acc, address) => ({ ...acc, [address]: false }), {})
           );
           setIsLoading(false);
           return;
         }
 
-        const pricePromises = tokens.map(async (token) => {
+        const pricePromises = tokens.map(async (tokenAddress) => {
           // Manual override for USDC - always return price of 1
-          if (token === "USDC" || token === "USDCe") {
-            return { token, price: 1, timedOut: false, error: false };
+          if (
+            tokenAddress ===
+              "0x033068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb" ||
+            tokenAddress ===
+              "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8"
+          ) {
+            return { tokenAddress, price: 1, timedOut: false, error: false };
           }
 
           // Create a timeout promise
           const timeoutPromise = new Promise<PriceResult>((resolve) => {
             setTimeout(() => {
-              resolve({ token, price: undefined, timedOut: true, error: true });
+              resolve({
+                tokenAddress,
+                price: undefined,
+                timedOut: true,
+                error: true,
+              });
             }, timeoutMs);
           });
 
           // Create the fetch promise
           const fetchPromise = (async () => {
             try {
-              const result = await fetch(
-                `${selectedChainConfig.ekuboPriceAPI!}/${token}/USDC/history`
-              );
+              if (!chainIdDecimal) {
+                throw new Error("Chain ID not available");
+              }
+
+              // Quoter API format: /{chainId}/{amount}/{tokenAddress}/{quoteToken}
+              const apiUrl = `${selectedChainConfig.ekuboPriceAPI!}/${chainIdDecimal}/${standardAmount}/${tokenAddress}/0x33068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb`;
+
+              console.log(`Fetching price from quoter API: ${apiUrl}`);
+
+              const result = await fetch(apiUrl);
 
               if (!result.ok) {
                 throw new Error(`HTTP error! status: ${result.status}`);
@@ -174,19 +195,27 @@ export const useEkuboPrices = ({
                 throw new Error("API did not return JSON");
               }
 
-              const priceObject = await result.json();
+              const quoteResponse = await result.json();
 
-              console.log(`Fetched price data for ${token}:`, priceObject);
+              console.log(`Fetched quote for ${tokenAddress}:`, quoteResponse);
 
-              if (!priceObject.data || !priceObject.data.length) {
-                throw new Error("No price data available");
+              // The quoter returns the amount of USDC we'd get for the input amount
+              // USDC has 6 decimals, so divide by 10^6 to get the dollar price
+              if (!quoteResponse.total_calculated) {
+                throw new Error("No quote data available");
               }
 
-              const price = priceObject.data[priceObject.data.length - 1].vwap;
-              return { token, price, timedOut: false, error: false };
+              // Convert the quote amount (in USDC smallest unit) to dollar price
+              const price = Number(quoteResponse.total_calculated) / 1e6;
+              return { tokenAddress, price, timedOut: false, error: false };
             } catch (error) {
-              console.error(`Error fetching ${token} price:`, error);
-              return { token, price: undefined, timedOut: false, error: true };
+              console.error(`Error fetching ${tokenAddress} price:`, error);
+              return {
+                tokenAddress,
+                price: undefined,
+                timedOut: false,
+                error: true,
+              };
             }
           })();
 
@@ -200,13 +229,13 @@ export const useEkuboPrices = ({
         const newErrorStates: TokenErrorStates = {};
 
         // Process all results at once to avoid multiple re-renders
-        results.forEach(({ token, price, error }) => {
-          newPrices[token] = price;
-          newLoadingStates[token] = false;
-          newErrorStates[token] = error;
+        results.forEach(({ tokenAddress, price, error }) => {
+          newPrices[tokenAddress] = price;
+          newLoadingStates[tokenAddress] = false;
+          newErrorStates[tokenAddress] = error;
         });
 
-        console.log('useEkuboPrices: Fetched prices:', newPrices);
+        console.log("useEkuboPrices: Fetched prices:", newPrices);
 
         setPrices(newPrices); // Replace entirely instead of merging
         setTokenLoadingStates(newLoadingStates);
@@ -219,7 +248,13 @@ export const useEkuboPrices = ({
     };
 
     fetchPrices();
-  }, [tokensKey, selectedChainConfig.ekuboPriceAPI, isMainnet, timeoutMs, selectedChainConfig.chainId]); // Added chainId to dependencies
+  }, [
+    tokensKey,
+    selectedChainConfig.ekuboPriceAPI,
+    isMainnet,
+    timeoutMs,
+    selectedChainConfig.chainId,
+  ]); // Added chainId to dependencies
 
   return {
     prices,

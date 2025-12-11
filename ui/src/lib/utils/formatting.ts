@@ -136,8 +136,8 @@ export const processTournamentData = (
         formData.gatingOptions?.type === "extension"
           ? 0 // Extensions handle their own entry limits
           : formData.enableEntryLimit
-            ? formData.gatingOptions?.entry_limit ?? 0
-            : 0,
+          ? formData.gatingOptions?.entry_limit ?? 0
+          : 0,
       entry_requirement_type: entryRequirementType,
     };
   }
@@ -623,21 +623,19 @@ export const calculatePrizeValue = (
     value: bigint[] | bigint;
     address?: string;
   },
-  symbol: string,
+  tokenAddress: string,
   prices: Record<string, number | undefined>,
   tokenDecimals?: Record<string, number>
 ): number => {
   if (prize.type !== "erc20") return 0;
 
-  const price = prices[symbol];
+  const price = prices[tokenAddress];
   const decimals = tokenDecimals?.[prize.address || ""] || 18;
-  const amount = Number(prize.value) / 10 ** decimals;
+  // Handle array or single bigint value
+  const amount = Array.isArray(prize.value) ? prize.value[0] : prize.value;
 
-  // If no price is available, just return the token amount
-  if (price === undefined) return amount;
-
-  // Otherwise calculate the value using the price
-  return price * amount;
+  // Use precision-safe conversion
+  return convertTokenAmount(amount, decimals, price);
 };
 
 export const calculateTotalValue = (
@@ -647,14 +645,17 @@ export const calculateTotalValue = (
 ) => {
   return Object.entries(groupedPrizes)
     .filter(([_, prize]) => prize.type === "erc20")
-    .reduce((total, [symbol, prize]) => {
-      const price = prices[symbol];
+    .reduce((total, [_symbol, prize]) => {
+      // Use prize address to look up price (prices are now keyed by address)
+      const price = prize.address ? prices[prize.address] : undefined;
       const decimals = tokenDecimals?.[prize.address || ""] || 18;
-      const amount = Number(prize.value) / 10 ** decimals;
+      // Handle array or single bigint value
+      const amount = Array.isArray(prize.value) ? prize.value[0] : prize.value;
 
       if (price === undefined) return total;
 
-      return total + price * amount;
+      // Use precision-safe conversion
+      return total + convertTokenAmount(amount, decimals, price);
     }, 0);
 };
 

@@ -125,7 +125,9 @@ export const TournamentCard = ({
   const submissionDuration = tournament?.schedule?.submission_duration
     ? Number(tournament.schedule.submission_duration)
     : null;
-  const submissionEnd = submissionDuration ? gameEnd + submissionDuration : null;
+  const submissionEnd = submissionDuration
+    ? gameEnd + submissionDuration
+    : null;
 
   const getTournamentStatus = () => {
     // Registration phase
@@ -133,7 +135,10 @@ export const TournamentCard = ({
       if (currentTimestamp < registrationStart) {
         return { text: "Upcoming", variant: "outline" as const };
       }
-      if (currentTimestamp >= registrationStart && currentTimestamp < registrationEnd) {
+      if (
+        currentTimestamp >= registrationStart &&
+        currentTimestamp < registrationEnd
+      ) {
         return { text: "Registration", variant: "success" as const };
       }
     }
@@ -149,7 +154,11 @@ export const TournamentCard = ({
     }
 
     // Submission phase
-    if (submissionEnd && currentTimestamp >= gameEnd && currentTimestamp < submissionEnd) {
+    if (
+      submissionEnd &&
+      currentTimestamp >= gameEnd &&
+      currentTimestamp < submissionEnd
+    ) {
       return { text: "Submission", variant: "warning" as const };
     }
 
@@ -170,12 +179,18 @@ export const TournamentCard = ({
   const entryFee = tournament?.entry_fee.isSome()
     ? (() => {
         const entryFeeDecimals = tokenDecimals[entryFeeToken ?? ""] || 18;
-        return (
-          Number(
-            BigInt(tournament?.entry_fee.Some?.amount!) /
-              10n ** BigInt(entryFeeDecimals)
-          ) * Number(tokenPrices[entryFeeTokenSymbol ?? ""] ?? 0)
-        ).toFixed(2);
+        const entryFeePrice = entryFeeToken
+          ? tokenPrices[entryFeeToken]
+          : undefined;
+
+        // Return "0.00" if price is not available
+        if (!entryFeePrice || isNaN(entryFeePrice)) {
+          return "0.00";
+        }
+
+        const amount = Number(tournament?.entry_fee.Some?.amount!);
+        const humanAmount = amount / 10 ** entryFeeDecimals;
+        return (humanAmount * entryFeePrice).toFixed(2);
       })()
     : "Free";
 
@@ -285,117 +300,131 @@ export const TournamentCard = ({
             <div className="flex flex-row sm:flex-wrap items-center gap-2 overflow-x-auto sm:overflow-visible [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
               {/* Tournament Status */}
               <Tooltip delayDuration={50}>
-              <TooltipTrigger asChild>
-                <div className="flex-shrink-0">
-                  <Badge variant={tournamentStatus.variant} className="text-xs p-1 rounded-md">
-                    {tournamentStatus.text}
-                  </Badge>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="top" align="center">
-                <p>Tournament Status: {tournamentStatus.text}</p>
-              </TooltipContent>
-            </Tooltip>
-
-            {/* Prize Spots */}
-            <Tooltip delayDuration={50}>
-              <TooltipTrigger asChild>
-                <div className="flex-shrink-0">
-                  <Badge variant="outline" className="text-xs p-1 rounded-md">
-                    {Number(tournament.game_config.prize_spots)} Winners
-                  </Badge>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="top" align="center">
-                <p>{Number(tournament.game_config.prize_spots)} Winners</p>
-              </TooltipContent>
-            </Tooltip>
-
-            {/* Restricte Access */}
-            {isRestricted && (
-              <Tooltip delayDuration={50}>
                 <TooltipTrigger asChild>
                   <div className="flex-shrink-0">
-                    <Badge variant="outline" className="text-xs p-1 rounded-md">
-                      Restricted
+                    <Badge
+                      variant={tournamentStatus.variant}
+                      className="text-xs p-1 rounded-md"
+                    >
+                      {tournamentStatus.text}
                     </Badge>
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="top" align="center">
-                  <span>
-                    {requirementVariant === "allowlist" ? (
-                      "Allowlist"
-                    ) : requirementVariant === "token" ? (
-                      "Token"
-                    ) : requirementVariant === "tournament" ? (
-                      <span>
-                        Tournament{" "}
-                        <span className="capitalize">
-                          {tournamentRequirementVariant}
-                        </span>
-                      </span>
-                    ) : (
-                      "Unknown"
-                    )}
-                  </span>
+                  <p>Tournament Status: {tournamentStatus.text}</p>
                 </TooltipContent>
               </Tooltip>
-            )}
 
-            {/* Limited Entry */}
-            {hasEntryLimit && (
+              {/* Prize Spots */}
               <Tooltip delayDuration={50}>
                 <TooltipTrigger asChild>
                   <div className="flex-shrink-0">
                     <Badge variant="outline" className="text-xs p-1 rounded-md">
+                      {Number(tournament.game_config.prize_spots)} Winners
+                    </Badge>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="center">
+                  <p>{Number(tournament.game_config.prize_spots)} Winners</p>
+                </TooltipContent>
+              </Tooltip>
+
+              {/* Restricte Access */}
+              {isRestricted && (
+                <Tooltip delayDuration={50}>
+                  <TooltipTrigger asChild>
+                    <div className="flex-shrink-0">
+                      <Badge
+                        variant="outline"
+                        className="text-xs p-1 rounded-md"
+                      >
+                        Restricted
+                      </Badge>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" align="center">
+                    <span>
+                      {requirementVariant === "allowlist" ? (
+                        "Allowlist"
+                      ) : requirementVariant === "token" ? (
+                        "Token"
+                      ) : requirementVariant === "tournament" ? (
+                        <span>
+                          Tournament{" "}
+                          <span className="capitalize">
+                            {tournamentRequirementVariant}
+                          </span>
+                        </span>
+                      ) : (
+                        "Unknown"
+                      )}
+                    </span>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+
+              {/* Limited Entry */}
+              {hasEntryLimit && (
+                <Tooltip delayDuration={50}>
+                  <TooltipTrigger asChild>
+                    <div className="flex-shrink-0">
+                      <Badge
+                        variant="outline"
+                        className="text-xs p-1 rounded-md"
+                      >
+                        {Number(entryLimit) === 1
+                          ? `${Number(entryLimit)} entry`
+                          : `${Number(entryLimit)} entries`}
+                      </Badge>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" align="center">
+                    <p>
                       {Number(entryLimit) === 1
                         ? `${Number(entryLimit)} entry`
-                        : `${Number(entryLimit)} entries`}
-                    </Badge>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent side="top" align="center">
-                  <p>
-                    {Number(entryLimit) === 1
-                      ? `${Number(entryLimit)} entry`
-                      : `${Number(entryLimit)} entries`}{" "}
-                    per qualification
-                  </p>
-                </TooltipContent>
-              </Tooltip>
-            )}
+                        : `${Number(entryLimit)} entries`}{" "}
+                      per qualification
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
 
-            {/* Start Date - for ended tournaments */}
-            {status === "ended" && (
-              <Tooltip delayDuration={50}>
-                <TooltipTrigger asChild>
-                  <div className="flex-shrink-0">
-                    <Badge variant="outline" className="text-xs p-1 rounded-md flex items-center gap-1">
-                      <span className="w-4 h-4">
-                        <CALENDAR />
-                      </span>
+              {/* Start Date - for ended tournaments */}
+              {status === "ended" && (
+                <Tooltip delayDuration={50}>
+                  <TooltipTrigger asChild>
+                    <div className="flex-shrink-0">
+                      <Badge
+                        variant="outline"
+                        className="text-xs p-1 rounded-md flex items-center gap-1"
+                      >
+                        <span className="w-4 h-4">
+                          <CALENDAR />
+                        </span>
+                        {startDate.toLocaleDateString(undefined, {
+                          month: "numeric",
+                          day: "numeric",
+                        })}
+                        /{startDate.getFullYear().toString().slice(-2)}
+                      </Badge>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" align="center">
+                    <p>
+                      Started:{" "}
                       {startDate.toLocaleDateString(undefined, {
-                        month: "numeric",
+                        month: "short",
                         day: "numeric",
-                      })}/{startDate.getFullYear().toString().slice(-2)}
-                    </Badge>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent side="top" align="center">
-                  <p>
-                    Started: {startDate.toLocaleDateString(undefined, {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    })}{" "}
-                    {startDate.toLocaleTimeString(undefined, {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </p>
-                </TooltipContent>
-              </Tooltip>
-            )}
+                        year: "numeric",
+                      })}{" "}
+                      {startDate.toLocaleTimeString(undefined, {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
             </div>
           </div>
 

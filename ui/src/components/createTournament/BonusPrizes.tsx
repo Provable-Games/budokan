@@ -10,7 +10,7 @@ import {
 import { Input } from "@/components/ui/input";
 import AmountInput from "@/components/createTournament/inputs/Amount";
 import TokenDialog from "@/components/dialogs/Token";
-import { getTokenLogoUrl, getTokenSymbol } from "@/lib/tokensMeta";
+import { getTokenLogoUrl } from "@/lib/tokensMeta";
 import { X } from "@/components/Icons";
 import { Slider } from "@/components/ui/slider";
 import {
@@ -59,27 +59,22 @@ const BonusPrizes = ({ form }: StepProps) => {
 
   const { getBalanceGeneral, getTokenDecimals } = useSystemCalls();
 
-  const uniqueTokenSymbols = useMemo(() => {
+  const uniqueTokenAddresses = useMemo(() => {
     const bonusPrizes = form.watch("bonusPrizes") || [];
 
-    // First map to get symbols, then filter out undefined values, then create a Set
-    const symbols = bonusPrizes
-      .map((prize) => getTokenSymbol(chainId, prize.token.address))
-      .filter(
-        (symbol): symbol is string =>
-          typeof symbol === "string" && symbol !== ""
-      );
+    // Get unique token addresses
+    const addresses = bonusPrizes
+      .map((prize) => prize.token.address)
+      .filter((address): address is string => typeof address === "string" && address !== "");
 
     // Create a Set from the filtered array to get unique values
-    return [...new Set(symbols)];
+    return [...new Set(addresses)];
   }, [form.watch("bonusPrizes")]);
 
   const { prices, isLoading: pricesLoading } = useEkuboPrices({
     tokens: [
-      ...uniqueTokenSymbols,
-      ...(newPrize.token
-        ? [getTokenSymbol(chainId, newPrize.token.address) ?? ""]
-        : []),
+      ...uniqueTokenAddresses,
+      ...(newPrize.token ? [newPrize.token.address] : []),
     ],
   });
 
@@ -124,8 +119,7 @@ const BonusPrizes = ({ form }: StepProps) => {
       ...prev,
       amount:
         (prev.value ?? 0) /
-        (prices?.[getTokenSymbol(chainId, prev.token?.address ?? "") ?? ""] ??
-          1),
+        (prices?.[prev.token?.address ?? ""] ?? 1),
     }));
   }, [prices, newPrize.value]);
 
@@ -518,12 +512,7 @@ const BonusPrizes = ({ form }: StepProps) => {
                                   className="w-4"
                                 />
                               </div>
-                              {prices?.[
-                                getTokenSymbol(
-                                  chainId,
-                                  newPrize.token.address
-                                ) ?? ""
-                              ] && (
+                              {prices?.[newPrize.token.address] && (
                                 <span className="text-xs text-neutral">
                                   ~$
                                   {(
@@ -578,20 +567,10 @@ const BonusPrizes = ({ form }: StepProps) => {
                                     <span className="text-sm text-neutral">
                                       {pricesLoading
                                         ? "Loading..."
-                                        : prices?.[
-                                            getTokenSymbol(
-                                              chainId,
-                                              prize.token.address
-                                            ) ?? ""
-                                          ] &&
+                                        : prices?.[prize.token.address] &&
                                           `~$${(
                                             (prize.amount ?? 0) *
-                                            (prices?.[
-                                              getTokenSymbol(
-                                                chainId,
-                                                prize.token.address
-                                              ) ?? ""
-                                            ] ?? 0)
+                                            (prices?.[prize.token.address] ?? 0)
                                           ).toFixed(2)}`}
                                     </span>
                                   </div>
