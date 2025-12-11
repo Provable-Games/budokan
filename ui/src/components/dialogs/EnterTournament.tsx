@@ -384,7 +384,7 @@ export function EnterTournamentDialog({
     loading: nftsLoading,
     hasMore,
   } = useVoyagerNfts({
-    contractAddress: requiredTokenAddress ?? "",
+    contractAddress: requiredTokenAddress ?? "0x0",
     owner: address,
     limit: 100,
     fetchAll: true, // Fetch all pages
