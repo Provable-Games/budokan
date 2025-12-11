@@ -17,16 +17,16 @@ pub struct Schedule {
     pub submission_duration: u64,
 }
 
-// ============ Entry Fee Models ============
+// ============ Distribution Models ============
 
 #[derive(Copy, Drop, Serde, Introspect)]
 pub enum Distribution {
     /// Linear decreasing distribution with configurable weight
     /// Position i gets (n - i + 1)^weight shares
-    /// Weight is 1-1000 where higher = steeper drop from 1st to last
+    /// Weight is 10-1000 (scaled by 10 for 1 decimal place)
     Linear: u16,
     /// Exponential distribution with configurable steepness
-    /// Weight is 1-1000 where higher = steeper curve toward top positions
+    /// Weight is 10-1000 (scaled by 10 for 1 decimal place)
     Exponential: u16,
     /// Uniform distribution - all positions get equal share
     Uniform,
@@ -34,6 +34,8 @@ pub enum Distribution {
     /// Span contains the share (in basis points) for each position
     Custom: Span<u16>,
 }
+
+// ============ Entry Fee Models ============
 
 #[derive(Copy, Drop, Serde, Introspect)]
 pub struct EntryFee {
@@ -43,6 +45,7 @@ pub struct EntryFee {
     pub tournament_creator_share: Option<u16>,
     pub game_creator_share: Option<u16>,
     pub refund_share: Option<u16>,
+    pub distribution_positions: Option<u32>,
 }
 
 // ============ Entry Requirement Models ============
@@ -75,7 +78,6 @@ pub enum QualificationProof {
 
 #[derive(Copy, Drop, Serde, Introspect)]
 pub struct NFTQualification {
-    pub token_address: ContractAddress,
     pub token_id: u256,
 }
 
@@ -84,6 +86,8 @@ pub struct NFTQualification {
 #[derive(Copy, Drop, Serde, Introspect)]
 pub struct ERC20Data {
     pub amount: u128,
+    pub distribution: Option<Distribution>,
+    pub distribution_count: Option<u32>,
 }
 
 #[derive(Copy, Drop, Serde, Introspect)]
@@ -98,17 +102,13 @@ pub enum TokenTypeData {
 }
 
 #[derive(Copy, Drop, Serde, Introspect)]
-pub enum Role {
-    TournamentCreator,
-    GameCreator,
-    Position: u32,
-    Refund: u128,
-}
-
-#[derive(Copy, Drop, Serde, Introspect)]
 pub enum PrizeType {
-    EntryFees: Role,
-    Sponsored: u64,
+    /// Claim a non-distributed prize by prize_id
+    /// Position is determined by the caller's token on the leaderboard
+    Single: u64,
+    /// Claim from a distributed prize pool: (prize_id, payout_index)
+    /// payout_index determines which share of the distribution is being claimed
+    Distributed: (u64, u32),
 }
 
 // ============ Game Config Models ============

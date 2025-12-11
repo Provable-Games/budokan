@@ -12,7 +12,6 @@ import { Input } from "@/components/ui/input";
 import { Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { getTokenLogoUrl } from "@/lib/tokensMeta";
 import { useDojo } from "@/context/dojo";
-import { ChainId } from "@/dojo/setup/networks";
 import { QUESTION } from "@/components/Icons";
 import { indexAddress } from "@/lib/utils";
 import { FormToken } from "@/lib/types";
@@ -31,10 +30,7 @@ const TokenDialog = ({ selectedToken, onSelect, type }: TokenDialogProps) => {
   const [tokenSearchQuery, setTokenSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
-  const { selectedChainConfig, namespace } = useDojo();
-
-  const isMainnet = selectedChainConfig.chainId === ChainId.SN_MAIN;
-  const isSepolia = selectedChainConfig.chainId === ChainId.SN_SEPOLIA;
+  const { selectedChainConfig } = useDojo();
 
   const tokensPerPage = 10;
   const offset = currentPage * tokensPerPage;
@@ -63,16 +59,16 @@ const TokenDialog = ({ selectedToken, onSelect, type }: TokenDialogProps) => {
 
   const whitelistedNFTTokens = mainnetNFTs.filter((nft) =>
     erc721Tokens.some(
-      (token) => indexAddress(nft.address) === indexAddress(token.address)
+      (token) => indexAddress(nft.address) === indexAddress(token.token_address)
     )
   );
 
   const getTokenImage = (token: TokenForDisplay) => {
     if (token.token_type === "erc20") {
-      return getTokenLogoUrl(selectedChainConfig?.chainId ?? "", token.address);
+      return getTokenLogoUrl(selectedChainConfig?.chainId ?? "", token.token_address);
     } else {
       const whitelistedImage = whitelistedNFTTokens.find(
-        (nft) => indexAddress(nft.address) === indexAddress(token.address)
+        (nft) => indexAddress(nft.address) === indexAddress(token.token_address)
       )?.image;
       if (whitelistedImage) {
         return whitelistedImage;
@@ -170,13 +166,16 @@ const TokenDialog = ({ selectedToken, onSelect, type }: TokenDialogProps) => {
                   <DialogClose asChild key={index}>
                     <div
                       className={`w-full flex flex-row items-center justify-between hover:bg-brand/20 hover:cursor-pointer px-5 py-2 ${
-                        selectedToken?.address === token.address
+                        selectedToken?.address === token.token_address
                           ? "bg-terminal-green/75 text-terminal-black"
                           : ""
                       }`}
                       onClick={() =>
                         onSelect({
-                          ...token,
+                          address: token.token_address,
+                          name: token.name,
+                          symbol: token.symbol,
+                          token_type: token.token_type,
                           image: getTokenImage(token) ?? undefined,
                         })
                       }

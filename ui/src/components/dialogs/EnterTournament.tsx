@@ -9,7 +9,8 @@ import {
 } from "@/components/ui/dialog";
 import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
 import { useAccount, useConnect } from "@starknet-react/core";
-import { Tournament, Token } from "@/generated/models.gen";
+import { Tournament } from "@/generated/models.gen";
+import { TokenMetadata } from "@/lib/types";
 import {
   feltToString,
   indexAddress,
@@ -47,7 +48,7 @@ interface EnterTournamentDialogProps {
   tournamentModel: Tournament;
   entryCount: number;
   // gameCount: BigNumberish;
-  tokens: Token[];
+  tokens: TokenMetadata[];
   tournamentsData: Tournament[];
   duration: number;
   totalPrizesValueUSD: number;
@@ -253,7 +254,7 @@ export function EnterTournamentDialog({
     tournamentModel?.entry_requirement.Some?.entry_requirement_type?.variant
       ?.token;
 
-  const token = tokens.find((token) => token.address === requiredTokenAddress);
+  const token = tokens.find((token) => token.token_address === requiredTokenAddress);
 
   const tournamentRequirementVariant =
     tournamentModel?.entry_requirement.Some?.entry_requirement_type?.variant?.tournament?.activeVariant();
@@ -875,6 +876,7 @@ export function EnterTournamentDialog({
   ]);
 
   // display the entry fee distribution
+  // Shares are now in basis points (10000 = 100%) to allow 2 decimal precision
 
   const creatorShare = Number(
     tournamentModel?.entry_fee.Some?.tournament_creator_share.Some ?? 0n
@@ -882,20 +884,29 @@ export function EnterTournamentDialog({
   const gameShare = Number(
     tournamentModel?.entry_fee.Some?.game_creator_share.Some ?? 0n
   );
-  const prizePoolShare = 100 - creatorShare - gameShare;
+  const refundShare = Number(
+    tournamentModel?.entry_fee.Some?.refund_share.Some ?? 0n
+  );
+  const prizePoolShare = 10000 - creatorShare - gameShare - refundShare;
+
   const creatorAmount =
     (Number(BigInt(tournamentModel?.entry_fee.Some?.amount ?? 0)) *
-      (creatorShare / 100)) /
+      (creatorShare / 10000)) /
     10 ** 18;
 
   const gameAmount =
     (Number(BigInt(tournamentModel?.entry_fee.Some?.amount ?? 0)) *
-      (gameShare / 100)) /
+      (gameShare / 10000)) /
+    10 ** 18;
+
+  const refundAmount =
+    (Number(BigInt(tournamentModel?.entry_fee.Some?.amount ?? 0)) *
+      (refundShare / 10000)) /
     10 ** 18;
 
   const prizePoolAmount =
     (Number(BigInt(tournamentModel?.entry_fee.Some?.amount ?? 0)) *
-      (prizePoolShare / 100)) /
+      (prizePoolShare / 10000)) /
     10 ** 18;
 
   return (
@@ -926,7 +937,7 @@ export function EnterTournamentDialog({
 
                       <span>
                         {
-                          tokens.find((token) => token.address === entryToken)
+                          tokens.find((token) => token.token_address === entryToken)
                             ?.symbol
                         }
                       </span>
@@ -956,73 +967,86 @@ export function EnterTournamentDialog({
                   <FAT_ARROW_RIGHT />
                 </span>
                 <div className="flex flex-row items-center gap-2 w-full">
-                  <div
-                    className={`flex flex-col items-center gap-1 border border-brand-muted rounded-md p-2 w-1/3 ${
-                      creatorAmount > 0 ? "" : "opacity-50"
-                    }`}
-                  >
-                    <span className="text-sm sm:text-base">
-                      {creatorShare}%
-                    </span>
-                    <span className="text-sm sm:text-base">Creator Fee</span>
-                    <div className="flex flex-row items-center gap-1">
-                      <span className="text-xs sm:text-sm">
-                        +{formatNumber(creatorAmount)}
+                  {creatorShare > 0 && (
+                    <div className="flex flex-col items-center gap-1 border border-brand-muted rounded-md p-2 flex-1">
+                      <span className="text-sm sm:text-base">
+                        {(creatorShare / 100).toFixed(2)}%
                       </span>
-                      <img
-                        src={getTokenLogoUrl(chainId, entryToken ?? "")}
-                        alt={entryToken ?? ""}
-                        className="w-5"
-                      />
-                      <span className="hidden sm:block text-xs sm:text-sm text-neutral">
-                        ~${formatNumber(creatorAmount * (entryFeePrice ?? 0))}
-                      </span>
+                      <span className="text-xs sm:text-sm">Creator Fee</span>
+                      <div className="flex flex-row items-center gap-1">
+                        <span className="text-xs sm:text-sm">
+                          +{formatNumber(creatorAmount)}
+                        </span>
+                        <img
+                          src={getTokenLogoUrl(chainId, entryToken ?? "")}
+                          alt={entryToken ?? ""}
+                          className="w-5"
+                        />
+                        <span className="hidden sm:block text-xs sm:text-sm text-neutral">
+                          ~${formatNumber(creatorAmount * (entryFeePrice ?? 0))}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                  <div
-                    className={`flex flex-col items-center gap-1 border border-brand-muted rounded-md p-2 w-1/3 ${
-                      gameAmount > 0 ? "" : "opacity-50"
-                    }`}
-                  >
-                    <span className="text-sm sm:text-base">{gameShare}%</span>
-                    <span className="text-sm sm:text-base">Game Fee</span>
-                    <div className="flex flex-row items-center gap-1">
-                      <span className="text-xs sm:text-sm">
-                        +{formatNumber(gameAmount)}
-                      </span>
-                      <img
-                        src={getTokenLogoUrl(chainId, entryToken ?? "")}
-                        alt={entryToken ?? ""}
-                        className="w-5"
-                      />
-                      <span className="hidden sm:block text-xs sm:text-sm text-neutral">
-                        ~${formatNumber(gameAmount * (entryFeePrice ?? 0))}
-                      </span>
+                  )}
+                  {gameShare > 0 && (
+                    <div className="flex flex-col items-center gap-1 border border-brand-muted rounded-md p-2 flex-1">
+                      <span className="text-sm sm:text-base">{(gameShare / 100).toFixed(2)}%</span>
+                      <span className="text-xs sm:text-sm">Game Fee</span>
+                      <div className="flex flex-row items-center gap-1">
+                        <span className="text-xs sm:text-sm">
+                          +{formatNumber(gameAmount)}
+                        </span>
+                        <img
+                          src={getTokenLogoUrl(chainId, entryToken ?? "")}
+                          alt={entryToken ?? ""}
+                          className="w-5"
+                        />
+                        <span className="hidden sm:block text-xs sm:text-sm text-neutral">
+                          ~${formatNumber(gameAmount * (entryFeePrice ?? 0))}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                  <div
-                    className={`flex flex-col items-center gap-1 border border-brand-muted rounded-md p-2 w-1/3 ${
-                      prizePoolAmount > 0 ? "" : "opacity-50"
-                    }`}
-                  >
-                    <span className="text-sm sm:text-base">
-                      {prizePoolShare}%
-                    </span>
-                    <span className="text-sm sm:text-base">Prize Pool</span>
-                    <div className="flex flex-row items-center gap-1">
-                      <span className="text-xs sm:text-sm">
-                        +{formatNumber(prizePoolAmount)}
-                      </span>
-                      <img
-                        src={getTokenLogoUrl(chainId, entryToken ?? "")}
-                        alt={entryToken ?? ""}
-                        className="w-5"
-                      />
-                      <span className="hidden sm:block text-xs sm:text-sm text-neutral">
-                        ~${formatNumber(prizePoolAmount * (entryFeePrice ?? 0))}
-                      </span>
+                  )}
+                  {refundShare > 0 && (
+                    <div className="flex flex-col items-center gap-1 border border-brand-muted rounded-md p-2 flex-1">
+                      <span className="text-sm sm:text-base">{(refundShare / 100).toFixed(2)}%</span>
+                      <span className="text-xs sm:text-sm">Refund</span>
+                      <div className="flex flex-row items-center gap-1">
+                        <span className="text-xs sm:text-sm">
+                          +{formatNumber(refundAmount)}
+                        </span>
+                        <img
+                          src={getTokenLogoUrl(chainId, entryToken ?? "")}
+                          alt={entryToken ?? ""}
+                          className="w-5"
+                        />
+                        <span className="hidden sm:block text-xs sm:text-sm text-neutral">
+                          ~${formatNumber(refundAmount * (entryFeePrice ?? 0))}
+                        </span>
+                      </div>
                     </div>
-                  </div>
+                  )}
+                  {prizePoolShare > 0 && (
+                    <div className="flex flex-col items-center gap-1 border border-brand-muted rounded-md p-2 flex-1">
+                      <span className="text-sm sm:text-base">
+                        {(prizePoolShare / 100).toFixed(2)}%
+                      </span>
+                      <span className="text-xs sm:text-sm">Prize Pool</span>
+                      <div className="flex flex-row items-center gap-1">
+                        <span className="text-xs sm:text-sm">
+                          +{formatNumber(prizePoolAmount)}
+                        </span>
+                        <img
+                          src={getTokenLogoUrl(chainId, entryToken ?? "")}
+                          alt={entryToken ?? ""}
+                          className="w-5"
+                        />
+                        <span className="hidden sm:block text-xs sm:text-sm text-neutral">
+                          ~${formatNumber(prizePoolAmount * (entryFeePrice ?? 0))}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

@@ -15,6 +15,7 @@ import {
   Account,
   BigNumberish,
   CairoOption,
+  CairoOptionVariant,
   CallData,
   ByteArray,
   byteArray,
@@ -290,17 +291,27 @@ export const useSystemCalls = () => {
       calls.push(...erc20ApprovalCalls, ...erc721ApprovalCalls);
 
       // Add prize calls
+      const budokanContract = initializeBudokanContract();
+
       for (const prize of prizes) {
+        // Create position as CairoOption
+        const position = (prize as any).position
+          ? new CairoOption(CairoOptionVariant.Some, (prize as any).position)
+          : new CairoOption(CairoOptionVariant.None);
+
+        const call = budokanContract.populate("add_prize", [
+          prize.context_id,
+          prize.token_address,
+          prize.token_type,
+          position,
+        ]);
+
         const addPrizesCall = {
           contractAddress: tournamentAddress,
           entrypoint: "add_prize",
-          calldata: CallData.compile([
-            prize.tournament_id,
-            prize.token_address,
-            prize.token_type,
-            prize.payout_position,
-          ]),
+          calldata: call.calldata,
         };
+
         calls.push(addPrizesCall);
       }
 
@@ -400,16 +411,23 @@ export const useSystemCalls = () => {
         }
 
         // Add prize calls
-        const prizeCalls = batch.map((prize) => ({
-          contractAddress: tournamentAddress,
-          entrypoint: "add_prize",
-          calldata: CallData.compile([
-            prize.tournament_id,
-            prize.token_address,
-            prize.token_type,
-            prize.payout_position,
-          ]),
-        }));
+        const prizeCalls = batch.map((prize) => {
+          // Create position as CairoOption
+          const position = (prize as any).position
+            ? new CairoOption(CairoOptionVariant.Some, (prize as any).position)
+            : new CairoOption(CairoOptionVariant.None);
+
+          return {
+            contractAddress: tournamentAddress,
+            entrypoint: "add_prize",
+            calldata: CallData.compile([
+              prize.context_id, // Changed from tournament_id
+              prize.token_address,
+              prize.token_type,
+              position, // Position as Option<u32>
+            ]),
+          };
+        });
         calls.push(...prizeCalls);
 
         console.log(
@@ -464,6 +482,14 @@ export const useSystemCalls = () => {
   ) => {
     const budokanContract = initializeBudokanContract();
     const game = getGameName(tournament.game_config.address);
+    console.log([
+      address!,
+      tournament.metadata,
+      tournament.schedule,
+      tournament.game_config,
+      tournament.entry_fee,
+      tournament.entry_requirement,
+    ]);
     try {
       const call = budokanContract.populate("create_tournament", [
         address!,
@@ -533,14 +559,19 @@ export const useSystemCalls = () => {
 
       calls.push(...erc20ApprovalCalls, ...erc721ApprovalCalls);
       for (const prize of prizes) {
+        // Create position as CairoOption
+        const position = (prize as any).position
+          ? new CairoOption(CairoOptionVariant.Some, (prize as any).position)
+          : new CairoOption(CairoOptionVariant.None);
+
         const addPrizesCall = {
           contractAddress: tournamentAddress,
           entrypoint: "add_prize",
           calldata: CallData.compile([
-            prize.tournament_id,
+            prize.context_id, // Changed from tournament_id
             prize.token_address,
             prize.token_type,
-            prize.payout_position,
+            position, // Position as Option<u32>
           ]),
         };
         calls.push(addPrizesCall);
@@ -673,16 +704,23 @@ export const useSystemCalls = () => {
         }
 
         // Add prize calls
-        const prizeCalls = batch.map((prize) => ({
-          contractAddress: tournamentAddress,
-          entrypoint: "add_prize",
-          calldata: CallData.compile([
-            prize.tournament_id,
-            prize.token_address,
-            prize.token_type,
-            prize.payout_position,
-          ]),
-        }));
+        const prizeCalls = batch.map((prize) => {
+          // Create position as CairoOption
+          const position = (prize as any).position
+            ? new CairoOption(CairoOptionVariant.Some, (prize as any).position)
+            : new CairoOption(CairoOptionVariant.None);
+
+          return {
+            contractAddress: tournamentAddress,
+            entrypoint: "add_prize",
+            calldata: CallData.compile([
+              prize.context_id, // Changed from tournament_id
+              prize.token_address,
+              prize.token_type,
+              position, // Position as Option<u32>
+            ]),
+          };
+        });
         calls.push(...prizeCalls);
 
         console.log(

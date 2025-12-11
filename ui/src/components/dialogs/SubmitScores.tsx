@@ -41,7 +41,10 @@ export function SubmitScoresDialog({
   } | null>(null);
   const tournamentAddress = selectedChainConfig.budokanAddress!;
 
-  const leaderboardSize = Number(tournamentModel?.game_config.prize_spots);
+  // Calculate leaderboard size from entry fee distribution positions, or default to 10
+  const leaderboardSize = tournamentModel?.entry_fee && 'Some' in tournamentModel.entry_fee && tournamentModel.entry_fee.Some?.distribution_positions && 'Some' in tournamentModel.entry_fee.Some.distribution_positions
+    ? Number(tournamentModel.entry_fee.Some.distribution_positions.Some)
+    : 10;
 
   const { games } = useGameTokens({
     context: {

@@ -179,8 +179,11 @@ const Tournament = () => {
     };
   }, [id, tournamentsCount]);
 
-  // Default to 3 prize positions if not specified
-  const leaderboardSize = 3;
+  // Get leaderboard size from distribution_positions if specified, otherwise use entry count
+  const leaderboardSize =
+    tournamentModel?.entry_fee?.Some?.distribution_positions?.isSome()
+      ? Number(tournamentModel.entry_fee.Some.distribution_positions.Some)
+      : Number(entryCountModel?.count ?? 0);
 
   const totalSubmissions = leaderboardModel?.token_ids.length ?? 0;
 
@@ -297,6 +300,33 @@ const Tournament = () => {
     ? claimsAggregations.total_unclaimed
     : 0;
 
+  // Calculate paid places based on entry fee and prizes
+  // Note: We use aggregations for prize count since we don't have full Prize objects here
+  // This is a simplified calculation - it counts entry fee positions + bonus prizes
+  const paidPlaces = useMemo(() => {
+    const positions = new Set<number>();
+
+    // Add entry fee distribution positions
+    if (tournamentModel?.entry_fee?.isSome() &&
+        tournamentModel.entry_fee.Some?.distribution_positions?.isSome()) {
+      const distributionCount = Number(tournamentModel.entry_fee.Some.distribution_positions.Some);
+      for (let i = 1; i <= distributionCount; i++) {
+        positions.add(i);
+      }
+    }
+
+    // Add bonus prize positions from aggregations
+    // We don't have the exact positions here, but we can estimate based on total prizes
+    // This is a rough approximation - actual calculation would need Prize objects
+    const bonusPrizesCount = aggregations?.total_prizes || 0;
+    const startPosition = positions.size > 0 ? positions.size + 1 : 1;
+    for (let i = 0; i < bonusPrizesCount; i++) {
+      positions.add(startPosition + i);
+    }
+
+    return positions.size;
+  }, [tournamentModel?.entry_fee, aggregations?.total_prizes]);
+
   // Extract unique token symbols from aggregated data and entry fee prizes
   const erc20TokenSymbols = useMemo(() => {
     const symbols = new Set<string>();
@@ -337,7 +367,10 @@ const Tournament = () => {
   // Get token data for all unique addresses in this tournament from static tokens
   const tournamentTokens = useMemo(() => {
     if (uniqueTokenAddresses.length === 0) return [];
-    return getTokensByAddresses(uniqueTokenAddresses, selectedChainConfig?.chainId ?? "");
+    return getTokensByAddresses(
+      uniqueTokenAddresses,
+      selectedChainConfig?.chainId ?? ""
+    );
   }, [uniqueTokenAddresses, selectedChainConfig]);
 
   // Add entry fee token symbol to the list
@@ -396,7 +429,7 @@ const Tournament = () => {
 
         // Find the token to get its symbol
         const token = tournamentTokens.find(
-          (t) => t.address === prize.token_address
+          (t) => t.token_address === prize.token_address
         );
         const price = token?.symbol ? prices[token.symbol] || 0 : 0;
 
@@ -784,7 +817,6 @@ const Tournament = () => {
             onOpenChange={setAddPrizesDialogOpen}
             tournamentId={tournamentModel?.id}
             tournamentName={feltToString(tournamentModel?.metadata?.name ?? "")}
-            leaderboardSize={leaderboardSize}
           />
           <SettingsDialog
             open={settingsDialogOpen}
@@ -816,14 +848,14 @@ const Tournament = () => {
                   </div>
                 )}
                 <div className="flex flex-row gap-2 hidden sm:flex">
-                  <span>Winners:</span>
-                  <span className="text-brand">Top {leaderboardSize}</span>
+                  <span>Paid Places:</span>
+                  <span className="text-brand">{paidPlaces > 0 ? paidPlaces : "-"}</span>
                 </div>
                 <Badge
                   variant="outline"
                   className="text-xs p-1 rounded-md sm:hidden text-brand"
                 >
-                  {leaderboardSize} Winners
+                  {paidPlaces > 0 ? `${paidPlaces} Paid Places` : "No Prizes"}
                 </Badge>
                 <div className="flex flex-row gap-2 hidden sm:flex">
                   <span>Registration:</span>

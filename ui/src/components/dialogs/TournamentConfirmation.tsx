@@ -20,6 +20,7 @@ import {
   getOrdinalSuffix,
   displayAddress,
 } from "@/lib/utils";
+import { calculatePaidPlaces } from "@/lib/utils/formatting";
 import { getTokenLogoUrl, getTokenSymbol } from "@/lib/tokensMeta";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
 import { useMemo, useState } from "react";
@@ -152,8 +153,6 @@ const TournamentConfirmation = ({
                 </div>
                 <span className="text-muted-foreground">Settings:</span>
                 <span>{hasSettings ? settings[0].name : "Default"}</span>
-                <span className="text-muted-foreground">Leaderboard Size:</span>
-                <span>{formData.leaderboardSize}</span>
                 {/* TODO: Uncomment when ready to use soulbound and play_url */}
                 {/* <span className="text-muted-foreground">Soulbound:</span>
                 <span>{formData.soulbound ? "Yes" : "No"}</span>
@@ -331,38 +330,46 @@ const TournamentConfirmation = ({
                               <th className="px-4 py-2 text-left">Id</th>
                               <th className="px-4 py-2 text-left">Name</th>
                               <th className="px-4 py-2 text-left">Game</th>
-                              <th className="px-4 py-2 text-left">Winners</th>
+                              <th className="px-4 py-2 text-left">Paid Places</th>
                             </tr>
                           </thead>
                           <tbody>
                             {formData.gatingOptions.tournament?.tournaments?.map(
-                              (tournament) => (
-                                <tr key={tournament.metadata.name}>
-                                  <td className="px-4">
-                                    {Number(tournament.id)}
-                                  </td>
-                                  <td className="px-4 capitalize">
-                                    {feltToString(tournament.metadata.name)}
-                                  </td>
-                                  <td className="px-4 capitalize">
-                                    <div className="flex flex-row items-center gap-2">
-                                      <TokenGameIcon
-                                        image={getGameImage(
-                                          tournament.game_config.address
-                                        )}
-                                      />
-                                      {gameData.find(
-                                        (game) =>
-                                          game.contract_address ===
-                                          tournament.game_config.address
-                                      )?.name ?? ""}
-                                    </div>
-                                  </td>
-                                  <td className="px-4 capitalize">
-                                    {Number(tournament.game_config.prize_spots)}
-                                  </td>
-                                </tr>
-                              )
+                              (tournament) => {
+                                // Calculate paid places for this tournament
+                                const paidPlaces = calculatePaidPlaces(
+                                  tournament.entry_fee,
+                                  [] // We don't have prizes data here, so just use entry fee
+                                );
+
+                                return (
+                                  <tr key={tournament.metadata.name}>
+                                    <td className="px-4">
+                                      {Number(tournament.id)}
+                                    </td>
+                                    <td className="px-4 capitalize">
+                                      {feltToString(tournament.metadata.name)}
+                                    </td>
+                                    <td className="px-4 capitalize">
+                                      <div className="flex flex-row items-center gap-2">
+                                        <TokenGameIcon
+                                          image={getGameImage(
+                                            tournament.game_config.address
+                                          )}
+                                        />
+                                        {gameData.find(
+                                          (game) =>
+                                            game.contract_address ===
+                                            tournament.game_config.address
+                                        )?.name ?? ""}
+                                      </div>
+                                    </td>
+                                    <td className="px-4">
+                                      {paidPlaces > 0 ? paidPlaces : "-"}
+                                    </td>
+                                  </tr>
+                                );
+                              }
                             )}
                           </tbody>
                         </table>

@@ -1,5 +1,6 @@
 import { TournamentFormData } from "@/containers/CreateTournament";
-import { bigintToHex, indexAddress, stringToFelt, calculateDistribution, DistributionType } from "@/lib/utils";
+import { bigintToHex, indexAddress, stringToFelt, calculateDistribution } from "@/lib/utils";
+import { DisplayPrize, TokenMetadata } from "@/lib/types";
 import {
   addAddressPadding,
   CairoOption,
@@ -10,17 +11,16 @@ import {
 import {
   Prize,
   Tournament,
-  Token,
   EntryFee,
   PrizeClaim,
   Leaderboard,
   QualificationProofEnum,
   GameMetadata,
+  ERC20Data,
+  ERC721Data,
 } from "@/generated/models.gen";
 import { PositionPrizes, TokenPrizes } from "@/lib/types";
 import { TokenPrices } from "@/hooks/useEkuboPrices";
-import { mainnetTokens } from "@/lib/mainnetTokens";
-import { sepoliaTokens } from "@/lib/sepoliaTokens";
 import { getExtensionProof } from "@/lib/extensionConfig";
 
 export const processTournamentData = (
@@ -232,6 +232,13 @@ export const processTournamentData = (
                   ) // Convert to basis points
                 )
               : new CairoOption(CairoOptionVariant.None),
+          distribution_positions:
+            formData.entryFees?.prizePoolPayoutCount
+              ? new CairoOption(
+                  CairoOptionVariant.Some,
+                  formData.entryFees.prizePoolPayoutCount
+                )
+              : new CairoOption(CairoOptionVariant.None),
         })
       : new CairoOption(CairoOptionVariant.None),
     entry_requirement: formData.enableGating
@@ -244,34 +251,86 @@ export const processPrizes = (
   formData: TournamentFormData,
   tournamentCount: number,
   prizeCount: number
-): Prize[] => {
+): DisplayPrize[] => {
   if (!formData.enableBonusPrizes || !formData.bonusPrizes?.length) {
     return [];
   }
 
-  return formData.bonusPrizes.map((prize, _) => ({
-    id: prizeCount + 1,
-    tournament_id: tournamentCount + 1,
-    token_address: prize.token.address,
-    token_type:
-      prize.type === "ERC20"
-        ? new CairoCustomEnum({
-            erc20: {
-              amount: addAddressPadding(
-                bigintToHex(prize.amount! * 10 ** (prize.tokenDecimals || 18))
-              ),
-            },
-            erc721: undefined,
+  return formData.bonusPrizes.map((prize, index) => {
+    let token_type;
+
+    if (prize.type === "ERC20") {
+      // Map distribution string to CairoCustomEnum
+      let distribution: CairoOption<CairoCustomEnum>;
+      if (prize.distribution === "linear") {
+        distribution = new CairoOption(
+          CairoOptionVariant.Some,
+          new CairoCustomEnum({
+            Linear: 100,
+            Exponential: undefined,
+            Uniform: undefined,
+            Custom: undefined,
           })
-        : new CairoCustomEnum({
-            erc20: undefined,
-            erc721: {
-              id: addAddressPadding(bigintToHex(prize.tokenId!)),
-            },
-          }),
-    payout_position: prize.position,
-    claimed: false,
-  }));
+        );
+      } else if (prize.distribution === "exponential") {
+        distribution = new CairoOption(
+          CairoOptionVariant.Some,
+          new CairoCustomEnum({
+            Linear: undefined,
+            Exponential: 100,
+            Uniform: undefined,
+            Custom: undefined,
+          })
+        );
+      } else if (prize.distribution === "uniform") {
+        distribution = new CairoOption(
+          CairoOptionVariant.Some,
+          new CairoCustomEnum({
+            Linear: undefined,
+            Exponential: undefined,
+            Uniform: {},
+            Custom: undefined,
+          })
+        );
+      } else {
+        distribution = new CairoOption(CairoOptionVariant.None);
+      }
+
+      // Create distribution_count as CairoOption
+      const distribution_count: CairoOption<BigNumberish> = prize.distributionCount
+        ? new CairoOption(CairoOptionVariant.Some, prize.distributionCount)
+        : new CairoOption(CairoOptionVariant.None);
+
+      const erc20Data: ERC20Data = {
+        amount: BigInt(prize.amount! * 10 ** (prize.tokenDecimals || 18)).toString(),
+        distribution,
+        distribution_count,
+      };
+
+      token_type = new CairoCustomEnum({
+        erc20: erc20Data,
+        erc721: undefined,
+      });
+    } else {
+      const erc721Data: ERC721Data = {
+        id: BigInt(prize.tokenId!).toString(),
+      };
+
+      token_type = new CairoCustomEnum({
+        erc20: undefined,
+        erc721: erc721Data,
+      });
+    }
+
+    return {
+      id: prizeCount + index + 1,
+      context_id: tournamentCount + 1,
+      token_address: prize.token.address,
+      token_type,
+      sponsor_address: "0x0", // Placeholder for bonus prizes
+      position: prize.position, // Position for display/sorting
+    };
+  });
 };
 
 export const getSubmittableScores = (
@@ -308,11 +367,11 @@ export const extractEntryFeePrizes = (
   tournamentId: BigNumberish,
   entryFee: CairoOption<EntryFee>,
   entryCount: BigNumberish,
-  winnersCount: number = 3
+  distributionPositions?: number
 ): {
-  tournamentCreatorShare: Prize[];
-  gameCreatorShare: Prize[];
-  distributionPrizes: Prize[];
+  tournamentCreatorShare: DisplayPrize[];
+  gameCreatorShare: DisplayPrize[];
+  distributionPrizes: DisplayPrize[];
 } => {
   if (!entryFee?.isSome()) {
     return {
@@ -322,6 +381,12 @@ export const extractEntryFeePrizes = (
     };
   }
   const totalFeeAmount = BigInt(entryFee.Some?.amount!) * BigInt(entryCount);
+
+  // Get distribution positions from entry fee if not provided
+  const winnersCount = distributionPositions ??
+    (entryFee.Some?.distribution_positions?.isSome()
+      ? Number(entryFee.Some.distribution_positions.Some)
+      : 3);
 
   if (totalFeeAmount === 0n) {
     return {
@@ -335,23 +400,22 @@ export const extractEntryFeePrizes = (
     ? [
         {
           id: 0,
-          tournament_id: tournamentId,
-          payout_position: 0,
+          context_id: tournamentId, // Changed from tournament_id
+          position: 0, // Virtual position for display
           token_address: entryFee.Some?.token_address!,
           token_type: new CairoCustomEnum({
             erc20: {
-              amount: addAddressPadding(
-                bigintToHex(
-                  (totalFeeAmount *
-                    BigInt(entryFee?.Some.game_creator_share?.Some!)) /
-                    100n
-                )
-              ),
-            },
+              amount: ((totalFeeAmount *
+                BigInt(entryFee?.Some.game_creator_share?.Some!)) /
+                10000n).toString(), // Shares are in basis points (10000 = 100%)
+              distribution: new CairoOption(CairoOptionVariant.None),
+              distribution_count: new CairoOption(CairoOptionVariant.None),
+            } as ERC20Data,
             erc721: undefined,
           }),
+          sponsor_address: "0x0", // Placeholder
           type: "entry_fee_game_creator",
-        } as Prize,
+        } as DisplayPrize,
       ]
     : [];
 
@@ -360,28 +424,27 @@ export const extractEntryFeePrizes = (
       ? [
           {
             id: 0,
-            tournament_id: tournamentId,
-            payout_position: 0,
+            context_id: tournamentId, // Changed from tournament_id
+            position: 0, // Virtual position for display
             token_address: entryFee.Some?.token_address!,
             token_type: new CairoCustomEnum({
               erc20: {
-                amount: addAddressPadding(
-                  bigintToHex(
-                    (totalFeeAmount *
-                      BigInt(entryFee?.Some.tournament_creator_share?.Some!)) /
-                      100n
-                  )
-                ),
-              },
+                amount: ((totalFeeAmount *
+                  BigInt(entryFee?.Some.tournament_creator_share?.Some!)) /
+                  10000n).toString(), // Shares are in basis points (10000 = 100%)
+                distribution: new CairoOption(CairoOptionVariant.None),
+                distribution_count: new CairoOption(CairoOptionVariant.None),
+              } as ERC20Data,
               erc721: undefined,
             }),
+            sponsor_address: "0x0", // Placeholder
             type: "entry_fee_tournament_creator",
-          } as Prize,
+          } as DisplayPrize,
         ]
       : [];
 
   // Calculate distribution prizes based on the distribution enum
-  const calculateDistributionPrizes = (): Prize[] => {
+  const calculateDistributionPrizes = (): DisplayPrize[] => {
     if (!entryFee.Some?.distribution) return [];
 
     const dist = entryFee.Some.distribution;
@@ -417,6 +480,7 @@ export const extractEntryFeePrizes = (
     }
 
     // Calculate actual prize pool after fees
+    // Shares are in basis points (10000 = 100%)
     const creatorSharePercent = entryFee.Some?.tournament_creator_share?.isSome()
       ? Number(entryFee.Some.tournament_creator_share.Some)
       : 0;
@@ -427,29 +491,33 @@ export const extractEntryFeePrizes = (
       ? Number(entryFee.Some.refund_share.Some)
       : 0;
 
-    const prizePoolPercent = 100 - creatorSharePercent - gameSharePercent - refundSharePercent;
-    const prizePoolAmount = (totalFeeAmount * BigInt(prizePoolPercent)) / 100n;
+    const prizePoolPercent = 10000 - creatorSharePercent - gameSharePercent - refundSharePercent;
+    const prizePoolAmount = (totalFeeAmount * BigInt(prizePoolPercent)) / 10000n;
 
     // Create prize objects from percentages
     return distributionPercentages
       .map((percentage, index) => {
         if (percentage === 0) return null;
 
-        const amount = (prizePoolAmount * BigInt(Math.floor(percentage * 100))) / 100n;
+        // percentage is 0-100 (e.g., 50 = 50%), convert to basis points by multiplying by 100
+        const amount = (prizePoolAmount * BigInt(Math.floor(percentage * 100))) / 10000n;
 
         return {
           id: 0,
-          tournament_id: tournamentId,
-          payout_position: index + 1,
+          context_id: tournamentId, // Changed from tournament_id
+          position: index + 1, // Virtual position for display
           token_address: entryFee.Some?.token_address!,
           token_type: new CairoCustomEnum({
             erc20: {
-              amount: addAddressPadding(bigintToHex(amount)),
-            },
+              amount: amount.toString(),
+              distribution: new CairoOption(CairoOptionVariant.None),
+              distribution_count: new CairoOption(CairoOptionVariant.None),
+            } as ERC20Data,
             erc721: undefined,
           }),
+          sponsor_address: "0x0", // Placeholder
           type: "entry_fee",
-        } as Prize;
+        } as DisplayPrize;
       })
       .filter((prize) => prize !== null);
   };
@@ -570,7 +638,7 @@ export const getClaimablePrizes = (
         return info.type === "EntryFees" && info.role === "TournamentCreator";
       });
     } else if (prize.type === "entry_fee") {
-      return !claimedEntryFeePositions.includes(prize.payout_position);
+      return !claimedEntryFeePositions.includes(prize.position ?? 0);
     } else {
       // Normalize prize.id to number for comparison (it might be hex string or number)
       const prizeIdNum =
@@ -604,7 +672,7 @@ export const getClaimablePrizes = (
         EntryFees: new CairoCustomEnum({
           TournamentCreator: undefined,
           GameCreator: undefined,
-          Position: prize.payout_position,
+          Position: prize.position ?? 0,
         }),
         Sponsored: undefined,
       });
@@ -621,14 +689,14 @@ export const getClaimablePrizes = (
   };
 };
 
-export const groupPrizesByPositions = (prizes: Prize[], tokens: Token[]) => {
+export const groupPrizesByPositions = (prizes: DisplayPrize[], tokens: TokenMetadata[]) => {
   return prizes
-    .filter((prize) => prize.payout_position !== 0)
-    .sort((a, b) => Number(a.payout_position) - Number(b.payout_position))
+    .filter((prize) => (prize.position ?? 0) !== 0) // Use position field instead of payout_position
+    .sort((a, b) => Number(a.position ?? 0) - Number(b.position ?? 0))
     .reduce((acc, prize) => {
-      const position = prize.payout_position.toString();
+      const position = (prize.position ?? 0).toString();
       const tokenModel = tokens.find(
-        (t) => indexAddress(t.address) === indexAddress(prize.token_address)
+        (t) => indexAddress(t.token_address) === indexAddress(prize.token_address)
       );
 
       if (!tokenModel?.symbol) {
@@ -665,9 +733,9 @@ export const groupPrizesByPositions = (prizes: Prize[], tokens: Token[]) => {
     }, {} as PositionPrizes);
 };
 
-export const groupPrizesByTokens = (prizes: Prize[], tokens: Token[]) => {
+export const groupPrizesByTokens = (prizes: Prize[], tokens: TokenMetadata[]) => {
   return prizes.reduce((acc, prize) => {
-    const tokenModel = tokens.find((t) => t.address === prize.token_address);
+    const tokenModel = tokens.find((t) => indexAddress(t.token_address) === indexAddress(prize.token_address));
     const tokenSymbol = tokenModel?.symbol;
 
     if (!tokenSymbol) {
@@ -757,6 +825,58 @@ export const countTotalNFTs = (groupedPrizes: TokenPrizes) => {
     .reduce((total, [_, prize]) => {
       return total + (Array.isArray(prize.value) ? prize.value.length : 1);
     }, 0);
+};
+
+/**
+ * Calculate the total number of paid places in a tournament
+ * This includes:
+ * 1. Entry fee distribution positions
+ * 2. Bonus prize positions (considering distribution_count for ERC20 prizes)
+ */
+export const calculatePaidPlaces = (
+  entryFee: CairoOption<EntryFee> | undefined,
+  prizes: Prize[] | DisplayPrize[]
+): number => {
+  const positions = new Set<number>();
+
+  // Add entry fee distribution positions
+  if (entryFee?.isSome() && entryFee.Some?.distribution_positions?.isSome()) {
+    const distributionCount = Number(entryFee.Some.distribution_positions.Some);
+    for (let i = 1; i <= distributionCount; i++) {
+      positions.add(i);
+    }
+  }
+
+  // Add bonus prize positions
+  prizes.forEach((prize: any) => {
+    if (prize.token_type) {
+      const tokenType = prize.token_type;
+
+      // For ERC721, just add the position if it exists
+      if (tokenType.activeVariant && tokenType.activeVariant() === "erc721") {
+        if (prize.position && prize.position !== 0) {
+          positions.add(Number(prize.position));
+        }
+      }
+      // For ERC20, check if there's a distribution_count
+      else if (tokenType.activeVariant && tokenType.activeVariant() === "erc20") {
+        const erc20Data = tokenType.variant?.erc20;
+        if (erc20Data?.distribution_count?.isSome && erc20Data.distribution_count.isSome()) {
+          const distributionCount = Number(erc20Data.distribution_count.Some);
+          // If there's a starting position, add from that position
+          const startPosition = prize.position ? Number(prize.position) : 1;
+          for (let i = 0; i < distributionCount; i++) {
+            positions.add(startPosition + i);
+          }
+        } else if (prize.position && prize.position !== 0) {
+          // Single position prize
+          positions.add(Number(prize.position));
+        }
+      }
+    }
+  });
+
+  return positions.size;
 };
 
 export const processTournamentFromSql = (tournament: any): Tournament => {
@@ -947,6 +1067,13 @@ export const processTournamentFromSql = (tournament: any): Tournament => {
                     tournament["entry_fee.Some.refund_share.Some"]
                   )
                 : new CairoOption(CairoOptionVariant.None),
+            distribution_positions:
+              tournament["entry_fee.Some.distribution_positions"] === "Some"
+                ? new CairoOption(
+                    CairoOptionVariant.Some,
+                    tournament["entry_fee.Some.distribution_positions.Some"]
+                  )
+                : new CairoOption(CairoOptionVariant.None),
           })
         : new CairoOption(CairoOptionVariant.None),
     entry_requirement:
@@ -974,21 +1101,23 @@ export const processPrizesFromSql = (
               prize.tokenType === "erc20"
                 ? new CairoCustomEnum({
                     erc20: {
-                      amount: prize.amount,
-                    },
+                      amount: prize.amount.toString(),
+                      distribution: new CairoOption(CairoOptionVariant.None),
+                      distribution_count: new CairoOption(CairoOptionVariant.None),
+                    } as ERC20Data,
                     erc721: undefined,
                   })
                 : new CairoCustomEnum({
                     erc20: undefined,
                     erc721: {
-                      id: prize.amount,
-                    },
+                      id: prize.amount.toString(),
+                    } as ERC721Data,
                   }),
           };
         })
         .sort(
-          (a: Prize, b: Prize) =>
-            Number(a.payout_position) - Number(b.payout_position)
+          (a: DisplayPrize, b: DisplayPrize) =>
+            Number(a.position ?? 0) - Number(b.position ?? 0) // Use position field
         )
     : null;
 };
@@ -1198,34 +1327,4 @@ export const formatGameSettings = (settings: any[]) => {
   formattedSettings.sort((a, b) => a.key.localeCompare(b.key));
 
   return formattedSettings;
-};
-
-export const formatTokens = (
-  registeredTokens: Token[],
-  isMainnet: boolean,
-  isSepolia: boolean
-) => {
-  return isMainnet
-    ? mainnetTokens.map((token) => ({
-        address: token.l2_token_address,
-        name: token.name,
-        symbol: token.symbol,
-        token_type: "erc20",
-        is_registered: registeredTokens.some(
-          (registeredToken) =>
-            registeredToken.address === token.l2_token_address
-        ),
-      }))
-    : isSepolia
-    ? sepoliaTokens.map((token) => ({
-        address: token.l2_token_address,
-        name: token.name,
-        symbol: token.symbol,
-        token_type: "erc20",
-        is_registered: registeredTokens.some(
-          (registeredToken) =>
-            registeredToken.address === token.l2_token_address
-        ),
-      }))
-    : [];
 };

@@ -19,7 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { StepProps } from "@/containers/CreateTournament";
-import { TROPHY, USER, X, INFO } from "@/components/Icons";
+import { USER, X, INFO } from "@/components/Icons";
 import { displayAddress, feltToString } from "@/lib/utils";
 import TokenGameIcon from "@/components/icons/TokenGameIcon";
 import { Search } from "lucide-react";
@@ -693,15 +693,6 @@ const EntryRequirements = ({ form }: StepProps) => {
                                                   </Tooltip>
                                                 </div>
                                                 {/* <div>${tournament.pot}</div> */}
-                                                <div className="flex flex-row items-center">
-                                                  <span className="w-5 h-5">
-                                                    <TROPHY />
-                                                  </span>
-                                                  {Number(
-                                                    tournament.tournament
-                                                      .game_config.prize_spots
-                                                  ).toString()}
-                                                </div>
                                               </div>
                                             );
 

@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { BigNumberish } from "starknet";
 import { padU64 } from "@/lib/utils";
 import { TOURNAMENT_VERSION_KEY } from "@/lib/constants";
+import { q } from "node_modules/@starknet-react/core/dist/index-KYmfBIOq";
 
 // Helper function to generate SQL exclusion clause for tournament IDs
 const getExcludedTournamentsClause = (excludedIds: number[]): string => {
@@ -465,7 +466,6 @@ export const useGetTournaments = ({
       excludedIdsKey,
     ]
   );
-  console.log(query);
   const { data, loading, error, refetch } = useSqlExecute(query);
 
   return { data, loading, error, refetch };
@@ -811,7 +811,6 @@ export const useGetTournamentPrizes = ({
         ? `
     SELECT * FROM '${namespace}-Prize'
     WHERE tournament_id = '${padU64(BigInt(tournamentId))}'
-      AND payout_position >= ${startPosition}
       AND payout_position <= ${endPosition}
     ORDER BY payout_position ASC
   `

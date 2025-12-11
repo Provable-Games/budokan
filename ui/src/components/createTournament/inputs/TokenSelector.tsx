@@ -24,6 +24,8 @@ interface TokenSelectorProps {
   quickSelectAddresses?: string[];
   tokenType?: "erc20" | "erc721";
   className?: string;
+  showTypeSelector?: boolean;
+  onTokenTypeChange?: (type: "erc20" | "erc721") => void;
 }
 
 export const TokenSelector = ({
@@ -35,13 +37,14 @@ export const TokenSelector = ({
   quickSelectAddresses,
   tokenType = "erc20",
   className = "",
+  showTypeSelector = false,
+  onTokenTypeChange,
 }: TokenSelectorProps) => {
   const { selectedChainConfig } = useDojo();
   const { getTokenDecimals } = useSystemCalls();
 
   const chainId = selectedChainConfig?.chainId ?? "";
   const isMainnet = selectedChainConfig?.chainId === ChainId.SN_MAIN;
-  const isSepolia = selectedChainConfig?.chainId === ChainId.SN_SEPOLIA;
 
   const quickSelectTokens: QuickSelectToken[] = quickSelectAddresses
     ? quickSelectAddresses
@@ -103,6 +106,34 @@ export const TokenSelector = ({
         <FormDescription className="hidden sm:block sm:text-xs xl:text-sm">
           {description}
         </FormDescription>
+
+        {/* Token Type Selection (if enabled) - positioned on the right */}
+        {showTypeSelector && (
+          <div className="ml-auto flex flex-col gap-1">
+            <button
+              type="button"
+              onClick={() => onTokenTypeChange?.("erc20")}
+              className={`px-2 py-1 text-xs rounded transition-colors ${
+                tokenType === "erc20"
+                  ? "bg-brand text-black font-medium"
+                  : "bg-background border border-brand-muted text-brand hover:bg-brand/10"
+              }`}
+            >
+              ERC20
+            </button>
+            <button
+              type="button"
+              onClick={() => onTokenTypeChange?.("erc721")}
+              className={`px-2 py-1 text-xs rounded transition-colors ${
+                tokenType === "erc721"
+                  ? "bg-brand text-black font-medium"
+                  : "bg-background border border-brand-muted text-brand hover:bg-brand/10"
+              }`}
+            >
+              ERC721
+            </button>
+          </div>
+        )}
       </div>
       <div className="flex flex-row items-center gap-3">
         {/* Quick select tokens */}

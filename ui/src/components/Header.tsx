@@ -6,7 +6,6 @@ import {
   PLAY,
   SPACE_INVADER_SOLID,
   TROPHY_LINE,
-  COIN,
   STARKNET,
   DISCORD,
 } from "@/components/Icons";
@@ -232,20 +231,6 @@ const Header = () => {
                 </span>
               </Button>
             )}
-            {!isMainnet &&
-              !isSepolia &&
-              location.pathname !== "/register-token" && (
-                <Button
-                  onClick={() => {
-                    navigate("/register-token");
-                  }}
-                >
-                  <span className="flex flex-row items-center gap-2">
-                    <COIN />
-                    Register Token
-                  </span>
-                </Button>
-              )}
             {location.pathname !== "/create-tournament" && (
               // && isAdmin
               <Button

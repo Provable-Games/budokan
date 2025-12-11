@@ -14,12 +14,14 @@ export interface StaticToken {
 }
 
 export interface TokenForDisplay {
-  address: string;
   name: string;
   symbol: string;
-  is_registered: boolean;
+  token_address: string;
+  decimals: number;
   token_type: "erc20" | "erc721";
   logo_url?: string;
+  total_supply?: number | null;
+  sort_order?: number;
 }
 
 /**
@@ -34,19 +36,21 @@ export const getTokensForChain = (
 
   if (isMainnet) {
     const erc20Tokens: TokenForDisplay[] = mainnetTokens.map((token) => ({
-      address: token.l2_token_address,
       name: token.name,
       symbol: token.symbol,
-      is_registered: true,
+      token_address: token.l2_token_address,
+      decimals: token.decimals ?? 18,
       token_type: "erc20" as const,
       logo_url: token.logo_url,
+      total_supply: token.total_supply,
+      sort_order: token.sort_order,
     }));
 
     const erc721Tokens: TokenForDisplay[] = mainnetNFTs.map((nft) => ({
-      address: nft.address,
       name: nft.name,
       symbol: nft.symbol,
-      is_registered: true,
+      token_address: nft.address,
+      decimals: 0,
       token_type: "erc721" as const,
       logo_url: nft.image,
     }));
@@ -60,12 +64,14 @@ export const getTokensForChain = (
     return allTokens;
   } else if (isSepolia) {
     const tokens: TokenForDisplay[] = sepoliaTokens.map((token) => ({
-      address: token.l2_token_address,
       name: token.name,
       symbol: token.symbol,
-      is_registered: true,
+      token_address: token.l2_token_address,
+      decimals: token.decimals ?? 18,
       token_type: "erc20" as const,
       logo_url: token.logo_url,
+      total_supply: token.total_supply,
+      sort_order: token.sort_order,
     }));
 
     if (tokenType === "erc721") {
@@ -87,7 +93,7 @@ export const getTokenByAddress = (
 ): TokenForDisplay | undefined => {
   const allTokens = getTokensForChain(chainId);
   return allTokens.find(
-    (token) => indexAddress(token.address) === indexAddress(address)
+    (token) => indexAddress(token.token_address) === indexAddress(address)
   );
 };
 
@@ -149,6 +155,6 @@ export const getTokensByAddresses = (
   const indexedAddresses = addresses.map(indexAddress);
 
   return allTokens.filter((token) =>
-    indexedAddresses.includes(indexAddress(token.address))
+    indexedAddresses.includes(indexAddress(token.token_address))
   );
 };

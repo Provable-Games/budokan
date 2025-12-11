@@ -1,26 +1,10 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 use budokan::models::budokan::{
-    EntryFee, EntryRequirement, PrizeType, QualificationProof, TokenTypeData,
+    GameConfig, EntryFee, EntryRequirement, Metadata, PrizeType, QualificationProof, TokenTypeData,
 };
 use budokan::models::schedule::Schedule;
 use starknet::ContractAddress;
-
-/// Metadata for tournament events
-#[derive(Drop, Serde)]
-pub struct EventMetadata {
-    pub name: felt252,
-    pub description: ByteArray,
-}
-
-/// GameConfig for tournament events
-#[derive(Drop, Serde)]
-pub struct EventGameConfig {
-    pub address: ContractAddress,
-    pub settings_id: u32,
-    pub soulbound: bool,
-    pub play_url: ByteArray,
-}
 
 #[starknet::interface]
 pub trait IBudokanEventRelayer<TState> {
@@ -33,9 +17,9 @@ pub trait IBudokanEventRelayer<TState> {
         created_at: u64,
         created_by: ContractAddress,
         creator_token_id: u64,
-        metadata: EventMetadata,
+        metadata: Metadata,
         schedule: Schedule,
-        game_config: EventGameConfig,
+        game_config: GameConfig,
         entry_fee: Option<EntryFee>,
         entry_requirement: Option<EntryRequirement>,
     );

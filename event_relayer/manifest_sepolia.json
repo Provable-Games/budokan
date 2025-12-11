@@ -33,13 +33,13 @@
   },
   "contracts": [
     {
-      "address": "0x13bcb99412d8a0e5ab93c7d7025fa5be67087f1a0bd0ed8004b0f010d5cb234",
-      "class_hash": "0x6e0409c22ae4abb84bc1775b79594be723ff6b6d2e67673248646ff51a99691",
+      "address": "0x6d8a282e6537da5d7f432e18ea1f92497e472c30d3f63ad62a587b154e8adea",
+      "class_hash": "0x4ec46a9618d5a7c60e74de1576944ca6dd2887bd228f24d5ece86d6175b0a48",
       "init_calldata": [
         "0x065d2AB17338b5AffdEbAF95E2D79834B5f30Bac596fF55563c62C3c98700150"
       ],
-      "tag": "budokan_relayer_0_0_3-BudokanEventRelayer",
-      "selector": "0xd3561bc1645426107e66dc30b42916e4d26a340e114d9fce2da6b003e83797",
+      "tag": "budokan_relayer_0_0_6-BudokanEventRelayer",
+      "selector": "0x5e6da5a6824a4b0394a292f42343ac26510ba93196b72f096a3d593cd0a5248",
       "systems": [
         "dojo_init",
         "emit_tournament",
@@ -77,8 +77,8 @@
         }
       ],
       "class_hash": "0x39f246767305418f79a9ca228d94fc52a3fd5af18bc23ad549d3b852d3fffe7",
-      "tag": "budokan_relayer_0_0_3-EntryCount",
-      "selector": "0x11bd01f7bc9a88b114b69e50ac02acf64573e6eae2280e86082b3572c51f4ce"
+      "tag": "budokan_relayer_0_0_6-EntryCount",
+      "selector": "0x5c41f4842fd672fbeaa5486111044ffe313eb76e8d4bdcece3e52b4147a6559"
     },
     {
       "members": [
@@ -94,8 +94,8 @@
         }
       ],
       "class_hash": "0x6283b3cdffa2ec20a6ff18996dfd6cbc2178a23749ca256f9b226bb01529db3",
-      "tag": "budokan_relayer_0_0_3-Leaderboard",
-      "selector": "0x6565b2c1514c901b58957f46acd279b0d551be4da6b8d16488466bee491bcd2"
+      "tag": "budokan_relayer_0_0_6-Leaderboard",
+      "selector": "0x72df1b65dc05b5b28df515078e76e51b2fa31e761b3fc3b9091ec0c7f1d2f47"
     },
     {
       "members": [
@@ -111,8 +111,8 @@
         }
       ],
       "class_hash": "0x10d0751f5951d918f2ca05de018794cd693688fc72629bee6758999d7cab7bf",
-      "tag": "budokan_relayer_0_0_3-PlatformMetrics",
-      "selector": "0x722ac4b616aa1c6d80d7c0718fbe1109124ff86dbbf60e9020f0b010367f303"
+      "tag": "budokan_relayer_0_0_6-PlatformMetrics",
+      "selector": "0x2a7760e6656e4838e417170d8e6d9df3de2d98e190fa8b4a0db8dbb99dc8af0"
     },
     {
       "members": [
@@ -147,9 +147,9 @@
           "key": false
         }
       ],
-      "class_hash": "0x1e1d0582ac86b9f0bfacfeaa07a033571385ecfb23a9926e5e0782ffafcb4d4",
-      "tag": "budokan_relayer_0_0_3-Prize",
-      "selector": "0x637259dc4e368f54a050753c17c24e302ea0991044dd62afa55787d0a088870"
+      "class_hash": "0x3659512da91b5dca8b61c652b3c34f3424478af690fa80a7cd2100b1a6aeb48",
+      "tag": "budokan_relayer_0_0_6-Prize",
+      "selector": "0x67dc3e3478d71aa6c79f06fdf5e269cec9655d78030e574055c39596d3d98ad"
     },
     {
       "members": [
@@ -169,9 +169,9 @@
           "key": false
         }
       ],
-      "class_hash": "0x79071501123a5226b9d9e509a5802942eaad486f626c7e58a80ce5eb79d2b4c",
-      "tag": "budokan_relayer_0_0_3-PrizeClaim",
-      "selector": "0x7b7be01aaec4079e925bf109154f431c2019e22dc34f0bcd34df62b6cff6a62"
+      "class_hash": "0x5e89d20f465ca1a5dc208529e978585e4269e4364853c7d4a44329cd59b27eb",
+      "tag": "budokan_relayer_0_0_6-PrizeClaim",
+      "selector": "0x5df7a4b6f8518b1b4b5eb79fffe0cfd454841bde2195c6ab3081384c77be790"
     },
     {
       "members": [
@@ -187,8 +187,8 @@
         }
       ],
       "class_hash": "0x78ad6e6d81ba636c58cd253fd9b286c9d40b9e1b92e5ce6ba189753db7e5e98",
-      "tag": "budokan_relayer_0_0_3-PrizeMetrics",
-      "selector": "0x3914300b9f4dc3a201906415edb9b9e0a2e21784d17d45172a08463f4060ee0"
+      "tag": "budokan_relayer_0_0_6-PrizeMetrics",
+      "selector": "0x4c7024afd8f3cf0b15ecff6c8739708643f036e8bc386be2a95fa50554bbc1b"
     },
     {
       "members": [
@@ -208,9 +208,9 @@
           "key": false
         }
       ],
-      "class_hash": "0x2ce60546261add759730bbdcb2e9bd829b428ba4f3dfad7810f5830ee2230a3",
-      "tag": "budokan_relayer_0_0_3-QualificationEntries",
-      "selector": "0x42be8d68bc56e2d5618548ee92fa977da1d0d2614a32ddd5c0b92a82da52714"
+      "class_hash": "0x535da3bd1f06ecd05ea125da73c2f8a49027f90930c97aae3beca88e6ecd357",
+      "tag": "budokan_relayer_0_0_6-QualificationEntries",
+      "selector": "0x2cb876e7d53a52bdbac629f6b522f426c951d964ea2ab82c9f2c76f418a6dc6"
     },
     {
       "members": [
@@ -246,8 +246,8 @@
         }
       ],
       "class_hash": "0xa61df4d995e10eb4d121b6f13edf71d38a757390461dba9ba3c9633548288",
-      "tag": "budokan_relayer_0_0_3-Registration",
-      "selector": "0x55b39650ab12a09436f169d586e34871ff60118bfb0bdf6dc118d413004fd23"
+      "tag": "budokan_relayer_0_0_6-Registration",
+      "selector": "0x79e12738cd72692e4d575397bad4b31f8c1952578eefa5713bd993ad97050a4"
     },
     {
       "members": [
@@ -297,9 +297,9 @@
           "key": false
         }
       ],
-      "class_hash": "0x1f00e27c8a03c0a98850a1dfbfa35c216995066a624c18c9887ea6795942fba",
-      "tag": "budokan_relayer_0_0_3-Tournament",
-      "selector": "0x268c28470c02f64fa183454431d9934c63fddf046eed6d4236f6b2148793862"
+      "class_hash": "0x65689e34fdfa5cfda1cca3d1e7e9af320979689a92b14ebef05899c0d8bb36f",
+      "tag": "budokan_relayer_0_0_6-Tournament",
+      "selector": "0x27bdb4e1322c25ac8749f1504bb710039a91463c658dd6137e015951ee497a7"
     }
   ],
   "external_contracts": [],
@@ -996,6 +996,14 @@
         {
           "name": "amount",
           "type": "core::integer::u128"
+        },
+        {
+          "name": "distribution",
+          "type": "core::option::Option::<budokan_event_relayer::models::Distribution>"
+        },
+        {
+          "name": "distribution_count",
+          "type": "core::option::Option::<core::integer::u32>"
         }
       ]
     },
@@ -1036,6 +1044,10 @@
         {
           "name": "refund_share",
           "type": "core::option::Option::<core::integer::u16>"
+        },
+        {
+          "name": "distribution_positions",
+          "type": "core::option::Option::<core::integer::u32>"
         }
       ]
     },
@@ -1126,10 +1138,6 @@
       "name": "budokan_event_relayer::models::NFTQualification",
       "members": [
         {
-          "name": "token_address",
-          "type": "core::starknet::contract_address::ContractAddress"
-        },
-        {
           "name": "token_id",
           "type": "core::integer::u256"
         }
@@ -1154,12 +1162,12 @@
       "name": "budokan_event_relayer::models::PrizeType",
       "variants": [
         {
-          "name": "EntryFees",
-          "type": "budokan_event_relayer::models::Role"
+          "name": "Single",
+          "type": "core::integer::u64"
         },
         {
-          "name": "Sponsored",
-          "type": "core::integer::u64"
+          "name": "Distributed",
+          "type": "(core::integer::u64, core::integer::u32)"
         }
       ]
     },
@@ -1178,28 +1186,6 @@
         {
           "name": "Extension",
           "type": "core::array::Span::<core::felt252>"
-        }
-      ]
-    },
-    {
-      "type": "enum",
-      "name": "budokan_event_relayer::models::Role",
-      "variants": [
-        {
-          "name": "TournamentCreator",
-          "type": "()"
-        },
-        {
-          "name": "GameCreator",
-          "type": "()"
-        },
-        {
-          "name": "Position",
-          "type": "core::integer::u32"
-        },
-        {
-          "name": "Refund",
-          "type": "core::integer::u128"
         }
       ]
     },
@@ -1408,6 +1394,20 @@
     },
     {
       "type": "enum",
+      "name": "core::option::Option::<budokan_event_relayer::models::Distribution>",
+      "variants": [
+        {
+          "name": "Some",
+          "type": "budokan_event_relayer::models::Distribution"
+        },
+        {
+          "name": "None",
+          "type": "()"
+        }
+      ]
+    },
+    {
+      "type": "enum",
       "name": "core::option::Option::<budokan_event_relayer::models::EntryFee>",
       "variants": [
         {
@@ -1455,6 +1455,20 @@
         {
           "name": "Some",
           "type": "core::integer::u16"
+        },
+        {
+          "name": "None",
+          "type": "()"
+        }
+      ]
+    },
+    {
+      "type": "enum",
+      "name": "core::option::Option::<core::integer::u32>",
+      "variants": [
+        {
+          "name": "Some",
+          "type": "core::integer::u32"
         },
         {
           "name": "None",

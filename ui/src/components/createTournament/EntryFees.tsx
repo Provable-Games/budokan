@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { StepProps } from "@/containers/CreateTournament";
 import {
   FormControl,
@@ -55,14 +55,6 @@ const EntryFees = ({ form }: StepProps) => {
   const creatorFee = form.watch("entryFees.creatorFeePercentage") || 0;
   const gameFee = form.watch("entryFees.gameFeePercentage") || 0;
   const refundShare = form.watch("entryFees.refundSharePercentage") || 0;
-  const prizeDistribution =
-    form
-      .watch("entryFees.prizeDistribution")
-      ?.reduce((sum, pos) => sum + (pos.percentage || 0), 0) || 0;
-
-  const totalDistributionPercentage = useMemo(() => {
-    return creatorFee + gameFee + refundShare + prizeDistribution;
-  }, [creatorFee, gameFee, refundShare, prizeDistribution]);
 
   // Calculate prize pool amount (100% - fees - refund)
   const prizePoolPercentage = Math.max(

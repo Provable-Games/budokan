@@ -83,7 +83,7 @@ export const PrizeDistributionVisual = ({
                   size="sm"
                   className="h-9 w-11 px-0 text-xs flex items-center justify-center"
                   onClick={() => onLeaderboardSizeChange?.(size)}
-                  disabled={disabled}
+                  disabled={disabled || !onLeaderboardSizeChange}
                 >
                   {size}
                 </Button>
@@ -95,7 +95,7 @@ export const PrizeDistributionVisual = ({
                 step={1}
                 value={leaderboardSize}
                 onChange={(e) => onLeaderboardSizeChange?.(Number(e.target.value))}
-                disabled={disabled}
+                disabled={disabled || !onLeaderboardSizeChange}
                 className="h-9 text-sm w-20"
               />
             </div>
@@ -104,7 +104,7 @@ export const PrizeDistributionVisual = ({
               max={1000}
               step={1}
               value={[leaderboardSize]}
-              disabled={disabled}
+              disabled={disabled || !onLeaderboardSizeChange}
               onValueChange={([value]) => onLeaderboardSizeChange?.(value)}
               className="w-full"
             />

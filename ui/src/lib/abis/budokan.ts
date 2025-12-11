@@ -331,6 +331,10 @@ const BUDOKAN_ABI = [
         name: "refund_share",
         type: "core::option::Option::<core::integer::u16>",
       },
+      {
+        name: "distribution_positions",
+        type: "core::option::Option::<core::integer::u32>",
+      },
     ],
   },
   {
@@ -557,37 +561,65 @@ const BUDOKAN_ABI = [
   },
   {
     type: "enum",
-    name: "budokan_prize::models::Role",
+    name: "budokan_prize::models::PrizeType",
     variants: [
       {
-        name: "TournamentCreator",
-        type: "()",
+        name: "Single",
+        type: "core::integer::u64",
+      },
+      {
+        name: "Distributed",
+        type: "(core::integer::u64, core::integer::u32)",
+      },
+    ],
+  },
+  {
+    type: "enum",
+    name: "budokan::models::budokan::EntryFeeRewardType",
+    variants: [
+      {
+        name: "Position",
+        type: "core::integer::u32",
       },
       {
         name: "GameCreator",
         type: "()",
       },
       {
-        name: "Position",
-        type: "core::integer::u32",
+        name: "Refund",
+        type: "core::integer::u64",
       },
       {
-        name: "Refund",
-        type: "core::integer::u128",
+        name: "AdditionalShare",
+        type: "core::integer::u8",
       },
     ],
   },
   {
     type: "enum",
-    name: "budokan_prize::models::PrizeType",
+    name: "budokan::models::budokan::RewardType",
     variants: [
       {
-        name: "EntryFees",
-        type: "budokan_prize::models::Role",
+        name: "Prize",
+        type: "budokan_prize::models::PrizeType",
       },
       {
-        name: "Sponsored",
-        type: "core::integer::u64",
+        name: "EntryFee",
+        type: "budokan::models::budokan::EntryFeeRewardType",
+      },
+    ],
+  },
+  {
+    type: "enum",
+    name: "core::option::Option::<budokan_distribution::models::Distribution>",
+    variants: [
+      {
+        name: "Some",
+        type: "budokan_distribution::models::Distribution",
+      },
+      {
+        name: "None",
+        type: "()",
       },
     ],
   },
@@ -598,6 +630,14 @@ const BUDOKAN_ABI = [
       {
         name: "amount",
         type: "core::integer::u128",
+      },
+      {
+        name: "distribution",
+        type: "core::option::Option::<budokan_distribution::models::Distribution>",
+      },
+      {
+        name: "distribution_count",
+        type: "core::option::Option::<core::integer::u32>",
       },
     ],
   },
@@ -622,6 +662,32 @@ const BUDOKAN_ABI = [
       {
         name: "erc721",
         type: "budokan_prize::models::ERC721Data",
+      },
+    ],
+  },
+  {
+    type: "struct",
+    name: "budokan_prize::models::Prize",
+    members: [
+      {
+        name: "id",
+        type: "core::integer::u64",
+      },
+      {
+        name: "context_id",
+        type: "core::integer::u64",
+      },
+      {
+        name: "token_address",
+        type: "core::starknet::contract_address::ContractAddress",
+      },
+      {
+        name: "token_type",
+        type: "budokan_prize::models::TokenTypeData",
+      },
+      {
+        name: "sponsor_address",
+        type: "core::starknet::contract_address::ContractAddress",
       },
     ],
   },
@@ -810,15 +876,15 @@ const BUDOKAN_ABI = [
       },
       {
         type: "function",
-        name: "claim_prize",
+        name: "claim_reward",
         inputs: [
           {
             name: "tournament_id",
             type: "core::integer::u64",
           },
           {
-            name: "prize_type",
-            type: "budokan_prize::models::PrizeType",
+            name: "reward_type",
+            type: "budokan::models::budokan::RewardType",
           },
         ],
         outputs: [],
@@ -842,12 +908,12 @@ const BUDOKAN_ABI = [
           },
           {
             name: "position",
-            type: "core::integer::u8",
+            type: "core::option::Option::<core::integer::u32>",
           },
         ],
         outputs: [
           {
-            type: "core::integer::u64",
+            type: "budokan_prize::models::Prize",
           },
         ],
         state_mutability: "external",
@@ -1115,36 +1181,6 @@ const BUDOKAN_ABI = [
     type: "impl",
     name: "PrizeImpl",
     interface_name: "budokan_interfaces::prize::IPrize",
-  },
-  {
-    type: "struct",
-    name: "budokan_prize::models::Prize",
-    members: [
-      {
-        name: "id",
-        type: "core::integer::u64",
-      },
-      {
-        name: "context_id",
-        type: "core::integer::u64",
-      },
-      {
-        name: "payout_position",
-        type: "core::integer::u32",
-      },
-      {
-        name: "token_address",
-        type: "core::starknet::contract_address::ContractAddress",
-      },
-      {
-        name: "token_type",
-        type: "budokan_prize::models::TokenTypeData",
-      },
-      {
-        name: "sponsor_address",
-        type: "core::starknet::contract_address::ContractAddress",
-      },
-    ],
   },
   {
     type: "interface",

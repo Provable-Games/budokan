@@ -2,9 +2,10 @@ import { TROPHY } from "@/components/Icons";
 import PrizeDisplay from "@/components/tournament/prizes/Prize";
 import { useState, useEffect, useMemo } from "react";
 import { TokenPrices } from "@/hooks/useEkuboPrices";
-import { PositionPrizes } from "@/lib/types";
+import { PositionPrizes, DisplayPrize, TokenMetadata } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { indexAddress } from "@/lib/utils";
+import { expandDistributedPrize } from "@/lib/utils/prizeDistribution";
 import {
   TournamentCard,
   TournamentCardContent,
@@ -13,7 +14,6 @@ import {
   TournamentCardSwitch,
   TournamentCardTitle,
 } from "@/components/tournament/containers/TournamentCard";
-import { Token } from "@/generated/models.gen";
 import { Button } from "@/components/ui/button";
 import { PrizesTableDialog } from "@/components/dialogs/PrizesTable";
 import { SponsorsDialog } from "@/components/dialogs/Sponsors";
@@ -21,13 +21,12 @@ import { TableProperties, Users } from "lucide-react";
 import { useGetTournamentPrizes } from "@/dojo/hooks/useSqlQueries";
 import { useDojo } from "@/context/dojo";
 import { BigNumberish } from "starknet";
-import { Prize } from "@/generated/models.gen";
 
 interface PrizesContainerProps {
   tournamentId?: BigNumberish;
-  tokens: Token[];
+  tokens: TokenMetadata[];
   tokenDecimals: Record<string, number>;
-  entryFeePrizes?: Prize[];
+  entryFeePrizes?: DisplayPrize[];
   prices?: TokenPrices;
   pricesLoading?: boolean;
   aggregations: any;
@@ -60,6 +59,8 @@ const PrizesContainer = ({
     endPosition: 5,
   });
 
+  console.log(prizesData);
+
   // Process prizes data into grouped format (including entry fee prizes for current page)
   const groupedPrizes: PositionPrizes = useMemo(() => {
     if (!prizesData && entryFeePrizes.length === 0) return {};
@@ -69,15 +70,36 @@ const PrizesContainer = ({
 
     // Filter entry fee prizes for top 5 positions
     const relevantEntryFeePrizes = entryFeePrizes.filter(
-      (p) => Number(p.payout_position) >= 1 && Number(p.payout_position) <= 5
+      (p) => Number(p.position ?? 0) >= 1 && Number(p.position ?? 0) <= 5
     );
 
-    // Combine with database prizes
-    const combinedPrizes = [...relevantEntryFeePrizes, ...currentPagePrizes];
+    // Expand distributed prizes (payout_position = 0) into individual position prizes
+    const expandedDatabasePrizes = currentPagePrizes.flatMap((prize) =>
+      expandDistributedPrize(prize)
+    );
+
+    console.log("Expanded DB Prizes:", expandedDatabasePrizes);
+
+    const expandedEntryFeePrizes = relevantEntryFeePrizes.flatMap((prize) =>
+      expandDistributedPrize(prize)
+    );
+
+    // Combine expanded prizes and filter for top 5 positions
+    const combinedPrizes = [
+      ...expandedEntryFeePrizes,
+      ...expandedDatabasePrizes,
+    ].filter((p) => {
+      const pos = Number(p.position ?? p.payout_position ?? 0);
+      return pos >= 1 && pos <= 5;
+    });
 
     return combinedPrizes.reduce((acc: PositionPrizes, prize: any) => {
-      const position = prize.payout_position;
-      if (!acc[position]) acc[position] = {};
+      // Use position field (for DisplayPrize) or payout_position (for SQL data)
+      const position = prize.position ?? prize.payout_position ?? 0;
+      if (!position || position === 0) return acc; // This should now be rare as distributed prizes are expanded
+
+      const positionKey = position.toString();
+      if (!acc[positionKey]) acc[positionKey] = {};
 
       const isErc20 =
         prize.token_type?.variant?.erc20 || prize.token_type === "erc20";
@@ -94,11 +116,11 @@ const PrizesContainer = ({
             0
         );
 
-        if (acc[position][tokenKey]) {
-          acc[position][tokenKey].value =
-            (acc[position][tokenKey].value as bigint) + amount;
+        if (acc[positionKey][tokenKey]) {
+          acc[positionKey][tokenKey].value =
+            (acc[positionKey][tokenKey].value as bigint) + amount;
         } else {
-          acc[position][tokenKey] = {
+          acc[positionKey][tokenKey] = {
             type: "erc20",
             payout_position: position,
             address: prize.token_address,
@@ -113,17 +135,20 @@ const PrizesContainer = ({
             0
         );
 
-        if (acc[position][tokenKey]) {
+        if (acc[positionKey][tokenKey]) {
           // Add to existing array
-          const currentValue = acc[position][tokenKey].value;
+          const currentValue = acc[positionKey][tokenKey].value;
           if (Array.isArray(currentValue)) {
-            acc[position][tokenKey].value = [...currentValue, tokenId];
+            acc[positionKey][tokenKey].value = [...currentValue, tokenId];
           } else {
-            acc[position][tokenKey].value = [currentValue as bigint, tokenId];
+            acc[positionKey][tokenKey].value = [
+              currentValue as bigint,
+              tokenId,
+            ];
           }
         } else {
           // Create new entry with single token ID
-          acc[position][tokenKey] = {
+          acc[positionKey][tokenKey] = {
             type: "erc721",
             payout_position: position,
             address: prize.token_address,
@@ -143,7 +168,7 @@ const PrizesContainer = ({
   const lowestPrizePosition = Math.max(
     aggregations?.lowest_prize_position || 0,
     ...(entryFeePrizes.length > 0
-      ? entryFeePrizes.map((p) => Number(p.payout_position))
+      ? entryFeePrizes.map((p) => Number(p.position ?? 0))
       : [0])
   );
 
@@ -172,7 +197,8 @@ const PrizesContainer = ({
 
     if (firstNftPrize) {
       const nftToken = tokens.find(
-        (t) => indexAddress(t.address) === indexAddress(firstNftPrize.address)
+        (t) =>
+          indexAddress(t.token_address) === indexAddress(firstNftPrize.address)
       );
       return nftToken?.symbol || "NFT";
     }
@@ -182,6 +208,8 @@ const PrizesContainer = ({
   useEffect(() => {
     setShowPrizes(prizesExist);
   }, [prizesExist]);
+
+  console.log(groupedPrizes);
 
   return (
     <TournamentCard
@@ -208,7 +236,8 @@ const PrizesContainer = ({
                 )}
                 {totalPrizeNFTs > 0 && (
                   <span className="font-brand text-md xl:text-lg 2xl:text-xl 3xl:text-2xl text-brand-muted">
-                    {totalPrizeNFTs} {nftSymbol}{totalPrizeNFTs === 1 ? "" : "s"}
+                    {totalPrizeNFTs} {nftSymbol}
+                    {totalPrizeNFTs === 1 ? "" : "s"}
                   </span>
                 )}
               </>
@@ -294,11 +323,7 @@ const PrizesContainer = ({
               ) : (
                 <>
                   {Object.entries(groupedPrizes)
-                    .sort(
-                      (a, b) =>
-                        Number(a[1].payout_position) -
-                        Number(b[1].payout_position)
-                    )
+                    .sort((a, b) => Number(a[0]) - Number(b[0]))
                     .map(([position, prizes], index) => (
                       <PrizeDisplay
                         key={index}

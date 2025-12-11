@@ -74,7 +74,7 @@ const EntryRequirements = ({
   if (!tournamentModel?.entry_requirement?.isSome()) {
     return null;
   }
-  const { namespace, selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useDojo();
 
   const navigate = useNavigate();
 
@@ -198,13 +198,13 @@ const EntryRequirements = ({
                   onClick={() => {
                     if (blockExplorerExists) {
                       window.open(
-                        `${selectedChainConfig.blockExplorerUrl}/nft-contract/${token?.address}`,
+                        `${selectedChainConfig.blockExplorerUrl}/nft-contract/${token?.token_address}`,
                         "_blank"
                       );
                     }
                   }}
                 >
-                  {displayAddress(token?.address ?? "0x0")}
+                  {displayAddress(token?.token_address ?? "0x0")}
                 </span>
               </>
             )}

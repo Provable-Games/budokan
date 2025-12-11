@@ -50,7 +50,7 @@ pub struct Tournament {
     pub entry_requirement: Option<EntryRequirement>,
 }
 
-#[derive(Drop, Serde, starknet::Store)]
+#[derive(Clone, Drop, Serde, starknet::Store)]
 pub struct Metadata {
     pub name: felt252,
     pub description: ByteArray,
@@ -76,12 +76,6 @@ pub struct Leaderboard {
 pub struct PlatformMetrics {
     pub key: felt252,
     pub total_tournaments: u64,
-}
-
-#[derive(Copy, Drop, Serde, starknet::Store)]
-pub struct TournamentTokenMetrics {
-    pub key: felt252,
-    pub total_supply: u64,
 }
 
 #[derive(Copy, Drop, Serde, starknet::Store)]

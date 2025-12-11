@@ -125,6 +125,8 @@ export const useSdkSubscribeEntities = ({
     return query;
   }, [query]);
 
+  console.log(memoizedQuery);
+
   useEffect(() => {
     let _unsubscribe: (() => void) | undefined;
 
@@ -136,7 +138,7 @@ export const useSdkSubscribeEntities = ({
       }
 
       try {
-        const subscription = await sdk.client.onEntityUpdated(
+        const subscription = await sdk.client.onEventMessageUpdated(
           memoizedQuery,
           (response: any) => {
             console.log("Subscription response:", response);

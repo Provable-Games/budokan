@@ -7,10 +7,9 @@ import {
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
 import { TokenPrices } from "@/hooks/useEkuboPrices";
-import { TokenPrizes } from "@/lib/types";
+import { TokenPrizes, TokenMetadata } from "@/lib/types";
 import { getTokenLogoUrl } from "@/lib/tokensMeta";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Token } from "@/generated/models.gen";
 import { QUESTION } from "@/components/Icons";
 import {
   Tooltip,
@@ -26,7 +25,7 @@ interface PrizeProps {
   position: number;
   prizes: TokenPrizes;
   prices: TokenPrices;
-  tokens: Token[];
+  tokens: TokenMetadata[];
   tokenDecimals: Record<string, number>;
   nftSymbols?: Record<string, string>;
 }
@@ -71,7 +70,7 @@ const Prize = ({
     // Get the first NFT's address
     const firstNftAddress = nftPrizes[0][1].address;
     const nftToken = tokens.find(
-      (t) => indexAddress(t.address) === indexAddress(firstNftAddress)
+      (t) => indexAddress(t.token_address) === indexAddress(firstNftAddress)
     );
     return nftToken?.symbol || nftSymbols[firstNftAddress] || "NFT";
   };
@@ -80,7 +79,7 @@ const Prize = ({
   const totalPrizesValueUSD = Object.entries(prizes)
     .filter(([_, prize]) => prize.type === "erc20")
     .reduce((total, [key, prize]) => {
-      const token = tokens.find((t) => t.address === prize.address);
+      const token = tokens.find((t) => t.token_address === prize.address);
       const symbol = token?.symbol || key;
       const price = prices[symbol];
       const decimals = tokenDecimals[prize.address] || 18;
@@ -104,7 +103,7 @@ const Prize = ({
       <div className="flex flex-col gap-2 overflow-y-auto px-4 py-2">
         {Object.entries(prizes)
           .map(([key, prize]) => {
-            const token = tokens.find((t) => t.address === prize.address);
+            const token = tokens.find((t) => t.token_address === prize.address);
             const symbol = token?.symbol || key;
             const hasPrice = prices[symbol] !== undefined;
             const USDValue = calculatePrizeValue(
@@ -124,7 +123,7 @@ const Prize = ({
           .sort((a, b) => b.USDValue - a.USDValue) // Sort by USDValue in descending order
           .map(({ key, prize, hasPrice, USDValue }) => {
             const token = tokens.find(
-              (token) => token.address === prize.address
+              (token) => token.token_address === prize.address
             );
             const decimals = tokenDecimals[prize.address] || 18;
             return (
@@ -149,7 +148,7 @@ const Prize = ({
                   <div className="flex flex-col gap-1">
                     {(() => {
                       const nftToken = tokens.find(
-                        (t) => indexAddress(t.address) === indexAddress(prize.address)
+                        (t) => indexAddress(t.token_address) === indexAddress(prize.address)
                       );
                       const nftSymbol = nftToken?.symbol || nftSymbols[prize.address] || "NFT";
 
@@ -289,7 +288,7 @@ const Prize = ({
                     .map(([key, prize]) => {
                       const decimals = tokenDecimals[prize.address] || 18;
                       const token = tokens.find(
-                        (t) => t.address === prize.address
+                        (t) => t.token_address === prize.address
                       );
                       const symbol = token?.symbol || key;
                       return (
@@ -313,7 +312,7 @@ const Prize = ({
                             <div className="flex items-center gap-2 whitespace-nowrap">
                               {(() => {
                                 const nftToken = tokens.find(
-                                  (t) => indexAddress(t.address) === indexAddress(prize.address)
+                                  (t) => indexAddress(t.token_address) === indexAddress(prize.address)
                                 );
                                 const nftSymbol = nftToken?.symbol || nftSymbols[prize.address] || "NFT";
                                 if (Array.isArray(prize.value)) {
@@ -414,7 +413,7 @@ const Prize = ({
               .map(([key, prize]) => {
                 const decimals = tokenDecimals[prize.address] || 18;
                 const token = tokens.find(
-                  (t) => t.address === prize.address
+                  (t) => t.token_address === prize.address
                 );
                 const symbol = token?.symbol || key;
                 return (
@@ -438,7 +437,7 @@ const Prize = ({
                       <div className="flex items-center gap-2 whitespace-nowrap">
                         {(() => {
                           const nftToken = tokens.find(
-                            (t) => indexAddress(t.address) === indexAddress(prize.address)
+                            (t) => indexAddress(t.token_address) === indexAddress(prize.address)
                           );
                           const nftSymbol = nftToken?.symbol || nftSymbols[prize.address] || "NFT";
                           if (Array.isArray(prize.value)) {

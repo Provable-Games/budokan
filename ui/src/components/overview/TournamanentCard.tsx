@@ -4,7 +4,8 @@ import { feltToString, formatTime } from "@/lib/utils";
 import TokenGameIcon from "@/components/icons/TokenGameIcon";
 import { SOLID_CLOCK, USER, CALENDAR } from "@/components/Icons";
 import { useNavigate } from "react-router-dom";
-import { Tournament, Token, Prize } from "@/generated/models.gen";
+import { Tournament, Prize } from "@/generated/models.gen";
+import { TokenMetadata } from "@/lib/types";
 import { useDojo } from "@/context/dojo";
 import {
   groupPrizesByTokens,
@@ -31,7 +32,7 @@ interface TournamentCardProps {
   status: TabType;
   prizes: Prize[] | null;
   entryCount: number;
-  tokens: Token[];
+  tokens: TokenMetadata[];
   tokenPrices: TokenPrices;
   pricesLoading: boolean;
   tokenDecimals: Record<string, number>;
@@ -54,14 +55,19 @@ export const TournamentCard = ({
 
   const entryFeeToken = tournament?.entry_fee.Some?.token_address;
   const entryFeeTokenSymbol = tokens.find(
-    (t) => t.address === entryFeeToken
+    (t) => t.token_address === entryFeeToken
   )?.symbol;
+
+  // Use distribution_positions from entry fee if available, otherwise use entry count
+  const leaderboardSize = tournament?.entry_fee?.Some?.distribution_positions?.isSome()
+    ? Number(tournament.entry_fee.Some.distribution_positions.Some)
+    : entryCount;
 
   const { distributionPrizes } = extractEntryFeePrizes(
     tournament?.id,
     tournament?.entry_fee,
     entryCount,
-    3 // Default prize positions
+    leaderboardSize
   );
 
   const allPrizes = [...distributionPrizes, ...(prizes ?? [])];
@@ -84,14 +90,14 @@ export const TournamentCard = ({
 
     Object.entries(groupedPrizes).forEach(([, prize]) => {
       if (prize.type === "erc20") {
-        const token = tokens.find((t) => t.address === prize.address);
-        if (token && !tokenMap.has(token.address)) {
+        const token = tokens.find((t) => t.token_address === prize.address);
+        if (token && !tokenMap.has(token.token_address)) {
           const logo = getTokenLogoUrl(
             selectedChainConfig.chainId ?? ChainId.SN_MAIN,
-            token.address
+            token.token_address
           );
-          tokenMap.set(token.address, {
-            address: token.address,
+          tokenMap.set(token.token_address, {
+            address: token.token_address,
             symbol: token.symbol,
             logo,
           });

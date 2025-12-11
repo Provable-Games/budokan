@@ -40,18 +40,14 @@ export const TokenAmountInput = ({
         <FormDescription className="hidden sm:block sm:text-xs xl:text-sm">
           {description}
         </FormDescription>
-        <TokenValue
-          className="sm:hidden"
-          amount={tokenAmount}
-          tokenAddress={tokenAddress}
-          usdValue={usdValue}
-          isLoading={isLoading}
-        />
       </div>
-      <div className="flex flex-row items-center gap-2">
-        <AmountInput value={value} onChange={onChange} disabled={disabled} />
+      <div className="flex flex-col gap-2">
+        <AmountInput
+          value={value || undefined}
+          onChange={(val) => onChange(val ?? 0)}
+          disabled={disabled}
+        />
         <TokenValue
-          className="hidden sm:flex"
           amount={tokenAmount}
           tokenAddress={tokenAddress}
           usdValue={usdValue}

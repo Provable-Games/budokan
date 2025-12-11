@@ -13,9 +13,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TokenPrices } from "@/hooks/useEkuboPrices";
-import { PositionPrizes } from "@/lib/types";
-import { Token, Prize } from "@/generated/models.gen";
+import { PositionPrizes, DisplayPrize, TokenMetadata } from "@/lib/types";
 import { formatNumber, getOrdinalSuffix, indexAddress } from "@/lib/utils";
+import { expandDistributedPrize } from "@/lib/utils/prizeDistribution";
 import { getTokenLogoUrl } from "@/lib/tokensMeta";
 import { useDojo } from "@/context/dojo";
 import { calculatePrizeValue } from "@/lib/utils/formatting";
@@ -38,10 +38,10 @@ interface PrizesTableDialogProps {
   onOpenChange: (open: boolean) => void;
   groupedPrizes: PositionPrizes;
   prices: TokenPrices;
-  tokens: Token[];
+  tokens: TokenMetadata[];
   tokenDecimals: Record<string, number>;
   tournamentId?: BigNumberish;
-  entryFeePrizes?: Prize[];
+  entryFeePrizes?: DisplayPrize[];
 }
 
 export const PrizesTableDialog = ({
@@ -73,32 +73,59 @@ export const PrizesTableDialog = ({
     active: !!tournamentId && open,
   });
 
-  // Calculate total positions including both DB prizes and entry fee prizes
-  const totalPositions = useMemo(() => {
-    const dbLowestPosition = aggregations?.lowest_prize_position || 0;
-    const entryFeeLowestPosition = entryFeePrizes.length > 0
-      ? Math.max(...entryFeePrizes.map(p => Number(p.payout_position)))
-      : 0;
-    return Math.max(dbLowestPosition, entryFeeLowestPosition);
-  }, [aggregations?.lowest_prize_position, entryFeePrizes]);
-
-  const totalPages = Math.ceil(totalPositions / positionsPerPage);
-
-  // Calculate position range for current page
+  // Initial position range calculation (we'll fetch a wider range if we detect distributed prizes)
   const startPosition = currentPage * positionsPerPage + 1;
-  const endPosition = Math.min(
-    startPosition + positionsPerPage - 1,
-    totalPositions
-  );
+  // If aggregations shows position 0, assume it's a distributed prize and fetch more
+  const hasDistributedPrize = (aggregations?.lowest_prize_position ?? 0) === 0;
+  const endPosition = hasDistributedPrize
+    ? Math.max(startPosition + positionsPerPage - 1, 50) // Fetch up to 50 positions for distributed prizes
+    : Math.min(startPosition + positionsPerPage - 1, aggregations?.lowest_prize_position || 5);
 
   // Fetch paginated prizes
   const { data: prizesData, loading: prizesLoading } = useGetTournamentPrizes({
     namespace,
     tournamentId: tournamentId ?? 0,
     active: !!tournamentId && open,
-    startPosition,
+    startPosition: hasDistributedPrize ? 0 : startPosition,
     endPosition,
   });
+
+  // Calculate total positions including both DB prizes and entry fee prizes
+  const totalPositions = useMemo(() => {
+    // Get the lowest position from aggregations
+    let dbLowestPosition = aggregations?.lowest_prize_position || 0;
+
+    // If the lowest position is 0 (distributed prize), check the fetched data for distribution_count
+    if (dbLowestPosition === 0 && prizesData && prizesData.length > 0) {
+      const distributedPrize = prizesData.find((p: any) =>
+        (p.position === 0 || p.payout_position === 0)
+      );
+      if (distributedPrize) {
+        const distributionCount = Number(
+          distributedPrize["token_type.erc20.distribution_count.Some"] ?? 0
+        );
+        dbLowestPosition = distributionCount;
+      }
+    }
+
+    const entryFeeLowestPosition =
+      entryFeePrizes.length > 0
+        ? Math.max(
+            ...entryFeePrizes.map((p) => Number((p as any).position ?? 0))
+          )
+        : 0;
+    return Math.max(dbLowestPosition, entryFeeLowestPosition);
+  }, [aggregations?.lowest_prize_position, entryFeePrizes, prizesData]);
+
+  const totalPages = Math.ceil(totalPositions / positionsPerPage);
+  const actualEndPosition = Math.min(
+    startPosition + positionsPerPage - 1,
+    totalPositions
+  );
+
+  console.log("Total positions:", totalPositions, "Total pages:", totalPages);
+
+  console.log("Prizes Data:", prizesData);
 
   // Extract NFT info for fetching token URIs
   const nftPrizes = useMemo(() => {
@@ -150,8 +177,8 @@ export const PrizesTableDialog = ({
     // Filter entry fee prizes that match current position range
     const relevantEntryFeePrizes = entryFeePrizes.filter(
       (p) =>
-        Number(p.payout_position) >= startPosition &&
-        Number(p.payout_position) <= endPosition
+        Number(p.position ?? 0) >= startPosition &&
+        Number(p.position ?? 0) <= actualEndPosition
     );
 
     // If we have no prizes at all, return empty
@@ -159,10 +186,32 @@ export const PrizesTableDialog = ({
       return {};
     }
 
-    const combinedPrizes = [...relevantEntryFeePrizes, ...currentPagePrizes];
+    // Expand distributed prizes (payout_position = 0) into individual position prizes
+    const expandedDatabasePrizes = currentPagePrizes.flatMap(
+      expandDistributedPrize
+    );
+    const expandedEntryFeePrizes = relevantEntryFeePrizes.flatMap(
+      expandDistributedPrize
+    );
+
+    console.log("Current page prizes:", currentPagePrizes);
+    console.log("Expanded database prizes:", expandedDatabasePrizes);
+    console.log("Expanded entry fee prizes:", expandedEntryFeePrizes);
+
+    // Combine expanded prizes and filter for current page position range
+    const combinedPrizes = [
+      ...expandedEntryFeePrizes,
+      ...expandedDatabasePrizes,
+    ].filter((p) => {
+      const pos = Number(p.position ?? p.payout_position ?? 0);
+      return pos >= startPosition && pos <= actualEndPosition;
+    });
+
+    console.log("Combined prizes after filter:", combinedPrizes);
+    console.log("Start position:", startPosition, "End position:", actualEndPosition);
 
     return combinedPrizes.reduce((acc: PositionPrizes, prize: any) => {
-      const position = prize.payout_position;
+      const position = prize.position ?? prize.payout_position;
       if (!acc[position]) acc[position] = {};
 
       const isErc20 =
@@ -226,8 +275,10 @@ export const PrizesTableDialog = ({
     prizesData,
     entryFeePrizes,
     startPosition,
-    endPosition,
+    actualEndPosition,
   ]);
+
+  console.log("Grouped Prizes:", groupedPrizes);
 
   return (
     <>
@@ -240,179 +291,31 @@ export const PrizesTableDialog = ({
       />
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="h-[600px] flex flex-col p-0 overflow-hidden">
-        <DialogHeader className="flex-shrink-0">
-          <DialogTitle className="p-4">Prize Distribution</DialogTitle>
-        </DialogHeader>
-        <div className="flex-1 flex flex-col min-h-0">
-          {/* Prize list */}
-          <div className="flex-1 overflow-y-auto">
-            {/* Mobile view - card layout */}
-            <div className="sm:hidden">
-              {prizesLoading ? (
-                <div className="space-y-3 p-4">
-                  {Array.from({ length: 5 }).map((_, index) => (
-                    <div
-                      key={index}
-                      className="border border-brand/20 rounded-lg p-3"
-                    >
-                      <Skeleton className="h-5 w-20 mb-2" />
-                      <Skeleton className="h-4 w-32 mb-1" />
-                      <Skeleton className="h-4 w-24" />
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="space-y-3 p-4">
-                  {Object.entries(groupedPrizes)
-                    .sort((a, b) => Number(a[0]) - Number(b[0]))
-                    .map(([position, prizes]) => {
-                      // Calculate total value for this position
-                      let totalPositionValue = 0;
-                      const prizeRows: JSX.Element[] = [];
-
-                      Object.entries(prizes).forEach(([key, prize]) => {
-                        const token = tokens.find(
-                          (t) => t.address === prize.address
-                        );
-                        const symbol = token?.symbol || key;
-                        const decimals = tokenDecimals[prize.address] || 18;
-
-                        if (prize.type === "erc20") {
-                          const value = calculatePrizeValue(
-                            prize,
-                            symbol,
-                            prices,
-                            tokenDecimals
-                          );
-                          totalPositionValue += value;
-
-                          prizeRows.push(
-                            <div
-                              key={`${position}-${key}`}
-                              className="flex items-center gap-2 text-sm"
-                            >
-                              <span>
-                                {formatNumber(
-                                  Number(prize.value) / 10 ** decimals
-                                )}
-                              </span>
-                              {getTokenLogoUrl(
-                                chainId,
-                                prize.address
-                              ) ? (
-                                <img
-                                  src={getTokenLogoUrl(
-                                    chainId,
-                                    prize.address
-                                  )}
-                                  className="w-4 h-4 rounded-full"
-                                  alt={symbol}
-                                />
-                              ) : null}
-                              <span className="text-xs text-muted-foreground">
-                                {token?.symbol || symbol}
-                              </span>
-                            </div>
-                          );
-                        } else {
-                          // One row per NFT
-                          const nftToken = tokens.find(
-                            (t) =>
-                              indexAddress(t.address) ===
-                              indexAddress(prize.address)
-                          );
-                          const nftSymbol = nftToken?.symbol || "NFT";
-                          const tokenIds = Array.isArray(prize.value)
-                            ? prize.value
-                            : [prize.value];
-
-                          tokenIds.forEach((tokenId) => {
-                            const nftTokenUri = tokenUris[`${prize.address}_${tokenId}`];
-                            prizeRows.push(
-                              <div
-                                key={`${position}-${key}-${tokenId}`}
-                                className="flex items-center gap-2 text-sm"
-                              >
-                                <NftPreview
-                                  tokenUri={nftTokenUri}
-                                  tokenId={tokenId}
-                                  symbol={nftSymbol}
-                                  size="sm"
-                                  loading={nftUrisLoading}
-                                  showTooltip={false}
-                                  onClick={() => setSelectedNft({
-                                    tokenUri: nftTokenUri,
-                                    tokenId,
-                                    symbol: nftSymbol,
-                                  })}
-                                />
-                                <span className="text-xs">
-                                  1 {nftSymbol}
-                                </span>
-                              </div>
-                            );
-                          });
-                        }
-                      });
-
-                      return (
-                        <div
-                          key={position}
-                          className="border border-brand/20 rounded-lg p-3"
-                        >
-                          <div className="flex justify-between items-start mb-2">
-                            <div className="font-bold text-brand">
-                              {position}
-                              <sup>
-                                {getOrdinalSuffix(Number(position))}
-                              </sup>{" "}
-                              Place
-                            </div>
-                            {totalPositionValue > 0 && (
-                              <span className="text-brand-muted">
-                                ${totalPositionValue.toFixed(2)}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex flex-col gap-1">
-                            {prizeRows}
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
-              )}
-            </div>
-
-            {/* Desktop view - table layout */}
-            <Table className="hidden sm:table">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[100px]">Position</TableHead>
-                  <TableHead>Prize</TableHead>
-                  <TableHead className="text-right">Value (USD)</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {prizesLoading
-                  ? Array.from({ length: 5 }).map((_, index) => (
-                      <TableRow key={index}>
-                        <TableCell>
-                          <Skeleton className="h-5 w-12" />
-                        </TableCell>
-                        <TableCell>
-                          <Skeleton className="h-5 w-32" />
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Skeleton className="h-5 w-20 ml-auto" />
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  : Object.entries(groupedPrizes)
-                      .sort(
-                        (a, b) =>
-                          Number(a[0]) - Number(b[0])
-                      )
+          <DialogHeader className="flex-shrink-0">
+            <DialogTitle className="p-4">Prize Distribution</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 flex flex-col min-h-0">
+            {/* Prize list */}
+            <div className="flex-1 overflow-y-auto">
+              {/* Mobile view - card layout */}
+              <div className="sm:hidden">
+                {prizesLoading ? (
+                  <div className="space-y-3 p-4">
+                    {Array.from({ length: 5 }).map((_, index) => (
+                      <div
+                        key={index}
+                        className="border border-brand/20 rounded-lg p-3"
+                      >
+                        <Skeleton className="h-5 w-20 mb-2" />
+                        <Skeleton className="h-4 w-32 mb-1" />
+                        <Skeleton className="h-4 w-24" />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-3 p-4">
+                    {Object.entries(groupedPrizes)
+                      .sort((a, b) => Number(a[0]) - Number(b[0]))
                       .map(([position, prizes]) => {
                         // Calculate total value for this position
                         let totalPositionValue = 0;
@@ -420,7 +323,7 @@ export const PrizesTableDialog = ({
 
                         Object.entries(prizes).forEach(([key, prize]) => {
                           const token = tokens.find(
-                            (t) => t.address === prize.address
+                            (t) => t.token_address === prize.address
                           );
                           const symbol = token?.symbol || key;
                           const decimals = tokenDecimals[prize.address] || 18;
@@ -437,35 +340,33 @@ export const PrizesTableDialog = ({
                             prizeRows.push(
                               <div
                                 key={`${position}-${key}`}
-                                className="flex items-center gap-2"
+                                className="flex items-center gap-2 text-sm"
                               >
-                                <span>{`${formatNumber(
-                                  Number(prize.value) / 10 ** decimals
-                                )}`}</span>
-                                {getTokenLogoUrl(
-                                  chainId,
-                                  prize.address
-                                ) ? (
+                                <span>
+                                  {formatNumber(
+                                    Number(prize.value) / 10 ** decimals
+                                  )}
+                                </span>
+                                {getTokenLogoUrl(chainId, prize.address) ? (
                                   <img
                                     src={getTokenLogoUrl(
                                       chainId,
                                       prize.address
                                     )}
-                                    className="w-5 h-5 rounded-full"
+                                    className="w-4 h-4 rounded-full"
                                     alt={symbol}
                                   />
-                                ) : (
-                                  <span className="text-sm text-muted-foreground">
-                                    {token?.symbol || symbol}
-                                  </span>
-                                )}
+                                ) : null}
+                                <span className="text-xs text-muted-foreground">
+                                  {token?.symbol || symbol}
+                                </span>
                               </div>
                             );
                           } else {
                             // One row per NFT
                             const nftToken = tokens.find(
                               (t) =>
-                                indexAddress(t.address) ===
+                                indexAddress(t.token_address) ===
                                 indexAddress(prize.address)
                             );
                             const nftSymbol = nftToken?.symbol || "NFT";
@@ -474,23 +375,29 @@ export const PrizesTableDialog = ({
                               : [prize.value];
 
                             tokenIds.forEach((tokenId) => {
+                              const nftTokenUri =
+                                tokenUris[`${prize.address}_${tokenId}`];
                               prizeRows.push(
                                 <div
                                   key={`${position}-${key}-${tokenId}`}
-                                  className="flex items-center gap-2"
+                                  className="flex items-center gap-2 text-sm"
                                 >
                                   <NftPreview
-                                    tokenUri={
-                                      tokenUris[
-                                        `${prize.address}_${tokenId}`
-                                      ]
-                                    }
+                                    tokenUri={nftTokenUri}
                                     tokenId={tokenId}
                                     symbol={nftSymbol}
                                     size="sm"
                                     loading={nftUrisLoading}
+                                    showTooltip={false}
+                                    onClick={() =>
+                                      setSelectedNft({
+                                        tokenUri: nftTokenUri,
+                                        tokenId,
+                                        symbol: nftSymbol,
+                                      })
+                                    }
                                   />
-                                  <span>1 {nftSymbol}</span>
+                                  <span className="text-xs">1 {nftSymbol}</span>
                                 </div>
                               );
                             });
@@ -498,71 +405,207 @@ export const PrizesTableDialog = ({
                         });
 
                         return (
-                          <TableRow key={position}>
-                            <TableCell className="font-medium">
-                              {position}
-                              <sup>{getOrdinalSuffix(Number(position))}</sup>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex flex-col gap-1">
-                                {prizeRows}
+                          <div
+                            key={position}
+                            className="border border-brand/20 rounded-lg p-3"
+                          >
+                            <div className="flex justify-between items-start mb-2">
+                              <div className="font-bold text-brand">
+                                {position}
+                                <sup>
+                                  {getOrdinalSuffix(Number(position))}
+                                </sup>{" "}
+                                Place
                               </div>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {totalPositionValue > 0 ? (
-                                <span>${totalPositionValue.toFixed(2)}</span>
-                              ) : (
-                                <span className="text-muted-foreground">-</span>
+                              {totalPositionValue > 0 && (
+                                <span className="text-brand-muted">
+                                  ${totalPositionValue.toFixed(2)}
+                                </span>
                               )}
-                            </TableCell>
-                          </TableRow>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              {prizeRows}
+                            </div>
+                          </div>
                         );
                       })}
-              </TableBody>
-            </Table>
-          </div>
-
-          {/* Pagination controls */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-brand/20">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
-                disabled={currentPage === 0}
-                className="flex items-center gap-1"
-              >
-                <ChevronLeft className="h-4 w-4" />
-                <span className="hidden sm:inline">Previous</span>
-                <span className="sm:hidden">Prev</span>
-              </Button>
-
-              <div className="flex flex-col items-center gap-1">
-                <span className="text-sm text-muted-foreground">
-                  Page {currentPage + 1} of {totalPages}
-                </span>
-                {totalPositions > 0 && (
-                  <span className="text-xs text-muted-foreground">
-                    {totalPositions} prizes total
-                  </span>
+                  </div>
                 )}
               </div>
 
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setCurrentPage((p) => Math.min(totalPages - 1, p + 1))
-                }
-                disabled={currentPage >= totalPages - 1}
-                className="flex items-center gap-1"
-              >
-                Next
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+              {/* Desktop view - table layout */}
+              <Table className="hidden sm:table">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[100px]">Position</TableHead>
+                    <TableHead>Prize</TableHead>
+                    <TableHead className="text-right">Value (USD)</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {prizesLoading
+                    ? Array.from({ length: 5 }).map((_, index) => (
+                        <TableRow key={index}>
+                          <TableCell>
+                            <Skeleton className="h-5 w-12" />
+                          </TableCell>
+                          <TableCell>
+                            <Skeleton className="h-5 w-32" />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Skeleton className="h-5 w-20 ml-auto" />
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    : Object.entries(groupedPrizes)
+                        .sort((a, b) => Number(a[0]) - Number(b[0]))
+                        .map(([position, prizes]) => {
+                          // Calculate total value for this position
+                          let totalPositionValue = 0;
+                          const prizeRows: JSX.Element[] = [];
+
+                          Object.entries(prizes).forEach(([key, prize]) => {
+                            const token = tokens.find(
+                              (t) => t.token_address === prize.address
+                            );
+                            const symbol = token?.symbol || key;
+                            const decimals = tokenDecimals[prize.address] || 18;
+
+                            if (prize.type === "erc20") {
+                              const value = calculatePrizeValue(
+                                prize,
+                                symbol,
+                                prices,
+                                tokenDecimals
+                              );
+                              totalPositionValue += value;
+
+                              prizeRows.push(
+                                <div
+                                  key={`${position}-${key}`}
+                                  className="flex items-center gap-2"
+                                >
+                                  <span>{`${formatNumber(
+                                    Number(prize.value) / 10 ** decimals
+                                  )}`}</span>
+                                  {getTokenLogoUrl(chainId, prize.address) ? (
+                                    <img
+                                      src={getTokenLogoUrl(
+                                        chainId,
+                                        prize.address
+                                      )}
+                                      className="w-5 h-5 rounded-full"
+                                      alt={symbol}
+                                    />
+                                  ) : (
+                                    <span className="text-sm text-muted-foreground">
+                                      {token?.symbol || symbol}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            } else {
+                              // One row per NFT
+                              const nftToken = tokens.find(
+                                (t) =>
+                                  indexAddress(t.token_address) ===
+                                  indexAddress(prize.address)
+                              );
+                              const nftSymbol = nftToken?.symbol || "NFT";
+                              const tokenIds = Array.isArray(prize.value)
+                                ? prize.value
+                                : [prize.value];
+
+                              tokenIds.forEach((tokenId) => {
+                                prizeRows.push(
+                                  <div
+                                    key={`${position}-${key}-${tokenId}`}
+                                    className="flex items-center gap-2"
+                                  >
+                                    <NftPreview
+                                      tokenUri={
+                                        tokenUris[`${prize.address}_${tokenId}`]
+                                      }
+                                      tokenId={tokenId}
+                                      symbol={nftSymbol}
+                                      size="sm"
+                                      loading={nftUrisLoading}
+                                    />
+                                    <span>1 {nftSymbol}</span>
+                                  </div>
+                                );
+                              });
+                            }
+                          });
+
+                          return (
+                            <TableRow key={position}>
+                              <TableCell className="font-medium">
+                                {position}
+                                <sup>{getOrdinalSuffix(Number(position))}</sup>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex flex-col gap-1">
+                                  {prizeRows}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {totalPositionValue > 0 ? (
+                                  <span>${totalPositionValue.toFixed(2)}</span>
+                                ) : (
+                                  <span className="text-muted-foreground">
+                                    -
+                                  </span>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                </TableBody>
+              </Table>
             </div>
-          )}
-        </div>
+
+            {/* Pagination controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-brand/20">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+                  disabled={currentPage === 0}
+                  className="flex items-center gap-1"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  <span className="hidden sm:inline">Previous</span>
+                  <span className="sm:hidden">Prev</span>
+                </Button>
+
+                <div className="flex flex-col items-center gap-1">
+                  <span className="text-sm text-muted-foreground">
+                    Page {currentPage + 1} of {totalPages}
+                  </span>
+                  {totalPositions > 0 && (
+                    <span className="text-xs text-muted-foreground">
+                      {totalPositions} prizes total
+                    </span>
+                  )}
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setCurrentPage((p) => Math.min(totalPages - 1, p + 1))
+                  }
+                  disabled={currentPage >= totalPages - 1}
+                  className="flex items-center gap-1"
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </>

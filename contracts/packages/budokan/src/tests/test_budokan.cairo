@@ -3081,6 +3081,96 @@ fn test_add_prize_records_sponsor_address() {
     stop_cheat_caller_address(contracts.budokan.contract_address);
 }
 
+#[test]
+fn test_prize_refunded_to_sponsor_when_position_exceeds_leaderboard() {
+    let owner = OWNER;
+    let sponsor = 0x5678_felt252.try_into().unwrap();
+    let contracts = setup();
+
+    start_cheat_caller_address(contracts.budokan.contract_address, owner);
+
+    // Create tournament
+    let tournament = create_basic_tournament(
+        contracts.budokan, contracts.minigame.contract_address,
+    );
+
+    stop_cheat_caller_address(contracts.budokan.contract_address);
+
+    // Mint tokens to sponsor
+    contracts.erc20.mint(sponsor, 1000);
+
+    // Sponsor approves budokan
+    start_cheat_caller_address(contracts.erc20.contract_address, sponsor);
+    contracts.erc20.approve(contracts.budokan.contract_address, 1000);
+    stop_cheat_caller_address(contracts.erc20.contract_address);
+
+    // Sponsor adds a prize for position 3
+    start_cheat_caller_address(contracts.budokan.contract_address, sponsor);
+    let prize = contracts
+        .budokan
+        .add_prize(
+            tournament.id,
+            contracts.erc20.contract_address,
+            TokenTypeData::erc20(
+                ERC20Data { amount: 500, distribution: Option::None, distribution_count: Option::None },
+            ),
+            Option::Some(3),
+        );
+    stop_cheat_caller_address(contracts.budokan.contract_address);
+
+    // Start registration and enter tournament with only 2 players
+    let mut time = TEST_REGISTRATION_START_TIME().into();
+    start_cheat_block_timestamp(contracts.budokan.contract_address, time);
+    start_cheat_block_timestamp(contracts.minigame.contract_address, time);
+
+    start_cheat_caller_address(contracts.budokan.contract_address, owner);
+    let (token_id1, _) = contracts
+        .budokan
+        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+    let (token_id2, _) = contracts
+        .budokan
+        .enter_tournament(tournament.id, 'player2', owner, Option::None);
+
+    // Move to submission period and submit scores (only 2 players, leaderboard size = 2)
+    time = TEST_END_TIME().into();
+    start_cheat_block_timestamp(contracts.budokan.contract_address, time);
+    start_cheat_block_timestamp(contracts.minigame.contract_address, time);
+
+    contracts.minigame.end_game(token_id1, 100);
+    contracts.minigame.end_game(token_id2, 50);
+    contracts.budokan.submit_score(tournament.id, token_id1, 1);
+    contracts.budokan.submit_score(tournament.id, token_id2, 2);
+
+    // Verify leaderboard has only 2 entries
+    let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
+    assert!(leaderboard.len() == 2, "Leaderboard should have 2 entries");
+
+    // Move to finalized period
+    time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD).into();
+    start_cheat_block_timestamp(contracts.budokan.contract_address, time);
+    start_cheat_block_timestamp(contracts.minigame.contract_address, time);
+
+    // Record sponsor balance before claim
+    let sponsor_balance_before = contracts.erc20.balance_of(sponsor);
+
+    // Claim prize for position 3 (which doesn't exist on the leaderboard)
+    // This should refund the prize to the sponsor
+    contracts
+        .budokan
+        .claim_reward(tournament.id, RewardType::Prize(PrizeType::Single(prize.id)));
+
+    // Verify prize was refunded to sponsor (not tournament creator)
+    let sponsor_balance_after = contracts.erc20.balance_of(sponsor);
+    assert!(
+        sponsor_balance_after == sponsor_balance_before + 500,
+        "Prize should be refunded to sponsor",
+    );
+
+    stop_cheat_caller_address(contracts.budokan.contract_address);
+    stop_cheat_block_timestamp(contracts.budokan.contract_address);
+    stop_cheat_block_timestamp(contracts.minigame.contract_address);
+}
+
 // ==================== Get Tournament ID for Token ID Tests ====================
 
 #[test]

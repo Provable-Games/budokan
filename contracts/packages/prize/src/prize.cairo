@@ -6,6 +6,8 @@
 /// - Prize deposit processing
 /// - Prize claim tracking
 /// - Total prize count metrics
+/// 
+/// TODO: Reclaim prize functionality for unclaimed prizes based on some context rules
 
 #[starknet::component]
 pub mod PrizeComponent {
@@ -325,6 +327,28 @@ pub mod PrizeComponent {
         ) {
             let erc721 = IERC721Dispatcher { contract_address: token_address };
             erc721.transfer_from(get_contract_address(), recipient, token_id.into());
+        }
+
+        /// Refund ERC20 prize to the original sponsor
+        fn refund_prize_erc20(
+            ref self: ComponentState<TContractState>,
+            prize_id: u64,
+            amount: u128,
+        ) {
+            let prize = self._get_prize(prize_id);
+            let erc20 = IERC20Dispatcher { contract_address: prize.token_address };
+            erc20.transfer(prize.sponsor_address, amount.into());
+        }
+
+        /// Refund ERC721 prize to the original sponsor
+        fn refund_prize_erc721(
+            ref self: ComponentState<TContractState>,
+            prize_id: u64,
+            token_id: u128,
+        ) {
+            let prize = self._get_prize(prize_id);
+            let erc721 = IERC721Dispatcher { contract_address: prize.token_address };
+            erc721.transfer_from(get_contract_address(), prize.sponsor_address, token_id.into());
         }
     }
 }

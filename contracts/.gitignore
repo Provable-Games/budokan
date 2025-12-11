@@ -4,3 +4,4 @@ target/
 .env.sepolia
 .snfoundry_cache/
 snfoundry_trace/
+deployments/

@@ -16,7 +16,7 @@ pub mod Budokan {
         PackedDistribution, PackedDistributionStorePacking, TournamentMeta,
         TournamentMetaStorePacking,
     };
-    use budokan::models::schedule::{Period, Phase, Schedule};
+    use budokan::models::schedule::{Phase, Schedule};
     use budokan_distribution::calculator;
     use budokan_distribution::models::{
         BASIS_POINTS, DIST_TYPE_CUSTOM, DIST_TYPE_EXPONENTIAL, DIST_TYPE_LINEAR, DIST_TYPE_UNIFORM,
@@ -30,8 +30,7 @@ pub mod Budokan {
         IENTRY_VALIDATOR_ID, IEntryValidatorDispatcher, IEntryValidatorDispatcherTrait,
     };
     use budokan_interfaces::event_relayer::{
-        EventGameConfig, EventMetadata, IBudokanEventRelayerDispatcher,
-        IBudokanEventRelayerDispatcherTrait,
+        IBudokanEventRelayerDispatcher, IBudokanEventRelayerDispatcherTrait,
     };
     use budokan_prize::prize::PrizeComponent;
     use budokan_prize::prize::PrizeComponent::PrizeInternalTrait;
@@ -848,10 +847,6 @@ pub mod Budokan {
             let created_at = get_block_timestamp();
             let created_by = get_caller_address();
 
-            // Store name/description before metadata is consumed (Metadata doesn't implement Copy)
-            let metadata_name = metadata.name;
-            let metadata_description = metadata.description.clone();
-
             // Store packed tournament meta (soulbound is part of game_config)
             let meta = TournamentMeta {
                 created_at,
@@ -864,7 +859,7 @@ pub mod Budokan {
             // Store other base fields
             self.tournament_created_by.entry(tournament_id).write(created_by);
             self.tournament_game_address.entry(tournament_id).write(game_config.address);
-            self.tournament_metadata.entry(tournament_id).write(metadata);
+            self.tournament_metadata.entry(tournament_id).write(metadata.clone());
             self.tournament_schedule.entry(tournament_id).write(schedule);
             self.tournament_play_url.entry(tournament_id).write(game_config.play_url.clone());
 
@@ -926,24 +921,15 @@ pub mod Budokan {
             let relayer_address = self.event_relayer.read();
             if !relayer_address.is_zero() {
                 let relayer = IBudokanEventRelayerDispatcher { contract_address: relayer_address };
-                let event_metadata = EventMetadata {
-                    name: metadata_name, description: metadata_description.clone(),
-                };
-                let event_game_config = EventGameConfig {
-                    address: game_config.address,
-                    settings_id: game_config.settings_id,
-                    soulbound: game_config.soulbound,
-                    play_url: game_config.play_url.clone(),
-                };
                 relayer
                     .emit_tournament(
                         tournament_id,
                         created_at,
                         created_by,
                         creator_token_id,
-                        event_metadata,
+                        metadata,
                         schedule,
-                        event_game_config,
+                        game_config,
                         entry_fee,
                         entry_requirement,
                     );
@@ -962,13 +948,13 @@ pub mod Budokan {
             let relayer_address = self.event_relayer.read();
             if !relayer_address.is_zero() {
                 let relayer = IBudokanEventRelayerDispatcher { contract_address: relayer_address };
-                // Position is no longer stored in prize - it's specified at claim time
-                // Use 0 for the event position field
+                // Read position from storage (0 means distributed prize)
+                let payout_position = self.prize_position.entry(prize.id).read();
                 relayer
                     .emit_prize(
                         prize.id,
                         prize.context_id,
-                        0_u32, // Position is determined at claim time
+                        payout_position,
                         prize.token_address,
                         prize.token_type,
                         prize.sponsor_address,
@@ -1531,36 +1517,49 @@ pub mod Budokan {
             let leaderboard_size: u32 = leaderboard.len();
             self._assert_position_is_valid(position, leaderboard_size);
 
-            // Get recipient address
-            let game_dispatcher = IMinigameDispatcher {
-                contract_address: tournament.game_config.address,
-            };
-            let game_token_address = game_dispatcher.token_address();
-
-            let recipient_address = if position <= leaderboard_size {
+            // Handle payout or refund based on leaderboard size
+            if position <= leaderboard_size {
+                // Position exists on leaderboard - pay the winner
+                let game_dispatcher = IMinigameDispatcher {
+                    contract_address: tournament.game_config.address,
+                };
+                let game_token_address = game_dispatcher.token_address();
                 let winner_token_id = *leaderboard.at(position - 1);
-                self._get_owner(game_token_address, winner_token_id.into())
-            } else {
-                // No entry at this position, default to tournament creator
-                self._get_owner(game_token_address, tournament.creator_token_id.into())
-            };
+                let recipient_address = self._get_owner(game_token_address, winner_token_id.into());
 
-            // Handle payout based on token type
-            match prize.token_type {
-                TokenTypeData::erc20(erc20_data) => {
-                    // Ensure this is NOT a distributed prize
-                    assert!(
-                        erc20_data.distribution.is_none(),
-                        "Tournament: Use SponsoredDistributed for distributed prizes",
-                    );
-                    self
-                        .prize
-                        .payout_erc20(prize.token_address, erc20_data.amount, recipient_address);
-                },
-                TokenTypeData::erc721(erc721_data) => {
-                    self.prize.payout_erc721(prize.token_address, erc721_data.id, recipient_address);
-                },
-            };
+                match prize.token_type {
+                    TokenTypeData::erc20(erc20_data) => {
+                        // Ensure this is NOT a distributed prize
+                        assert!(
+                            erc20_data.distribution.is_none(),
+                            "Tournament: Use SponsoredDistributed for distributed prizes",
+                        );
+                        self
+                            .prize
+                            .payout_erc20(prize.token_address, erc20_data.amount, recipient_address);
+                    },
+                    TokenTypeData::erc721(erc721_data) => {
+                        self
+                            .prize
+                            .payout_erc721(prize.token_address, erc721_data.id, recipient_address);
+                    },
+                };
+            } else {
+                // No entry at this position - refund to sponsor
+                match prize.token_type {
+                    TokenTypeData::erc20(erc20_data) => {
+                        // Ensure this is NOT a distributed prize
+                        assert!(
+                            erc20_data.distribution.is_none(),
+                            "Tournament: Use SponsoredDistributed for distributed prizes",
+                        );
+                        self.prize.refund_prize_erc20(prize_id, erc20_data.amount);
+                    },
+                    TokenTypeData::erc721(erc721_data) => {
+                        self.prize.refund_prize_erc721(prize_id, erc721_data.id);
+                    },
+                };
+            }
         }
 
         /// Claim from a distributed sponsored prize pool
@@ -1620,22 +1619,22 @@ pub mod Budokan {
             // Calculate payout amount
             let payout_amount = (share_bps.into() * erc20_data.amount) / BASIS_POINTS.into();
 
-            // Get recipient address - payout_index maps to leaderboard position
-            let game_dispatcher = IMinigameDispatcher {
-                contract_address: tournament.game_config.address,
-            };
-            let game_token_address = game_dispatcher.token_address();
-
-            let recipient_address = if payout_index <= leaderboard_size {
+            // Handle payout or refund based on leaderboard size
+            if payout_index <= leaderboard_size {
+                // Position exists on leaderboard - pay the winner
+                let game_dispatcher = IMinigameDispatcher {
+                    contract_address: tournament.game_config.address,
+                };
+                let game_token_address = game_dispatcher.token_address();
                 let winner_token_id = *leaderboard.at(payout_index - 1);
-                self._get_owner(game_token_address, winner_token_id.into())
-            } else {
-                // No entry at this position, default to tournament creator
-                self._get_owner(game_token_address, tournament.creator_token_id.into())
-            };
+                let recipient_address = self._get_owner(game_token_address, winner_token_id.into());
 
-            // Transfer calculated amount
-            self.prize.payout_erc20(prize.token_address, payout_amount, recipient_address);
+                // Transfer calculated amount
+                self.prize.payout_erc20(prize.token_address, payout_amount, recipient_address);
+            } else {
+                // No entry at this position - refund to sponsor
+                self.prize.refund_prize_erc20(prize_id, payout_amount);
+            }
         }
 
         /// Validates tournament-specific rules for score submission

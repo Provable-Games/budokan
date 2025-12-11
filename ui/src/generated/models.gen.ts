@@ -110,6 +110,8 @@ export interface TokenMetadataValue {
 // Type definition for `tournaments::components::models::tournament::ERC20Data` struct
 export interface ERC20Data {
   amount: BigNumberish;
+  distribution: CairoOption<DistributionEnum>;
+  distribution_count: CairoOption<BigNumberish>;
 }
 
 // Type definition for `tournaments::components::models::tournament::ERC721Data` struct
@@ -145,6 +147,7 @@ export interface EntryFee {
   tournament_creator_share: CairoOption<BigNumberish>;
   game_creator_share: CairoOption<BigNumberish>;
   refund_share: CairoOption<BigNumberish>;
+  distribution_positions: CairoOption<BigNumberish>;
 }
 
 // Type definition for `tournaments::components::models::tournament::GameConfig` struct
@@ -192,10 +195,10 @@ export interface PlatformMetricsValue {
 // Type definition for `tournaments::components::models::tournament::Prize` struct
 export interface Prize {
   id: BigNumberish;
-  tournament_id: BigNumberish;
-  payout_position: BigNumberish;
+  context_id: BigNumberish;
   token_address: string;
   token_type: TokenTypeDataEnum;
+  sponsor_address: string;
 }
 
 // Type definition for `tournaments::components::models::tournament::PrizeClaim` struct
@@ -248,15 +251,6 @@ export interface Schedule {
   registration: CairoOption<Period>;
   game: Period;
   submission_duration: BigNumberish;
-}
-
-// Type definition for `tournaments::components::models::tournament::Token` struct
-export interface Token {
-  address: string;
-  name: string;
-  symbol: string;
-  token_type: string;
-  is_registered: boolean;
 }
 
 // Type definition for `tournaments::components::models::tournament::TokenValue` struct
@@ -417,7 +411,6 @@ export interface SchemaType extends ISchemaType {
     Registration: WithFieldOrder<Registration>;
     RegistrationValue: WithFieldOrder<RegistrationValue>;
     Schedule: WithFieldOrder<Schedule>;
-    Token: WithFieldOrder<Token>;
     TokenValue: WithFieldOrder<TokenValue>;
     Tournament: WithFieldOrder<Tournament>;
     TournamentConfig: WithFieldOrder<TournamentConfig>;
@@ -552,8 +545,10 @@ export const schemaTemplate: {
     expires_at: 0,
   },
   ERC20Data: {
-    fieldOrder: ["amount"],
+    fieldOrder: ["amount", "distribution", "distribution_count"],
     amount: 0,
+    distribution: new CairoOption(CairoOptionVariant.None),
+    distribution_count: new CairoOption(CairoOptionVariant.None),
   },
   ERC721Data: {
     fieldOrder: ["id"],
@@ -576,6 +571,7 @@ export const schemaTemplate: {
       "tournament_creator_share",
       "game_creator_share",
       "refund_share",
+      "distribution_positions",
     ],
     token_address: "",
     amount: 0,
@@ -588,6 +584,7 @@ export const schemaTemplate: {
     tournament_creator_share: new CairoOption(CairoOptionVariant.None),
     game_creator_share: new CairoOption(CairoOptionVariant.None),
     refund_share: new CairoOption(CairoOptionVariant.None),
+    distribution_positions: new CairoOption(CairoOptionVariant.None),
   },
   GameConfig: {
     fieldOrder: [
@@ -633,19 +630,24 @@ export const schemaTemplate: {
   Prize: {
     fieldOrder: [
       "id",
-      "tournament_id",
-      "payout_position",
+      "context_id",
       "token_address",
       "token_type",
+      "sponsor_address",
     ],
     id: 0,
-    tournament_id: 0,
-    payout_position: 0,
+    context_id: 0,
     token_address: "",
     token_type: new CairoCustomEnum({
-      erc20: { fieldOrder: ["amount"], amount: 0 },
+      erc20: {
+        fieldOrder: ["amount", "distribution", "distribution_count"],
+        amount: 0,
+        distribution: new CairoOption(CairoOptionVariant.None),
+        distribution_count: new CairoOption(CairoOptionVariant.None),
+      },
       erc721: undefined,
     }),
+    sponsor_address: "",
   },
   PrizeClaim: {
     fieldOrder: ["tournament_id", "prize_type", "claimed"],
@@ -706,14 +708,6 @@ export const schemaTemplate: {
     registration: new CairoOption(CairoOptionVariant.None),
     game: { start: 0, end: 0 },
     submission_duration: 0,
-  },
-  Token: {
-    fieldOrder: ["address", "name", "symbol", "token_type", "is_registered"],
-    address: "",
-    name: "",
-    symbol: "",
-    token_type: "",
-    is_registered: false,
   },
   TokenValue: {
     fieldOrder: ["name", "symbol", "token_type", "is_registered"],
@@ -845,7 +839,6 @@ export function getModelsMapping(namespace: string) {
     RegistrationValue: `${namespace}-RegistrationValue` as const,
     Role: `${namespace}-Role` as const,
     Schedule: `${namespace}-Schedule` as const,
-    Token: `${namespace}-Token` as const,
     TokenType: `${namespace}-TokenType` as const,
     TokenValue: `${namespace}-TokenValue` as const,
     Tournament: `${namespace}-Tournament` as const,

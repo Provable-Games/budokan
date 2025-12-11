@@ -111,6 +111,9 @@ const formSchema = z.object({
           amount: z.number().min(0),
           position: z.number().min(1),
           tokenDecimals: z.number().min(0).max(18).optional(),
+          // Distribution metadata - if present, this is a distributed prize
+          distribution: z.enum(["linear", "exponential", "uniform"]).optional(),
+          distributionCount: z.number().min(1).optional(),
         }),
         z.object({
           type: z.literal("ERC721"),
@@ -435,7 +438,7 @@ const CreateTournament = () => {
         address!,
         Number(tournamentCount)
       );
-      console.log("Processed tournament:", JSON.stringify(processedTournament, (key, value) =>
+      console.log("Processed tournament:", JSON.stringify(processedTournament, (_key, value) =>
         typeof value === 'bigint' ? value.toString() : value
       , 2));
       // Process the prizes if they exist
