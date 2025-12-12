@@ -14,6 +14,8 @@ import { feltToString, formatNumber, getOrdinalSuffix } from "@/lib/utils";
 import {
   extractEntryFeePrizes,
   getClaimablePrizes,
+  expandDistributedPrizes,
+  formatRewardTypes,
 } from "@/lib/utils/formatting";
 import { useConnectToSelectedChain } from "@/dojo/hooks/useChain";
 import { TokenPrices } from "@/hooks/useEkuboPrices";
@@ -75,6 +77,11 @@ export function ClaimPrizesDialog({
 
   const claimedPrizes: PrizeClaim[] = (prizeClaimsData || []) as PrizeClaim[];
 
+  const leaderboardSize =
+    tournamentModel?.entry_fee?.Some?.distribution_positions?.isSome()
+      ? Number(tournamentModel.entry_fee.Some.distribution_positions.Some)
+      : entryCount;
+
   // Calculate entry fee prizes based on tournament settings
   const { tournamentCreatorShare, gameCreatorShare, distributionPrizes } =
     useMemo(
@@ -83,31 +90,45 @@ export function ClaimPrizesDialog({
           tournamentModel?.id,
           tournamentModel?.entry_fee,
           BigInt(entryCount || 0),
-          3 // Default prize positions
+          leaderboardSize
         ),
       [tournamentModel?.id, tournamentModel?.entry_fee, entryCount]
     );
 
-  // Combine all prizes: entry fee prizes + sponsored prizes from database
+  // Expand distributed sponsored prizes into individual positions
+  const expandedSponsoredPrizes = useMemo(
+    () => expandDistributedPrizes(sponsoredPrizes),
+    [sponsoredPrizes]
+  );
+
+  // Combine all prizes: entry fee prizes + expanded sponsored prizes
   const allPrizes = useMemo(() => {
     return [
       ...distributionPrizes,
       ...tournamentCreatorShare,
       ...gameCreatorShare,
-      ...sponsoredPrizes,
+      ...expandedSponsoredPrizes,
     ];
   }, [
     distributionPrizes,
     tournamentCreatorShare,
     gameCreatorShare,
-    sponsoredPrizes,
+    expandedSponsoredPrizes,
   ]);
 
-  // Calculate which prizes are claimable
-  const { claimablePrizes, claimablePrizeTypes } = useMemo(
+  // Calculate which prizes are claimable (using old format for filtering)
+  const { claimablePrizes } = useMemo(
     () => getClaimablePrizes(allPrizes, claimedPrizes),
     [allPrizes, claimedPrizes]
   );
+
+  // Convert claimable prizes to new RewardType format
+  const claimableRewardTypes = useMemo(
+    () => formatRewardTypes(claimablePrizes),
+    [claimablePrizes]
+  );
+
+  console.log(claimableRewardTypes);
 
   const handleClaimPrizes = async () => {
     setIsProcessing(true);
@@ -115,11 +136,11 @@ export function ClaimPrizesDialog({
 
     try {
       // Use batched version if there are many prizes to claim
-      if (claimablePrizeTypes.length > 20) {
+      if (claimableRewardTypes.length > 20) {
         await claimPrizesBatched(
           tournamentModel?.id,
           feltToString(tournamentModel?.metadata.name),
-          claimablePrizeTypes,
+          claimableRewardTypes,
           20, // batch size
           (current, total) => setBatchProgress({ current, total })
         );
@@ -127,7 +148,7 @@ export function ClaimPrizesDialog({
         await claimPrizes(
           tournamentModel?.id,
           feltToString(tournamentModel?.metadata.name),
-          claimablePrizeTypes
+          claimableRewardTypes
         );
       }
       onOpenChange(false); // Close dialog after success
@@ -139,12 +160,14 @@ export function ClaimPrizesDialog({
 
   const sortedClaimablePrizes = useMemo(() => {
     return [...claimablePrizes].sort((a: any, b: any) => {
-      // Sort by payout_position, with 0 (sponsored prizes) at the end
-      const posA = Number(a.payout_position) || Number.MAX_SAFE_INTEGER;
-      const posB = Number(b.payout_position) || Number.MAX_SAFE_INTEGER;
+      // Sort by position, with 0 (non-distributed sponsored prizes) at the end
+      const posA = Number(a.position) || Number.MAX_SAFE_INTEGER;
+      const posB = Number(b.position) || Number.MAX_SAFE_INTEGER;
       return posA - posB;
     });
   }, [claimablePrizes]);
+
+  console.log(sortedClaimablePrizes);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -194,10 +217,14 @@ export function ClaimPrizesDialog({
               prizeLabel = "Game Creator Share";
             } else if (prize.type === "entry_fee_tournament_creator") {
               prizeLabel = "Tournament Creator Share";
-            } else if (prize.payout_position > 0) {
-              prizeLabel = `${prize.payout_position}${getOrdinalSuffix(
-                prize.payout_position
+            } else if (prize.type === "entry_fee") {
+              prizeLabel = `${prize.position}${getOrdinalSuffix(
+                prize.position
               )} Place`;
+            } else if (prize.type === "sponsored_distributed") {
+              prizeLabel = `${prize.position}${getOrdinalSuffix(
+                prize.position
+              )} Place (Prize #${prize.id})`;
             } else {
               prizeLabel = `Sponsored Prize #${prize.id}`;
             }

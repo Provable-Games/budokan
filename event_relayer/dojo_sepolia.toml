@@ -9,14 +9,14 @@ rpc_url = "https://api.cartridge.gg/x/starknet/sepolia/rpc/v0_9"
 world_address = "0x785401cf74071ec444e37dbbd87281aba48afc86570b1a1537193d1ce39086f"
 
 [namespace]
-default = "budokan_relayer_0_0_6"
+default = "budokan_relayer_0_0_7"
 
 [writers]
-"budokan_relayer_0_0_6" = [
-    "budokan_relayer_0_0_6-BudokanEventRelayer",
+"budokan_relayer_0_0_7" = [
+    "budokan_relayer_0_0_7-BudokanEventRelayer",
 ]
 
 [init_call_args]
-"budokan_relayer_0_0_6-BudokanEventRelayer" = [
+"budokan_relayer_0_0_7-BudokanEventRelayer" = [
     "0x065d2AB17338b5AffdEbAF95E2D79834B5f30Bac596fF55563c62C3c98700150", # deployer address
 ]

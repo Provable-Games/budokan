@@ -15,7 +15,7 @@ import { useDojo } from "@/context/dojo";
 import { QUESTION } from "@/components/Icons";
 import { indexAddress } from "@/lib/utils";
 import { FormToken } from "@/lib/types";
-import { mainnetNFTs } from "@/lib/nfts";
+import { mainnetNFTs, sepoliaNFTs } from "@/lib/nfts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDebounce } from "@/hooks/useDebounce";
 import { getPaginatedTokens, TokenForDisplay } from "@/lib/tokenUtils";
@@ -57,7 +57,12 @@ const TokenDialog = ({ selectedToken, onSelect, type }: TokenDialogProps) => {
     (token) => token.token_type === "erc721"
   );
 
-  const whitelistedNFTTokens = mainnetNFTs.filter((nft) =>
+  const isMainnet = selectedChainConfig?.chainId === "SN_MAIN";
+  const isSepolia = selectedChainConfig?.chainId === "SN_SEPOLIA";
+
+  const nftList = isMainnet ? mainnetNFTs : isSepolia ? sepoliaNFTs : [];
+
+  const whitelistedNFTTokens = nftList.filter((nft) =>
     erc721Tokens.some(
       (token) => indexAddress(nft.address) === indexAddress(token.token_address)
     )

@@ -73,7 +73,7 @@ const snSepoliaConfig: DojoChainConfig = {
   denshokanAddress:
     "0x02334dc9c950c74c3228e2a343d495ae36f0b4edf06767a679569e9f9de08776",
   budokanAddress:
-    "0x0428debda9f02ad4d4d855dfdd08be1d9198ccde1458c6c5caba7d73b1d24cc2",
+    "0x076c643ca7016edf6d28444989f1ae3c7cd5a51f590d10b9db93df37883bfb92",
 };
 
 const snMainnetConfig: DojoChainConfig = {

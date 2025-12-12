@@ -619,12 +619,16 @@ export const getClaimablePrizes = (
     })
     .filter((pos) => pos !== null);
 
-  const claimedSponsoredPrizeKeys = claimedPrizes
+  // Extract claimed sponsored prizes (both single and distributed)
+  const claimedSponsoredPrizeInfo = claimedPrizes
     .map((prize) => {
       const info = getPrizeTypeInfo(prize);
-      return info.type === "Sponsored" ? info.prizeId : null;
+      if (info.type === "Sponsored") {
+        return { prizeId: info.prizeId };
+      }
+      return null;
     })
-    .filter((id) => id !== null);
+    .filter((info) => info !== null);
 
   const allPrizes = [...creatorPrizes, ...prizesFromSubmissions];
 
@@ -641,13 +645,29 @@ export const getClaimablePrizes = (
       });
     } else if (prize.type === "entry_fee") {
       return !claimedEntryFeePositions.includes(prize.position ?? 0);
-    } else {
-      // Normalize prize.id to number for comparison (it might be hex string or number)
+    } else if (prize.type === "sponsored_distributed") {
+      // For distributed prizes, check if this specific (prize_id, position) combo is claimed
+      // Note: Current PrizeClaim model doesn't differentiate between distributed positions
+      // So we check if the prize_id has been claimed at all
       const prizeIdNum =
         typeof prize.id === "string"
           ? parseInt(prize.id, 16)
           : Number(prize.id);
-      return !claimedSponsoredPrizeKeys.includes(prizeIdNum);
+      return !claimedSponsoredPrizeInfo.some((info) => info?.prizeId === prizeIdNum);
+    } else if (prize.type === "sponsored_single") {
+      // Single sponsored prize
+      const prizeIdNum =
+        typeof prize.id === "string"
+          ? parseInt(prize.id, 16)
+          : Number(prize.id);
+      return !claimedSponsoredPrizeInfo.some((info) => info?.prizeId === prizeIdNum);
+    } else {
+      // Fallback for any other prize types (legacy support)
+      const prizeIdNum =
+        typeof prize.id === "string"
+          ? parseInt(prize.id, 16)
+          : Number(prize.id);
+      return !claimedSponsoredPrizeInfo.some((info) => info?.prizeId === prizeIdNum);
     }
   });
   const unclaimedPrizeTypes = unclaimedPrizes.map((prize) => {
@@ -1361,4 +1381,172 @@ export const formatGameSettings = (settings: any[]) => {
   formattedSettings.sort((a, b) => a.key.localeCompare(b.key));
 
   return formattedSettings;
+};
+
+/**
+ * Expands distributed prizes into individual claimable positions
+ * Similar to how entry fee distributions are expanded
+ */
+export const expandDistributedPrizes = (
+  prizes: Prize[]
+): DisplayPrize[] => {
+  const expanded: DisplayPrize[] = [];
+
+  prizes.forEach((prize) => {
+    const tokenType = prize.token_type;
+
+    if (tokenType.activeVariant?.() === "erc20") {
+      const erc20Data = tokenType.variant?.erc20;
+
+      // Check if this prize has distribution_count
+      if (erc20Data?.distribution_count?.isSome?.()) {
+        const distributionCount = Number(erc20Data.distribution_count.Some);
+        const totalAmount = BigInt(erc20Data.amount);
+
+        // Calculate distribution percentages
+        let distributionPercentages: number[] = [];
+
+        if (erc20Data.distribution?.isSome?.()) {
+          const dist = erc20Data.distribution.Some;
+
+          if (dist.activeVariant() === "Linear") {
+            const weight = (dist.unwrap() as number) / 10;
+            distributionPercentages = calculateDistribution(
+              distributionCount,
+              weight,
+              0, 0, 0,
+              "linear"
+            );
+          } else if (dist.activeVariant() === "Exponential") {
+            const weight = (dist.unwrap() as number) / 10;
+            distributionPercentages = calculateDistribution(
+              distributionCount,
+              weight,
+              0, 0, 0,
+              "exponential"
+            );
+          } else if (dist.activeVariant() === "Uniform") {
+            distributionPercentages = calculateDistribution(
+              distributionCount,
+              1,
+              0, 0, 0,
+              "uniform"
+            );
+          } else if (dist.activeVariant() === "Custom") {
+            distributionPercentages = (dist.unwrap() as number[]).map(v => v / 100);
+          }
+        } else {
+          // Default to uniform if no distribution specified
+          distributionPercentages = calculateDistribution(
+            distributionCount,
+            1,
+            0, 0, 0,
+            "uniform"
+          );
+        }
+
+        // Create a DisplayPrize for each position
+        distributionPercentages.forEach((percentage, index) => {
+          if (percentage === 0) return;
+
+          const amount = (totalAmount * BigInt(Math.floor(percentage * 100))) / 10000n;
+
+          expanded.push({
+            id: prize.id,
+            context_id: prize.context_id,
+            position: index + 1,
+            token_address: prize.token_address,
+            token_type: new CairoCustomEnum({
+              erc20: {
+                amount: amount.toString(),
+                distribution: new CairoOption(CairoOptionVariant.None),
+                distribution_count: new CairoOption(CairoOptionVariant.None),
+              } as ERC20Data,
+              erc721: undefined,
+            }),
+            sponsor_address: prize.sponsor_address,
+            type: "sponsored_distributed",
+          } as DisplayPrize);
+        });
+      } else {
+        // Single prize, no distribution
+        expanded.push({
+          ...prize,
+          position: 0, // Position 0 for non-distributed prizes
+          type: "sponsored_single",
+        } as DisplayPrize);
+      }
+    } else {
+      // ERC721 prizes are always single
+      expanded.push({
+        ...prize,
+        position: 0,
+        type: "sponsored_single",
+      } as DisplayPrize);
+    }
+  });
+
+  return expanded;
+};
+
+/**
+ * Formats prizes into the new RewardType structure for claim_reward
+ * RewardType::Prize for sponsored prizes
+ * RewardType::EntryFee for entry fee prizes
+ */
+export const formatRewardTypes = (prizes: DisplayPrize[]): CairoCustomEnum[] => {
+  return prizes.map((prize) => {
+    if (prize.type === "entry_fee") {
+      // Entry fee distribution position
+      return new CairoCustomEnum({
+        Prize: undefined,
+        EntryFee: new CairoCustomEnum({
+          Position: prize.position,
+          TournamentCreator: undefined,
+          GameCreator: undefined,
+          Refund: undefined,
+        }),
+      });
+    } else if (prize.type === "entry_fee_game_creator") {
+      // Game creator share
+      return new CairoCustomEnum({
+        Prize: undefined,
+        EntryFee: new CairoCustomEnum({
+          Position: undefined,
+          TournamentCreator: undefined,
+          GameCreator: {},
+          Refund: undefined,
+        }),
+      });
+    } else if (prize.type === "entry_fee_tournament_creator") {
+      // Tournament creator share
+      return new CairoCustomEnum({
+        Prize: undefined,
+        EntryFee: new CairoCustomEnum({
+          Position: undefined,
+          TournamentCreator: {},
+          GameCreator: undefined,
+          Refund: undefined,
+        }),
+      });
+    } else if (prize.type === "sponsored_distributed") {
+      // Distributed sponsored prize (prize_id, position)
+      return new CairoCustomEnum({
+        Prize: new CairoCustomEnum({
+          Single: undefined,
+          Distributed: [prize.id, prize.position],
+        }),
+        EntryFee: undefined,
+      });
+    } else {
+      // Single sponsored prize (prize_id)
+      return new CairoCustomEnum({
+        Prize: new CairoCustomEnum({
+          Single: prize.id,
+          Distributed: undefined,
+        }),
+        EntryFee: undefined,
+      });
+    }
+  });
 };

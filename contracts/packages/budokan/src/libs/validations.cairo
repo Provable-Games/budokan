@@ -39,7 +39,7 @@ pub fn assert_valid_entry_fee_shares(
 ) {
     assert!(
         validate_entry_fee_shares(tournament_creator_share, game_creator_share, refund_share),
-        "Tournament: Entry fee shares exceed 100%",
+        "Budokan: Entry fee shares exceed 100%",
     );
 }
 
@@ -50,7 +50,7 @@ pub fn validate_position(position: u32, winner_count: u32) -> bool {
 
 /// Asserts that a position is valid
 pub fn assert_position_is_valid(position: u32, winner_count: u32) {
-    assert!(validate_position(position, winner_count), "Tournament: Invalid position");
+    assert!(validate_position(position, winner_count), "Budokan: Invalid position");
 }
 
 /// Validates that a payout index is valid (must be > 0)
@@ -60,7 +60,7 @@ pub fn validate_payout_index(payout_index: u32) -> bool {
 
 /// Asserts that a payout index is valid
 pub fn assert_payout_index_is_valid(payout_index: u32) {
-    assert!(validate_payout_index(payout_index), "Tournament: Payout index must be greater than zero");
+    assert!(validate_payout_index(payout_index), "Budokan: Payout index must be greater than zero");
 }
 
 /// Checks if an address is contained in a span of addresses
@@ -85,7 +85,7 @@ pub fn validate_prize_exists(token_address: ContractAddress) -> bool {
 
 /// Asserts that a prize exists
 pub fn assert_prize_exists(token_address: ContractAddress, prize_id: u64) {
-    assert!(validate_prize_exists(token_address), "Tournament: Prize key {} does not exist", prize_id);
+    assert!(validate_prize_exists(token_address), "Budokan: Prize key {} does not exist", prize_id);
 }
 
 #[cfg(test)]

@@ -6,7 +6,6 @@ import {
   Prize,
   EntryFee,
   QualificationProofEnum,
-  PrizeTypeEnum,
   TokenTypeDataEnum,
   ERC20Data,
   ERC721Data,
@@ -777,15 +776,15 @@ export const useSystemCalls = () => {
   const claimPrizes = async (
     tournamentId: BigNumberish,
     tournamentName: string,
-    prizes: Array<PrizeTypeEnum>
+    rewardTypes: Array<CairoCustomEnum>
   ) => {
     try {
       let calls = [];
-      for (const prize of prizes) {
+      for (const rewardType of rewardTypes) {
         calls.push({
           contractAddress: tournamentAddress,
-          entrypoint: "claim_prize",
-          calldata: CallData.compile([tournamentId, prize]),
+          entrypoint: "claim_reward",
+          calldata: CallData.compile([tournamentId, rewardType]),
         });
       }
 
@@ -803,29 +802,29 @@ export const useSystemCalls = () => {
   const claimPrizesBatched = async (
     tournamentId: BigNumberish,
     tournamentName: string,
-    prizes: Array<PrizeTypeEnum>,
+    rewardTypes: Array<CairoCustomEnum>,
     batchSize: number = 30,
     onProgress?: (current: number, total: number) => void
   ) => {
     try {
-      // Split prizes into batches
+      // Split reward types into batches
       const batches = [];
-      for (let i = 0; i < prizes.length; i += batchSize) {
-        batches.push(prizes.slice(i, i + batchSize));
+      for (let i = 0; i < rewardTypes.length; i += batchSize) {
+        batches.push(rewardTypes.slice(i, i + batchSize));
       }
 
       let tx;
       for (const [index, batch] of batches.entries()) {
-        const calls = batch.map((prize) => ({
+        const calls = batch.map((rewardType) => ({
           contractAddress: tournamentAddress,
-          entrypoint: "claim_prize",
-          calldata: CallData.compile([tournamentId, prize]),
+          entrypoint: "claim_reward",
+          calldata: CallData.compile([tournamentId, rewardType]),
         }));
 
         console.log(
           `Processing claim batch ${index + 1}/${batches.length} with ${
             calls.length
-          } prizes`
+          } rewards`
         );
 
         // Call progress callback

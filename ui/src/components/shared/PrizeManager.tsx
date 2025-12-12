@@ -4,12 +4,12 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { getTokenSymbol, getTokenLogoUrl } from "@/lib/tokensMeta";
 import { X } from "@/components/Icons";
-import {
-  getOrdinalSuffix,
-  formatNumber,
-} from "@/lib/utils";
+import { getOrdinalSuffix, formatNumber } from "@/lib/utils";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
-import { PrizeSelector, PrizeSelectorData } from "@/components/shared/PrizeSelector";
+import {
+  PrizeSelector,
+  PrizeSelectorData,
+} from "@/components/shared/PrizeSelector";
 import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
 import { FormToken } from "@/lib/types";
 
@@ -46,24 +46,24 @@ export function PrizeManager({
   checkBalance = true,
 }: PrizeManagerProps) {
   const { getTokenDecimals } = useSystemCalls();
-  const [selectedNFTToken, setSelectedNFTToken] = useState<FormToken | undefined>(undefined);
-  const [selectedTokenType, setSelectedTokenType] = useState<"ERC20" | "ERC721" | "">("");
+  const [selectedNFTToken, setSelectedNFTToken] = useState<
+    FormToken | undefined
+  >(undefined);
+  const [selectedTokenType, setSelectedTokenType] = useState<
+    "ERC20" | "ERC721" | ""
+  >("");
   const [tokenIdsInput, setTokenIdsInput] = useState<string>("");
 
-  const uniqueTokenSymbols = useMemo(() => {
+  const uniqueTokenAddresses = useMemo(() => {
     const symbols = prizes
-      .filter(prize => prize.type === "ERC20")
-      .map((prize) => getTokenSymbol(chainId, prize.token.address))
-      .filter(
-        (symbol): symbol is string =>
-          typeof symbol === "string" && symbol !== ""
-      );
+      .filter((prize) => prize.type === "ERC20")
+      .map((prize) => prize.token.address);
 
     return [...new Set(symbols)];
   }, [prizes, chainId]);
 
   const { prices, isLoading: pricesLoading } = useEkuboPrices({
-    tokens: uniqueTokenSymbols,
+    tokens: uniqueTokenAddresses,
   });
 
   const handleAddPrize = async (prizeData: PrizeSelectorData) => {
@@ -91,7 +91,11 @@ export function PrizeManager({
       };
 
       onPrizesChange([...prizes, newPrize]);
-    } else if (prizeData.tokenType === "ERC721" && prizeData.tokenId && prizeData.position) {
+    } else if (
+      prizeData.tokenType === "ERC721" &&
+      prizeData.tokenId &&
+      prizeData.position
+    ) {
       const newPrize: Prize = {
         type: "ERC721",
         token: prizeData.token,
@@ -130,27 +134,27 @@ export function PrizeManager({
             parsed[0].tokenId !== undefined
           ) {
             // Array of objects: [{ tokenId: 1, position: 1 }, ...]
-            newNFTPrizes.push(...parsed.map((item) => {
-              if (
-                typeof item.tokenId !== "number" ||
-                typeof item.position !== "number"
-              ) {
-                throw new Error(
-                  "Invalid object format - each object must have tokenId and position as numbers"
-                );
-              }
-              if (item.position < 1) {
-                throw new Error(
-                  `Position ${item.position} must be >= 1`
-                );
-              }
-              return {
-                type: "ERC721" as const,
-                token: selectedNFTToken,
-                tokenId: item.tokenId,
-                position: item.position,
-              };
-            }));
+            newNFTPrizes.push(
+              ...parsed.map((item) => {
+                if (
+                  typeof item.tokenId !== "number" ||
+                  typeof item.position !== "number"
+                ) {
+                  throw new Error(
+                    "Invalid object format - each object must have tokenId and position as numbers"
+                  );
+                }
+                if (item.position < 1) {
+                  throw new Error(`Position ${item.position} must be >= 1`);
+                }
+                return {
+                  type: "ERC721" as const,
+                  token: selectedNFTToken,
+                  tokenId: item.tokenId,
+                  position: item.position,
+                };
+              })
+            );
           } else {
             throw new Error(
               "JSON array must contain objects with tokenId and position fields"
@@ -162,33 +166,33 @@ export function PrizeManager({
         // Example: "1:1, 2:2, 3:3" or "1:1\n2:2\n3:3"
         const lines = trimmedInput.split(/[\n,]+/);
 
-        newNFTPrizes.push(...lines
-          .map((line) => line.trim())
-          .filter((line) => line.length > 0)
-          .map((line) => {
-            const [tokenIdStr, positionStr] = line
-              .split(":")
-              .map((s) => s.trim());
-            const tokenId = parseInt(tokenIdStr);
-            const position = parseInt(positionStr);
+        newNFTPrizes.push(
+          ...lines
+            .map((line) => line.trim())
+            .filter((line) => line.length > 0)
+            .map((line) => {
+              const [tokenIdStr, positionStr] = line
+                .split(":")
+                .map((s) => s.trim());
+              const tokenId = parseInt(tokenIdStr);
+              const position = parseInt(positionStr);
 
-            if (isNaN(tokenId) || isNaN(position)) {
-              throw new Error(`Invalid format in line: ${line}`);
-            }
+              if (isNaN(tokenId) || isNaN(position)) {
+                throw new Error(`Invalid format in line: ${line}`);
+              }
 
-            if (position < 1) {
-              throw new Error(
-                `Position ${position} must be >= 1`
-              );
-            }
+              if (position < 1) {
+                throw new Error(`Position ${position} must be >= 1`);
+              }
 
-            return {
-              type: "ERC721" as const,
-              token: selectedNFTToken,
-              tokenId,
-              position,
-            };
-          }));
+              return {
+                type: "ERC721" as const,
+                token: selectedNFTToken,
+                tokenId,
+                position,
+              };
+            })
+        );
       } else {
         throw new Error(
           "Position information is required. Please use tokenId:position format or JSON object array format"
@@ -240,20 +244,20 @@ export function PrizeManager({
             <div className="flex flex-col gap-1">
               <span className="font-semibold">Bulk Add NFTs</span>
               <span className="text-sm text-neutral">
-                Add multiple NFTs from {selectedNFTToken.symbol || selectedNFTToken.name} with position mapping
+                Add multiple NFTs from{" "}
+                {selectedNFTToken.symbol || selectedNFTToken.name} with position
+                mapping
               </span>
             </div>
 
             <div className="flex flex-col gap-4">
               {/* Bulk Input TextArea */}
               {selectedNFTToken && (
-            <>
-              <div className="flex flex-col gap-2">
-                <Label className="text-sm">
-                  Token IDs with Positions
-                </Label>
-                <textarea
-                  placeholder={`Supported formats:
+                <>
+                  <div className="flex flex-col gap-2">
+                    <Label className="text-sm">Token IDs with Positions</Label>
+                    <textarea
+                      placeholder={`Supported formats:
 
 1. Token:Position pairs (one per line or comma-separated):
    1:1
@@ -266,26 +270,26 @@ export function PrizeManager({
 Examples:
 - Award 3 NFTs to first place: 1:1, 2:1, 3:1
 - Distribute across positions: 1:1, 2:2, 3:3, 4:100`}
-                  value={tokenIdsInput}
-                  onChange={(e) => setTokenIdsInput(e.target.value)}
-                  className="flex min-h-[120px] w-full rounded-md border border-brand-muted bg-black px-3 py-2 text-sm text-brand placeholder:text-neutral focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y font-mono"
-                  rows={6}
-                />
-              </div>
-              <div className="flex justify-end items-center">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleBulkNFTInput}
-                  disabled={!tokenIdsInput.trim()}
-                >
-                  Add All NFTs
-                </Button>
-              </div>
-              </>
-            )}
+                      value={tokenIdsInput}
+                      onChange={(e) => setTokenIdsInput(e.target.value)}
+                      className="flex min-h-[120px] w-full rounded-md border border-brand-muted bg-black px-3 py-2 text-sm text-brand placeholder:text-neutral focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y font-mono"
+                      rows={6}
+                    />
+                  </div>
+                  <div className="flex justify-end items-center">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleBulkNFTInput}
+                      disabled={!tokenIdsInput.trim()}
+                    >
+                      Add All NFTs
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
-        </div>
         </>
       )}
 
@@ -293,16 +297,16 @@ Examples:
         <>
           <div className="w-full h-0.5 bg-brand/25" />
           <div className="space-y-2">
-            <FormLabel className="font-brand text-2xl">
-              Added Prizes
-            </FormLabel>
+            <FormLabel className="font-brand text-2xl">Added Prizes</FormLabel>
             <div className="flex flex-row items-center gap-2 overflow-x-auto pb-2 w-full">
               {prizes.map((prize, index) => (
                 <div
                   key={index}
                   className="flex items-center gap-2 p-2 bg-background/50 border border-brand-muted/50 rounded flex-shrink-0"
                 >
-                  {prize.type === "ERC20" && prize.distribution && prize.distributionCount ? (
+                  {prize.type === "ERC20" &&
+                  prize.distribution &&
+                  prize.distributionCount ? (
                     // Display distributed prize
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center gap-2">
@@ -312,9 +316,7 @@ Examples:
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="flex flex-row gap-1 items-center">
-                          <span>
-                            {formatNumber(prize.amount ?? 0)}
-                          </span>
+                          <span>{formatNumber(prize.amount ?? 0)}</span>
                           <img
                             src={getTokenLogoUrl(chainId, prize.token.address)}
                             className="w-6 h-6 flex-shrink-0 rounded-full"
@@ -325,20 +327,10 @@ Examples:
                         <span className="text-sm text-neutral">
                           {pricesLoading
                             ? "Loading..."
-                            : prices?.[
-                                getTokenSymbol(
-                                  chainId,
-                                  prize.token.address
-                                ) ?? ""
-                              ] &&
+                            : prices?.[prize.token.address ?? ""] &&
                               `~$${(
                                 (prize.amount ?? 0) *
-                                (prices?.[
-                                  getTokenSymbol(
-                                    chainId,
-                                    prize.token.address
-                                  ) ?? ""
-                                ] ?? 0)
+                                (prices?.[prize.token.address ?? ""] ?? 0)
                               ).toFixed(2)}`}
                         </span>
                       </div>
@@ -358,11 +350,12 @@ Examples:
                         {prize.type === "ERC20" ? (
                           <div className="flex flex-row items-center gap-1">
                             <div className="flex flex-row gap-1 items-center">
-                              <span>
-                                {formatNumber(prize.amount ?? 0)}
-                              </span>
+                              <span>{formatNumber(prize.amount ?? 0)}</span>
                               <img
-                                src={getTokenLogoUrl(chainId, prize.token.address)}
+                                src={getTokenLogoUrl(
+                                  chainId,
+                                  prize.token.address
+                                )}
                                 className="w-6 h-6 flex-shrink-0 rounded-full"
                                 alt="Token logo"
                               />
@@ -371,27 +364,20 @@ Examples:
                             <span className="text-sm text-neutral">
                               {pricesLoading
                                 ? "Loading..."
-                                : prices?.[
-                                    getTokenSymbol(
-                                      chainId,
-                                      prize.token.address
-                                    ) ?? ""
-                                  ] &&
+                                : prices?.[prize.token.address ?? ""] &&
                                   `~$${(
                                     (prize.amount ?? 0) *
-                                    (prices?.[
-                                      getTokenSymbol(
-                                        chainId,
-                                        prize.token.address
-                                      ) ?? ""
-                                    ] ?? 0)
+                                    (prices?.[prize.token.address ?? ""] ?? 0)
                                   ).toFixed(2)}`}
                             </span>
                           </div>
                         ) : (
                           <div className="flex flex-row items-center gap-1">
                             <img
-                              src={getTokenLogoUrl(chainId, prize.token.address)}
+                              src={getTokenLogoUrl(
+                                chainId,
+                                prize.token.address
+                              )}
                               className="w-6 h-6 flex-shrink-0 rounded-full"
                               alt="Token logo"
                             />

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useForm, FormProvider } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -84,13 +84,12 @@ export function AddPrizesDialog({
     },
   });
 
-  const { address, account } = useAccount();
+  const { address, account: _account } = useAccount();
   const { namespace, selectedChainConfig } = useDojo();
   const { connect } = useConnectToSelectedChain();
   const {
     approveAndAddPrizes,
     approveAndAddPrizesBatched,
-    getBalanceGeneral,
     getTokenDecimals,
   } = useSystemCalls();
 
@@ -104,7 +103,7 @@ export function AddPrizesDialog({
     current: number;
     total: number;
   } | null>(null);
-  const [_tokenBalances, setTokenBalances] = useState<Record<string, bigint>>(
+  const [_tokenBalances, _setTokenBalances] = useState<Record<string, bigint>>(
     {}
   );
   const [tokenDecimals, setTokenDecimals] = useState<Record<string, number>>(
@@ -316,8 +315,6 @@ export function AddPrizesDialog({
     return acc;
   }, {} as Record<string, any>);
 
-  // Convert to array for rendering
-  const aggregatedPrizesArray = Object.values(aggregatedPrizes);
 
   return (
     <FormProvider {...form}>

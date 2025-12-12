@@ -3,7 +3,6 @@ import { useMemo } from "react";
 import { BigNumberish } from "starknet";
 import { padU64 } from "@/lib/utils";
 import { TOURNAMENT_VERSION_KEY } from "@/lib/constants";
-import { q } from "node_modules/@starknet-react/core/dist/index-KYmfBIOq";
 
 // Helper function to generate SQL exclusion clause for tournament IDs
 const getExcludedTournamentsClause = (excludedIds: number[]): string => {
@@ -1084,10 +1083,8 @@ export const useGetTournamentPrizeClaimsAggregations = ({
                 THEN 1 ELSE 0
               END
               +
-              -- Count non-zero distribution positions
-              (SELECT COUNT(*)
-               FROM json_each('${namespace}-Tournament'.'entry_fee.Some.distribution')
-               WHERE CAST(value AS INTEGER) > 0)
+              -- Count distribution positions from distribution_positions field
+              COALESCE('${namespace}-Tournament'.'entry_fee.Some.distribution_positions.Some', 0)
             ELSE 0
           END
          FROM '${namespace}-Tournament'
@@ -1121,6 +1118,8 @@ export const useGetTournamentPrizeClaimsAggregations = ({
         : null,
     [namespace, tournamentId, active]
   );
+
+  console.log(query);
 
   const { data, loading, error } = useSqlExecute(query);
 

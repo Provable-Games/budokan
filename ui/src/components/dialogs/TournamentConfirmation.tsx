@@ -21,7 +21,7 @@ import {
   displayAddress,
 } from "@/lib/utils";
 import { calculatePaidPlaces } from "@/lib/utils/formatting";
-import { getTokenLogoUrl, getTokenSymbol } from "@/lib/tokensMeta";
+import { getTokenLogoUrl } from "@/lib/tokensMeta";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
 import { useMemo, useState } from "react";
 import { useDojo } from "@/context/dojo";

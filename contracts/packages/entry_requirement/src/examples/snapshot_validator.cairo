@@ -144,6 +144,10 @@ pub mod SnapshotValidator {
             Option::Some(remaining_entries)
         }
 
+        fn registration_only(self: @ContractState) -> bool {
+            false
+        }
+
         fn add_config(
             ref self: ContractState, tournament_id: u64, entry_limit: u8, config: Span<felt252>,
         ) {

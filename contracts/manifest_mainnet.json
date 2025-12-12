@@ -1,7 +1,7 @@
 {
   "world": {
     "class_hash": "0x13d92333361bb7049c1232c0a5404e2c19082ededc3a73d75cb33fa952adec7",
-    "address": "0x2ef591697f0fd9adc0ba9dbe0ca04dabad80cf95f08ba02e435d9cb6698a28a",
+    "address": "0x785401cf74071ec444e37dbbd87281aba48afc86570b1a1537193d1ce39086f",
     "seed": "DNC",
     "name": "Realms World",
     "entrypoints": [
@@ -1328,8 +1328,8 @@
   },
   "contracts": [
     {
-      "address": "0x58f888ba5897efa811eca5e5818540d35b664f4281660cd839cd5a4b0bf4582",
-      "class_hash": "0x71a7f04495838d92054f2bcb7a7bd2f7601e31767306417a55076f6d482af0c",
+      "address": "0x164963e916c2908dee7fd1de36522073d0a869d824e1c4316e493e65b145902",
+      "class_hash": "0x9dc01d9720f0dd4f556159ee43b4beb2b32d8d005b836c663404732ee3605f",
       "abi": [
         {
           "type": "impl",
@@ -1857,14 +1857,6 @@
             {
               "name": "entry_requirement",
               "type": "core::option::Option::<budokan::models::budokan::EntryRequirement>"
-            },
-            {
-              "name": "soulbound",
-              "type": "core::bool"
-            },
-            {
-              "name": "play_url",
-              "type": "core::byte_array::ByteArray"
             }
           ]
         },
@@ -1954,28 +1946,6 @@
             },
             {
               "name": "has_submitted",
-              "type": "core::bool"
-            }
-          ]
-        },
-        {
-          "type": "struct",
-          "name": "budokan::models::budokan::RegistrationBanned",
-          "members": [
-            {
-              "name": "game_address",
-              "type": "core::starknet::contract_address::ContractAddress"
-            },
-            {
-              "name": "game_token_id",
-              "type": "core::integer::u64"
-            },
-            {
-              "name": "tournament_id",
-              "type": "core::integer::u64"
-            },
-            {
-              "name": "is_banned",
               "type": "core::bool"
             }
           ]
@@ -2253,26 +2223,6 @@
             },
             {
               "type": "function",
-              "name": "get_registration_banned",
-              "inputs": [
-                {
-                  "name": "game_address",
-                  "type": "core::starknet::contract_address::ContractAddress"
-                },
-                {
-                  "name": "token_id",
-                  "type": "core::integer::u64"
-                }
-              ],
-              "outputs": [
-                {
-                  "type": "budokan::models::budokan::RegistrationBanned"
-                }
-              ],
-              "state_mutability": "view"
-            },
-            {
-              "type": "function",
               "name": "get_prize",
               "inputs": [
                 {
@@ -2334,14 +2284,6 @@
                 {
                   "name": "entry_requirement",
                   "type": "core::option::Option::<budokan::models::budokan::EntryRequirement>"
-                },
-                {
-                  "name": "soulbound",
-                  "type": "core::bool"
-                },
-                {
-                  "name": "play_url",
-                  "type": "core::byte_array::ByteArray"
                 }
               ],
               "outputs": [
@@ -2377,51 +2319,6 @@
                   "type": "(core::integer::u64, core::integer::u32)"
                 }
               ],
-              "state_mutability": "external"
-            },
-            {
-              "type": "function",
-              "name": "validate_entries",
-              "inputs": [
-                {
-                  "name": "tournament_id",
-                  "type": "core::integer::u64"
-                },
-                {
-                  "name": "game_token_ids",
-                  "type": "core::array::Span::<core::integer::u64>"
-                }
-              ],
-              "outputs": [],
-              "state_mutability": "external"
-            },
-            {
-              "type": "function",
-<<<<<<< HEAD
-              "name": "validate_entry",
-=======
-              "name": "validate_entries",
->>>>>>> main
-              "inputs": [
-                {
-                  "name": "tournament_id",
-                  "type": "core::integer::u64"
-                },
-                {
-<<<<<<< HEAD
-                  "name": "game_token_id",
-                  "type": "core::integer::u64"
-                },
-                {
-                  "name": "proof",
-                  "type": "core::array::Span::<core::felt252>"
-=======
-                  "name": "game_token_ids",
-                  "type": "core::array::Span::<core::integer::u64>"
->>>>>>> main
-                }
-              ],
-              "outputs": [],
               "state_mutability": "external"
             },
             {
@@ -2692,37 +2589,16 @@
         }
       ],
       "init_calldata": [
-        "0x036017E69D21D6D8c13E266EaBB73ef1f1D02722D86BDcAbe5f168f8e549d3cD",
-        "10",
-        "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
-        "0",
-        "0x0124aeb495b947201f5fac96fd1138e326ad86195b98df6dec9009158a533b49",
-        "0",
-        "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
-        "0",
-        "0x53c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
-        "0",
-        "0x4878d1148318a31829523ee9c6a5ee563af6cd87f90a30809e5b0d27db8a9b",
-        "0",
-        "0x410466536b5ae074f7fea81e5533b8134a9fa08b3dd077dd9db08f64997d113",
-        "0",
-        "0x75afe6402ad5a5c20dd25e10ec3b3986acaa647b77e4ae24b0cbc9a54a27a87",
-        "0",
-        "0x3b405a98c9e795d427fe82cdeeeed803f221b52471e3a757574a2b4180793ee",
-        "0",
-        "0x498edfaf50ca5855666a700c25dd629d577eb9afccdf3b5977aec79aee55ada",
-        "0",
-        "0x00539f522b29ae9251dbf7443c7a950cf260372e69efab3710a11bf17a9599f1",
-        "1"
+        "0x02334dc9c950c74c3228e2a343d495ae36f0b4edf06767a679569e9f9de08776",
+        "0"
       ],
-      "tag": "budokan_1_0_8-Budokan",
-      "selector": "0x136d85f09247c2abed73c6a49b54d7d0b1d6cb2986984609d7eb90249ddce2d",
+      "tag": "budokan_1_0_9-Budokan",
+      "selector": "0x307dcc48567cc13ee37670f404826a51d46b7daee0e1d192dee2b51e2dcc2f7",
       "systems": [
         "dojo_init",
         "register_token",
         "create_tournament",
         "enter_tournament",
-        "validate_entries",
         "submit_score",
         "claim_prize",
         "add_prize",
@@ -2735,74 +2611,68 @@
     {
       "members": [],
       "class_hash": "0xf0a6d4b45771048384a077a3d91ef2b1fbec7010c0aa5c61172cf0853dd42f",
-      "tag": "budokan_1_0_8-EntryCount",
-      "selector": "0x1c20443ad06e7afeb2c2b1278491c4f7c38b64fe247c9db79af999cd9a43190"
+      "tag": "budokan_1_0_9-EntryCount",
+      "selector": "0x1100ddd80afb50f5033cb3d4182b3d96899b5ed39f2b088be3c6aad5a83c043"
     },
     {
       "members": [],
       "class_hash": "0x4d64965f7530ee98f9b543789dfe4f55dd4ea0c973aa955d8dfac20ee8db9f",
-      "tag": "budokan_1_0_8-Leaderboard",
-      "selector": "0x780922e2e32acbc8c7ee78cdeb5d4e0180e6d0adfacbba7d431328a29d07b88"
+      "tag": "budokan_1_0_9-Leaderboard",
+      "selector": "0x3717a0617fdbfb4833e4d7e007e5e5ed42a0a680bc8637b5c987e166bb4bd12"
     },
     {
       "members": [],
       "class_hash": "0x65f2c9a663c05dfe60002668de838e77210e8b61028a9e081b8c7b768e8c7e7",
-      "tag": "budokan_1_0_8-PlatformMetrics",
-      "selector": "0x12fab074646f3b36282683754455de2106a8153c919240830411d861adc7eb"
+      "tag": "budokan_1_0_9-PlatformMetrics",
+      "selector": "0x51ad67ccc0d06355770a772480a4be771a1c0dbc6d07215273fa2c4bd12a620"
     },
     {
       "members": [],
       "class_hash": "0x16336a06375d4be16f85a7da0ae414e50b4dfad8e06c25eb3f3f2ae180a3427",
-      "tag": "budokan_1_0_8-Prize",
-      "selector": "0x25eefb250b7371f68208d50e3a87f58d7de03e5d7f86a48b6fd0630177830bb"
+      "tag": "budokan_1_0_9-Prize",
+      "selector": "0x44b8ace089ac7d5d06214e80bcd2667fc609da01cc0423d4b2b7725574840bc"
     },
     {
       "members": [],
       "class_hash": "0x21855c0a2cf04e8856968872c14c20bbf9ab2db84905a3410440cecca37859b",
-      "tag": "budokan_1_0_8-PrizeClaim",
-      "selector": "0x43de9f2c7666f3eb18ae96646be27edf6e516d0fb5d42f98d4c271b002b9e97"
+      "tag": "budokan_1_0_9-PrizeClaim",
+      "selector": "0x43ddb3ebbf874b82e914eec8d43a366630dfea1a6f6b07c2fb41055ac09cd5f"
     },
     {
       "members": [],
       "class_hash": "0x1a0b675ac71ae15ed0fd0169a98d6d4017a400fdf1228948b5f8e86e02b9746",
-      "tag": "budokan_1_0_8-PrizeMetrics",
-      "selector": "0x1ac687546125a0aa764daf11ef8342d670bdc2ce3eddcb8c11670a3e9a3af75"
+      "tag": "budokan_1_0_9-PrizeMetrics",
+      "selector": "0x7257a32874fda5aa6615afd6457202ca0798fa42d9508fdf626408fa77a711a"
     },
     {
       "members": [],
       "class_hash": "0x14c12c79beeb2a181d13b0ddfdfb9f0100f8294393fd712a3357297a194f602",
-      "tag": "budokan_1_0_8-QualificationEntries",
-      "selector": "0x1c8a09b3e029c25ae2ed196b70610c05c105e9f26a5848cceb48508b3943973"
+      "tag": "budokan_1_0_9-QualificationEntries",
+      "selector": "0x535aba24502c1e015ba0c62e15c0f528343d09e8fcbb37e8b6555be07351846"
     },
     {
       "members": [],
       "class_hash": "0x2c7a3b768cd1fb75f4497fe11a5895a7e5fc19c80a6a1de5c47be2dd49be857",
-      "tag": "budokan_1_0_8-Registration",
-      "selector": "0x2d132780ce16e46ed57c3b5d96f59c81a1005e0eab20c6e813346fd0c13c786"
-    },
-    {
-      "members": [],
-      "class_hash": "0x4bbf3f0320eae7a28926647a30997bb84e6c3cb9870a1e8cbd68c71eb7fc054",
-      "tag": "budokan_1_0_8-RegistrationBanned",
-      "selector": "0x677547bd8ad96e0534a7e3fa865a6918456d777bce4799516bcfef4ee2ff796"
+      "tag": "budokan_1_0_9-Registration",
+      "selector": "0x48257d6e83ebff7cd45f180d4457c6dde2ce77a390d511fae5a827654c7d6fc"
     },
     {
       "members": [],
       "class_hash": "0xe8e405001cd345d8f22de847d3de959c801f89062378eeba8a0bdda9594b85",
-      "tag": "budokan_1_0_8-Token",
-      "selector": "0x2c4bdc0d2be4f3cbdb01ab6fb4ad349010d21f49118b8becc35fd26b87cbdde"
+      "tag": "budokan_1_0_9-Token",
+      "selector": "0x4a13c2d9b593c6475a9454474c61612c3a2baf551065ec944834dcdcb87bdd1"
     },
     {
       "members": [],
-      "class_hash": "0x686f97b49a457566ef72f5e276605110d83f84be5dbd0ea860aad71ea45f014",
-      "tag": "budokan_1_0_8-Tournament",
-      "selector": "0xf41a2a77547bd69c79b96690e60659eae31edaebe1264f4834223c58b47a95"
+      "class_hash": "0x1687216451733eaec23314c8091ee670e9ce288f117c11af864a0a5fb6ac4ba",
+      "tag": "budokan_1_0_9-Tournament",
+      "selector": "0x3019783f67fa3976cb8b74fcda5a1b101f3acde22989d04ad582a1d781b3612"
     },
     {
       "members": [],
       "class_hash": "0x58b7428962798f9e521ea385c029803814d96e64d819f1875dc2892fe88793b",
-      "tag": "budokan_1_0_8-TournamentTokenMetrics",
-      "selector": "0x5c033d634ec26912dfd9b6b39e268772b0239f22d12c79492d9da57cc7813f5"
+      "tag": "budokan_1_0_9-TournamentTokenMetrics",
+      "selector": "0x325bf8dcedad8dd87c7a99b7554d30475b28cb4177b57e56cbaf927f5ec3fc3"
     }
   ],
   "events": [],

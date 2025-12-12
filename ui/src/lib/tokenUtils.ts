@@ -1,5 +1,5 @@
 import { mainnetTokens } from "./mainnetTokens";
-import { mainnetNFTs } from "./nfts";
+import { mainnetNFTs, sepoliaNFTs } from "./nfts";
 import { sepoliaTokens } from "./sepoliaTokens";
 import { indexAddress } from "./utils";
 
@@ -47,8 +47,8 @@ export const getTokensForChain = (
     }));
 
     const erc721Tokens: TokenForDisplay[] = mainnetNFTs.map((nft) => ({
-      name: nft.name,
-      symbol: nft.symbol,
+      name: nft.name || "Unknown NFT",
+      symbol: nft.symbol || "NFT",
       token_address: nft.address,
       decimals: 0,
       token_type: "erc721" as const,
@@ -63,7 +63,7 @@ export const getTokensForChain = (
 
     return allTokens;
   } else if (isSepolia) {
-    const tokens: TokenForDisplay[] = sepoliaTokens.map((token) => ({
+    const erc20Tokens: TokenForDisplay[] = sepoliaTokens.map((token) => ({
       name: token.name,
       symbol: token.symbol,
       token_address: token.l2_token_address,
@@ -74,11 +74,22 @@ export const getTokensForChain = (
       sort_order: token.sort_order,
     }));
 
-    if (tokenType === "erc721") {
-      return [];
+    const erc721Tokens: TokenForDisplay[] = sepoliaNFTs.map((nft) => ({
+      name: nft.name || "Unknown NFT",
+      symbol: nft.symbol || "NFT",
+      token_address: nft.address,
+      decimals: 0,
+      token_type: "erc721" as const,
+      logo_url: nft.image,
+    }));
+
+    const allTokens = [...erc20Tokens, ...erc721Tokens];
+
+    if (tokenType) {
+      return allTokens.filter((token) => token.token_type === tokenType);
     }
 
-    return tokens;
+    return allTokens;
   }
 
   return [];

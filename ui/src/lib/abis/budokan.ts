@@ -582,16 +582,16 @@ const BUDOKAN_ABI = [
         type: "core::integer::u32",
       },
       {
+        name: "TournamentCreator",
+        type: "()",
+      },
+      {
         name: "GameCreator",
         type: "()",
       },
       {
         name: "Refund",
         type: "core::integer::u64",
-      },
-      {
-        name: "AdditionalShare",
-        type: "core::integer::u8",
       },
     ],
   },
@@ -869,10 +869,6 @@ const BUDOKAN_ABI = [
           {
             name: "position",
             type: "core::integer::u8",
-          },
-          {
-            name: "reward_type",
-            type: "budokan::models::budokan::RewardType",
           },
         ],
         outputs: [],

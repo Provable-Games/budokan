@@ -144,13 +144,13 @@ pub impl ScheduleAssertionsImpl of ScheduleAssertionsTrait {
     }
 
     fn assert_ends_after_start(self: Period) {
-        assert!(self.ends_after_start(), "Schedule: Tournament end time must be after start time");
+        assert!(self.ends_after_start(), "Budokan: Tournament end time must be after start time");
     }
 
     fn assert_valid_submission_duration(self: Schedule) {
         assert!(
             self.is_valid_submission_duration(),
-            "Schedule: Submission duration must be between {} and {}",
+            "Budokan: Submission duration must be between {} and {}",
             MIN_SUBMISSION_PERIOD,
             MAX_SUBMISSION_PERIOD,
         );
@@ -169,7 +169,7 @@ pub impl ScheduleAssertionsImpl of ScheduleAssertionsTrait {
     fn assert_min_registration_period(self: Period) {
         assert!(
             self.is_min_registration_period(),
-            "Schedule: Registration period less than minimum of {}",
+            "Budokan: Registration period less than minimum of {}",
             MIN_REGISTRATION_PERIOD,
         );
     }
@@ -177,7 +177,7 @@ pub impl ScheduleAssertionsImpl of ScheduleAssertionsTrait {
     fn assert_less_than_max_registration_period(self: Period) {
         assert!(
             self.is_less_than_max_registration_period(),
-            "Schedule: Registration period greater than maximum of {}",
+            "Budokan: Registration period greater than maximum of {}",
             MAX_REGISTRATION_PERIOD,
         );
     }
@@ -185,7 +185,7 @@ pub impl ScheduleAssertionsImpl of ScheduleAssertionsTrait {
     fn assert_registration_starts_before_tournament_starts(self: Period, tournament_start: u64) {
         assert!(
             self.is_registration_starts_before_tournament_starts(tournament_start),
-            "Schedule: Registration start time {} is after tournament start time {}",
+            "Budokan: Registration start time {} is after tournament start time {}",
             self.start,
             tournament_start,
         );
@@ -194,7 +194,7 @@ pub impl ScheduleAssertionsImpl of ScheduleAssertionsTrait {
     fn assert_registration_ends_before_tournament_ends(self: Period, tournament_end: u64) {
         assert!(
             self.is_registration_ends_before_tournament_ends(tournament_end),
-            "Schedule: Registration end time {} is after tournament end time {}",
+            "Budokan: Registration end time {} is after tournament end time {}",
             self.end,
             tournament_end,
         );
@@ -203,7 +203,7 @@ pub impl ScheduleAssertionsImpl of ScheduleAssertionsTrait {
     fn assert_registration_ends_before_game_starts(self: Period, game_start: u64) {
         assert!(
             self.is_registration_ends_before_game_starts(game_start),
-            "Schedule: Registration end time {} is after game start time {}",
+            "Budokan: Registration end time {} is after game start time {}",
             self.end,
             game_start,
         );
@@ -215,12 +215,12 @@ pub impl ScheduleAssertionsImpl of ScheduleAssertionsTrait {
     fn assert_has_registration_period_before_game_start(self: Schedule) {
         assert!(
             self.registration.is_some(),
-            "Schedule: Extension requires a registration period but none was provided",
+            "Budokan: Extension requires a registration period but none was provided",
         );
         let registration = self.registration.unwrap();
         assert!(
             registration.end < self.game.start,
-            "Schedule: Extension requires registration to end before game starts. Registration ends at {}, game starts at {}",
+            "Budokan: Extension requires registration to end before game starts. Registration ends at {}, game starts at {}",
             registration.end,
             self.game.start,
         );
@@ -229,7 +229,7 @@ pub impl ScheduleAssertionsImpl of ScheduleAssertionsTrait {
     fn assert_min_duration(self: Period) {
         assert!(
             self.is_min_duration(),
-            "Schedule: Tournament duration less than minimum of {}",
+            "Budokan: Tournament duration less than minimum of {}",
             MIN_TOURNAMENT_LENGTH,
         );
     }
@@ -237,23 +237,23 @@ pub impl ScheduleAssertionsImpl of ScheduleAssertionsTrait {
     fn assert_max_duration(self: Period) {
         assert!(
             self.is_max_duration(),
-            "Schedule: Tournament duration greater than maximum of {}",
+            "Budokan: Tournament duration greater than maximum of {}",
             MAX_TOURNAMENT_LENGTH,
         );
     }
 
     fn assert_tournament_is_finalized(self: Schedule, current_time: u64) {
         assert!(
-            self.is_tournament_finalized(current_time), "Schedule: Tournament is not finalized",
+            self.is_tournament_finalized(current_time), "Budokan: Tournament is not finalized",
         );
     }
 
     fn assert_registration_open(self: Schedule, current_time: u64) {
-        assert!(self.is_registration_open(current_time), "Schedule: Registration is not open");
+        assert!(self.is_registration_open(current_time), "Budokan: Registration is not open");
     }
 
     fn assert_is_active(self: Period, current_time: u64) {
-        assert!(self.is_active(current_time), "Schedule: Tournament has ended");
+        assert!(self.is_active(current_time), "Budokan: Tournament has ended");
     }
 }
 
@@ -522,7 +522,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected: "Schedule: Submission duration must be between")]
+    #[should_panic(expected: "Budokan: Submission duration must be between")]
     fn assert_valid_submission_duration_min() {
         let invalid_schedule = Schedule {
             registration: Option::None,
@@ -533,7 +533,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected: "Schedule: Submission duration must be between")]
+    #[should_panic(expected: "Budokan: Submission duration must be between")]
     fn assert_valid_submission_duration_max() {
         let invalid_schedule = Schedule {
             registration: Option::None,
@@ -638,7 +638,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected: "Schedule: Tournament has ended")]
+    #[should_panic(expected: "Budokan: Tournament has ended")]
     fn assert_is_active() {
         let period = Period { start: 100, end: 200 };
         period.assert_is_active(200);

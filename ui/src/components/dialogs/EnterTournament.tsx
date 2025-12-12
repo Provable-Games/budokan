@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -31,7 +31,6 @@ import {
   useGetTournamentRegistrants,
   useGetTournamentLeaderboards,
   useGetTournamentQualificationEntries,
-  useGetTokenByAddress,
 } from "@/dojo/hooks/useSqlQueries";
 import { useGameTokens } from "metagame-sdk";
 import { useDojo } from "@/context/dojo";
@@ -87,12 +86,11 @@ export function EnterTournamentDialog({
   const { address } = useAccount();
   const { connect } = useConnectToSelectedChain();
   const { connector } = useConnect();
-  const { provider } = useProvider();
   const {
     approveAndEnterTournament,
-    getBalanceGeneral,
     checkExtensionValidEntry,
     getExtensionEntriesLeft,
+    getBalanceGeneral,
   } = useSystemCalls();
   const [playerName, setPlayerName] = useState("");
   const [controllerUsername, setControllerUsername] = useState("");
@@ -108,7 +106,7 @@ export function EnterTournamentDialog({
     number | null
   >(null);
   const [manualTokenId, setManualTokenId] = useState("");
-  const [isVerifyingTokenOwnership, setIsVerifyingTokenOwnership] =
+  const [_isVerifyingTokenOwnership, _setIsVerifyingTokenOwnership] =
     useState(false);
   const [manualTokenOwnershipVerified, setManualTokenOwnershipVerified] =
     useState(false);
@@ -376,21 +374,15 @@ export function EnterTournamentDialog({
       return;
     }
 
-    // Debounce the verification
-    const timeoutId = setTimeout(async () => {
-      await verifyTokenOwnership(manualTokenId.trim());
-    }, 500);
+    // TODO: Implement token ownership verification
+    // const timeoutId = setTimeout(async () => {
+    //   await verifyTokenOwnership(manualTokenId.trim());
+    // }, 500);
 
-    return () => {
-      clearTimeout(timeoutId);
-    };
-  }, [
-    manualTokenId,
-    open,
-    requirementVariant,
-    ownedTokenIds,
-    verifyTokenOwnership,
-  ]);
+    // return () => {
+    //   clearTimeout(timeoutId);
+    // };
+  }, [manualTokenId, open, requirementVariant, ownedTokenIds]);
 
   const requiredTournamentGameAddresses = tournamentsData.map((tournament) =>
     indexAddress(tournament.game_config?.address ?? "")
@@ -980,22 +972,22 @@ export function EnterTournamentDialog({
   const creatorAmount =
     (Number(BigInt(tournamentModel?.entry_fee.Some?.amount ?? 0)) *
       (creatorShare / 10000)) /
-    10 ** 18;
+    10 ** entryTokenDecimals;
 
   const gameAmount =
     (Number(BigInt(tournamentModel?.entry_fee.Some?.amount ?? 0)) *
       (gameShare / 10000)) /
-    10 ** 18;
+    10 ** entryTokenDecimals;
 
   const refundAmount =
     (Number(BigInt(tournamentModel?.entry_fee.Some?.amount ?? 0)) *
       (refundShare / 10000)) /
-    10 ** 18;
+    10 ** entryTokenDecimals;
 
   const prizePoolAmount =
     (Number(BigInt(tournamentModel?.entry_fee.Some?.amount ?? 0)) *
       (prizePoolShare / 10000)) /
-    10 ** 18;
+    10 ** entryTokenDecimals;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1260,7 +1252,7 @@ export function EnterTournamentDialog({
                           />
                           {manualTokenId.trim() && (
                             <div className="flex flex-row items-center gap-2">
-                              {isVerifyingTokenOwnership ? (
+                              {false ? (
                                 <>
                                   <LoadingSpinner />
                                   <span className="text-brand-muted text-sm">

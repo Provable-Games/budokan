@@ -30,3 +30,13 @@ export const mainnetNFTs = [
     image: "https://claim.focustree.app/focus-tree-logo.svg",
   },
 ];
+
+export const sepoliaNFTs = [
+  {
+    address:
+      "0x02334dc9c950c74c3228e2a343d495ae36f0b4edf06767a679569e9f9de08776",
+    name: "Games",
+    symbol: "GAME",
+    image: denshokanImage,
+  },
+];

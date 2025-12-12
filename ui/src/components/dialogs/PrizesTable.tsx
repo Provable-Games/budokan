@@ -339,7 +339,7 @@ export const PrizesTableDialog = ({
                           if (prize.type === "erc20") {
                             const value = calculatePrizeValue(
                               prize,
-                              symbol,
+                              prize.address,
                               prices,
                               tokenDecimals
                             );
@@ -482,7 +482,7 @@ export const PrizesTableDialog = ({
                             if (prize.type === "erc20") {
                               const value = calculatePrizeValue(
                                 prize,
-                                symbol,
+                                prize.address,
                                 prices,
                                 tokenDecimals
                               );

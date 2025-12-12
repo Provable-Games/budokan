@@ -89,12 +89,12 @@ pub struct EntryCount {
 pub enum EntryFeeRewardType {
     /// Claim entry fee position-based distribution
     Position: u32,
+    /// Claim tournament creator's entry fee share
+    TournamentCreator,
     /// Claim game creator's entry fee share
     GameCreator,
     /// Claim refund share for a specific token_id
     Refund: u64,
-    /// Claim an additional entry fee share by index
-    AdditionalShare: u8,
 }
 
 /// Unified reward type for claiming both prizes and entry fee shares

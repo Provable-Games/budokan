@@ -458,11 +458,11 @@ pub mod Budokan {
 
             // Ensure tournament has an extension entry requirement
             let entry_requirement = tournament.entry_requirement;
-            assert!(entry_requirement.is_some(), "Tournament: No entry requirement set");
+            assert!(entry_requirement.is_some(), "Budokan: No entry requirement set");
 
             let extension_config = match entry_requirement.unwrap().entry_requirement_type {
                 EntryRequirementType::extension(config) => config,
-                _ => panic!("Tournament: Entry requirement must be of type 'extension'"),
+                _ => panic!("Budokan: Entry requirement must be of type 'extension'"),
             };
 
             let extension_address = extension_config.address;
@@ -473,10 +473,10 @@ pub mod Budokan {
                 assert!(
                     current_time >= registration.start
                         && current_time < tournament.schedule.game.start,
-                    "Tournament: Can only ban from registration start until game starts",
+                    "Budokan: Can only ban from registration start until game starts",
                 );
             } else {
-                panic!("Tournament: Can only ban tournaments with registration period set");
+                panic!("Budokan: Can only ban tournaments with registration period set");
             }
 
             // Validate and potentially ban the provided game token ID
@@ -493,11 +493,11 @@ pub mod Budokan {
             // Verify this registration belongs to this tournament
             assert!(
                 registration.context_id == tournament_id,
-                "Tournament: Game ID not registered for this tournament",
+                "Budokan: Game ID not registered for this tournament",
             );
 
             // Assert game ID is not already banned
-            assert!(!registration.is_banned, "Tournament: Game ID is already banned");
+            assert!(!registration.is_banned, "Budokan: Game ID is already banned");
 
             // Get the owner of this game token
             let token_owner = game_dispatcher.owner_of(game_token_id.into());
@@ -576,21 +576,21 @@ pub mod Budokan {
                         relayer.emit_leaderboard(tournament_id, leaderboard.span());
                     }
                 },
-                LeaderboardResult::InvalidPosition => { panic!("Tournament: Invalid position"); },
+                LeaderboardResult::InvalidPosition => { panic!("Budokan: Invalid position"); },
                 LeaderboardResult::DuplicateEntry => {
-                    panic!("Tournament: Token already on leaderboard");
+                    panic!("Budokan: Token already on leaderboard");
                 },
                 LeaderboardResult::ScoreTooLow => {
-                    panic!("Tournament: Score too low for position");
+                    panic!("Budokan: Score too low for position");
                 },
                 LeaderboardResult::ScoreTooHigh => {
-                    panic!("Tournament: Score too high for position");
+                    panic!("Budokan: Score too high for position");
                 },
                 LeaderboardResult::LeaderboardFull => {
-                    panic!("Tournament: Leaderboard is full");
+                    panic!("Budokan: Leaderboard is full");
                 },
                 LeaderboardResult::InvalidConfig => {
-                    panic!("Tournament: Invalid leaderboard config");
+                    panic!("Budokan: Invalid leaderboard config");
                 },
             }
         }
@@ -983,16 +983,16 @@ pub mod Budokan {
                 EntryFeeRewardType::Position(position) => {
                     self.entry_fee_position_claimed.entry((tournament_id, position)).write(true);
                 },
+                EntryFeeRewardType::TournamentCreator => {
+                    self
+                        .entry_fee
+                        .set_claimed(tournament_id, EntryFeeClaimType::AdditionalShare(0));
+                },
                 EntryFeeRewardType::GameCreator => {
                     self.entry_fee.set_claimed(tournament_id, EntryFeeClaimType::GameCreator);
                 },
                 EntryFeeRewardType::Refund(token_id) => {
                     self.entry_fee.set_claimed(tournament_id, EntryFeeClaimType::Refund(token_id));
-                },
-                EntryFeeRewardType::AdditionalShare(index) => {
-                    self
-                        .entry_fee
-                        .set_claimed(tournament_id, EntryFeeClaimType::AdditionalShare(index));
                 },
             }
         }
@@ -1096,7 +1096,7 @@ pub mod Budokan {
             let address_felt: felt252 = address.into();
             assert!(
                 src5_dispatcher.supports_interface(IMINIGAME_ID),
-                "Tournament: Game address {} does not support IGame interface",
+                "Budokan: Game address {} does not support IGame interface",
                 address_felt,
             );
         }
@@ -1108,7 +1108,7 @@ pub mod Budokan {
             let address_felt: felt252 = address.into();
             assert!(
                 src5_dispatcher.supports_interface(IERC721_ID),
-                "Tournament: Game token address {} does not support IERC721 interface",
+                "Budokan: Game token address {} does not support IERC721 interface",
                 address_felt,
             );
         }
@@ -1124,7 +1124,7 @@ pub mod Budokan {
             let game_address: felt252 = game.into();
             assert!(
                 settings_exist,
-                "Tournament: Settings id {} is not found on game address {}",
+                "Budokan: Settings id {} is not found on game address {}",
                 settings_id,
                 game_address,
             );
@@ -1150,14 +1150,23 @@ pub mod Budokan {
                 EntryFeeRewardType::Position(position) => {
                     assert!(
                         !self._is_position_claim_made(tournament_id, position),
-                        "Tournament: Position {} entry fee already claimed",
+                        "Budokan: Position {} entry fee already claimed",
                         position,
+                    );
+                },
+                EntryFeeRewardType::TournamentCreator => {
+                    // Tournament creator share is stored as AdditionalShare at index 0
+                    assert!(
+                        !self
+                            .entry_fee
+                            .is_claimed(tournament_id, EntryFeeClaimType::AdditionalShare(0)),
+                        "Budokan: Tournament creator share already claimed",
                     );
                 },
                 EntryFeeRewardType::GameCreator => {
                     assert!(
                         !self.entry_fee.is_claimed(tournament_id, EntryFeeClaimType::GameCreator),
-                        "Tournament: Game creator entry fee already claimed",
+                        "Budokan: Game creator share already claimed",
                     );
                 },
                 EntryFeeRewardType::Refund(token_id) => {
@@ -1165,17 +1174,8 @@ pub mod Budokan {
                         !self
                             .entry_fee
                             .is_claimed(tournament_id, EntryFeeClaimType::Refund(token_id)),
-                        "Tournament: Refund already claimed for token {}",
+                        "Budokan: Refund share already claimed for token {}",
                         token_id,
-                    );
-                },
-                EntryFeeRewardType::AdditionalShare(index) => {
-                    assert!(
-                        !self
-                            .entry_fee
-                            .is_claimed(tournament_id, EntryFeeClaimType::AdditionalShare(index)),
-                        "Tournament: Additional share {} already claimed",
-                        index,
                     );
                 },
             }
@@ -1187,7 +1187,7 @@ pub mod Budokan {
         ) {
             assert!(
                 payout_position.into() <= winner_token_ids.len(),
-                "Tournament: Prize payout position {} is not a top score",
+                "Budokan: Prize payout position {} is not a top score",
                 payout_position,
             );
         }
@@ -1206,14 +1206,14 @@ pub mod Budokan {
                     let extension_address = extension_config.address;
                     assert!(
                         !extension_address.is_zero(),
-                        "Tournament: Qualification extension address can't be zero",
+                        "Budokan: Qualification extension address can't be zero",
                     );
 
                     let src5_dispatcher = ISRC5Dispatcher { contract_address: extension_address };
                     let display_extension_address: felt252 = extension_address.into();
                     assert!(
                         src5_dispatcher.supports_interface(IENTRY_VALIDATOR_ID),
-                        "Tournament: Qualification extension address {} doesn't support IEntryValidator interface",
+                        "Budokan: Qualification extension address {} doesn't support IEntryValidator interface",
                         display_extension_address,
                     );
                     let entry_validator_dispatcher = IEntryValidatorDispatcher {
@@ -1237,7 +1237,7 @@ pub mod Budokan {
         fn _assert_tournament_exists(self: @ContractState, tournament_id: u64) {
             assert!(
                 tournament_id <= self.total_tournaments.read(),
-                "Tournament: Tournament {} does not exist",
+                "Budokan: Tournament {} does not exist",
                 tournament_id,
             );
         }
@@ -1329,13 +1329,28 @@ pub mod Budokan {
                             );
                         return;
                     },
+                    EntryFeeRewardType::TournamentCreator => {
+                        // Get tournament creator share from additional shares at index 0
+                        let stored_fee = self.entry_fee._get_entry_fee(tournament_id);
+                        let stored = match stored_fee {
+                            Option::Some(fee) => fee,
+                            Option::None => panic!("Budokan: no entry fee"),
+                        };
+                        assert!(
+                            stored.additional_shares.len() > 0,
+                            "Budokan: tournament {} does not have a tournament creator share",
+                            tournament_id,
+                        );
+                        let additional_share = *stored.additional_shares.at(0);
+                        (additional_share.share_bps, additional_share.recipient)
+                    },
                     EntryFeeRewardType::GameCreator => {
                         let share = if let Option::Some(game_creator_share) = entry_fee
                             .game_creator_share {
                             game_creator_share
                         } else {
                             panic!(
-                                "Tournament: tournament {} does not have a game creator share",
+                                "Budokan: tournament {} does not have a game creator share",
                                 tournament_id,
                             )
                         };
@@ -1365,10 +1380,10 @@ pub mod Budokan {
                         // Verify the token_id is registered for this tournament
                         let registration = self
                             .registration
-                            ._get_registration(game_token_address, token_id);
+                            ._get_registration(game_config_address, token_id);
                         assert!(
                             registration.context_id == tournament_id,
-                            "Tournament: token_id {} is not registered for tournament {}",
+                            "Budokan: token_id {} is not registered for tournament {}",
                             token_id,
                             tournament_id,
                         );
@@ -1380,7 +1395,7 @@ pub mod Budokan {
                             refund_share / total_entries.try_into().unwrap_or(1)
                         } else {
                             panic!(
-                                "Tournament: tournament {} does not have a refund share",
+                                "Budokan: tournament {} does not have a refund share",
                                 tournament_id,
                             )
                         };
@@ -1390,27 +1405,12 @@ pub mod Budokan {
 
                         (share, recipient)
                     },
-                    EntryFeeRewardType::AdditionalShare(index) => {
-                        // Get additional share from stored entry fee
-                        let stored_fee = self.entry_fee._get_entry_fee(tournament_id);
-                        let stored = match stored_fee {
-                            Option::Some(fee) => fee,
-                            Option::None => panic!("Tournament: no entry fee"),
-                        };
-                        assert!(
-                            index.into() < stored.additional_shares.len(),
-                            "Tournament: invalid additional share index {}",
-                            index,
-                        );
-                        let additional_share = *stored.additional_shares.at(index.into());
-                        (additional_share.share_bps, additional_share.recipient)
-                    },
                 };
 
                 let prize_amount = self._calculate_payout(share.into(), total_pool);
                 self.entry_fee.payout(entry_fee.token_address, recipient_address, prize_amount);
             } else {
-                panic!("Tournament: tournament {} has no entry fees", tournament_id);
+                panic!("Budokan: tournament {} has no entry fees", tournament_id);
             }
         }
 
@@ -1430,8 +1430,8 @@ pub mod Budokan {
             let leaderboard = self.leaderboard.get_leaderboard(tournament_id);
             let leaderboard_size: u32 = leaderboard.len();
 
-            // Validate position is within actual leaderboard
-            self._assert_position_is_valid(position, leaderboard_size);
+            // Validate position is at least 1
+            assert!(position > 0, "Budokan: Position must be greater than zero");
 
             // Use fixed distribution_positions if set, otherwise use actual leaderboard size
             let total_positions: u32 = match entry_fee.distribution_positions {
@@ -1479,7 +1479,7 @@ pub mod Budokan {
                 PrizeType::Single(prize_id) => {
                     // Get position from storage (set during add_prize)
                     let position = self.prize_position.entry(prize_id).read();
-                    assert!(position > 0, "Tournament: Prize position not set");
+                    assert!(position > 0, "Budokan: Prize position not set");
                     self._claim_single_prize(tournament_id, tournament, prize_id, position);
                 },
                 PrizeType::Distributed((
@@ -1507,15 +1507,15 @@ pub mod Budokan {
             // Validate prize belongs to this tournament
             assert!(
                 prize.context_id == tournament_id,
-                "Tournament: Prize {} is for tournament {}",
+                "Budokan: Prize {} is for tournament {}",
                 prize_id,
                 prize.context_id,
             );
 
-            // Get leaderboard and validate position
+            // Get leaderboard and validate position is at least 1
             let leaderboard = self._get_leaderboard(tournament_id);
             let leaderboard_size: u32 = leaderboard.len();
-            self._assert_position_is_valid(position, leaderboard_size);
+            assert!(position > 0, "Budokan: Position must be greater than zero");
 
             // Handle payout or refund based on leaderboard size
             if position <= leaderboard_size {
@@ -1532,7 +1532,7 @@ pub mod Budokan {
                         // Ensure this is NOT a distributed prize
                         assert!(
                             erc20_data.distribution.is_none(),
-                            "Tournament: Use SponsoredDistributed for distributed prizes",
+                            "Budokan: Use SponsoredDistributed for distributed prizes",
                         );
                         self
                             .prize
@@ -1551,7 +1551,7 @@ pub mod Budokan {
                         // Ensure this is NOT a distributed prize
                         assert!(
                             erc20_data.distribution.is_none(),
-                            "Tournament: Use SponsoredDistributed for distributed prizes",
+                            "Budokan: Use SponsoredDistributed for distributed prizes",
                         );
                         self.prize.refund_prize_erc20(prize_id, erc20_data.amount);
                     },
@@ -1576,7 +1576,7 @@ pub mod Budokan {
             // Validate prize belongs to this tournament
             assert!(
                 prize.context_id == tournament_id,
-                "Tournament: Prize {} is for tournament {}",
+                "Budokan: Prize {} is for tournament {}",
                 prize_id,
                 prize.context_id,
             );
@@ -1585,14 +1585,14 @@ pub mod Budokan {
             let erc20_data = match prize.token_type {
                 TokenTypeData::erc20(data) => data,
                 TokenTypeData::erc721(_) => {
-                    panic!("Tournament: ERC721 not supported for distributed prizes")
+                    panic!("Budokan: ERC721 not supported for distributed prizes")
                 },
             };
 
             // Ensure this is a distributed prize
             assert!(
                 erc20_data.distribution.is_some(),
-                "Tournament: Use Sponsored for non-distributed prizes",
+                "Budokan: Use Sponsored for non-distributed prizes",
             );
 
             // Get leaderboard
@@ -1600,7 +1600,7 @@ pub mod Budokan {
             let leaderboard_size: u32 = leaderboard.len();
 
             // Validate payout_index (must be >= 1)
-            assert!(payout_index > 0, "Tournament: Payout index must be greater than zero");
+            assert!(payout_index > 0, "Budokan: Payout index must be greater than zero");
 
             // Use fixed distribution_count if set, otherwise use actual leaderboard size
             let total_positions: u32 = match erc20_data.distribution_count {
@@ -1645,7 +1645,7 @@ pub mod Budokan {
             let schedule = *tournament.schedule;
             assert!(
                 schedule.current_phase(get_block_timestamp()) == Phase::Submission,
-                "Tournament: Not in submission period",
+                "Budokan: Not in submission period",
             );
 
             // Delegate validation to registration component
@@ -1668,7 +1668,7 @@ pub mod Budokan {
                 Option::Some(q) => q,
                 Option::None => {
                     panic!(
-                        "Tournament: Tournament {} has an entry requirement but no qualification was provided",
+                        "Budokan: Tournament {} has an entry requirement but no qualification was provided",
                         tournament_id,
                     )
                 },
@@ -1735,7 +1735,7 @@ pub mod Budokan {
         ) -> ContractAddress {
             let qualification = match qualifier {
                 QualificationProof::NFT(qual) => qual,
-                _ => panic!("Tournament: Provided qualification proof is not of type 'Token'"),
+                _ => panic!("Budokan: Provided qualification proof is not of type 'Token'"),
             };
 
             let erc721_dispatcher = IERC721Dispatcher { contract_address: token_address };
@@ -1753,12 +1753,12 @@ pub mod Budokan {
         ) -> ContractAddress {
             let qualifying_address = match qualifier {
                 QualificationProof::Address(qual) => qual,
-                _ => panic!("Tournament: Provided qualification proof is not of type 'Address'"),
+                _ => panic!("Budokan: Provided qualification proof is not of type 'Address'"),
             };
 
             assert!(
                 self._contains_address(allowlist_addresses, qualifying_address),
-                "Tournament: Qualifying address is not in allowlist",
+                "Budokan: Qualifying address is not in allowlist",
             );
 
             // Return the qualifying address
@@ -1774,7 +1774,7 @@ pub mod Budokan {
         ) -> ContractAddress {
             let qualification = match qualifier {
                 QualificationProof::Extension(qual) => qual,
-                _ => panic!("Tournament: Provided qualification proof is not of type 'Extension'"),
+                _ => panic!("Budokan: Provided qualification proof is not of type 'Extension'"),
             };
 
             let entry_validator_dispatcher = IEntryValidatorDispatcher {
@@ -1785,7 +1785,7 @@ pub mod Budokan {
             assert!(
                 entry_validator_dispatcher
                     .valid_entry(tournament_id, caller_address, qualification),
-                "Tournament: Invalid entry according to extension {}",
+                "Budokan: Invalid entry according to extension {}",
                 display_extension_address,
             );
             caller_address

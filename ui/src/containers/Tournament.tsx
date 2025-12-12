@@ -30,6 +30,7 @@ import { useDojo } from "@/context/dojo";
 import {
   extractEntryFeePrizes,
   processTournamentFromSql,
+  convertTokenAmount,
 } from "@/lib/utils/formatting";
 import { EnterTournamentDialog } from "@/components/dialogs/EnterTournament";
 import ScoreTable from "@/components/tournament/table/ScoreTable";
@@ -267,8 +268,6 @@ const Tournament = () => {
     return getTokenByAddress(entryFeeToken, selectedChainConfig?.chainId ?? "");
   }, [entryFeeToken, hasEntryFee, selectedChainConfig]);
 
-  const entryFeeTokenSymbol = entryFeeTokenData?.symbol;
-
   const tournamentId = tournamentModel?.id;
 
   // Fetch aggregated data
@@ -285,6 +284,8 @@ const Tournament = () => {
     tournamentId: tournamentId ?? 0,
     active: !!tournamentId,
   });
+
+  console.log(claimsAggregations);
 
   // Calculate total potential prizes including both entry fees and sponsored prizes
   const totalPotentialPrizes =
@@ -344,22 +345,6 @@ const Tournament = () => {
     aggregations?.lowest_prize_position,
   ]);
 
-  // Extract unique token symbols from aggregated data and entry fee prizes
-  const erc20TokenSymbols = useMemo(() => {
-    const symbols = new Set<string>();
-
-    // From aggregated data
-    if (aggregations?.token_totals) {
-      aggregations.token_totals.forEach((tokenTotal: any) => {
-        if (tokenTotal.tokenSymbol && tokenTotal.tokenType === "erc20") {
-          symbols.add(tokenTotal.tokenSymbol);
-        }
-      });
-    }
-
-    return Array.from(symbols);
-  }, [aggregations?.token_totals]);
-
   // Extract unique token addresses for fetching token data
   const uniqueTokenAddresses = useMemo(() => {
     const addresses = new Set<string>();
@@ -389,15 +374,6 @@ const Tournament = () => {
       selectedChainConfig?.chainId ?? ""
     );
   }, [uniqueTokenAddresses, selectedChainConfig]);
-
-  // Add entry fee token symbol to the list
-  const allTokenSymbols = useMemo(() => {
-    const symbols = [...erc20TokenSymbols];
-    if (entryFeeTokenSymbol && !symbols.includes(entryFeeTokenSymbol)) {
-      symbols.push(entryFeeTokenSymbol);
-    }
-    return symbols;
-  }, [erc20TokenSymbols, entryFeeTokenSymbol]);
 
   // Fetch prices for all ERC20 tokens
   const {
@@ -434,7 +410,7 @@ const Tournament = () => {
               return sum;
             }
             const decimals = tokenDecimals[tokenTotal.tokenAddress] || 18;
-            const amount = Number(tokenTotal.totalAmount);
+            const amount = tokenTotal.totalAmount;
 
             return sum + (amount / 10 ** decimals) * price;
           }
@@ -454,16 +430,10 @@ const Tournament = () => {
           hasAllPrices = false;
           return;
         }
-        const amount = Number(prize.token_type.variant.erc20.amount || 0);
+        const amount = prize.token_type.variant.erc20.amount || 0;
         const decimals = tokenDecimals[prize.token_address] || 18;
 
-        // Find the token to get its symbol
-        const token = tournamentTokens.find(
-          (t) => t.token_address === prize.token_address
-        );
-        const price = token?.symbol ? prices[token.symbol] || 0 : 0;
-
-        total += Number(amount / 10n ** BigInt(decimals)) * Number(price);
+        total += (amount / 10 ** decimals) * price;
       }
     });
 
@@ -479,6 +449,8 @@ const Tournament = () => {
     distributionPrizes,
     tournamentTokens,
   ]);
+
+  console.log(distributionPrizes, prices);
 
   console.log(totalPrizesValueUSD);
 
