@@ -28,7 +28,7 @@ interface UsePGNftsResult {
 
 const PG_API_BASE_URL =
   import.meta.env.VITE_PG_API_BASE_URL ||
-  "https://apibara-tokens-production.up.railway.app";
+  "https://brave-stillness-production-7081.up.railway.app";
 
 // List of contract addresses that should use the PG API
 const PG_CONTRACT_ADDRESSES = (import.meta.env.VITE_PG_CONTRACT_ADDRESSES || "")
