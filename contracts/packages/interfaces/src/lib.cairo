@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: BUSL-1.1
 
+// Shared models
+
 // Budokan main contract interface
 pub mod budokan;
+pub mod distribution;
 
 // Component interfaces
 pub mod entry_fee;

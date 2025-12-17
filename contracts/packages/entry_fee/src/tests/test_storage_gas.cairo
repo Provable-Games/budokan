@@ -49,11 +49,12 @@ fn create_additional_shares(count: u32) -> Array<AdditionalShare> {
         shares
             .append(
                 AdditionalShare {
-                    recipient: make_address((i + 100).into()), share_bps: ((i + 1) * 100).try_into().unwrap(),
+                    recipient: make_address((i + 100).into()),
+                    share_bps: ((i + 1) * 100).try_into().unwrap(),
                 },
             );
         i += 1;
-    };
+    }
     shares
 }
 
@@ -173,10 +174,16 @@ fn test_storage_gas_claim_status() {
     mock.set_claimed(1, EntryFeeClaimType::AdditionalShare(3));
 
     // Verify only share 3 is claimed
-    assert!(!mock.is_claimed(1, EntryFeeClaimType::AdditionalShare(0)), "share 0 should not be claimed");
-    assert!(!mock.is_claimed(1, EntryFeeClaimType::AdditionalShare(2)), "share 2 should not be claimed");
+    assert!(
+        !mock.is_claimed(1, EntryFeeClaimType::AdditionalShare(0)), "share 0 should not be claimed",
+    );
+    assert!(
+        !mock.is_claimed(1, EntryFeeClaimType::AdditionalShare(2)), "share 2 should not be claimed",
+    );
     assert!(mock.is_claimed(1, EntryFeeClaimType::AdditionalShare(3)), "share 3 should be claimed");
-    assert!(!mock.is_claimed(1, EntryFeeClaimType::AdditionalShare(4)), "share 4 should not be claimed");
+    assert!(
+        !mock.is_claimed(1, EntryFeeClaimType::AdditionalShare(4)), "share 4 should not be claimed",
+    );
 }
 
 /// Test claiming multiple shares (measures read-modify-write gas)
@@ -202,8 +209,14 @@ fn test_storage_gas_claim_multiple_shares() {
 
     // Verify claimed status
     assert!(mock.is_claimed(1, EntryFeeClaimType::AdditionalShare(0)), "share 0 should be claimed");
-    assert!(!mock.is_claimed(1, EntryFeeClaimType::AdditionalShare(1)), "share 1 should not be claimed");
+    assert!(
+        !mock.is_claimed(1, EntryFeeClaimType::AdditionalShare(1)), "share 1 should not be claimed",
+    );
     assert!(mock.is_claimed(1, EntryFeeClaimType::AdditionalShare(5)), "share 5 should be claimed");
-    assert!(mock.is_claimed(1, EntryFeeClaimType::AdditionalShare(10)), "share 10 should be claimed");
-    assert!(mock.is_claimed(1, EntryFeeClaimType::AdditionalShare(15)), "share 15 should be claimed");
+    assert!(
+        mock.is_claimed(1, EntryFeeClaimType::AdditionalShare(10)), "share 10 should be claimed",
+    );
+    assert!(
+        mock.is_claimed(1, EntryFeeClaimType::AdditionalShare(15)), "share 15 should be claimed",
+    );
 }

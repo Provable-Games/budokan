@@ -9,10 +9,8 @@
 
 #[starknet::component]
 pub mod RegistrationComponent {
-    use budokan_interfaces::registration::IRegistration;
-    use budokan_registration::models::{
-        Registration, RegistrationData, RegistrationDataStorePacking,
-    };
+    use budokan_interfaces::registration::{IRegistration, Registration};
+    use budokan_registration::models::{RegistrationData, RegistrationDataStorePacking};
     use starknet::ContractAddress;
     use starknet::storage::{
         Map, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess,

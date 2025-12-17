@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: BUSL-1.1
 
-use budokan::models::budokan::{
-    GameConfig, EntryFee, EntryRequirement, Metadata, PrizeType, QualificationProof, TokenTypeData,
+use budokan_interfaces::budokan::{
+    EntryFee, EntryRequirement, GameConfig, Metadata, QualificationProof, RewardType, Schedule,
+    TokenTypeData,
 };
-use budokan::models::schedule::Schedule;
 use starknet::ContractAddress;
 
 #[starknet::interface]
@@ -63,8 +63,10 @@ pub trait IBudokanEventRelayer<TState> {
         sponsor_address: ContractAddress,
     );
 
-    /// Emit when a prize is claimed
-    fn emit_prize_claim(ref self: TState, tournament_id: u64, prize_type: PrizeType, claimed: bool);
+    /// Emit when a reward is claimed (prize or entry fee)
+    fn emit_reward_claim(
+        ref self: TState, tournament_id: u64, reward_type: RewardType, claimed: bool,
+    );
 
     // ============ Metrics Events ============
 

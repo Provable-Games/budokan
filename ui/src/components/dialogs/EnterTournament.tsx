@@ -37,8 +37,16 @@ import { useDojo } from "@/context/dojo";
 import { processQualificationProof } from "@/lib/utils/formatting";
 import { getTokenLogoUrl, getTokenDecimals } from "@/lib/tokensMeta";
 import { LoadingSpinner } from "@/components/ui/spinner";
-import { getExtensionProof } from "@/lib/extensionConfig";
+import {
+  getExtensionProof,
+  isTournamentValidator,
+  registerTournamentValidator,
+} from "@/lib/extensionConfig";
 import { useVoyagerNfts } from "@/hooks/useVoyagerNfts";
+import {
+  useExtensionQualification,
+  TournamentValidatorInput,
+} from "@/dojo/hooks/useExtensionQualification";
 
 interface EnterTournamentDialogProps {
   open: boolean;
@@ -267,9 +275,6 @@ export function EnterTournamentDialog({
     (token) => token.token_address === requiredTokenAddress
   );
 
-  const tournamentRequirementVariant =
-    tournamentModel?.entry_requirement.Some?.entry_requirement_type?.variant?.tournament?.activeVariant();
-
   const requiredTokenAddresses = requiredTokenAddress
     ? [indexAddress(requiredTokenAddress ?? "")]
     : [];
@@ -282,6 +287,67 @@ export function EnterTournamentDialog({
     tournamentModel?.entry_requirement.Some?.entry_requirement_type?.variant
       ?.extension;
 
+  // Register tournament validator when config loads
+  useEffect(() => {
+    if (selectedChainConfig?.tournamentValidatorAddress) {
+      registerTournamentValidator(
+        selectedChainConfig.tournamentValidatorAddress
+      );
+    }
+  }, [selectedChainConfig?.tournamentValidatorAddress]);
+
+  // Check if this extension is a tournament validator
+  const isTournamentValidatorExtension = useMemo(() => {
+    if (
+      !extensionConfig?.address ||
+      !selectedChainConfig?.tournamentValidatorAddress
+    )
+      return false;
+    // Normalize both addresses for comparison
+    const normalizedExtensionAddress = indexAddress(extensionConfig.address);
+    const normalizedValidatorAddress = indexAddress(
+      selectedChainConfig.tournamentValidatorAddress
+    );
+    return normalizedExtensionAddress === normalizedValidatorAddress;
+  }, [
+    extensionConfig?.address,
+    selectedChainConfig?.tournamentValidatorAddress,
+  ]);
+
+  // Parse tournament validator config: [qualifier_type, qualifying_mode, top_positions, ...tournament_ids]
+  const tournamentValidatorConfig = useMemo(() => {
+    if (!isTournamentValidatorExtension || !extensionConfig?.config) {
+      return null;
+    }
+
+    const config = extensionConfig.config;
+    if (!config || config.length < 3) return null;
+
+    const qualifierType = config[0]; // "0" = participated, "1" = won
+    const qualifyingMode = config[1]; // "0" = AT_LEAST_ONE, "1" = CUMULATIVE_PER_TOURNAMENT, "2" = ALL, "3" = CUMULATIVE_PER_ENTRY, "4" = ALL_PARTICIPATE_ANY_WIN, "5" = ALL_WITH_CUMULATIVE
+    const topPositions = config[2]; // "0" = all positions, or number of top positions
+    const tournamentIds = config.slice(3); // Rest are tournament IDs
+
+    return {
+      requirementType: qualifierType === "1" ? "won" : "participated",
+      qualifyingMode: Number(qualifyingMode),
+      topPositions: Number(topPositions),
+      tournamentIds: tournamentIds.map((id: any) => BigInt(id)),
+    };
+  }, [isTournamentValidatorExtension, extensionConfig?.config]);
+
+  console.log(tournamentsData);
+
+  // Get tournament data for validator extensions
+  const validatorTournaments = useMemo(() => {
+    if (!tournamentValidatorConfig) return [];
+    return tournamentsData.filter((t) =>
+      tournamentValidatorConfig.tournamentIds.some(
+        (id: any) => BigInt(t.id) === id
+      )
+    );
+  }, [tournamentValidatorConfig, tournamentsData]);
+
   useEffect(() => {
     const checkExtensionEntry = async () => {
       if (
@@ -292,7 +358,18 @@ export function EnterTournamentDialog({
       ) {
         try {
           const extensionAddress = extensionConfig.address;
-          // Get proof data from extension config
+
+          // For tournament validators, we'll handle validation differently
+          // They need specific proof per tournament token, so we skip the generic check
+          if (isTournamentValidatorExtension) {
+            // Tournament validator entries are checked per-qualification in qualificationMethods
+            // Set to true to allow the UI to proceed - actual validation happens per token
+            setExtensionValidEntry(true);
+            setExtensionEntriesLeft(null); // Will be calculated per tournament token
+            return;
+          }
+
+          // Generic extension - use simple proof
           const qualification = getExtensionProof(
             extensionAddress,
             address,
@@ -333,6 +410,7 @@ export function EnterTournamentDialog({
     tournamentModel?.id,
     checkExtensionValidEntry,
     getExtensionEntriesLeft,
+    isTournamentValidatorExtension,
   ]);
 
   // Fetch NFTs using Voyager API with pagination
@@ -401,7 +479,7 @@ export function EnterTournamentDialog({
   const { data: registrations } = useGetTournamentRegistrants({
     namespace: namespace ?? "",
     gameIds: ownedGameIds ?? [],
-    active: requirementVariant === "tournament",
+    active: isTournamentValidatorExtension && !!tournamentValidatorConfig,
   });
 
   const { data: leaderboards } = useGetTournamentLeaderboards({
@@ -409,7 +487,7 @@ export function EnterTournamentDialog({
     tournamentIds: tournamentsData.map((tournament) =>
       padU64(BigInt(tournament.id))
     ),
-    active: requirementVariant === "tournament",
+    active: isTournamentValidatorExtension && !!tournamentValidatorConfig,
   });
 
   const currentTime = BigInt(new Date().getTime()) / 1000n;
@@ -435,28 +513,20 @@ export function EnterTournamentDialog({
 
     return requiredTournamentRegistrations.reduce((acc, registration) => {
       const registrationTournamentId = registration.tournament_id;
-      const registeredTournament = tournamentsData.find(
-        (tournament) => tournament.id === registrationTournamentId
-      );
-      const registeredTournamentFinalizedTime =
-        BigInt(registeredTournament?.schedule.game.end ?? 0n) +
-        BigInt(registeredTournament?.schedule.submission_duration ?? 0n);
-      const hasRegisteredTournamentFinalized =
-        registeredTournamentFinalizedTime < currentTime;
 
-      // Only add token ID if tournament has finalized
-      if (hasRegisteredTournamentFinalized) {
-        // Initialize array if it doesn't exist
-        if (!acc[registration.tournament_id]) {
-          acc[registration.tournament_id] = [];
-        }
-
-        // Add this token ID to the array
-        acc[registration.tournament_id].push(registration.game_token_id);
+      // For participation, we don't care if tournament is finalized
+      // Just track that they participated
+      // Initialize array if it doesn't exist
+      if (!acc[registration.tournament_id]) {
+        acc[registration.tournament_id] = [];
       }
+
+      // Add this token ID to the array
+      acc[registration.tournament_id].push(registration.game_token_id);
+
       return acc;
     }, {} as Record<string, string[]>);
-  }, [requiredTournamentRegistrations, tournamentsData, currentTime]);
+  }, [requiredTournamentRegistrations, tournamentsData]);
 
   const parseTokenIds = (tokenIdsString: string): string[] => {
     try {
@@ -519,6 +589,78 @@ export function EnterTournamentDialog({
 
   // need to get the number of entries for each of the qualification methods of the qualifying type
 
+  // Build tournament validator qualification inputs for the hook
+  const tournamentValidatorQualificationInputs = useMemo<
+    TournamentValidatorInput[]
+  >(() => {
+    if (!isTournamentValidatorExtension || !tournamentValidatorConfig) {
+      return [];
+    }
+
+    const inputs: TournamentValidatorInput[] = [];
+
+    if (tournamentValidatorConfig.requirementType === "won") {
+      for (const tournament of validatorTournaments) {
+        const tournamentId = tournament.id.toString();
+        const wonInfoArray = hasWonTournamentMap[tournamentId];
+
+        if (wonInfoArray && wonInfoArray.length > 0) {
+          for (const wonInfo of wonInfoArray) {
+            inputs.push({
+              tournamentId: tournamentId,
+              tokenId: wonInfo.tokenId,
+              position: wonInfo.position,
+              tournamentName: feltToString(tournament.metadata.name),
+            });
+          }
+        }
+      }
+    } else {
+      // participated
+      for (const tournament of validatorTournaments) {
+        const tournamentId = tournament.id.toString();
+        const gameIds = hasParticipatedInTournamentMap[tournamentId];
+
+        if (gameIds && gameIds.length > 0) {
+          for (const gameId of gameIds) {
+            inputs.push({
+              tournamentId: tournamentId,
+              tokenId: gameId,
+              position: 1, // Participation = position 1
+              tournamentName: feltToString(tournament.metadata.name),
+            });
+          }
+        }
+      }
+    }
+
+    return inputs;
+  }, [
+    isTournamentValidatorExtension,
+    tournamentValidatorConfig,
+    validatorTournaments,
+    hasWonTournamentMap,
+    hasParticipatedInTournamentMap,
+  ]);
+
+  // Use the extension qualification hook to check entries left for tournament validators
+  const {
+    qualifications: extensionQualifications,
+    totalEntriesLeft: extensionTotalEntriesLeft,
+    bestQualification: extensionBestQualification,
+    loading: extensionQualificationsLoading,
+  } = useExtensionQualification(
+    extensionConfig?.address,
+    tournamentModel?.id.toString(),
+    address,
+    tournamentValidatorQualificationInputs,
+    isTournamentValidatorExtension && open
+  );
+
+  console.log("Extension Qualifications:", extensionQualifications);
+  console.log("Extension Total Entries Left:", extensionTotalEntriesLeft);
+  console.log("Extension Best Qualification:", extensionBestQualification);
+
   const qualificationMethods = useMemo(() => {
     const methods = [];
 
@@ -533,44 +675,6 @@ export function EnterTournamentDialog({
       }
     }
 
-    if (requirementVariant === "tournament") {
-      if (tournamentRequirementVariant === "winners") {
-        for (const tournament of tournamentsData) {
-          const tournamentId = tournament.id.toString();
-          const wonInfoArray = hasWonTournamentMap[tournamentId];
-
-          if (wonInfoArray && wonInfoArray.length > 0) {
-            // Add a qualification method for each winning token
-            for (const wonInfo of wonInfoArray) {
-              methods.push({
-                type: "tournament",
-                tournamentId: tournamentId,
-                gameId: wonInfo.tokenId,
-                position: wonInfo.position,
-              });
-            }
-          }
-        }
-      } else {
-        for (const tournament of tournamentsData) {
-          const tournamentId = tournament.id.toString();
-          const gameIds = hasParticipatedInTournamentMap[tournamentId];
-
-          if (gameIds && gameIds.length > 0) {
-            // Add a qualification method for each participated token
-            for (const gameId of gameIds) {
-              methods.push({
-                type: "tournament",
-                tournamentId: tournamentId,
-                gameId: gameId,
-                position: 1,
-              });
-            }
-          }
-        }
-      }
-    }
-
     if (requirementVariant === "allowlist") {
       methods.push({
         type: "allowlist",
@@ -579,22 +683,65 @@ export function EnterTournamentDialog({
     }
 
     if (requirementVariant === "extension") {
-      methods.push({
-        type: "extension",
-        address: address,
-      });
+      // Check if this is a tournament validator
+      if (isTournamentValidatorExtension && tournamentValidatorConfig) {
+        // For tournament validators, add qualification methods for each qualifying tournament token
+        if (tournamentValidatorConfig.requirementType === "won") {
+          for (const tournament of validatorTournaments) {
+            const tournamentId = tournament.id.toString();
+            const wonInfoArray = hasWonTournamentMap[tournamentId];
+
+            if (wonInfoArray && wonInfoArray.length > 0) {
+              for (const wonInfo of wonInfoArray) {
+                methods.push({
+                  type: "extension",
+                  tournamentId: tournamentId,
+                  gameId: wonInfo.tokenId,
+                  position: wonInfo.position,
+                  address: address,
+                });
+              }
+            }
+          }
+        } else {
+          // participated
+          for (const tournament of validatorTournaments) {
+            const tournamentId = tournament.id.toString();
+            const gameIds = hasParticipatedInTournamentMap[tournamentId];
+
+            if (gameIds && gameIds.length > 0) {
+              for (const gameId of gameIds) {
+                methods.push({
+                  type: "extension",
+                  tournamentId: tournamentId,
+                  gameId: gameId,
+                  position: 1,
+                  address: address,
+                });
+              }
+            }
+          }
+        }
+      } else {
+        // Generic extension
+        methods.push({
+          type: "extension",
+          address: address,
+        });
+      }
     }
 
     return methods;
   }, [
     hasEntryRequirement,
-    tournamentModel,
-    tournamentRequirementVariant,
     hasWonTournamentMap,
     hasParticipatedInTournamentMap,
     ownedTokenIds,
-    tournamentsData,
-    entryCount,
+    isTournamentValidatorExtension,
+    tournamentValidatorConfig,
+    validatorTournaments,
+    address,
+    requirementVariant,
   ]);
 
   const { data: qualificationEntries } = useGetTournamentQualificationEntries({
@@ -717,136 +864,6 @@ export function EnterTournamentDialog({
       };
     }
 
-    // Handle tournament-based entry requirements
-    if (requirementVariant === "tournament") {
-      if (!tournamentsData || tournamentsData.length === 0) {
-        return {
-          meetsEntryRequirements: false,
-          proof,
-          entriesLeftByTournament: [],
-        };
-      }
-
-      // Track best proof across all tournaments
-      let bestProof = { tournamentId: "", tokenId: "", position: 0 };
-      let maxEntriesLeft = 0;
-
-      // Check if the user meets at least one tournament requirement
-      for (const tournament of tournamentsData) {
-        const tournamentId = tournament.id.toString();
-        let tournamentCanEnter = false;
-        let tournamentTotalEntriesLeft = 0;
-        let tournamentBestProof = {
-          tournamentId: "",
-          tokenId: "",
-          position: 0,
-        };
-        let tournamentBestProofEntriesLeft = 0;
-
-        // If requirement is for winners, check hasWonTournamentMap
-        if (tournamentRequirementVariant === "winners") {
-          const wonInfoArray = hasWonTournamentMap[tournamentId] || [];
-
-          // Check each winning token
-          for (const wonInfo of wonInfoArray) {
-            // get the current entry count from the qualification data
-            const currentEntryCount =
-              qualificationEntries?.find(
-                (entry) =>
-                  entry["qualification_proof.Tournament.tournament_id"] ===
-                    tournamentId &&
-                  entry["qualification_proof.Tournament.position"] ===
-                    wonInfo.position &&
-                  entry["qualification_proof.Tournament.token_id"] ===
-                    wonInfo.tokenId
-              )?.entry_count ?? 0;
-
-            const remaining = hasEntryLimit
-              ? Number(entryLimit) - currentEntryCount
-              : Infinity;
-
-            // If this token has entries left
-            if (remaining > 0) {
-              tournamentCanEnter = true;
-              // Add to total entries left for this tournament
-              tournamentTotalEntriesLeft += remaining;
-
-              // If this is the best proof for this tournament so far
-              if (remaining > tournamentBestProofEntriesLeft) {
-                tournamentBestProof = {
-                  tournamentId,
-                  tokenId: wonInfo.tokenId,
-                  position: wonInfo.position,
-                };
-                tournamentBestProofEntriesLeft = remaining;
-              }
-            }
-          }
-        }
-        // If requirement is for participants, check hasParticipatedInTournamentMap
-        else if (tournamentRequirementVariant === "participants") {
-          const gameIds = hasParticipatedInTournamentMap[tournamentId] || [];
-
-          // Check each participated token
-          for (const gameId of gameIds) {
-            // get the current entry count from the qualification data
-            const currentEntryCount =
-              qualificationEntries?.find(
-                (entry) =>
-                  entry["qualification_proof.Tournament.tournament_id"] ===
-                    tournamentId &&
-                  entry["qualification_proof.Tournament.position"] === 1 &&
-                  entry["qualification_proof.Tournament.token_id"] === gameId
-              )?.entry_count ?? 0;
-
-            const remaining = hasEntryLimit
-              ? Number(entryLimit) - currentEntryCount
-              : Infinity;
-
-            // If this token has entries left
-            if (remaining > 0) {
-              tournamentCanEnter = true;
-              // Add to total entries left for this tournament
-              tournamentTotalEntriesLeft += remaining;
-
-              // If this is the best proof for this tournament so far
-              if (remaining > tournamentBestProofEntriesLeft) {
-                tournamentBestProof = {
-                  tournamentId,
-                  tokenId: gameId,
-                  position: 1,
-                };
-                tournamentBestProofEntriesLeft = remaining;
-              }
-            }
-          }
-        }
-
-        // If this tournament has valid entries
-        if (tournamentCanEnter) {
-          // Add to our entries left array with the total entries left
-          entriesLeftByTournament.push({
-            tournamentId,
-            entriesLeft: tournamentTotalEntriesLeft,
-          });
-
-          // Update overall can enter status
-          canEnter = true;
-
-          // Update best proof if this tournament has more entries left for a single token
-          if (tournamentBestProofEntriesLeft > maxEntriesLeft) {
-            bestProof = tournamentBestProof;
-            maxEntriesLeft = tournamentBestProofEntriesLeft;
-          }
-        }
-      }
-
-      // Set the best proof we found
-      if (canEnter) {
-        proof = bestProof;
-      }
-    }
-
     // Handle allowlist-based entry requirements
     if (requirementVariant === "allowlist") {
       // If no address, can't enter
@@ -909,7 +926,78 @@ export function EnterTournamentDialog({
         };
       }
 
-      // Use extension contract validation results
+      // Handle tournament validators - use the hook's results
+      if (isTournamentValidatorExtension && tournamentValidatorConfig) {
+        const qualifyingMode = tournamentValidatorConfig.qualifyingMode;
+
+        // Group qualifications by tournament ID to show per-tournament entries
+        const entriesPerTournament = new Map<string, number>();
+
+        extensionQualifications.forEach((qual) => {
+          const tId = qual.metadata?.tournamentId;
+          if (tId) {
+            const current = entriesPerTournament.get(tId) || 0;
+            entriesPerTournament.set(tId, current + qual.entriesLeft);
+          }
+        });
+
+        // Build entriesLeftByTournament array
+        const entriesLeftByTournament = Array.from(
+          entriesPerTournament.entries()
+        ).map(([tournamentId, entriesLeft]) => ({
+          tournamentId,
+          entriesLeft,
+        }));
+
+        // Determine if can enter based on qualifying mode
+        let canEnter = false;
+
+        if (qualifyingMode === 0) {
+          // AT_LEAST_ONE: Need at least one qualification
+          canEnter = extensionQualifications.length > 0;
+        } else if (qualifyingMode === 1) {
+          // CUMULATIVE_PER_TOURNAMENT: Need at least one qualification (track limits per tournament)
+          canEnter = extensionQualifications.length > 0;
+        } else if (qualifyingMode === 2) {
+          // ALL: Need qualifications for ALL required tournaments
+          const requiredTournamentCount =
+            tournamentValidatorConfig.tournamentIds.length;
+          const qualifiedTournamentCount = entriesPerTournament.size;
+          canEnter = qualifiedTournamentCount === requiredTournamentCount;
+        } else if (qualifyingMode === 3) {
+          // CUMULATIVE_PER_ENTRY: Need at least one qualification (track entries per token)
+          canEnter = extensionQualifications.length > 0;
+        } else if (qualifyingMode === 4) {
+          // ALL_PARTICIPATE_ANY_WIN: Must participate in all, but only need to win in any one
+          const requiredTournamentCount =
+            tournamentValidatorConfig.tournamentIds.length;
+          const qualifiedTournamentCount = entriesPerTournament.size;
+          canEnter = qualifiedTournamentCount === requiredTournamentCount;
+        } else if (qualifyingMode === 5) {
+          // ALL_WITH_CUMULATIVE: Must participate in all, entries multiply by count
+          const requiredTournamentCount =
+            tournamentValidatorConfig.tournamentIds.length;
+          const qualifiedTournamentCount = entriesPerTournament.size;
+          canEnter = qualifiedTournamentCount === requiredTournamentCount;
+        }
+
+        // Use best qualification from the hook
+        const proof = extensionBestQualification
+          ? {
+              tournamentId: extensionBestQualification.metadata?.tournamentId,
+              tokenId: extensionBestQualification.metadata?.tokenId,
+              position: extensionBestQualification.metadata?.position,
+            }
+          : { tournamentId: "", tokenId: "", position: 0 };
+
+        return {
+          meetsEntryRequirements: canEnter,
+          proof,
+          entriesLeftByTournament,
+        };
+      }
+
+      // Generic extension validation
       const remaining =
         extensionEntriesLeft !== null ? extensionEntriesLeft : Infinity;
 
@@ -937,10 +1025,6 @@ export function EnterTournamentDialog({
       entriesLeftByTournament,
     };
   }, [
-    tournamentsData,
-    tournamentRequirementVariant,
-    hasWonTournamentMap,
-    hasParticipatedInTournamentMap,
     hasEntryRequirement,
     qualificationEntries,
     ownedTokenIds,
@@ -948,12 +1032,19 @@ export function EnterTournamentDialog({
     requirementVariant,
     address,
     allowlistAddresses,
-    entryCount,
     extensionValidEntry,
     extensionEntriesLeft,
     manualTokenOwnershipVerified,
     manualTokenId,
+    isTournamentValidatorExtension,
+    tournamentValidatorConfig,
+    extensionQualifications,
+    extensionBestQualification,
+    hasEntryLimit,
+    requiredTokenAddresses,
   ]);
+
+  console.log(entriesLeftByTournament);
 
   // display the entry fee distribution
   // Shares are now in basis points (10000 = 100%) to allow 2 decimal precision
@@ -988,6 +1079,12 @@ export function EnterTournamentDialog({
     (Number(BigInt(tournamentModel?.entry_fee.Some?.amount ?? 0)) *
       (prizePoolShare / 10000)) /
     10 ** entryTokenDecimals;
+
+  console.log(
+    isTournamentValidatorExtension,
+    tournamentValidatorConfig,
+    validatorTournaments
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1144,16 +1241,37 @@ export function EnterTournamentDialog({
               <span className="px-2">
                 {requirementVariant === "token" ? (
                   "You must hold the NFT"
-                ) : requirementVariant === "tournament" ? (
-                  <div className="flex flex-row items-center gap-2">
-                    {`You must have ${
-                      tournamentRequirementVariant === "winners"
-                        ? "won"
-                        : "participated in"
-                    }:`}
-                  </div>
                 ) : requirementVariant === "extension" ? (
-                  "Entry validated by extension contract"
+                  isTournamentValidatorExtension &&
+                  tournamentValidatorConfig ? (
+                    <div className="flex flex-col gap-1">
+                      <div className="flex flex-row items-center gap-2">
+                        {`You must have ${
+                          tournamentValidatorConfig.requirementType === "won"
+                            ? "won"
+                            : "participated in"
+                        }:`}
+                      </div>
+                      <div className="text-xs text-brand-muted">
+                        Mode:{" "}
+                        {tournamentValidatorConfig.qualifyingMode === 0
+                          ? "At Least One"
+                          : tournamentValidatorConfig.qualifyingMode === 1
+                          ? "Cumulative per Tournament"
+                          : tournamentValidatorConfig.qualifyingMode === 2
+                          ? "All"
+                          : tournamentValidatorConfig.qualifyingMode === 3
+                          ? "Cumulative per Entry"
+                          : tournamentValidatorConfig.qualifyingMode === 4
+                          ? "All Participated, Any Top Positions"
+                          : tournamentValidatorConfig.qualifyingMode === 5
+                          ? "All Participated, Cumulative Top Positions"
+                          : "Unknown"}
+                      </div>
+                    </div>
+                  ) : (
+                    "Entry validated by extension contract"
+                  )
                 ) : (
                   "Must be part of the allowlist"
                 )}
@@ -1284,25 +1402,78 @@ export function EnterTournamentDialog({
                       )}
                   </div>
                 </>
-              ) : requirementVariant === "tournament" ? (
-                <div className="flex flex-col gap-2 px-4">
-                  {tournamentsData.map((tournament) => {
-                    const tournamentFinalizedTime =
-                      BigInt(tournament?.schedule.game.end ?? 0n) +
-                      BigInt(tournament?.schedule.submission_duration ?? 0n);
-                    const hasTournamentFinalized =
-                      tournamentFinalizedTime < currentTime;
-                    return (
-                      <div
-                        key={tournament.id}
-                        className="flex flex-row items-center justify-between border border-brand-muted rounded-md p-2"
-                      >
-                        <span>{feltToString(tournament.metadata.name)}</span>
-                        {address ? (
-                          tournamentRequirementVariant === "winners" ? (
-                            !!hasWonTournamentMap[tournament.id.toString()] &&
-                            hasWonTournamentMap[tournament.id.toString()]
-                              .length > 0 ? (
+              ) : requirementVariant === "extension" ? (
+                address ? (
+                  isTournamentValidatorExtension &&
+                  tournamentValidatorConfig ? (
+                    // Tournament validator - show individual tournaments
+                    <div className="flex flex-col gap-2 px-4">
+                      {validatorTournaments.map((tournament) => {
+                        const tournamentFinalizedTime =
+                          BigInt(tournament?.schedule.game.end ?? 0n) +
+                          BigInt(
+                            tournament?.schedule.submission_duration ?? 0n
+                          );
+                        const hasTournamentFinalized =
+                          tournamentFinalizedTime < currentTime;
+                        return (
+                          <div
+                            key={tournament.id}
+                            className="flex flex-row items-center justify-between border border-brand-muted rounded-md p-2"
+                          >
+                            <span>
+                              {feltToString(tournament.metadata.name)}
+                            </span>
+                            {tournamentValidatorConfig.requirementType ===
+                            "won" ? (
+                              !!hasWonTournamentMap[tournament.id.toString()] &&
+                              hasWonTournamentMap[tournament.id.toString()]
+                                .length > 0 ? (
+                                <div className="flex flex-row items-center gap-2">
+                                  <span className="w-5">
+                                    <CHECK />
+                                  </span>
+                                  {entriesLeftByTournament.find(
+                                    (entry) =>
+                                      entry.tournamentId ===
+                                      tournament.id.toString()
+                                  )?.entriesLeft ?? 0 > 0 ? (
+                                    <span>
+                                      {`${
+                                        entriesLeftByTournament.find(
+                                          (entry) =>
+                                            entry.tournamentId ===
+                                            tournament.id.toString()
+                                        )?.entriesLeft
+                                      } ${
+                                        entriesLeftByTournament.find(
+                                          (entry) =>
+                                            entry.tournamentId ===
+                                            tournament.id.toString()
+                                        )?.entriesLeft === 1
+                                          ? "entry"
+                                          : "entries"
+                                      } left`}
+                                    </span>
+                                  ) : (
+                                    <span>No entries left</span>
+                                  )}
+                                </div>
+                              ) : !hasTournamentFinalized ? (
+                                <span className="text-warning">
+                                  Not Finalized
+                                </span>
+                              ) : (
+                                <div className="flex flex-row items-center gap-2">
+                                  <span className="w-5">
+                                    <X />
+                                  </span>
+                                  <span>No qualified entries</span>
+                                </div>
+                              )
+                            ) : !!hasParticipatedInTournamentMap[
+                                tournament.id.toString()
+                              ] ? (
                               <div className="flex flex-row items-center gap-2">
                                 <span className="w-5">
                                   <CHECK />
@@ -1338,107 +1509,73 @@ export function EnterTournamentDialog({
                                 Not Finalized
                               </span>
                             ) : (
-                              <div className="flex flex-row items-center gap-2">
-                                <span className="w-5">
-                                  <X />
-                                </span>
-                                <span>No qualified entries</span>
-                              </div>
-                            )
-                          ) : !!hasParticipatedInTournamentMap[
-                              tournament.id.toString()
-                            ] ? (
-                            <div className="flex flex-row items-center gap-2">
                               <span className="w-5">
-                                <CHECK />
+                                <X />
                               </span>
-                              {entriesLeftByTournament.find(
-                                (entry) =>
-                                  entry.tournamentId ===
-                                  tournament.id.toString()
-                              )?.entriesLeft ?? 0 > 0 ? (
-                                <span>
-                                  {`${
-                                    entriesLeftByTournament.find(
-                                      (entry) =>
-                                        entry.tournamentId ===
-                                        tournament.id.toString()
-                                    )?.entriesLeft
-                                  } ${
-                                    entriesLeftByTournament.find(
-                                      (entry) =>
-                                        entry.tournamentId ===
-                                        tournament.id.toString()
-                                    )?.entriesLeft === 1
-                                      ? "entry"
-                                      : "entries"
-                                  } left`}
-                                </span>
-                              ) : (
-                                <span>No entries left</span>
-                              )}
-                            </div>
-                          ) : !hasTournamentFinalized ? (
-                            <span className="text-warning">Not Finalized</span>
-                          ) : (
-                            <span className="w-5">
-                              <X />
-                            </span>
-                          )
-                        ) : (
-                          <span className="text-neutral">Connect Account</span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : requirementVariant === "extension" ? (
-                address ? (
-                  <div className="flex flex-col gap-2 px-4">
-                    <div className="flex flex-row items-center justify-between border border-brand-muted rounded-md p-2">
-                      <div className="flex flex-col gap-1">
-                        <span className="font-mono text-xs">
-                          {displayAddress(extensionConfig?.address ?? "")}
-                        </span>
-                      </div>
-                      {meetsEntryRequirements ? (
-                        <div className="flex flex-row items-center gap-2">
-                          <span className="w-5">
-                            <CHECK />
-                          </span>
-                          <span>
-                            {(() => {
-                              const entriesLeft = entriesLeftByTournament.find(
-                                (entry) => entry.address === address
-                              )?.entriesLeft;
-
-                              // Show entries count if there's a limit (not infinite)
-                              if (
-                                entriesLeft !== undefined &&
-                                entriesLeft !== Infinity
-                              ) {
-                                return `${entriesLeft} ${
-                                  entriesLeft === 1 ? "entry" : "entries"
-                                } left`;
-                              }
-                              return "Can enter";
-                            })()}
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="flex flex-row items-center gap-2">
-                          <span className="w-5">
-                            <X />
-                          </span>
-                          <span>No entries left</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {/* Show total entries left across all tournaments */}
+                      {extensionTotalEntriesLeft > 0 && (
+                        <div className="px-4 pt-2 text-sm text-brand-muted">
+                          Total: {extensionTotalEntriesLeft}{" "}
+                          {extensionTotalEntriesLeft === 1
+                            ? "entry"
+                            : "entries"}{" "}
+                          left across all qualifying tournaments
                         </div>
                       )}
                     </div>
-                    <span className="text-xs text-muted-foreground">
-                      Note: Final validation will be performed by the extension
-                      contract on-chain
-                    </span>
-                  </div>
+                  ) : (
+                    // Generic extension
+                    <div className="flex flex-col gap-2 px-4">
+                      <div className="flex flex-row items-center justify-between border border-brand-muted rounded-md p-2">
+                        <div className="flex flex-col gap-1">
+                          <span className="font-mono text-xs">
+                            {displayAddress(extensionConfig?.address ?? "")}
+                          </span>
+                        </div>
+                        {meetsEntryRequirements ? (
+                          <div className="flex flex-row items-center gap-2">
+                            <span className="w-5">
+                              <CHECK />
+                            </span>
+                            <span>
+                              {(() => {
+                                const entriesLeft =
+                                  entriesLeftByTournament.find(
+                                    (entry) => entry.address === address
+                                  )?.entriesLeft;
+
+                                // Show entries count if there's a limit (not infinite)
+                                if (
+                                  entriesLeft !== undefined &&
+                                  entriesLeft !== Infinity
+                                ) {
+                                  return `${entriesLeft} ${
+                                    entriesLeft === 1 ? "entry" : "entries"
+                                  } left`;
+                                }
+                                return "Can enter";
+                              })()}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex flex-row items-center gap-2">
+                            <span className="w-5">
+                              <X />
+                            </span>
+                            <span>No entries left</span>
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        Note: Final validation will be performed by the
+                        extension contract on-chain
+                      </span>
+                    </div>
+                  )
                 ) : (
                   <span className="text-neutral px-4">Connect Account</span>
                 )
@@ -1601,7 +1738,8 @@ export function EnterTournamentDialog({
                   (controllerUsername.length === 0 ||
                     !playerAddress ||
                     isLookingUpUsername)) ||
-                isEntering
+                isEntering ||
+                extensionQualificationsLoading
               }
               onClick={handleEnterTournament}
             >
@@ -1609,6 +1747,11 @@ export function EnterTournamentDialog({
                 <div className="flex items-center gap-2">
                   <LoadingSpinner />
                   <span>Entering...</span>
+                </div>
+              ) : extensionQualificationsLoading ? (
+                <div className="flex items-center gap-2">
+                  <LoadingSpinner />
+                  <span>Checking qualifications...</span>
                 </div>
               ) : (
                 "Enter Tournament"

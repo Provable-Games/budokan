@@ -243,9 +243,7 @@ pub impl ScheduleAssertionsImpl of ScheduleAssertionsTrait {
     }
 
     fn assert_tournament_is_finalized(self: Schedule, current_time: u64) {
-        assert!(
-            self.is_tournament_finalized(current_time), "Budokan: Tournament is not finalized",
-        );
+        assert!(self.is_tournament_finalized(current_time), "Budokan: Tournament is not finalized");
     }
 
     fn assert_registration_open(self: Schedule, current_time: u64) {

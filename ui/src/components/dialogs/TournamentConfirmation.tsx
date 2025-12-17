@@ -19,6 +19,7 @@ import {
   formatTime,
   getOrdinalSuffix,
   displayAddress,
+  calculateDistribution,
 } from "@/lib/utils";
 import { calculatePaidPlaces } from "@/lib/utils/formatting";
 import { getTokenLogoUrl } from "@/lib/tokensMeta";
@@ -95,6 +96,83 @@ const TournamentConfirmation = ({
     formData.entryFees?.value,
     formData.entryFees?.token?.address,
   ]);
+
+  // Expand distributed bonus prizes into individual position entries
+  const expandedBonusPrizes = useMemo(() => {
+    if (!formData.bonusPrizes) return [];
+
+    const expanded: any[] = [];
+
+    formData.bonusPrizes.forEach((prize) => {
+      // For ERC20 prizes with distribution, expand into individual positions
+      if (
+        prize.type === "ERC20" &&
+        prize.distribution &&
+        prize.distributionCount &&
+        prize.distributionCount > 1
+      ) {
+        // Calculate distribution percentages
+        let distributionPercentages: number[] = [];
+        const weight = 1; // Default weight for uniform distribution
+
+        if (prize.distribution === "linear") {
+          distributionPercentages = calculateDistribution(
+            prize.distributionCount,
+            weight,
+            0,
+            0,
+            0,
+            "linear"
+          );
+        } else if (prize.distribution === "exponential") {
+          distributionPercentages = calculateDistribution(
+            prize.distributionCount,
+            weight,
+            0,
+            0,
+            0,
+            "exponential"
+          );
+        } else {
+          // Uniform distribution
+          distributionPercentages = calculateDistribution(
+            prize.distributionCount,
+            weight,
+            0,
+            0,
+            0,
+            "uniform"
+          );
+        }
+
+        // Create individual position entries
+        distributionPercentages.forEach((percentage, index) => {
+          const tokenPrice =
+            prices?.[prize.token.address] ?? 0;
+          expanded.push({
+            type: "ERC20",
+            token: prize.token,
+            position: prize.position + index,
+            amount: (percentage * prize.amount) / 100,
+            value: (percentage * prize.amount * tokenPrice) / 100,
+            isDistributed: true,
+          });
+        });
+      } else {
+        // For NFTs or non-distributed ERC20 prizes, keep as-is
+        const tokenPrice =
+          prize.type === "ERC20" ? prices?.[prize.token.address] ?? 0 : 0;
+        expanded.push({
+          ...prize,
+          value:
+            prize.type === "ERC20" ? prize.amount * tokenPrice : undefined,
+          isDistributed: false,
+        });
+      }
+    });
+
+    return expanded;
+  }, [formData.bonusPrizes, prices]);
 
   const handleConfirm = async () => {
     setIsCreating(true);
@@ -323,6 +401,34 @@ const TournamentConfirmation = ({
                         <span className="capitalize">
                           {formData.gatingOptions.tournament?.requirement}
                         </span>
+                        <span className="text-muted-foreground">
+                          Qualifying Mode:
+                        </span>
+                        <span>
+                          {formData.gatingOptions.tournament?.qualifying_mode === 0
+                            ? "At Least One"
+                            : formData.gatingOptions.tournament?.qualifying_mode === 1
+                            ? "Cumulative per Tournament"
+                            : formData.gatingOptions.tournament?.qualifying_mode === 2
+                            ? "All"
+                            : formData.gatingOptions.tournament?.qualifying_mode === 3
+                            ? "Cumulative per Entry"
+                            : formData.gatingOptions.tournament?.qualifying_mode === 4
+                            ? "All Participate, Any Win"
+                            : formData.gatingOptions.tournament?.qualifying_mode === 5
+                            ? "All With Cumulative"
+                            : "Unknown"}
+                        </span>
+                        {formData.gatingOptions.tournament?.requirement === "won" && (
+                          <>
+                            <span className="text-muted-foreground">
+                              Top Positions:
+                            </span>
+                            <span>
+                              Top {formData.gatingOptions.tournament?.top_positions ?? 1}
+                            </span>
+                          </>
+                        )}
                         <span>Total Tournaments:</span>
                         <span>
                           {
@@ -575,11 +681,11 @@ const TournamentConfirmation = ({
                   <div className="flex flex-row justify-between items-center">
                     <h3 className="font-bold text-lg">Bonus Prizes</h3>
                     <span className="text-muted-foreground">
-                      {formData.bonusPrizes?.length}
+                      {expandedBonusPrizes.length} position{expandedBonusPrizes.length !== 1 ? 's' : ''}
                     </span>
                   </div>
                   <div className="flex flex-col gap-2">
-                    {formData.bonusPrizes?.map((prize, index) => (
+                    {expandedBonusPrizes.map((prize, index) => (
                       <div
                         key={index}
                         className="flex items-center justify-between p-3 border border-brand-muted rounded-md"
@@ -599,11 +705,7 @@ const TournamentConfirmation = ({
                               className="w-6 h-6 rounded-full"
                             />
                             <span className="text-neutral">
-                              {prices?.[prize.token.address] &&
-                                `~$${(
-                                  prize.amount *
-                                  (prices?.[prize.token.address] ?? 0)
-                                ).toFixed(2)}`}
+                              ~${(prize.value ?? 0).toFixed(2)}
                             </span>
                           </div>
                         ) : (

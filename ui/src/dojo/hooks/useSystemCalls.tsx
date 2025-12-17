@@ -129,6 +129,25 @@ export const useSystemCalls = () => {
     }
   };
 
+  const validateEntry = async (
+    tournamentId: BigNumberish,
+    gameTokenId: BigNumberish,
+    proof: string[]
+  ) => {
+    try {
+      const tx = await account?.execute({
+        contractAddress: tournamentAddress,
+        entrypoint: "validate_entry",
+        calldata: CallData.compile([tournamentId, gameTokenId, proof]),
+      });
+
+      return tx;
+    } catch (error) {
+      console.error("Error executing validate entry:", error);
+      throw error;
+    }
+  };
+
   const submitScores = async (
     tournamentId: BigNumberish,
     tournamentName: string,
@@ -778,6 +797,7 @@ export const useSystemCalls = () => {
     tournamentName: string,
     rewardTypes: Array<CairoCustomEnum>
   ) => {
+    console.log(rewardTypes);
     try {
       let calls = [];
       for (const rewardType of rewardTypes) {
@@ -787,6 +807,8 @@ export const useSystemCalls = () => {
           calldata: CallData.compile([tournamentId, rewardType]),
         });
       }
+
+      console.log(calls);
 
       const tx = await account?.execute(calls);
 
@@ -1079,6 +1101,8 @@ export const useSystemCalls = () => {
         ]),
       });
 
+      console.log(result);
+
       // Result is Option<u8>
       // If Option::Some, result[0] is 0 and result[1] is the value
       // If Option::None, result[0] is 1
@@ -1097,6 +1121,7 @@ export const useSystemCalls = () => {
 
   return {
     approveAndEnterTournament,
+    validateEntry,
     submitScores,
     submitScoresBatched,
     approveAndAddPrizes,

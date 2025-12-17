@@ -3,19 +3,6 @@
 use starknet::ContractAddress;
 use starknet::storage_access::StorePacking;
 
-// Registration with is_banned field included
-// game_address and game_token_id stored as map key (ContractAddress, u64)
-// Remaining fields packed efficiently into RegistrationData
-#[derive(Copy, Drop, Serde, starknet::Store)]
-pub struct Registration {
-    pub game_address: ContractAddress,
-    pub game_token_id: u64,
-    pub context_id: u64,
-    pub entry_number: u32,
-    pub has_submitted: bool,
-    pub is_banned: bool,
-}
-
 // Constants for packing/unpacking
 const TWO_POW_32: u128 = 0x100000000;
 const TWO_POW_64: u128 = 0x10000000000000000;

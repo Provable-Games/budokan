@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
+// Re-export Distribution from budokan_interfaces
+pub use budokan_interfaces::distribution::Distribution;
 use starknet::storage_access::StorePacking;
 
 /// Basis points constant: 10000 = 100%
@@ -15,34 +17,6 @@ pub const DIST_TYPE_CUSTOM: u8 = 3;
 const TWO_POW_8: u128 = 0x100; // 2^8
 const MASK_8: u128 = 0xFF; // 8 bits of 1s
 const MASK_16: u128 = 0xFFFF; // 16 bits of 1s
-
-/// Distribution type for asset payouts
-/// Determines how shares are calculated across positions
-#[derive(Drop, Copy, Serde, PartialEq)]
-pub enum Distribution {
-    /// Linear decreasing distribution with configurable weight
-    /// Position i gets weight * (n - i + 1) / sum(weight * 1..n) of available share
-    /// Weight is 10-1000 (scaled by 10 for 1 decimal place)
-    /// E.g. 10 = 1.0, 15 = 1.5, 25 = 2.5, 100 = 10.0
-    /// Higher weight = steeper drop from 1st to last
-    /// Example with weight=10 (1.0) and 3 positions: 1st=50%, 2nd=33%, 3rd=17%
-    /// Example with weight=100 (10.0) and 3 positions: 1st=~69%, 2nd=~23%, 3rd=~8%
-    Linear: u16,
-    /// Exponential distribution with configurable steepness
-    /// Uses formula: share = (1 - (i-1)/n)^weight, then normalized
-    /// Weight is 10-1000 (scaled by 10 for 1 decimal place)
-    /// E.g. 10 = 1.0, 15 = 1.5, 25 = 2.5, 100 = 10.0
-    /// Higher weight = steeper curve toward top positions
-    Exponential: u16,
-    /// Uniform distribution - all positions get equal share
-    /// Each position gets available_share / total_positions
-    /// Useful for quests, airdrops, participation rewards
-    Uniform,
-    /// Custom distribution with user-defined shares per position
-    /// Span contains the share (in basis points) for each position
-    /// Shares should sum to available_share (will be normalized with dust if not exact)
-    Custom: Span<u16>,
-}
 
 /// StorePacking implementation for Distribution (without positions count)
 /// Packs into felt252: dist_type(8) | dist_param(16)

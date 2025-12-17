@@ -201,15 +201,15 @@ export interface Prize {
   sponsor_address: string;
 }
 
-// Type definition for `tournaments::components::models::tournament::PrizeClaim` struct
-export interface PrizeClaim {
+// Type definition for `tournaments::components::models::tournament::RewardClaim` struct
+export interface RewardClaim {
   tournament_id: BigNumberish;
-  prize_type: PrizeTypeEnum;
+  reward_type: RewardTypeEnum;
   claimed: boolean;
 }
 
-// Type definition for `tournaments::components::models::tournament::PrizeClaimValue` struct
-export interface PrizeClaimValue {
+// Type definition for `tournaments::components::models::tournament::RewardClaimValue` struct
+export interface RewardClaimValue {
   claimed: boolean;
 }
 
@@ -320,17 +320,38 @@ export type EntryRequirement = {
 // Type definition for `tournaments::components::models::tournament::EntryRequirementType` enum
 export type EntryRequirementType = {
   token: string;
-  tournament: TournamentType;
   allowlist: Array<string>;
+  extension: ExtensionConfig;
 };
 export type EntryRequirementTypeEnum = CairoCustomEnum;
 
+export type ExtensionConfig = {
+  address: string;
+  config: Array<BigNumberish>;
+};
+
+// Type definition for `tournaments::components::models::tournament::RewardType` enum
+export type RewardType = {
+  Prize: PrizeTypeEnum;
+  EntryFee: EntryFeeRewardTypeEnum;
+};
+export type RewardTypeEnum = CairoCustomEnum;
+
 // Type definition for `tournaments::components::models::tournament::PrizeType` enum
 export type PrizeType = {
-  EntryFees: Role;
-  Sponsored: BigNumberish;
+  Single: BigNumberish;
+  Distributed: [BigNumberish, BigNumberish];
 };
 export type PrizeTypeEnum = CairoCustomEnum;
+
+// Type definition for `tournaments::components::models::tournament::EntryFeeRewardType` enum
+export type EntryFeeRewardType = {
+  Position: BigNumberish;
+  TournamentCreator: any;
+  GameCreator: any;
+  Refund: BigNumberish;
+};
+export type EntryFeeRewardTypeEnum = CairoCustomEnum;
 
 // Type definition for `tournaments::components::models::tournament::Role` enum
 export enum Role {
@@ -407,8 +428,8 @@ export interface SchemaType extends ISchemaType {
     PlatformMetrics: WithFieldOrder<PlatformMetrics>;
     PlatformMetricsValue: WithFieldOrder<PlatformMetricsValue>;
     Prize: WithFieldOrder<Prize>;
-    PrizeClaim: WithFieldOrder<PrizeClaim>;
-    PrizeClaimValue: WithFieldOrder<PrizeClaimValue>;
+    RewardClaim: WithFieldOrder<RewardClaim>;
+    RewardClaimValue: WithFieldOrder<RewardClaimValue>;
     PrizeMetrics: WithFieldOrder<PrizeMetrics>;
     PrizeMetricsValue: WithFieldOrder<PrizeMetricsValue>;
     PrizeValue: WithFieldOrder<PrizeValue>;
@@ -653,16 +674,19 @@ export const schemaTemplate: {
     }),
     sponsor_address: "",
   },
-  PrizeClaim: {
-    fieldOrder: ["tournament_id", "prize_type", "claimed"],
+  RewardClaim: {
+    fieldOrder: ["tournament_id", "reward_type", "claimed"],
     tournament_id: 0,
-    prize_type: new CairoCustomEnum({
-      EntryFees: Role.TournamentCreator,
-      sponsored: undefined,
+    reward_type: new CairoCustomEnum({
+      Prize: new CairoCustomEnum({
+        Single: 1,
+        Distributed: undefined,
+      }),
+      EntryFee: undefined,
     }),
     claimed: false,
   },
-  PrizeClaimValue: {
+  RewardClaimValue: {
     fieldOrder: ["claimed"],
     claimed: false,
   },

@@ -42,6 +42,7 @@ pub mod EntryRequirementComponent {
         /// Extension address for extension-gated requirements
         EntryRequirement_extension_address: Map<u64, ContractAddress>,
         /// Extension config data (stored as Vec)
+        /// TODO: Remove as this will be stored within the extension contract
         EntryRequirement_extension_config: Map<u64, Vec<felt252>>,
         /// Qualification entries tracking keyed by (context_id, qualification_hash)
         EntryRequirement_qualification_entries: Map<(u64, felt252), u8>,

@@ -10,12 +10,6 @@ sierra-replace-ids = true
 
 [dependencies]
 starknet.workspace = true
-budokan = { path = "../budokan" }
-budokan_distribution = { path = "../distribution" }
-budokan_registration = { path = "../registration" }
-budokan_entry_fee = { path = "../entry_fee" }
-budokan_entry_requirement = { path = "../entry_requirement" }
-budokan_prize = { path = "../prize" }
 
 [dev-dependencies]
 snforge_std.workspace = true

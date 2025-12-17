@@ -58,9 +58,7 @@ pub fn calculate_total(
 /// Calculate the rounding dust (difference between available_share and sum of all shares)
 /// This dust should be added to the last payout to ensure 100% distribution
 /// Returns the dust amount in basis points
-pub fn calculate_dust(
-    distribution: Distribution, total_payouts: u32, available_share: u16,
-) -> u16 {
+pub fn calculate_dust(distribution: Distribution, total_payouts: u32, available_share: u16) -> u16 {
     let total = calculate_total(distribution, total_payouts, available_share);
     if total > available_share {
         // This shouldn't happen, but handle gracefully
@@ -72,7 +70,8 @@ pub fn calculate_dust(
 
 /// Calculate share with dust allocation for payout_index 1 (winner)
 /// This ensures that all available_share is distributed by giving the rounding remainder
-/// to payout_index 1 (winner) (the winner). Use this for actual prize distribution to prevent stuck funds.
+/// to payout_index 1 (winner) (the winner). Use this for actual prize distribution to prevent stuck
+/// funds.
 ///
 /// # Arguments
 /// * `distribution` - The distribution type to use (includes custom shares if Custom variant)
@@ -303,7 +302,9 @@ mod tests {
         assert!(share1 > share5, "Payout index 1 > Payout index 5");
 
         // Payout index 1 should get significantly more than last payout
-        assert!(share1 > share5 * 10, "Payout index 1 should get >10x payout index 5 with weight 50");
+        assert!(
+            share1 > share5 * 10, "Payout index 1 should get >10x payout index 5 with weight 50",
+        );
 
         // Total should sum to approximately 100%
         let total = share1 + share2 + share3 + share4 + share5;
@@ -641,10 +642,12 @@ mod tests {
 
         // Higher weight should give payout index 1 more
         assert!(
-            share1_low < share1_medium, "Medium weight should give more to payout_index 1 (winner) than low",
+            share1_low < share1_medium,
+            "Medium weight should give more to payout_index 1 (winner) than low",
         );
         assert!(
-            share1_medium < share1_high, "High weight should give more to payout_index 1 (winner) than medium",
+            share1_medium < share1_high,
+            "High weight should give more to payout_index 1 (winner) than medium",
         );
 
         // Verify the progression makes sense

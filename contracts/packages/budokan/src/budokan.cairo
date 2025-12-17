@@ -279,15 +279,18 @@ pub mod Budokan {
 
         /// @title Create tournament
         /// @notice Allows anyone to create a new tournament with specified configuration.
-        /// @dev Validates schedule, game config, entry fees, and entry requirements before creation.
+        /// @dev Validates schedule, game config, entry fees, and entry requirements before
+        /// creation.
         ///      Mints a creator token for reward distribution purposes.
         /// @param self A reference to the ContractState object.
         /// @param creator_rewards_address The address to mint the creator's game token to.
         /// @param metadata The tournament metadata (name, description, etc.).
         /// @param schedule The tournament schedule (registration, game, submission periods).
-        /// @param game_config The tournament game configuration (address, settings, soulbound flag, play URL).
+        /// @param game_config The tournament game configuration (address, settings, soulbound flag,
+        /// play URL).
         /// @param entry_fee Optional entry fee configuration with distribution settings.
-        /// @param entry_requirement Optional entry requirement (token, allowlist, or extension-based).
+        /// @param entry_requirement Optional entry requirement (token, allowlist, or
+        /// extension-based).
         /// @return A TournamentModel struct containing the created tournament details.
         fn create_tournament(
             ref self: ContractState,
@@ -348,12 +351,15 @@ pub mod Budokan {
 
         /// @title Enter tournament
         /// @notice Registers a player for a tournament and mints them a game token.
-        /// @dev Validates tournament exists, registration is open, entry requirements are met, and processes entry fees.
-        ///      The game token is minted to the qualifying address or player based on entry requirements.
+        /// @dev Validates tournament exists, registration is open, entry requirements are met, and
+        /// processes entry fees.
+        ///      The game token is minted to the qualifying address or player based on entry
+        ///      requirements.
         /// @param self A reference to the ContractState object.
         /// @param tournament_id The tournament ID to enter.
         /// @param player_name The display name for the player.
-        /// @param player_address The address to receive the game token (if no qualification override).
+        /// @param player_address The address to receive the game token (if no qualification
+        /// override).
         /// @param qualification Optional qualification proof for gated tournaments.
         /// @return A tuple of (game_token_id, entry_number) for the registered player.
         fn enter_tournament(
@@ -441,8 +447,10 @@ pub mod Budokan {
         }
 
         /// @title Validate entry
-        /// @notice Validates a tournament entry against extension-based entry requirements and bans invalid entries.
-        /// @dev Only works with extension-based entry requirements. Can only be called between registration start and game start.
+        /// @notice Validates a tournament entry against extension-based entry requirements and bans
+        /// invalid entries.
+        /// @dev Only works with extension-based entry requirements. Can only be called between
+        /// registration start and game start.
         ///      If validation fails, the entry is marked as banned.
         /// @param self A reference to the ContractState object.
         /// @param tournament_id The tournament ID to validate entry for.
@@ -532,12 +540,14 @@ pub mod Budokan {
 
         /// @title Submit score
         /// @notice Submits a player's score to the tournament leaderboard.
-        /// @dev Validates tournament phase (must be in Submission period), registration status, and leaderboard placement.
+        /// @dev Validates tournament phase (must be in Submission period), registration status, and
+        /// leaderboard placement.
         ///      Position parameter allows players to claim their ranking efficiently.
         /// @param self A reference to the ContractState object.
         /// @param tournament_id The tournament ID to submit score for.
         /// @param token_id The game token ID containing the score.
-        /// @param position The claimed position on the leaderboard (validated against actual score).
+        /// @param position The claimed position on the leaderboard (validated against actual
+        /// score).
         fn submit_score(ref self: ContractState, tournament_id: u64, token_id: u64, position: u8) {
             // assert tournament exists
             self._assert_tournament_exists(tournament_id);
@@ -586,9 +596,7 @@ pub mod Budokan {
                 LeaderboardResult::ScoreTooHigh => {
                     panic!("Budokan: Score too high for position");
                 },
-                LeaderboardResult::LeaderboardFull => {
-                    panic!("Budokan: Leaderboard is full");
-                },
+                LeaderboardResult::LeaderboardFull => { panic!("Budokan: Leaderboard is full"); },
                 LeaderboardResult::InvalidConfig => {
                     panic!("Budokan: Invalid leaderboard config");
                 },
@@ -597,8 +605,10 @@ pub mod Budokan {
 
         /// @title Claim reward
         /// @notice Unified function for claiming both sponsored prizes and entry fee rewards.
-        /// @dev Tournament must be finalized before any rewards can be claimed. Validates reward hasn't been claimed already.
-        ///      Supports both Prize (single/distributed) and EntryFee (position/game creator/refund/additional share) reward types.
+        /// @dev Tournament must be finalized before any rewards can be claimed. Validates reward
+        /// hasn't been claimed already.
+        ///      Supports both Prize (single/distributed) and EntryFee (position/game
+        ///      creator/refund/additional share) reward types.
         /// @param self A reference to the ContractState object.
         /// @param tournament_id The tournament ID to claim rewards from.
         /// @param reward_type The type of reward to claim (Prize or EntryFee variant).
@@ -614,27 +624,30 @@ pub mod Budokan {
                 RewardType::Prize(prize_type) => {
                     self._assert_prize_not_claimed(tournament_id, prize_type);
                     self._claim_prize(tournament_id, tournament, prize_type);
-                    self._set_prize_claim(tournament_id, prize_type);
                 },
                 RewardType::EntryFee(entry_fee_type) => {
                     self._assert_entry_fee_reward_not_claimed(tournament_id, entry_fee_type);
                     self._claim_entry_fee_reward(tournament_id, tournament, entry_fee_type);
-                    self._set_entry_fee_reward_claim(tournament_id, entry_fee_type);
                 },
             }
+
+            self._set_reward_claim(tournament_id, reward_type);
         }
 
         /// @title Add prize
         /// @notice Adds a sponsored prize to an active tournament.
-        /// @dev Tournament must be in the Live phase. Tokens are transferred from caller to contract upon addition.
+        /// @dev Tournament must be in the Live phase. Tokens are transferred from caller to
+        /// contract upon addition.
         ///      Position parameter determines whether prize is single-position or distributed.
         /// @param self A reference to the ContractState object.
         /// @param tournament_id The tournament to add the prize to.
         /// @param token_address The token address for the prize (ERC20 or ERC721).
-        /// @param token_type The token type data (ERC20 with amount/distribution, or ERC721 with id).
+        /// @param token_type The token type data (ERC20 with amount/distribution, or ERC721 with
+        /// id).
         /// @param position Position for Single prizes, None for Distributed prizes:
         ///        - Some(n): Prize goes to position n on leaderboard (Single prize)
-        ///        - None: Prize is distributed across positions (Distributed prize, requires distribution in ERC20Data)
+        ///        - None: Prize is distributed across positions (Distributed prize, requires
+        ///        distribution in ERC20Data)
         /// @return A Prize struct containing the added prize details.
         fn add_prize(
             ref self: ContractState,
@@ -675,7 +688,8 @@ pub mod Budokan {
 
         // Leaderboard operations
         /// @title Get leaderboard (internal)
-        /// @notice Retrieves the leaderboard from the leaderboard component and converts to an array.
+        /// @notice Retrieves the leaderboard from the leaderboard component and converts to an
+        /// array.
         /// @dev Reads from the leaderboard component using the Store trait.
         /// @param self A reference to the ContractState object.
         /// @param tournament_id The tournament ID to query.
@@ -818,7 +832,8 @@ pub mod Budokan {
 
         /// @title Create tournament (internal)
         /// @notice Creates and stores a new tournament with all configuration.
-        /// @dev Increments tournament counter, stores packed data, initializes leaderboard, and emits events.
+        /// @dev Increments tournament counter, stores packed data, initializes leaderboard, and
+        /// emits events.
         ///      Stores entry fees, distribution, and requirements using component storage.
         /// @param self A reference to the ContractState object.
         /// @param creator_token_id The token ID minted for the tournament creator.
@@ -965,35 +980,44 @@ pub mod Budokan {
             }
         }
 
-        fn _set_prize_claim(ref self: ContractState, tournament_id: u64, prize_type: PrizeType) {
-            self.prize.set_prize_claimed(tournament_id, prize_type);
+        fn _set_reward_claim(ref self: ContractState, tournament_id: u64, reward_type: RewardType) {
+            // Set the claim state based on reward type
+            match reward_type {
+                RewardType::Prize(prize_type) => {
+                    self.prize.set_prize_claimed(tournament_id, prize_type);
+                },
+                RewardType::EntryFee(entry_fee_type) => {
+                    match entry_fee_type {
+                        EntryFeeRewardType::Position(position) => {
+                            self
+                                .entry_fee_position_claimed
+                                .entry((tournament_id, position))
+                                .write(true);
+                        },
+                        EntryFeeRewardType::TournamentCreator => {
+                            self
+                                .entry_fee
+                                .set_claimed(tournament_id, EntryFeeClaimType::AdditionalShare(0));
+                        },
+                        EntryFeeRewardType::GameCreator => {
+                            self
+                                .entry_fee
+                                .set_claimed(tournament_id, EntryFeeClaimType::GameCreator);
+                        },
+                        EntryFeeRewardType::Refund(token_id) => {
+                            self
+                                .entry_fee
+                                .set_claimed(tournament_id, EntryFeeClaimType::Refund(token_id));
+                        },
+                    }
+                },
+            }
 
             // Emit event if relayer is configured
             let relayer_address = self.event_relayer.read();
             if !relayer_address.is_zero() {
                 let relayer = IBudokanEventRelayerDispatcher { contract_address: relayer_address };
-                relayer.emit_prize_claim(tournament_id, prize_type, true);
-            }
-        }
-
-        fn _set_entry_fee_reward_claim(
-            ref self: ContractState, tournament_id: u64, entry_fee_type: EntryFeeRewardType,
-        ) {
-            match entry_fee_type {
-                EntryFeeRewardType::Position(position) => {
-                    self.entry_fee_position_claimed.entry((tournament_id, position)).write(true);
-                },
-                EntryFeeRewardType::TournamentCreator => {
-                    self
-                        .entry_fee
-                        .set_claimed(tournament_id, EntryFeeClaimType::AdditionalShare(0));
-                },
-                EntryFeeRewardType::GameCreator => {
-                    self.entry_fee.set_claimed(tournament_id, EntryFeeClaimType::GameCreator);
-                },
-                EntryFeeRewardType::Refund(token_id) => {
-                    self.entry_fee.set_claimed(tournament_id, EntryFeeClaimType::Refund(token_id));
-                },
+                relayer.emit_reward_claim(tournament_id, reward_type, true);
             }
         }
 
@@ -1536,7 +1560,9 @@ pub mod Budokan {
                         );
                         self
                             .prize
-                            .payout_erc20(prize.token_address, erc20_data.amount, recipient_address);
+                            .payout_erc20(
+                                prize.token_address, erc20_data.amount, recipient_address,
+                            );
                     },
                     TokenTypeData::erc721(erc721_data) => {
                         self
@@ -1656,6 +1682,22 @@ pub mod Budokan {
             let tournament = self._get_tournament(tournament_id);
             let game_address = tournament.game_config.address;
             self.registration.mark_score_submitted(game_address, token_id);
+
+            // Emit registration event with has_submitted=true
+            let relayer_address = self.event_relayer.read();
+            if !relayer_address.is_zero() {
+                let registration = self.registration._get_registration(game_address, token_id);
+                let relayer = IBudokanEventRelayerDispatcher { contract_address: relayer_address };
+                relayer
+                    .emit_registration(
+                        game_address,
+                        token_id,
+                        registration.context_id,
+                        registration.entry_number,
+                        registration.has_submitted,
+                        registration.is_banned,
+                    );
+            }
         }
 
         fn _process_entry_requirement(

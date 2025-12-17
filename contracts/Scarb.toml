@@ -44,3 +44,15 @@ inlining-strategy = "avoid"
 [profile.slot]
 [profile.sepolia]
 [profile.mainnet]
+
+[tool.snforge]
+# Fork configurations for testing
+[[tool.snforge.fork]]
+name = "sepolia"
+url = "https://starknet-sepolia.public.blastapi.io"
+block_id.tag = "latest"
+
+[[tool.snforge.fork]]
+name = "mainnet"
+url = "https://starknet-mainnet.public.blastapi.io"
+block_id.tag = "latest"

@@ -109,8 +109,8 @@ pub fn calculate_slots_needed(share_count: u32) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::{
-        calculate_slot_position, calculate_slots_needed, get_packed_share, pow_2_u256_16,
-        set_packed_share, SHARES_PER_SLOT,
+        SHARES_PER_SLOT, calculate_slot_position, calculate_slots_needed, get_packed_share,
+        pow_2_u256_16, set_packed_share,
     };
 
     #[test]

@@ -43,7 +43,7 @@ import { ClaimPrizesDialog } from "@/components/dialogs/ClaimPrizes";
 import { SubmitScoresDialog } from "@/components/dialogs/SubmitScores";
 import {
   useGetTournamentPrizesAggregations,
-  useGetTournamentPrizeClaimsAggregations,
+  useGetTournamentRewardClaimsAggregations,
   useGetTournaments,
   useGetTournamentsCount,
   useGetTournamentLeaderboards,
@@ -278,12 +278,14 @@ const Tournament = () => {
       active: !!tournamentId,
     });
 
-  // Fetch prize claims aggregations to track claimed vs unclaimed prizes
-  const { data: claimsAggregations } = useGetTournamentPrizeClaimsAggregations({
-    namespace,
-    tournamentId: tournamentId ?? 0,
-    active: !!tournamentId,
-  });
+  // Fetch reward claims aggregations to track claimed vs unclaimed prizes
+  const { data: claimsAggregations } = useGetTournamentRewardClaimsAggregations(
+    {
+      namespace,
+      tournamentId: tournamentId ?? 0,
+      active: !!tournamentId,
+    }
+  );
 
   console.log(claimsAggregations);
 
@@ -629,27 +631,24 @@ const Tournament = () => {
     return "upcoming";
   }, [isStarted, isEnded, isSubmitted]);
 
-  // handle fetching of tournament data if there is a tournament entry requirement
+  // handle fetching of tournament data if there is a tournament validator extension requirement
 
-  const tournament: CairoCustomEnum =
+  const extensionRequirement =
     tournamentModel?.entry_requirement.Some?.entry_requirement_type?.variant
-      ?.tournament;
-
-  const tournamentVariant = tournament?.activeVariant();
+      ?.extension;
 
   const tournamentIdsQuery = useMemo(() => {
-    if (!tournamentModel) return [];
-    if (tournamentVariant === "winners") {
-      return tournamentModel.entry_requirement.Some?.entry_requirement_type?.variant?.tournament?.variant?.winners?.map(
-        (winner: any) => addAddressPadding(bigintToHex(winner))
-      );
-    } else if (tournamentVariant === "participants") {
-      return tournamentModel.entry_requirement.Some?.entry_requirement_type?.variant?.tournament?.variant?.participants?.map(
-        (participant: any) => addAddressPadding(bigintToHex(participant))
-      );
-    }
-    return [];
-  }, [tournamentModel, tournamentVariant]);
+    if (!tournamentModel || !extensionRequirement) return [];
+
+    // Check if this extension is a tournament validator by looking at the config format
+    // Tournament validator config: [qualifier_type, ...tournament_ids]
+    const config = extensionRequirement.config;
+    if (!config || config.length < 2) return [];
+
+    // Extract tournament IDs (skip first element which is qualifier_type)
+    const tournamentIds = config.slice(1);
+    return tournamentIds.map((id: any) => padU64(BigInt(id)));
+  }, [tournamentModel, extensionRequirement]);
 
   const { data: tournaments } = useGetTournaments({
     namespace: namespace,
@@ -660,12 +659,13 @@ const Tournament = () => {
     active: tournamentIdsQuery.length > 0,
   });
 
-  const tournamentsData = tournaments?.map((tournament) => {
-    return {
+  const tournamentsData = useMemo(() => {
+    if (!tournaments) return [];
+    return tournaments.map((tournament) => ({
       ...processTournamentFromSql(tournament),
       entry_count: tournament.entry_count,
-    };
-  });
+    }));
+  }, [tournaments]);
 
   const { settings } = useSettings({
     gameAddresses: gameAddress ? [gameAddress] : [],
@@ -1022,6 +1022,8 @@ const Tournament = () => {
               entryCount={entryCount}
               isStarted={isStarted}
               isEnded={isEnded}
+              tournamentModel={tournamentModel}
+              tournamentsData={tournamentsData}
             />
             <MyEntries
               tournamentId={tournamentModel?.id}

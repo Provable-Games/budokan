@@ -105,6 +105,8 @@ const EntryRequirements = ({ form }: StepProps) => {
 
     form.setValue("gatingOptions.token", undefined);
     form.setValue("gatingOptions.tournament.requirement", "participated");
+    form.setValue("gatingOptions.tournament.qualifying_mode", 0); // Default to ANY
+    form.setValue("gatingOptions.tournament.top_positions", 0); // Default to 0 for participated
     form.setValue("gatingOptions.tournament.tournaments", []);
     form.setValue("gatingOptions.addresses", []);
     form.setValue("gatingOptions.extension", undefined);
@@ -216,32 +218,47 @@ const EntryRequirements = ({ form }: StepProps) => {
                       <div className="flex gap-2">
                         <Button
                           type="button"
-                          variant={selectedPreset === null ? "default" : "outline"}
+                          variant={
+                            selectedPreset === null ? "default" : "outline"
+                          }
                           onClick={() => {
                             setSelectedPreset(null);
                             setSnapshotId("");
-                            form.setValue("gatingOptions.extension.address", "");
+                            form.setValue(
+                              "gatingOptions.extension.address",
+                              ""
+                            );
                             form.setValue("gatingOptions.extension.config", "");
                             setExtensionError("");
                           }}
                         >
                           Custom Contract
                         </Button>
-                        {Object.entries(PRESET_EXTENSIONS).map(([key, config]) => (
-                          <Button
-                            key={key}
-                            type="button"
-                            variant={selectedPreset === key ? "default" : "outline"}
-                            onClick={() => {
-                              setSelectedPreset(key);
-                              setExtensionError("");
-                              form.setValue("gatingOptions.extension.address", "");
-                              form.setValue("gatingOptions.extension.config", "");
-                            }}
-                          >
-                            {config.name}
-                          </Button>
-                        ))}
+                        {Object.entries(PRESET_EXTENSIONS).map(
+                          ([key, config]) => (
+                            <Button
+                              key={key}
+                              type="button"
+                              variant={
+                                selectedPreset === key ? "default" : "outline"
+                              }
+                              onClick={() => {
+                                setSelectedPreset(key);
+                                setExtensionError("");
+                                form.setValue(
+                                  "gatingOptions.extension.address",
+                                  ""
+                                );
+                                form.setValue(
+                                  "gatingOptions.extension.config",
+                                  ""
+                                );
+                              }}
+                            >
+                              {config.name}
+                            </Button>
+                          )
+                        )}
                       </div>
                     </div>
                   )}
@@ -253,106 +270,112 @@ const EntryRequirements = ({ form }: StepProps) => {
                       name="enableEntryLimit"
                       render={({ field }) => (
                         <FormItem className="space-y-0 flex flex-col gap-4 sm:w-1/2">
-                        <div className="flex flex-col">
-                          <div className="flex flex-row justify-between">
-                            <div className="flex flex-row items-center gap-5">
-                              <div className="flex flex-row items-center gap-2">
-                                <FormLabel className="font-brand text-lg xl:text-xl 2xl:text-2xl 3xl:text-3xl">
-                                  Entry Limit
-                                </FormLabel>
-                                <HoverCard openDelay={50} closeDelay={0}>
-                                  <HoverCardTrigger asChild>
-                                    <span className="w-4 h-4 text-brand-muted hover:text-brand cursor-help">
-                                      <INFO />
-                                    </span>
-                                  </HoverCardTrigger>
-                                  <HoverCardContent className="w-72 p-4 text-sm break-words" align="start" side="top">
-                                    <p className="text-muted-foreground whitespace-normal">
-                                      Limits how many times each eligible address can enter.
-                                      <br />
-                                      <br />
-                                      If disabled, participants have unlimited entries per requirement.
-                                    </p>
-                                  </HoverCardContent>
-                                </HoverCard>
-                              </div>
-                              <FormDescription className="hidden sm:block">
-                                Set an entry limit for the tournament
-                              </FormDescription>
-                            </div>
-                            <FormControl>
-                              <div className="flex flex-row items-center gap-2">
-                                <span className="uppercase text-neutral text-xs font-bold">
-                                  Optional
-                                </span>
-                                <Switch
-                                  size="sm"
-                                  checked={field.value}
-                                  onCheckedChange={field.onChange}
-                                />
-                              </div>
-                            </FormControl>
-                          </div>
-                        </div>
-                        {field.value && (
-                          <FormField
-                            control={form.control}
-                            name="gatingOptions.entry_limit"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormControl>
-                                  <div className="flex flex-col sm:flex-row items-center gap-5">
-                                    <div
-                                      className={`flex flex-row items-center justify-center sm:justify-start gap-2 sm:w-1/2`}
+                          <div className="flex flex-col">
+                            <div className="flex flex-row justify-between">
+                              <div className="flex flex-row items-center gap-5">
+                                <div className="flex flex-row items-center gap-2">
+                                  <FormLabel className="font-brand text-lg xl:text-xl 2xl:text-2xl 3xl:text-3xl">
+                                    Entry Limit
+                                  </FormLabel>
+                                  <HoverCard openDelay={50} closeDelay={0}>
+                                    <HoverCardTrigger asChild>
+                                      <span className="w-4 h-4 text-brand-muted hover:text-brand cursor-help">
+                                        <INFO />
+                                      </span>
+                                    </HoverCardTrigger>
+                                    <HoverCardContent
+                                      className="w-72 p-4 text-sm break-words"
+                                      align="start"
+                                      side="top"
                                     >
-                                      {ENTRY_LIMIT_OPTIONS.map(
-                                        ({ value, label }) => (
-                                          <Button
-                                            key={value}
-                                            type="button"
-                                            variant={
-                                              field.value === value
-                                                ? "default"
-                                                : "outline"
-                                            }
-                                            className="px-2 w-10 h-10 flex items-center justify-center"
-                                            onClick={() => {
-                                              field.onChange(value);
-                                            }}
-                                          >
-                                            {label}
-                                          </Button>
-                                        )
-                                      )}
-                                    </div>
-                                    <div className="flex flex-col gap-2 w-1/2">
-                                      <div className="flex justify-between items-center">
-                                        <Label className="xl:text-xs 2xl:text-lg">
-                                          Entries
-                                        </Label>
-                                        <span className="text-sm text-muted-foreground text-xl">
-                                          {field.value ?? 0}
-                                        </span>
+                                      <p className="text-muted-foreground whitespace-normal">
+                                        Limits how many times each eligible
+                                        address can enter.
+                                        <br />
+                                        <br />
+                                        If disabled, participants have unlimited
+                                        entries per requirement.
+                                      </p>
+                                    </HoverCardContent>
+                                  </HoverCard>
+                                </div>
+                                <FormDescription className="hidden sm:block">
+                                  Set an entry limit for the tournament
+                                </FormDescription>
+                              </div>
+                              <FormControl>
+                                <div className="flex flex-row items-center gap-2">
+                                  <span className="uppercase text-neutral text-xs font-bold">
+                                    Optional
+                                  </span>
+                                  <Switch
+                                    size="sm"
+                                    checked={field.value}
+                                    onCheckedChange={field.onChange}
+                                  />
+                                </div>
+                              </FormControl>
+                            </div>
+                          </div>
+                          {field.value && (
+                            <FormField
+                              control={form.control}
+                              name="gatingOptions.entry_limit"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormControl>
+                                    <div className="flex flex-col sm:flex-row items-center gap-5">
+                                      <div
+                                        className={`flex flex-row items-center justify-center sm:justify-start gap-2 sm:w-1/2`}
+                                      >
+                                        {ENTRY_LIMIT_OPTIONS.map(
+                                          ({ value, label }) => (
+                                            <Button
+                                              key={value}
+                                              type="button"
+                                              variant={
+                                                field.value === value
+                                                  ? "default"
+                                                  : "outline"
+                                              }
+                                              className="px-2 w-10 h-10 flex items-center justify-center"
+                                              onClick={() => {
+                                                field.onChange(value);
+                                              }}
+                                            >
+                                              {label}
+                                            </Button>
+                                          )
+                                        )}
                                       </div>
-                                      <Slider
-                                        value={[field.value ?? 0]}
-                                        onValueChange={([entries]) => {
-                                          field.onChange(entries);
-                                        }}
-                                        max={100}
-                                        min={1}
-                                        step={1}
-                                      />
+                                      <div className="flex flex-col gap-2 w-1/2">
+                                        <div className="flex justify-between items-center">
+                                          <Label className="xl:text-xs 2xl:text-lg">
+                                            Entries
+                                          </Label>
+                                          <span className="text-sm text-muted-foreground text-xl">
+                                            {field.value ?? 0}
+                                          </span>
+                                        </div>
+                                        <Slider
+                                          value={[field.value ?? 0]}
+                                          onValueChange={([entries]) => {
+                                            field.onChange(entries);
+                                          }}
+                                          max={100}
+                                          min={1}
+                                          step={1}
+                                        />
+                                      </div>
                                     </div>
-                                  </div>
-                                </FormControl>
-                              </FormItem>
-                            )}
-                          />
-                        )}
-                      </FormItem>
-                    )}
-                  />
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
+                          )}
+                        </FormItem>
+                      )}
+                    />
                   )}
                 </div>
 
@@ -388,49 +411,288 @@ const EntryRequirements = ({ form }: StepProps) => {
                   <>
                     <div className="w-full h-0.5 bg-brand/25" />
                     <div className="space-y-4">
-                      <FormField
-                        control={form.control}
-                        name="gatingOptions.tournament.requirement"
-                        render={({ field }) => (
-                          <FormItem>
-                            <div className="flex flex-row items-center gap-5">
-                              <FormLabel className="font-brand text-lg xl:text-xl 2xl:text-2xl 3xl:text-3xl">
-                                Requirement
-                              </FormLabel>
-                              <FormDescription className="hidden sm:block">
-                                Choose whether previous tournaments must have
-                                been won or only participated in
-                              </FormDescription>
-                            </div>
-                            <FormControl>
-                              <div className="flex gap-2">
-                                <Button
-                                  type="button"
-                                  variant={
-                                    field.value === "participated"
-                                      ? "default"
-                                      : "outline"
-                                  }
-                                  onClick={() => field.onChange("participated")}
-                                >
-                                  Participated
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant={
-                                    field.value === "won"
-                                      ? "default"
-                                      : "outline"
-                                  }
-                                  onClick={() => field.onChange("won")}
-                                >
-                                  Won
-                                </Button>
+                      <div className="flex flex-col sm:flex-row gap-4 sm:h-24">
+                        <FormField
+                          control={form.control}
+                          name="gatingOptions.tournament.requirement"
+                          render={({ field }) => (
+                            <FormItem className="flex flex-col gap-4 sm:w-1/2">
+                              <div className="flex flex-row items-center gap-5">
+                                <FormLabel className="font-brand text-lg xl:text-xl 2xl:text-2xl 3xl:text-3xl">
+                                  Requirement
+                                </FormLabel>
+                                <FormDescription className="hidden sm:block">
+                                  Participated or Top Position
+                                </FormDescription>
                               </div>
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
+                              <FormControl>
+                                <div className="flex gap-2 items-center">
+                                  <Button
+                                    type="button"
+                                    variant={
+                                      field.value === "participated"
+                                        ? "default"
+                                        : "outline"
+                                    }
+                                    onClick={() => {
+                                      field.onChange("participated");
+                                      // Reset top_positions to 0 for participated
+                                      form.setValue(
+                                        "gatingOptions.tournament.top_positions",
+                                        0
+                                      );
+                                    }}
+                                  >
+                                    Participated
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant={
+                                      field.value === "won"
+                                        ? "default"
+                                        : "outline"
+                                    }
+                                    onClick={() => {
+                                      field.onChange("won");
+                                      // Set default top_positions to 1 for won
+                                      if (
+                                        !form.watch(
+                                          "gatingOptions.tournament.top_positions"
+                                        ) ||
+                                        form.watch(
+                                          "gatingOptions.tournament.top_positions"
+                                        ) === 0
+                                      ) {
+                                        form.setValue(
+                                          "gatingOptions.tournament.top_positions",
+                                          1
+                                        );
+                                      }
+                                    }}
+                                  >
+                                    Top Position
+                                  </Button>
+                                  {form.watch(
+                                    "gatingOptions.tournament.requirement"
+                                  ) === "won" && (
+                                    <div
+                                      className="flex flex-col gap-1 ml-2"
+                                      style={{ width: "220px" }}
+                                    >
+                                      <div className="flex gap-1">
+                                        {[1, 3, 5, 10, 20].map((value) => (
+                                          <Button
+                                            key={value}
+                                            type="button"
+                                            variant={
+                                              form.watch(
+                                                "gatingOptions.tournament.top_positions"
+                                              ) === value
+                                                ? "default"
+                                                : "outline"
+                                            }
+                                            className="px-1 h-6 text-xs flex items-center justify-center flex-1"
+                                            onClick={() => {
+                                              form.setValue(
+                                                "gatingOptions.tournament.top_positions",
+                                                value
+                                              );
+                                            }}
+                                          >
+                                            {value}
+                                          </Button>
+                                        ))}
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <Slider
+                                          value={[
+                                            form.watch(
+                                              "gatingOptions.tournament.top_positions"
+                                            ) ?? 1,
+                                          ]}
+                                          onValueChange={([positions]) => {
+                                            form.setValue(
+                                              "gatingOptions.tournament.top_positions",
+                                              positions
+                                            );
+                                          }}
+                                          max={200}
+                                          min={1}
+                                          step={1}
+                                          className="flex-1"
+                                        />
+                                        <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                          Top{" "}
+                                          {form.watch(
+                                            "gatingOptions.tournament.top_positions"
+                                          ) ?? 1}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+                        <div className="hidden sm:block w-0.5 h-full bg-brand/25" />
+                        <div className="sm:hidden w-full h-0.5 bg-brand/25" />
+                        <FormField
+                          control={form.control}
+                          name="gatingOptions.tournament.qualifying_mode"
+                          render={({ field }) => (
+                            <FormItem className="flex flex-col gap-4 sm:w-1/2">
+                              <div className="flex flex-row items-center gap-5">
+                                <div className="flex flex-row items-center gap-2">
+                                  <FormLabel className="font-brand text-lg xl:text-xl 2xl:text-2xl 3xl:text-3xl">
+                                    Qualifying Mode
+                                  </FormLabel>
+                                  <HoverCard openDelay={50} closeDelay={0}>
+                                    <HoverCardTrigger asChild>
+                                      <span className="w-4 h-4 text-brand-muted hover:text-brand cursor-help">
+                                        <INFO />
+                                      </span>
+                                    </HoverCardTrigger>
+                                    <HoverCardContent
+                                      className="w-80 p-4 text-sm"
+                                      align="start"
+                                      side="top"
+                                    >
+                                      <div className="flex flex-col gap-2">
+                                        <div>
+                                          <span className="font-semibold">
+                                            At Least One:
+                                          </span>{" "}
+                                          Qualify in at least one tournament
+                                        </div>
+                                        <div>
+                                          <span className="font-semibold">
+                                            All:
+                                          </span>{" "}
+                                          Must qualify in all tournaments
+                                        </div>
+                                        <div>
+                                          <span className="font-semibold">
+                                            Cumulative per Tournament:
+                                          </span>{" "}
+                                          Track entries per qualifying
+                                          tournament
+                                        </div>
+                                        <div>
+                                          <span className="font-semibold">
+                                            Cumulative per Entry:
+                                          </span>{" "}
+                                          Track entries per qualifying token ID
+                                        </div>
+                                        {form.watch(
+                                          "gatingOptions.tournament.requirement"
+                                        ) === "won" && (
+                                          <>
+                                            <div>
+                                              <span className="font-semibold">
+                                                All Participated, Any Top
+                                                Positions:
+                                              </span>{" "}
+                                              Must participate in all, but only
+                                              need to win in any one
+                                            </div>
+                                            <div>
+                                              <span className="font-semibold">
+                                                All Particpated, Cumulative Top
+                                                Positions:
+                                              </span>{" "}
+                                              Must participate in all, entries
+                                              multiply by tournament count
+                                            </div>
+                                          </>
+                                        )}
+                                      </div>
+                                    </HoverCardContent>
+                                  </HoverCard>
+                                </div>
+                                <FormDescription className="hidden sm:block">
+                                  Evaluation mode
+                                </FormDescription>
+                              </div>
+                              <FormControl>
+                                <div className="flex gap-2 overflow-x-auto overflow-y-hidden">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant={
+                                      field.value === 0 ? "default" : "outline"
+                                    }
+                                    onClick={() => field.onChange(0)}
+                                  >
+                                    At Least One
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant={
+                                      field.value === 2 ? "default" : "outline"
+                                    }
+                                    onClick={() => field.onChange(2)}
+                                  >
+                                    All
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant={
+                                      field.value === 1 ? "default" : "outline"
+                                    }
+                                    onClick={() => field.onChange(1)}
+                                  >
+                                    Cumulative per Tournament
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant={
+                                      field.value === 3 ? "default" : "outline"
+                                    }
+                                    onClick={() => field.onChange(3)}
+                                  >
+                                    Cumulative per Entry
+                                  </Button>
+                                  {form.watch(
+                                    "gatingOptions.tournament.requirement"
+                                  ) === "won" && (
+                                    <>
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant={
+                                          field.value === 4
+                                            ? "default"
+                                            : "outline"
+                                        }
+                                        onClick={() => field.onChange(4)}
+                                      >
+                                        All Participated, Any Top Positions
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant={
+                                          field.value === 5
+                                            ? "default"
+                                            : "outline"
+                                        }
+                                        onClick={() => field.onChange(5)}
+                                      >
+                                        All Particpated, Cumulative Top
+                                        Positions
+                                      </Button>
+                                    </>
+                                  )}
+                                </div>
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+                      </div>
                       <div className="w-full h-0.5 bg-brand/25" />
                       <FormField
                         control={form.control}

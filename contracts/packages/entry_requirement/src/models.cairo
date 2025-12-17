@@ -1,46 +1,12 @@
 // SPDX-License-Identifier: BUSL-1.1
 
+// Re-export all types from budokan_interfaces::entry_requirement
+pub use budokan_interfaces::entry_requirement::{
+    EntryRequirement, EntryRequirementType, ExtensionConfig, NFTQualification, QualificationEntries,
+    QualificationProof,
+};
 use starknet::ContractAddress;
 use starknet::storage_access::StorePacking;
-
-#[derive(Copy, Drop, Serde, PartialEq)]
-pub struct EntryRequirement {
-    pub entry_limit: u32, // Max ~4.3B entries per qualified address
-    pub entry_requirement_type: EntryRequirementType,
-}
-
-#[derive(Copy, Drop, Serde, PartialEq)]
-pub enum EntryRequirementType {
-    token: ContractAddress,
-    allowlist: Span<ContractAddress>,
-    extension: ExtensionConfig,
-}
-
-#[derive(Copy, Drop, Serde, PartialEq)]
-pub struct ExtensionConfig {
-    pub address: ContractAddress,
-    pub config: Span<felt252>,
-}
-
-#[derive(Copy, Drop, Serde)]
-pub struct QualificationEntries {
-    pub context_id: u64,
-    pub qualification_proof: QualificationProof,
-    pub entry_count: u8,
-}
-
-#[derive(Copy, Drop, Serde, PartialEq)]
-pub enum QualificationProof {
-    /// For qualifying via NFT ownership
-    NFT: NFTQualification,
-    Address: ContractAddress,
-    Extension: Span<felt252>,
-}
-
-#[derive(Copy, Drop, Serde, PartialEq, starknet::Store)]
-pub struct NFTQualification {
-    pub token_id: u256,
-}
 
 /// Entry requirement metadata
 /// Packs: entry_limit (u32) | req_type (u8) into a single u64

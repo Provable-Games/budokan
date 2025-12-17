@@ -27,3 +27,14 @@ game_components_minigame.workspace = true
 [dev-dependencies]
 snforge_std.workspace = true
 openzeppelin_token.workspace = true
+
+[tool.snforge]
+[[tool.snforge.fork]]
+name = "sepolia"
+url = "https://api.cartridge.gg/x/starknet/sepolia"
+block_id.tag = "latest"
+
+[[tool.snforge.fork]]
+name = "mainnet"
+url = "https://api.cartridge.gg/x/starknet/mainnet"
+block_id.tag = "latest"

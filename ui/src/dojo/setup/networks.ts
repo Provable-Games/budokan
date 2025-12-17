@@ -50,6 +50,7 @@ export type DojoChainConfig = {
   explorers?: ChainExplorers;
   denshokanAddress?: string;
   budokanAddress?: string;
+  tournamentValidatorAddress?: string;
 };
 
 const snSepoliaConfig: DojoChainConfig = {
@@ -73,7 +74,9 @@ const snSepoliaConfig: DojoChainConfig = {
   denshokanAddress:
     "0x02334dc9c950c74c3228e2a343d495ae36f0b4edf06767a679569e9f9de08776",
   budokanAddress:
-    "0x076c643ca7016edf6d28444989f1ae3c7cd5a51f590d10b9db93df37883bfb92",
+    "0x04695a4e3e012d4bf11dde6d58f97e24ff6d104ca1519a681bc81a1d0cf1c437",
+  tournamentValidatorAddress:
+    "0x04beaeea6de96394bd7256040e1396b387a7652a6d3287fc9a48ff068edee843",
 };
 
 const snMainnetConfig: DojoChainConfig = {

@@ -21,12 +21,15 @@ import { padAddress } from "@/lib/utils";
 import { ScoreTableDialog } from "@/components/dialogs/ScoreTable";
 import { useGetTournamentRegistrants } from "@/dojo/hooks/useSqlQueries";
 import { useDojo } from "@/context/dojo";
+import { Tournament } from "@/generated/models.gen";
 
 interface ScoreTableProps {
   tournamentId: BigNumberish;
   entryCount: number;
   isStarted: boolean;
   isEnded: boolean;
+  tournamentModel?: Tournament;
+  tournamentsData?: Tournament[];
 }
 
 const ScoreTable = ({
@@ -34,6 +37,8 @@ const ScoreTable = ({
   entryCount,
   isStarted,
   isEnded,
+  tournamentModel,
+  tournamentsData = [],
 }: ScoreTableProps) => {
   const { namespace, selectedChainConfig } = useDojo();
   const [showScores, setShowScores] = useState(false);
@@ -252,6 +257,8 @@ const ScoreTable = ({
         entryCount={entryCount}
         isStarted={isStarted}
         isEnded={isEnded}
+        tournamentModel={tournamentModel}
+        tournamentsData={tournamentsData}
       />
     </TournamentCard>
   );

@@ -4,12 +4,12 @@
 mod BudokanEventRelayer {
     use budokan_event_relayer::constants::DEFAULT_NS;
     use budokan_event_relayer::events::{
-        EntryCount, Leaderboard, PlatformMetrics, Prize, PrizeClaim, PrizeMetrics,
-        QualificationEntries, Registration, Tournament,
+        EntryCount, Leaderboard, PlatformMetrics, Prize, PrizeMetrics, QualificationEntries,
+        Registration, RewardClaim, Tournament,
     };
     use budokan_event_relayer::interfaces::IBudokanEventRelayer;
     use budokan_event_relayer::models::{
-        EntryFee, EntryRequirement, GameConfig, Metadata, PrizeType, QualificationProof, Schedule,
+        EntryFee, EntryRequirement, GameConfig, Metadata, QualificationProof, RewardType, Schedule,
         TokenTypeData,
     };
     use dojo::event::EventStorage;
@@ -152,12 +152,12 @@ mod BudokanEventRelayer {
                 );
         }
 
-        fn emit_prize_claim(
-            ref self: ContractState, tournament_id: u64, prize_type: PrizeType, claimed: bool,
+        fn emit_reward_claim(
+            ref self: ContractState, tournament_id: u64, reward_type: RewardType, claimed: bool,
         ) {
             self.assert_only_budokan();
             let mut world = self.world(@DEFAULT_NS());
-            world.emit_event(@PrizeClaim { tournament_id, prize_type, claimed });
+            world.emit_event(@RewardClaim { tournament_id, reward_type, claimed });
         }
 
         // ============ Metrics Events ============

@@ -1,3 +1,5 @@
+// Re-export types from budokan interface
+pub use budokan_interfaces::budokan::{Period, Phase, Schedule};
 use starknet::storage_access::StorePacking;
 
 // Constants for packing/unpacking Schedule
@@ -5,15 +7,9 @@ const TWO_POW_35: u128 = 0x800000000; // 2^35
 const MASK_25: u128 = 0x1FFFFFF; // 25 bits of 1s
 const MASK_35: u128 = 0x7FFFFFFFF; // 35 bits of 1s
 
-#[derive(Copy, Drop, Serde, PartialEq)]
-pub struct Schedule {
-    pub registration: Option<Period>,
-    pub game: Period,
-    pub submission_duration: u64,
-}
-
 /// StorePacking implementation for Schedule
-/// Packs into u256: registration_start(35) | registration_end(35) | game_start(35) | game_end(35) | submission_duration(25)
+/// Packs into u256: registration_start(35) | registration_end(35) | game_start(35) | game_end(35) |
+/// submission_duration(25)
 /// Total: 4×35 + 25 = 165 bits fits in u256
 /// registration_start = 0 means no registration period
 pub impl ScheduleStorePacking of StorePacking<Schedule, u256> {
@@ -23,7 +19,8 @@ pub impl ScheduleStorePacking of StorePacking<Schedule, u256> {
             Option::None => (0, 0),
         };
 
-        // Layout: registration_start(35) | registration_end(35) | game_start(35) | game_end(35) | submission_duration(25)
+        // Layout: registration_start(35) | registration_end(35) | game_start(35) | game_end(35) |
+        // submission_duration(25)
         let packed: u256 = reg_start.into()
             + (reg_end.into() * TWO_POW_35.into())
             + (value.game.start.into() * TWO_POW_35.into() * TWO_POW_35.into())
@@ -66,20 +63,4 @@ pub impl ScheduleStorePacking of StorePacking<Schedule, u256> {
             registration, game: Period { start: game_start, end: game_end }, submission_duration,
         }
     }
-}
-
-#[derive(Copy, Drop, Serde, PartialEq, starknet::Store)]
-pub struct Period {
-    pub start: u64,
-    pub end: u64,
-}
-
-#[derive(Copy, Drop, Serde, PartialEq)]
-pub enum Phase {
-    Scheduled,
-    Registration,
-    Staging,
-    Live,
-    Submission,
-    Finalized,
 }

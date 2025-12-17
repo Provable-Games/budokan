@@ -1,21 +1,103 @@
 // SPDX-License-Identifier: BUSL-1.1
 
-// Import types from component packages
-// Import budokan-specific types
-use budokan::models::budokan::{EntryFee, GameConfig, Metadata, RewardType, Tournament};
-use budokan::models::schedule::{Phase, Schedule};
-use budokan_entry_requirement::models::{EntryRequirement, QualificationProof};
-use budokan_prize::models::{Prize, TokenTypeData};
+// Import types from other interface packages
+pub use budokan_interfaces::distribution::Distribution;
+pub use budokan_interfaces::entry_requirement::{
+    EntryRequirement, EntryRequirementType, ExtensionConfig, NFTQualification, QualificationProof,
+};
+pub use budokan_interfaces::prize::{ERC20Data, ERC721Data, Prize, PrizeType, TokenTypeData};
 use starknet::ContractAddress;
+
+// ==============================================
+// SCHEDULE MODELS
+// ==============================================
+
+#[derive(Copy, Drop, Serde, PartialEq, starknet::Store)]
+pub struct Schedule {
+    pub registration: Option<Period>,
+    pub game: Period,
+    pub submission_duration: u64,
+}
+
+#[derive(Copy, Drop, Serde, PartialEq, starknet::Store)]
+pub struct Period {
+    pub start: u64,
+    pub end: u64,
+}
+
+#[derive(Copy, Drop, Serde, PartialEq)]
+pub enum Phase {
+    Scheduled,
+    Registration,
+    Staging,
+    Live,
+    Submission,
+    Finalized,
+}
+
+// ==============================================
+// BUDOKAN CORE MODELS
+// ==============================================
+
+#[derive(Drop, Serde)]
+pub struct EntryFee {
+    pub token_address: ContractAddress,
+    pub amount: u128,
+    pub distribution: Distribution,
+    pub tournament_creator_share: Option<u16>,
+    pub game_creator_share: Option<u16>,
+    pub refund_share: Option<u16>,
+    pub distribution_positions: Option<u32>,
+}
+
+#[derive(Drop, Serde)]
+pub struct Tournament {
+    pub id: u64,
+    pub created_at: u64,
+    pub created_by: ContractAddress,
+    pub creator_token_id: u64,
+    pub metadata: Metadata,
+    pub schedule: Schedule,
+    pub game_config: GameConfig,
+    pub entry_fee: Option<EntryFee>,
+    pub entry_requirement: Option<EntryRequirement>,
+}
+
+#[derive(Clone, Drop, Serde, starknet::Store)]
+pub struct Metadata {
+    pub name: felt252,
+    pub description: ByteArray,
+}
+
+#[derive(Drop, Serde)]
+pub struct GameConfig {
+    pub address: ContractAddress,
+    pub settings_id: u32,
+    pub soulbound: bool,
+    pub play_url: ByteArray,
+}
+
+#[derive(Copy, Drop, Serde)]
+pub enum EntryFeeRewardType {
+    Position: u32,
+    TournamentCreator,
+    GameCreator,
+    Refund: u64,
+}
+
+#[derive(Copy, Drop, Serde)]
+pub enum RewardType {
+    Prize: PrizeType,
+    EntryFee: EntryFeeRewardType,
+}
+
+// ==============================================
+// INTERFACE
+// ==============================================
 
 #[starknet::interface]
 pub trait IBudokan<TState> {
     // View functions
-    // Note: get_registration, get_registration_banned, get_entry_count, registration_exists,
-    // get_tournament_id_for_token are exposed via IRegistration
-    // Note: get_entry_fee is exposed via IEntryFee
-    // Note: get_entry_requirement, get_qualification_entries are exposed via IEntryRequirement
-    // Note: get_prize, get_total_prizes, is_prize_claimed are exposed via IPrize
     fn total_tournaments(self: @TState) -> u64;
     fn tournament(self: @TState, tournament_id: u64) -> Tournament;
     fn tournament_entries(self: @TState, tournament_id: u64) -> u32;
@@ -47,17 +129,8 @@ pub trait IBudokan<TState> {
 
     fn submit_score(ref self: TState, tournament_id: u64, token_id: u64, position: u8);
 
-    /// Claim a reward from a tournament
-    /// reward_type specifies what to claim:
-    /// - Prize: sponsored prizes (Single or Distributed)
-    /// - EntryFee: entry fee shares (Position, GameCreator, Refund, AdditionalShare)
     fn claim_reward(ref self: TState, tournament_id: u64, reward_type: RewardType);
 
-    /// Add a sponsored prize to a tournament
-    /// @param tournament_id The tournament to add the prize to
-    /// @param token_address The token address for the prize
-    /// @param token_type The token type data (ERC20 with amount/distribution, or ERC721 with id)
-    /// @param position Position for Single prizes (None for Distributed prizes)
     fn add_prize(
         ref self: TState,
         tournament_id: u64,

@@ -281,7 +281,7 @@ fn test_create_tournament_start_time_in_past() {
     stop_cheat_block_timestamp(contracts.budokan.contract_address);
 }
 
-#[should_panic(expected: "Schedule: Registration period less than minimum")]
+#[should_panic(expected: "Budokan: Registration period less than minimum")]
 #[test]
 fn test_create_tournament_registration_period_too_short() {
     let contracts = setup();
@@ -312,7 +312,7 @@ fn test_create_tournament_registration_period_too_short() {
     stop_cheat_caller_address(contracts.budokan.contract_address);
 }
 
-#[should_panic(expected: "Schedule: Registration period greater than maximum")]
+#[should_panic(expected: "Budokan: Registration period greater than maximum")]
 #[test]
 fn test_create_tournament_registration_period_too_long() {
     let contracts = setup();
@@ -343,7 +343,7 @@ fn test_create_tournament_registration_period_too_long() {
     stop_cheat_caller_address(contracts.budokan.contract_address);
 }
 
-#[should_panic(expected: "Schedule: Registration end time")]
+#[should_panic(expected: "Budokan: Registration end time")]
 #[test]
 fn test_create_tournament_end_time_too_close() {
     let contracts = setup();
@@ -370,7 +370,7 @@ fn test_create_tournament_end_time_too_close() {
     stop_cheat_caller_address(contracts.budokan.contract_address);
 }
 
-#[should_panic(expected: "Schedule: Tournament duration greater than maximum")]
+#[should_panic(expected: "Budokan: Tournament duration greater than maximum")]
 #[test]
 fn test_create_tournament_tournament_too_long() {
     let contracts = setup();
@@ -394,7 +394,7 @@ fn test_create_tournament_tournament_too_long() {
     stop_cheat_caller_address(contracts.budokan.contract_address);
 }
 
-#[should_panic(expected: "Schedule: Submission duration must be between")]
+#[should_panic(expected: "Budokan: Submission duration must be between")]
 #[test]
 fn test_create_tournament_submission_period_too_short() {
     let contracts = setup();
@@ -420,7 +420,7 @@ fn test_create_tournament_submission_period_too_short() {
     stop_cheat_caller_address(contracts.budokan.contract_address);
 }
 
-#[should_panic(expected: "Schedule: Submission duration must be between")]
+#[should_panic(expected: "Budokan: Submission duration must be between")]
 #[test]
 fn test_create_tournament_submission_period_too_long() {
     let contracts = setup();
@@ -802,7 +802,11 @@ fn test_create_tournament_with_prizes() {
             tournament.id,
             contracts.erc20.contract_address,
             TokenTypeData::erc20(
-                ERC20Data { amount: STARTING_BALANCE.low, distribution: Option::None, distribution_count: Option::None },
+                ERC20Data {
+                    amount: STARTING_BALANCE.low,
+                    distribution: Option::None,
+                    distribution_count: Option::None,
+                },
             ),
             Option::Some(1),
         );
@@ -856,8 +860,9 @@ fn test_create_gated_tournament_with_unsettled_tournament() {
         contracts.budokan.contract_address,
     );
 
-    // Create extension config: [qualifier_type, qualifying_tournament_id]
-    let extension_config = array![QUALIFIER_TYPE_WINNERS, first_tournament.id.into()].span();
+    // Create extension config: [qualifier_type, qualifying_mode, top_positions,
+    // qualifying_tournament_id]
+    let extension_config = array![QUALIFIER_TYPE_WINNERS, 0, 0, first_tournament.id.into()].span();
     let entry_requirement_type = EntryRequirementType::extension(
         ExtensionConfig { address: tournament_validator_address, config: extension_config },
     );
@@ -953,10 +958,10 @@ fn test_create_tournament_gated_by_multiple_tournaments() {
         contracts.budokan.contract_address,
     );
 
-    // Create extension config: [qualifier_type, qualifying_tournament_id_1,
-    // qualifying_tournament_id_2]
+    // Create extension config: [qualifier_type, qualifying_mode, top_positions,
+    // qualifying_tournament_id_1, qualifying_tournament_id_2]
     let extension_config = array![
-        QUALIFIER_TYPE_WINNERS, first_tournament.id.into(), second_tournament.id.into(),
+        QUALIFIER_TYPE_WINNERS, 0, 0, first_tournament.id.into(), second_tournament.id.into(),
     ]
         .span();
     let entry_requirement_type = EntryRequirementType::extension(
@@ -1083,9 +1088,12 @@ fn test_create_tournament_gated_by_participants() {
         contracts.budokan.contract_address,
     );
 
-    // Create extension config: [qualifier_type, qualifying_tournament_id]
+    // Create extension config: [qualifier_type, qualifying_mode, top_positions,
+    // qualifying_tournament_id]
     // PARTICIPANTS type - just needs registration, not submission
-    let extension_config = array![QUALIFIER_TYPE_PARTICIPANTS, qualifying_tournament.id.into()]
+    let extension_config = array![
+        QUALIFIER_TYPE_PARTICIPANTS, 0, 0, qualifying_tournament.id.into(),
+    ]
         .span();
     let entry_requirement_type = EntryRequirementType::extension(
         ExtensionConfig { address: tournament_validator_address, config: extension_config },
@@ -2056,7 +2064,11 @@ fn test_claim_prizes_with_sponsored_prizes() {
             tournament.id,
             contracts.erc20.contract_address,
             TokenTypeData::erc20(
-                ERC20Data { amount: STARTING_BALANCE.low, distribution: Option::None, distribution_count: Option::None },
+                ERC20Data {
+                    amount: STARTING_BALANCE.low,
+                    distribution: Option::None,
+                    distribution_count: Option::None,
+                },
             ),
             Option::Some(1),
         );
@@ -2133,7 +2145,11 @@ fn test_claim_prizes_prize_already_claimed() {
             tournament.id,
             contracts.erc20.contract_address,
             TokenTypeData::erc20(
-                ERC20Data { amount: STARTING_BALANCE.low, distribution: Option::None, distribution_count: Option::None },
+                ERC20Data {
+                    amount: STARTING_BALANCE.low,
+                    distribution: Option::None,
+                    distribution_count: Option::None,
+                },
             ),
             Option::Some(1),
         );
@@ -2411,10 +2427,10 @@ fn test_create_tournament_gated_by_multiple_tournaments_with_limited_entry() {
         contracts.budokan.contract_address,
     );
 
-    // Create extension config: [qualifier_type, qualifying_tournament_id_1,
-    // qualifying_tournament_id_2]
+    // Create extension config: [qualifier_type, qualifying_mode, top_positions,
+    // qualifying_tournament_id_1, qualifying_tournament_id_2]
     let extension_config = array![
-        QUALIFIER_TYPE_WINNERS, first_tournament.id.into(), second_tournament.id.into(),
+        QUALIFIER_TYPE_WINNERS, 0, 0, first_tournament.id.into(), second_tournament.id.into(),
     ]
         .span();
     let entry_requirement_type = EntryRequirementType::extension(
@@ -2520,8 +2536,9 @@ fn test_tournament_gated_caller_owns_qualifying_token_different_player() {
         contracts.budokan.contract_address,
     );
 
-    // Create extension config: [qualifier_type, qualifying_tournament_id]
-    let extension_config = array![QUALIFIER_TYPE_WINNERS, first_tournament.id.into()].span();
+    // Create extension config: [qualifier_type, qualifying_mode, top_positions,
+    // qualifying_tournament_id]
+    let extension_config = array![QUALIFIER_TYPE_WINNERS, 0, 0, first_tournament.id.into()].span();
     let entry_requirement_type = EntryRequirementType::extension(
         ExtensionConfig { address: tournament_validator_address, config: extension_config },
     );
@@ -2617,8 +2634,9 @@ fn test_tournament_gated_caller_does_not_own_qualifying_token() {
         contracts.budokan.contract_address,
     );
 
-    // Create extension config: [qualifier_type, qualifying_tournament_id]
-    let extension_config = array![QUALIFIER_TYPE_WINNERS, first_tournament.id.into()].span();
+    // Create extension config: [qualifier_type, qualifying_mode, top_positions,
+    // qualifying_tournament_id]
+    let extension_config = array![QUALIFIER_TYPE_WINNERS, 0, 0, first_tournament.id.into()].span();
     let entry_requirement_type = EntryRequirementType::extension(
         ExtensionConfig { address: tournament_validator_address, config: extension_config },
     );
@@ -2738,7 +2756,7 @@ fn test_extension_gated_tournament_with_entry_limit() {
 
 // ==================== Enter Tournament After Registration Ends ====================
 
-#[should_panic(expected: "Schedule: Registration is not open")]
+#[should_panic(expected: "Budokan: Registration is not open")]
 #[test]
 fn test_enter_tournament_after_registration_ends() {
     let owner = OWNER;
@@ -2981,7 +2999,11 @@ fn test_get_prize_basic() {
         .add_prize(
             tournament.id,
             contracts.erc20.contract_address,
-            TokenTypeData::erc20(ERC20Data { amount: 1000, distribution: Option::None, distribution_count: Option::None }),
+            TokenTypeData::erc20(
+                ERC20Data {
+                    amount: 1000, distribution: Option::None, distribution_count: Option::None,
+                },
+            ),
             Option::Some(1),
         );
 
@@ -3070,7 +3092,11 @@ fn test_add_prize_records_sponsor_address() {
         .add_prize(
             tournament.id,
             contracts.erc20.contract_address,
-            TokenTypeData::erc20(ERC20Data { amount: 500, distribution: Option::None, distribution_count: Option::None }),
+            TokenTypeData::erc20(
+                ERC20Data {
+                    amount: 500, distribution: Option::None, distribution_count: Option::None,
+                },
+            ),
             Option::Some(1),
         );
 
@@ -3112,7 +3138,9 @@ fn test_prize_refunded_to_sponsor_when_position_exceeds_leaderboard() {
             tournament.id,
             contracts.erc20.contract_address,
             TokenTypeData::erc20(
-                ERC20Data { amount: 500, distribution: Option::None, distribution_count: Option::None },
+                ERC20Data {
+                    amount: 500, distribution: Option::None, distribution_count: Option::None,
+                },
             ),
             Option::Some(3),
         );
@@ -3155,9 +3183,7 @@ fn test_prize_refunded_to_sponsor_when_position_exceeds_leaderboard() {
 
     // Claim prize for position 3 (which doesn't exist on the leaderboard)
     // This should refund the prize to the sponsor
-    contracts
-        .budokan
-        .claim_reward(tournament.id, RewardType::Prize(PrizeType::Single(prize.id)));
+    contracts.budokan.claim_reward(tournament.id, RewardType::Prize(PrizeType::Single(prize.id)));
 
     // Verify prize was refunded to sponsor (not tournament creator)
     let sponsor_balance_after = contracts.erc20.balance_of(sponsor);
@@ -4929,8 +4955,9 @@ fn test_use_host_token_to_qualify_into_tournament_gated_tournament() {
         contracts.budokan.contract_address,
     );
 
-    // Create extension config: [qualifier_type, qualifying_tournament_id]
-    let extension_config = array![QUALIFIER_TYPE_WINNERS, first_tournament.id.into()].span();
+    // Create extension config: [qualifier_type, qualifying_mode, top_positions,
+    // qualifying_tournament_id]
+    let extension_config = array![QUALIFIER_TYPE_WINNERS, 0, 0, first_tournament.id.into()].span();
     let entry_requirement_type = EntryRequirementType::extension(
         ExtensionConfig { address: tournament_validator_address, config: extension_config },
     );
@@ -5021,8 +5048,9 @@ fn test_enter_tournament_wrong_submission_type() {
         contracts.budokan.contract_address,
     );
 
-    // Create extension config: [qualifier_type, qualifying_tournament_id]
-    let extension_config = array![QUALIFIER_TYPE_WINNERS, first_tournament.id.into()].span();
+    // Create extension config: [qualifier_type, qualifying_mode, top_positions,
+    // qualifying_tournament_id]
+    let extension_config = array![QUALIFIER_TYPE_WINNERS, 0, 0, first_tournament.id.into()].span();
     let entry_requirement_type = EntryRequirementType::extension(
         ExtensionConfig { address: tournament_validator_address, config: extension_config },
     );
@@ -5223,7 +5251,8 @@ fn test_third_party_enters_different_player_into_tournament() {
     stop_cheat_block_timestamp(contracts.minigame.contract_address);
 }
 
-// ==================== Tournament Creator Share / Game Creator Share / Refund Tests ====================
+// ==================== Tournament Creator Share / Game Creator Share / Refund Tests
+// ====================
 
 #[test]
 fn test_claim_tournament_creator_share() {
@@ -5363,7 +5392,7 @@ fn test_claim_game_creator_share() {
         tournament_creator_share: Option::None,
         game_creator_share: Option::Some(1500), // 15% to game creator
         refund_share: Option::None,
-        distribution_positions: Option::None
+        distribution_positions: Option::None,
     };
 
     let tournament = contracts
@@ -5472,7 +5501,7 @@ fn test_claim_refund_share() {
         tournament_creator_share: Option::None,
         game_creator_share: Option::None,
         refund_share: Option::Some(2000), // 20% refund to each depositor
-        distribution_positions: Option::None
+        distribution_positions: Option::None,
     };
 
     let tournament = contracts
@@ -5525,7 +5554,9 @@ fn test_claim_refund_share() {
     // Owner claims refund for their token
     contracts
         .budokan
-        .claim_reward(tournament.id, RewardType::EntryFee(EntryFeeRewardType::Refund(player1_token)));
+        .claim_reward(
+            tournament.id, RewardType::EntryFee(EntryFeeRewardType::Refund(player1_token)),
+        );
 
     // Verify refund
     let owner_after = contracts.erc20.balance_of(owner);
@@ -5535,10 +5566,7 @@ fn test_claim_refund_share() {
     // Expected refund: 20% of 100 = 20 tokens
     let expected_refund: u256 = 20 * one_token.into();
 
-    assert!(
-        owner_refund == expected_refund,
-        "Owner should receive 20% refund (20 tokens)",
-    );
+    assert!(owner_refund == expected_refund, "Owner should receive 20% refund (20 tokens)");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
     stop_cheat_block_timestamp(contracts.budokan.contract_address);
@@ -5573,7 +5601,7 @@ fn test_claim_all_shares_combined() {
         tournament_creator_share: Option::Some(1000), // 10%
         game_creator_share: Option::Some(500), // 5%
         refund_share: Option::Some(1000), // 10%
-        distribution_positions: Option::None
+        distribution_positions: Option::None,
     };
 
     let tournament = contracts
@@ -5727,7 +5755,10 @@ fn test_claim_all_shares_combined() {
     );
 
     // Verify total distribution equals 100% of pool (allow for rounding dust)
-    let total_distributed = tournament_creator_share + game_creator_share + total_refunds + position_prizes;
+    let total_distributed = tournament_creator_share
+        + game_creator_share
+        + total_refunds
+        + position_prizes;
     let total_diff = if total_distributed > total_pool {
         total_distributed - total_pool
     } else {
@@ -5764,7 +5795,7 @@ fn test_cannot_claim_tournament_creator_share_twice() {
         tournament_creator_share: Option::Some(1000), // 10%
         game_creator_share: Option::None,
         refund_share: Option::None,
-        distribution_positions: Option::None
+        distribution_positions: Option::None,
     };
 
     let tournament = contracts
@@ -5833,7 +5864,7 @@ fn test_cannot_claim_game_creator_share_twice() {
         tournament_creator_share: Option::None,
         game_creator_share: Option::Some(500), // 5%
         refund_share: Option::None,
-        distribution_positions: Option::None
+        distribution_positions: Option::None,
     };
 
     let tournament = contracts
@@ -5885,7 +5916,7 @@ fn test_cannot_claim_game_creator_share_twice() {
         .claim_reward(tournament.id, RewardType::EntryFee(EntryFeeRewardType::GameCreator));
 }
 
-#[should_panic(expected: "Budokan: Refund already claimed for token 2")]
+#[should_panic(expected: "Budokan: Refund share already claimed for token 2")]
 #[test]
 fn test_cannot_claim_refund_twice() {
     let owner = OWNER;
@@ -5904,7 +5935,7 @@ fn test_cannot_claim_refund_twice() {
         tournament_creator_share: Option::None,
         game_creator_share: Option::None,
         refund_share: Option::Some(1000), // 10%
-        distribution_positions: Option::None
+        distribution_positions: Option::None,
     };
 
     let tournament = contracts
@@ -5945,10 +5976,14 @@ fn test_cannot_claim_refund_twice() {
     // Claim once - should succeed
     contracts
         .budokan
-        .claim_reward(tournament.id, RewardType::EntryFee(EntryFeeRewardType::Refund(player1_token_id)));
+        .claim_reward(
+            tournament.id, RewardType::EntryFee(EntryFeeRewardType::Refund(player1_token_id)),
+        );
 
     // Try to claim again - should panic
     contracts
         .budokan
-        .claim_reward(tournament.id, RewardType::EntryFee(EntryFeeRewardType::Refund(player1_token_id)));
+        .claim_reward(
+            tournament.id, RewardType::EntryFee(EntryFeeRewardType::Refund(player1_token_id)),
+        );
 }

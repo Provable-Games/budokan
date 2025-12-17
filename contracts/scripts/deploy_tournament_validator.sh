@@ -5,13 +5,6 @@
 
 set -euo pipefail
 
-# ============================
-# STARKLI VERSION CHECK
-# ============================
-
-STARKLI_VERSION=$(starkli --version | cut -d' ' -f1)
-echo "Detected starkli version: $STARKLI_VERSION"
-
 # Find .env relative to script location
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [ -f "$SCRIPT_DIR/../.env" ]; then
@@ -41,30 +34,34 @@ print_warning() {
 }
 
 # Check deployment environment
-DEPLOY_TO_SLOT="${DEPLOY_TO_SLOT:-false}"
 REGISTRATION_ONLY="${REGISTRATION_ONLY:-false}"
+STARKNET_NETWORK="${STARKNET_NETWORK:-default}"
+
+# Map network to sncast profile
+case "$STARKNET_NETWORK" in
+    "mainnet")
+        SNCAST_PROFILE="mainnet"
+        ;;
+    "sepolia")
+        SNCAST_PROFILE="sepolia"
+        ;;
+    *)
+        SNCAST_PROFILE="default"
+        ;;
+esac
 
 # Check if required environment variables are set
 print_info "Checking environment variables..."
 
-# Determine required vars based on deployment type
-if [ "$DEPLOY_TO_SLOT" = "true" ]; then
-    print_info "Deploying to Slot - reduced requirements"
-    required_vars=("STARKNET_ACCOUNT" "STARKNET_RPC" "BUDOKAN_ADDRESS")
-else
-    required_vars=("STARKNET_NETWORK" "STARKNET_ACCOUNT" "STARKNET_RPC" "STARKNET_PK" "BUDOKAN_ADDRESS")
-fi
+required_vars=("BUDOKAN_ADDRESS")
 
 missing_vars=()
 
 # Debug output for environment variables
 print_info "Environment variables loaded:"
-echo "  DEPLOY_TO_SLOT: $DEPLOY_TO_SLOT"
 echo "  REGISTRATION_ONLY: $REGISTRATION_ONLY"
-echo "  STARKNET_NETWORK: ${STARKNET_NETWORK:-<not set>}"
-echo "  STARKNET_ACCOUNT: ${STARKNET_ACCOUNT:-<not set>}"
-echo "  STARKNET_RPC: ${STARKNET_RPC:-<not set>}"
-echo "  STARKNET_PK: ${STARKNET_PK:+<set>}"
+echo "  STARKNET_NETWORK: $STARKNET_NETWORK"
+echo "  SNCAST_PROFILE: $SNCAST_PROFILE"
 echo "  BUDOKAN_ADDRESS: ${BUDOKAN_ADDRESS:-<not set>}"
 
 for var in "${required_vars[@]}"; do
@@ -82,40 +79,13 @@ if [ ${#missing_vars[@]} -ne 0 ]; then
     exit 1
 fi
 
-# Check that private key is set (only for non-Slot deployments)
-if [ "$DEPLOY_TO_SLOT" != "true" ]; then
-    if [ -z "${STARKNET_PK:-}" ]; then
-        print_error "STARKNET_PK environment variable is not set"
-        exit 1
-    fi
-    print_warning "Using private key (insecure for production)"
-fi
-
-# ============================
-# EXTRACT ACCOUNT ADDRESS
-# ============================
-
-# Extract the actual account address from the JSON file if STARKNET_ACCOUNT is a file path
-if [ -f "$STARKNET_ACCOUNT" ]; then
-    ACCOUNT_ADDRESS=$(cat "$STARKNET_ACCOUNT" | grep -o '"address"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4)
-    if [ -z "$ACCOUNT_ADDRESS" ]; then
-        print_error "Failed to extract address from account file: $STARKNET_ACCOUNT"
-        exit 1
-    fi
-    print_info "Extracted account address: $ACCOUNT_ADDRESS"
-else
-    # If STARKNET_ACCOUNT is not a file, assume it's already an address
-    ACCOUNT_ADDRESS="$STARKNET_ACCOUNT"
-fi
-
 # ============================
 # DISPLAY CONFIGURATION
 # ============================
 
 print_info "Deployment Configuration:"
-echo "  Deployment Type: $(if [ "$DEPLOY_TO_SLOT" = "true" ]; then echo "Slot"; else echo "Standard"; fi)"
-echo "  Network: ${STARKNET_NETWORK:-<not required for Slot>}"
-echo "  Account: $STARKNET_ACCOUNT"
+echo "  Network: $STARKNET_NETWORK"
+echo "  Profile: $SNCAST_PROFILE"
 echo "  Registration Only: $REGISTRATION_ONLY"
 echo ""
 
@@ -137,9 +107,9 @@ print_info "Building contracts..."
 cd "$SCRIPT_DIR/.."
 scarb build
 
-if [ ! -f "target/dev/budokan_extensions_TournamentValidator.contract_class.json" ]; then
+if [ ! -f "target/dev/budokan_entry_requirement_TournamentValidator.contract_class.json" ]; then
     print_error "TournamentValidator contract build failed or contract file not found"
-    print_error "Expected: target/dev/budokan_extensions_TournamentValidator.contract_class.json"
+    print_error "Expected: target/dev/budokan_entry_requirement_TournamentValidator.contract_class.json"
     echo "Available contract files:"
     ls -la target/dev/*.contract_class.json 2>/dev/null || echo "No contract files found"
     exit 1
@@ -151,28 +121,37 @@ fi
 
 print_info "Declaring TournamentValidator contract..."
 
-# Build declare command based on deployment type
-if [ "$DEPLOY_TO_SLOT" = "true" ]; then
-    DECLARE_OUTPUT=$(starkli declare --account $STARKNET_ACCOUNT --rpc $STARKNET_RPC --watch target/dev/budokan_extensions_TournamentValidator.contract_class.json 2>&1)
-else
-    DECLARE_OUTPUT=$(starkli declare --account $STARKNET_ACCOUNT --rpc $STARKNET_RPC --watch target/dev/budokan_extensions_TournamentValidator.contract_class.json --private-key $STARKNET_PK 2>&1)
-fi
+DECLARE_OUTPUT=$(sncast --profile $SNCAST_PROFILE declare \
+    --contract-name TournamentValidator \
+    --package budokan_entry_requirement \
+    2>&1) || true
 
 # Extract class hash from output
-CLASS_HASH=$(echo "$DECLARE_OUTPUT" | grep -oE '0x[0-9a-fA-F]+' | tail -1)
-
-if [ -z "$CLASS_HASH" ]; then
-    # Contract might already be declared, try to extract from error message
-    if echo "$DECLARE_OUTPUT" | grep -q "already declared"; then
-        CLASS_HASH=$(echo "$DECLARE_OUTPUT" | grep -oE 'class_hash: 0x[0-9a-fA-F]+' | grep -oE '0x[0-9a-fA-F]+')
-        print_warning "TournamentValidator contract already declared with class hash: $CLASS_HASH"
-    else
-        print_error "Failed to declare TournamentValidator contract"
-        echo "$DECLARE_OUTPUT"
+if echo "$DECLARE_OUTPUT" | grep -qi "class hash:"; then
+    # New sncast format: "Class Hash:       0x..."
+    CLASS_HASH=$(echo "$DECLARE_OUTPUT" | grep -i "class hash:" | awk '{print $3}')
+    print_info "Declared with class hash: $CLASS_HASH"
+elif echo "$DECLARE_OUTPUT" | grep -q "class_hash:"; then
+    # Old sncast format: "class_hash: 0x..."
+    CLASS_HASH=$(echo "$DECLARE_OUTPUT" | grep "class_hash:" | awk '{print $2}')
+    print_info "Declared with class hash: $CLASS_HASH"
+elif echo "$DECLARE_OUTPUT" | grep -qi "already declared"; then
+    # New sncast doesn't show class hash for already declared contracts
+    # Calculate it from the compiled artifact using sncast
+    print_info "Contract already declared, calculating class hash from artifact..."
+    CLASS_HASH_OUTPUT=$(sncast --profile $SNCAST_PROFILE utils class-hash --contract-name TournamentValidator --package budokan_entry_requirement 2>&1)
+    CLASS_HASH=$(echo "$CLASS_HASH_OUTPUT" | grep -i "class hash:" | awk '{print $3}')
+    if [ -z "$CLASS_HASH" ]; then
+        print_error "Could not calculate class hash from artifact"
+        echo "Class hash output: $CLASS_HASH_OUTPUT"
+        echo "Declaration output: $DECLARE_OUTPUT"
         exit 1
     fi
+    print_warning "TournamentValidator contract already declared with class hash: $CLASS_HASH"
 else
-    print_info "TournamentValidator contract declared with class hash: $CLASS_HASH"
+    echo "Declaration output: $DECLARE_OUTPUT"
+    print_error "Could not extract class hash"
+    exit 1
 fi
 
 # Deploy TournamentValidator contract
@@ -189,29 +168,21 @@ else
     REGISTRATION_ONLY_FELT="0"
 fi
 
-if [ "$DEPLOY_TO_SLOT" = "true" ]; then
-    CONTRACT_ADDRESS=$(starkli deploy \
-        --account $STARKNET_ACCOUNT \
-        --rpc $STARKNET_RPC \
-        --watch \
-        $CLASS_HASH \
-        $BUDOKAN_ADDRESS \
-        $REGISTRATION_ONLY_FELT \
-        2>&1 | tee >(cat >&2) | grep -oE '0x[0-9a-fA-F]{64}' | tail -1)
-else
-    CONTRACT_ADDRESS=$(starkli deploy \
-        --account $STARKNET_ACCOUNT \
-        --rpc $STARKNET_RPC \
-        --private-key $STARKNET_PK \
-        --watch \
-        $CLASS_HASH \
-        $BUDOKAN_ADDRESS \
-        $REGISTRATION_ONLY_FELT \
-        2>&1 | tee >(cat >&2) | grep -oE '0x[0-9a-fA-F]{64}' | tail -1)
-fi
+DEPLOY_OUTPUT=$(sncast --profile $SNCAST_PROFILE deploy \
+    --class-hash "$CLASS_HASH" \
+    --constructor-calldata "$BUDOKAN_ADDRESS" "$REGISTRATION_ONLY_FELT" \
+    2>&1)
 
-if [ -z "$CONTRACT_ADDRESS" ]; then
-    print_error "Failed to deploy TournamentValidator contract"
+# Extract contract address from output
+if echo "$DEPLOY_OUTPUT" | grep -qi "contract address:"; then
+    # New sncast format: "Contract Address:  0x..."
+    CONTRACT_ADDRESS=$(echo "$DEPLOY_OUTPUT" | grep -i "contract address:" | awk '{print $3}')
+elif echo "$DEPLOY_OUTPUT" | grep -q "contract_address:"; then
+    # Old sncast format: "contract_address: 0x..."
+    CONTRACT_ADDRESS=$(echo "$DEPLOY_OUTPUT" | grep "contract_address:" | awk '{print $2}')
+else
+    echo "Deploy output: $DEPLOY_OUTPUT"
+    print_error "Could not extract contract address"
     exit 1
 fi
 
@@ -226,7 +197,8 @@ mkdir -p deployments
 
 cat > "$DEPLOYMENT_FILE" << EOF
 {
-  "network": "${STARKNET_NETWORK:-slot}",
+  "network": "$STARKNET_NETWORK",
+  "profile": "$SNCAST_PROFILE",
   "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "tournament_validator": {
     "address": "$CONTRACT_ADDRESS",
@@ -265,51 +237,29 @@ echo "  export TOURNAMENT_VALIDATOR=$CONTRACT_ADDRESS"
 echo ""
 
 echo "Example: Configure for participant-based qualification:"
-if [ "$DEPLOY_TO_SLOT" = "true" ]; then
-    echo "  starkli invoke \$TOURNAMENT_VALIDATOR add_config \\"
-    echo "    <tournament_id> <entry_limit> \\"
-    echo "    0 <qualifying_tournament_id_1> <qualifying_tournament_id_2>"
-else
-    echo "  starkli invoke --rpc \$STARKNET_RPC \$TOURNAMENT_VALIDATOR add_config \\"
-    echo "    <tournament_id> <entry_limit> \\"
-    echo "    0 <qualifying_tournament_id_1> <qualifying_tournament_id_2> \\"
-    echo "    --private-key \$STARKNET_PK"
-fi
+echo "  sncast --profile $SNCAST_PROFILE invoke \\"
+echo "    --contract-address \$TOURNAMENT_VALIDATOR \\"
+echo "    --function add_config \\"
+echo "    --calldata <tournament_id> <entry_limit> 0 <qualifying_tournament_id_1> <qualifying_tournament_id_2>"
 echo ""
 
 echo "Example: Configure for winner-based qualification:"
-if [ "$DEPLOY_TO_SLOT" = "true" ]; then
-    echo "  starkli invoke \$TOURNAMENT_VALIDATOR add_config \\"
-    echo "    <tournament_id> <entry_limit> \\"
-    echo "    1 <qualifying_tournament_id_1> <qualifying_tournament_id_2>"
-else
-    echo "  starkli invoke --rpc \$STARKNET_RPC \$TOURNAMENT_VALIDATOR add_config \\"
-    echo "    <tournament_id> <entry_limit> \\"
-    echo "    1 <qualifying_tournament_id_1> <qualifying_tournament_id_2> \\"
-    echo "    --private-key \$STARKNET_PK"
-fi
+echo "  sncast --profile $SNCAST_PROFILE invoke \\"
+echo "    --contract-address \$TOURNAMENT_VALIDATOR \\"
+echo "    --function add_config \\"
+echo "    --calldata <tournament_id> <entry_limit> 1 <qualifying_tournament_id_1> <qualifying_tournament_id_2>"
 echo ""
 
 echo "Example: Test entry validation (participant-based):"
-if [ "$DEPLOY_TO_SLOT" = "true" ]; then
-    echo "  starkli call \$TOURNAMENT_VALIDATOR valid_entry \\"
-    echo "    <tournament_id> <player_address> \\"
-    echo "    <qualifying_tournament_id> <token_id>"
-else
-    echo "  starkli call --rpc \$STARKNET_RPC \$TOURNAMENT_VALIDATOR valid_entry \\"
-    echo "    <tournament_id> <player_address> \\"
-    echo "    <qualifying_tournament_id> <token_id>"
-fi
+echo "  sncast --profile $SNCAST_PROFILE call \\"
+echo "    --contract-address \$TOURNAMENT_VALIDATOR \\"
+echo "    --function valid_entry \\"
+echo "    --calldata <tournament_id> <player_address> <qualifying_tournament_id> <token_id>"
 echo ""
 
 echo "Example: Test entry validation (winner-based):"
-if [ "$DEPLOY_TO_SLOT" = "true" ]; then
-    echo "  starkli call \$TOURNAMENT_VALIDATOR valid_entry \\"
-    echo "    <tournament_id> <player_address> \\"
-    echo "    <qualifying_tournament_id> <token_id> <leaderboard_position>"
-else
-    echo "  starkli call --rpc \$STARKNET_RPC \$TOURNAMENT_VALIDATOR valid_entry \\"
-    echo "    <tournament_id> <player_address> \\"
-    echo "    <qualifying_tournament_id> <token_id> <leaderboard_position>"
-fi
+echo "  sncast --profile $SNCAST_PROFILE call \\"
+echo "    --contract-address \$TOURNAMENT_VALIDATOR \\"
+echo "    --function valid_entry \\"
+echo "    --calldata <tournament_id> <player_address> <qualifying_tournament_id> <token_id> <leaderboard_position>"
 echo ""

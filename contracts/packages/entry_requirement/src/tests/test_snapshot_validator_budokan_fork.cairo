@@ -1,7 +1,9 @@
 use budokan_entry_requirement::examples::snapshot_validator::{
     Entry, ISnapshotValidatorDispatcher, ISnapshotValidatorDispatcherTrait, SnapshotStatus,
 };
-use budokan_entry_requirement::tests::constants::{budokan_address, minigame_address, test_account};
+use budokan_entry_requirement::tests::constants::{
+    budokan_address_mainnet, minigame_address_mainnet, test_account_mainnet,
+};
 use budokan_interfaces::entry_validator::{
     IEntryValidatorDispatcher, IEntryValidatorDispatcherTrait,
 };
@@ -186,9 +188,9 @@ fn test_snapshot_validator_budokan_create_tournament() {
     // 5. Create a tournament on Budokan using the SnapshotValidator as the entry requirement
     // 6. Enter the tournament through Budokan, which calls the validator
 
-    let budokan_addr = budokan_address();
-    let minigame_addr = minigame_address();
-    let account = test_account();
+    let budokan_addr = budokan_address_mainnet();
+    let minigame_addr = minigame_address_mainnet();
+    let account = test_account_mainnet();
 
     // Step 1: Deploy SnapshotValidator
     let validator_address = deploy_snapshot_validator(budokan_addr);
@@ -313,8 +315,8 @@ fn test_snapshot_validator_budokan_create_tournament() {
 fn test_snapshot_validator_budokan_multiple_entries() {
     // This test demonstrates a player using multiple entries from their snapshot allocation
 
-    let budokan_addr = budokan_address();
-    let account = test_account();
+    let budokan_addr = budokan_address_mainnet();
+    let account = test_account_mainnet();
     let validator_address = deploy_snapshot_validator(budokan_addr);
     let validator = ISnapshotValidatorDispatcher { contract_address: validator_address };
 
@@ -373,9 +375,9 @@ fn test_snapshot_validator_budokan_multiple_entries() {
 fn test_snapshot_validator_budokan_unauthorized_entry() {
     // This test demonstrates that a player without snapshot entries cannot enter through Budokan
 
-    let budokan_addr = budokan_address();
-    let minigame_addr = minigame_address();
-    let account = test_account();
+    let budokan_addr = budokan_address_mainnet();
+    let minigame_addr = minigame_address_mainnet();
+    let account = test_account_mainnet();
     let validator_address = deploy_snapshot_validator(budokan_addr);
     let validator = ISnapshotValidatorDispatcher { contract_address: validator_address };
 
@@ -440,8 +442,8 @@ fn test_snapshot_validator_budokan_unauthorized_entry() {
 fn test_snapshot_validator_budokan_update_snapshots() {
     // This test demonstrates creating multiple snapshots with different data
 
-    let budokan_addr = budokan_address();
-    let account = test_account();
+    let budokan_addr = budokan_address_mainnet();
+    let account = test_account_mainnet();
     let validator_address = deploy_snapshot_validator(budokan_addr);
     let validator = ISnapshotValidatorDispatcher { contract_address: validator_address };
 
@@ -494,8 +496,8 @@ fn test_snapshot_validator_budokan_update_snapshots() {
 fn test_snapshot_validator_budokan_cross_tournament() {
     // This test demonstrates using different snapshots for different tournaments
 
-    let budokan_addr = budokan_address();
-    let account = test_account();
+    let budokan_addr = budokan_address_mainnet();
+    let account = test_account_mainnet();
     let validator_address = deploy_snapshot_validator(budokan_addr);
     let validator = ISnapshotValidatorDispatcher { contract_address: validator_address };
 
@@ -537,8 +539,8 @@ fn test_snapshot_validator_budokan_cross_tournament() {
 fn test_snapshot_validator_locking_mechanism() {
     // This test demonstrates the snapshot locking mechanism
 
-    let budokan_addr = budokan_address();
-    let account = test_account();
+    let budokan_addr = budokan_address_mainnet();
+    let account = test_account_mainnet();
     let _other_account: ContractAddress = 0x999.try_into().unwrap();
     let validator_address = deploy_snapshot_validator(budokan_addr);
     let validator = ISnapshotValidatorDispatcher { contract_address: validator_address };
@@ -591,8 +593,8 @@ fn test_snapshot_validator_locking_mechanism() {
 fn test_snapshot_validator_ownership() {
     // This test demonstrates ownership controls on snapshots
 
-    let budokan_addr = budokan_address();
-    let owner = test_account();
+    let budokan_addr = budokan_address_mainnet();
+    let owner = test_account_mainnet();
     let _other_user: ContractAddress = 0x999.try_into().unwrap();
     let validator_address = deploy_snapshot_validator(budokan_addr);
     let validator = ISnapshotValidatorDispatcher { contract_address: validator_address };
@@ -631,9 +633,9 @@ fn test_snapshot_validator_exceed_entry_limit() {
     // This test verifies that a player cannot enter a tournament more times
     // than their snapshot allocation allows
 
-    let budokan_addr = budokan_address();
-    let minigame_addr = minigame_address();
-    let account = test_account();
+    let budokan_addr = budokan_address_mainnet();
+    let minigame_addr = minigame_address_mainnet();
+    let account = test_account_mainnet();
     let validator_address = deploy_snapshot_validator(budokan_addr);
     let validator = ISnapshotValidatorDispatcher { contract_address: validator_address };
 
@@ -712,8 +714,8 @@ fn test_snapshot_validator_exceed_entry_limit() {
 fn test_snapshot_validator_zero_entries() {
     // Test that a player with 0 entries in snapshot cannot enter
 
-    let budokan_addr = budokan_address();
-    let account = test_account();
+    let budokan_addr = budokan_address_mainnet();
+    let account = test_account_mainnet();
     let validator_address = deploy_snapshot_validator(budokan_addr);
     let validator = ISnapshotValidatorDispatcher { contract_address: validator_address };
 
@@ -749,8 +751,8 @@ fn test_snapshot_validator_zero_entries() {
 fn test_snapshot_upload_data_to_locked_snapshot() {
     // Test that uploading data to a locked snapshot fails
 
-    let budokan_addr = budokan_address();
-    let account = test_account();
+    let budokan_addr = budokan_address_mainnet();
+    let account = test_account_mainnet();
     let validator_address = deploy_snapshot_validator(budokan_addr);
     let validator = ISnapshotValidatorDispatcher { contract_address: validator_address };
 
@@ -775,8 +777,8 @@ fn test_snapshot_upload_data_to_locked_snapshot() {
 fn test_snapshot_non_owner_upload() {
     // Test that non-owner cannot upload data to someone else's snapshot
 
-    let budokan_addr = budokan_address();
-    let owner = test_account();
+    let budokan_addr = budokan_address_mainnet();
+    let owner = test_account_mainnet();
     let non_owner: ContractAddress = 0x999.try_into().unwrap();
     let validator_address = deploy_snapshot_validator(budokan_addr);
     let validator = ISnapshotValidatorDispatcher { contract_address: validator_address };
@@ -798,8 +800,8 @@ fn test_snapshot_non_owner_upload() {
 fn test_snapshot_non_owner_lock() {
     // Test that non-owner cannot lock someone else's snapshot
 
-    let budokan_addr = budokan_address();
-    let owner = test_account();
+    let budokan_addr = budokan_address_mainnet();
+    let owner = test_account_mainnet();
     let non_owner: ContractAddress = 0x999.try_into().unwrap();
     let validator_address = deploy_snapshot_validator(budokan_addr);
     let validator = ISnapshotValidatorDispatcher { contract_address: validator_address };
@@ -822,8 +824,8 @@ fn test_snapshot_non_owner_lock() {
 fn test_snapshot_use_nonexistent_snapshot() {
     // Test that using a non-existent snapshot ID fails
 
-    let budokan_addr = budokan_address();
-    let account = test_account();
+    let budokan_addr = budokan_address_mainnet();
+    let account = test_account_mainnet();
     let validator_address = deploy_snapshot_validator(budokan_addr);
     let validator = ISnapshotValidatorDispatcher { contract_address: validator_address };
 
@@ -841,8 +843,8 @@ fn test_snapshot_use_nonexistent_snapshot() {
 fn test_snapshot_double_lock() {
     // Test that locking a snapshot twice fails
 
-    let budokan_addr = budokan_address();
-    let account = test_account();
+    let budokan_addr = budokan_address_mainnet();
+    let account = test_account_mainnet();
     let validator_address = deploy_snapshot_validator(budokan_addr);
     let validator = ISnapshotValidatorDispatcher { contract_address: validator_address };
 
@@ -863,8 +865,8 @@ fn test_snapshot_double_lock() {
 fn test_snapshot_add_config_nonexistent_snapshot() {
     // Test that adding a tournament config with non-existent snapshot fails
 
-    let budokan_addr = budokan_address();
-    let _account = test_account();
+    let budokan_addr = budokan_address_mainnet();
+    let _account = test_account_mainnet();
     let validator_address = deploy_snapshot_validator(budokan_addr);
     let entry_validator = IEntryValidatorDispatcher { contract_address: validator_address };
 
@@ -881,8 +883,8 @@ fn test_snapshot_add_config_nonexistent_snapshot() {
 fn test_snapshot_validator_entries_tracking_across_uses() {
     // Test that entries are properly tracked as they're used up
 
-    let budokan_addr = budokan_address();
-    let account = test_account();
+    let budokan_addr = budokan_address_mainnet();
+    let account = test_account_mainnet();
     let validator_address = deploy_snapshot_validator(budokan_addr);
     let validator = ISnapshotValidatorDispatcher { contract_address: validator_address };
 
@@ -944,8 +946,8 @@ fn test_snapshot_validator_entries_tracking_across_uses() {
 fn test_snapshot_validator_independent_tournament_tracking() {
     // Test that entry tracking is independent per tournament
 
-    let budokan_addr = budokan_address();
-    let account = test_account();
+    let budokan_addr = budokan_address_mainnet();
+    let account = test_account_mainnet();
     let validator_address = deploy_snapshot_validator(budokan_addr);
     let validator = ISnapshotValidatorDispatcher { contract_address: validator_address };
 

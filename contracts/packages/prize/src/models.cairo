@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 
-use budokan_distribution::models::Distribution;
+// Re-export all types from budokan_interfaces
+pub use budokan_interfaces::distribution::Distribution;
+pub use budokan_interfaces::prize::{ERC20Data, ERC721Data, Prize, PrizeType, TokenTypeData};
 use starknet::ContractAddress;
 use starknet::storage_access::StorePacking;
 
@@ -24,44 +26,6 @@ pub const PAYOUT_TYPE_LINEAR: u8 = 1;
 pub const PAYOUT_TYPE_EXPONENTIAL: u8 = 2;
 pub const PAYOUT_TYPE_UNIFORM: u8 = 3;
 pub const PAYOUT_TYPE_CUSTOM: u8 = 4;
-
-/// ERC20 prize data with amount and optional distribution
-/// If distribution is None, the full amount goes to a single recipient (specified at claim time)
-/// If distribution is Some, the amount is distributed across recipients based on the distribution
-/// type
-#[derive(Drop, Serde)]
-pub struct ERC20Data {
-    pub amount: u128,
-    /// Optional distribution config. None = single recipient payout, Some = distributed payout
-    pub distribution: Option<Distribution>,
-    /// Number of recipients for distribution calculation. None = dynamic (determined at claim time)
-    pub distribution_count: Option<u32>,
-}
-
-/// ERC721 prize data - position specified at claim time
-#[derive(Copy, Drop, Serde, starknet::Store)]
-pub struct ERC721Data {
-    pub id: u128,
-}
-
-/// Token type for API input
-#[allow(starknet::store_no_default_variant)]
-#[derive(Drop, Serde)]
-pub enum TokenTypeData {
-    erc20: ERC20Data,
-    erc721: ERC721Data,
-}
-
-/// Prize model with all data
-/// When stored, the id field is omitted and managed separately by the component
-#[derive(Drop, Serde)]
-pub struct Prize {
-    pub id: u64,
-    pub context_id: u64,
-    pub token_address: ContractAddress,
-    pub token_type: TokenTypeData,
-    pub sponsor_address: ContractAddress,
-}
 
 /// Internal packed representation for ERC20 data storage
 /// Layout: [amount: 128 bits][payout_type: 8 bits][param: 16 bits][count: 32 bits] = 184 bits
@@ -94,113 +58,133 @@ impl PackedERC20DataPacking of StorePacking<PackedERC20Data, felt252> {
 
 /// Internal enum for storing TokenTypeData with packing
 #[allow(starknet::store_no_default_variant)]
-#[derive(Copy, Drop, starknet::Store)]
+#[derive(Copy, Drop, Serde, starknet::Store)]
 enum PackedTokenTypeData {
     erc20: felt252, // Packed ERC20Data
     erc721: ERC721Data,
 }
 
-/// Prize storage packing - stores Prize without the id field
-/// The id is managed separately by the prize component as the map key
-pub impl PrizeStorePacking of StorePacking<Prize, (u64, ContractAddress, PackedTokenTypeData, ContractAddress)> {
-    fn pack(value: Prize) -> (u64, ContractAddress, PackedTokenTypeData, ContractAddress) {
-        // Pack token_type
-        let packed_token_type = match value.token_type {
-            TokenTypeData::erc20(erc20_data) => {
-                // Convert ERC20Data to packed format
-                let (payout_type, param) = match erc20_data.distribution {
-                    Option::None => (PAYOUT_TYPE_POSITION, 0_u16),
-                    Option::Some(dist) => {
-                        match dist {
-                            budokan_distribution::models::Distribution::Linear(w) => (PAYOUT_TYPE_LINEAR, w),
-                            budokan_distribution::models::Distribution::Exponential(w) => (PAYOUT_TYPE_EXPONENTIAL, w),
-                            budokan_distribution::models::Distribution::Uniform => (PAYOUT_TYPE_UNIFORM, 0_u16),
-                            budokan_distribution::models::Distribution::Custom(_) => (PAYOUT_TYPE_CUSTOM, 0_u16),
-                        }
-                    },
-                };
-                let count = match erc20_data.distribution_count {
-                    Option::Some(c) => c,
-                    Option::None => 0_u32,
-                };
-                let packed = PackedERC20Data { amount: erc20_data.amount, payout_type, param, count };
-                PackedTokenTypeData::erc20(PackedERC20DataPacking::pack(packed))
-            },
-            TokenTypeData::erc721(erc721_data) => PackedTokenTypeData::erc721(erc721_data),
-        };
+/// Internal storage representation of Prize with Store trait
+/// This is what actually gets stored in contract storage
+#[derive(Drop, Serde)]
+pub struct StoredPrize {
+    pub context_id: u64,
+    pub token_address: ContractAddress,
+    pub token_type: PackedTokenTypeData,
+    pub sponsor_address: ContractAddress,
+}
 
-        (value.context_id, value.token_address, packed_token_type, value.sponsor_address)
+/// StorePacking for StoredPrize - handles efficient packing into storage
+/// Packs into: (context_id, token_address, packed_token_type, sponsor_address)
+pub impl StoredPrizeStorePacking of StorePacking<
+    StoredPrize, (u64, ContractAddress, PackedTokenTypeData, ContractAddress),
+> {
+    fn pack(value: StoredPrize) -> (u64, ContractAddress, PackedTokenTypeData, ContractAddress) {
+        (value.context_id, value.token_address, value.token_type, value.sponsor_address)
     }
 
-    fn unpack(value: (u64, ContractAddress, PackedTokenTypeData, ContractAddress)) -> Prize {
-        let (context_id, token_address, packed_token_type, sponsor_address) = value;
+    fn unpack(value: (u64, ContractAddress, PackedTokenTypeData, ContractAddress)) -> StoredPrize {
+        let (context_id, token_address, token_type, sponsor_address) = value;
+        StoredPrize { context_id, token_address, token_type, sponsor_address }
+    }
+}
 
-        // Unpack token_type
-        let token_type = match packed_token_type {
-            PackedTokenTypeData::erc20(packed_felt) => {
-                let packed = PackedERC20DataPacking::unpack(packed_felt);
+/// Helper to pack TokenTypeData from Prize API format
+fn pack_token_type(token_type: TokenTypeData) -> PackedTokenTypeData {
+    match token_type {
+        TokenTypeData::erc20(erc20_data) => {
+            // Convert ERC20Data to packed format
+            let (payout_type, param) = match erc20_data.distribution {
+                Option::None => (PAYOUT_TYPE_POSITION, 0_u16),
+                Option::Some(dist) => {
+                    match dist {
+                        budokan_distribution::models::Distribution::Linear(w) => (
+                            PAYOUT_TYPE_LINEAR, w,
+                        ),
+                        budokan_distribution::models::Distribution::Exponential(w) => (
+                            PAYOUT_TYPE_EXPONENTIAL, w,
+                        ),
+                        budokan_distribution::models::Distribution::Uniform => (
+                            PAYOUT_TYPE_UNIFORM, 0_u16,
+                        ),
+                        budokan_distribution::models::Distribution::Custom(_) => (
+                            PAYOUT_TYPE_CUSTOM, 0_u16,
+                        ),
+                    }
+                },
+            };
+            let count = match erc20_data.distribution_count {
+                Option::Some(c) => c,
+                Option::None => 0_u32,
+            };
+            let packed = PackedERC20Data { amount: erc20_data.amount, payout_type, param, count };
+            PackedTokenTypeData::erc20(PackedERC20DataPacking::pack(packed))
+        },
+        TokenTypeData::erc721(erc721_data) => PackedTokenTypeData::erc721(erc721_data),
+    }
+}
 
-                // Reconstruct distribution
-                let distribution = if packed.payout_type == PAYOUT_TYPE_POSITION {
-                    Option::None
-                } else if packed.payout_type == PAYOUT_TYPE_LINEAR {
-                    Option::Some(budokan_distribution::models::Distribution::Linear(packed.param))
-                } else if packed.payout_type == PAYOUT_TYPE_EXPONENTIAL {
-                    Option::Some(budokan_distribution::models::Distribution::Exponential(packed.param))
-                } else if packed.payout_type == PAYOUT_TYPE_UNIFORM {
-                    Option::Some(budokan_distribution::models::Distribution::Uniform)
-                } else {
-                    Option::Some(budokan_distribution::models::Distribution::Custom(array![].span()))
-                };
+/// Helper to unpack TokenTypeData to Prize API format
+fn unpack_token_type(packed_token_type: PackedTokenTypeData) -> TokenTypeData {
+    match packed_token_type {
+        PackedTokenTypeData::erc20(packed_felt) => {
+            let packed = PackedERC20DataPacking::unpack(packed_felt);
 
-                // Reconstruct distribution_count
-                let distribution_count = if packed.count == 0 {
-                    Option::None
-                } else {
-                    Option::Some(packed.count)
-                };
+            // Reconstruct distribution
+            let distribution = if packed.payout_type == PAYOUT_TYPE_POSITION {
+                Option::None
+            } else if packed.payout_type == PAYOUT_TYPE_LINEAR {
+                Option::Some(budokan_distribution::models::Distribution::Linear(packed.param))
+            } else if packed.payout_type == PAYOUT_TYPE_EXPONENTIAL {
+                Option::Some(budokan_distribution::models::Distribution::Exponential(packed.param))
+            } else if packed.payout_type == PAYOUT_TYPE_UNIFORM {
+                Option::Some(budokan_distribution::models::Distribution::Uniform)
+            } else {
+                Option::Some(budokan_distribution::models::Distribution::Custom(array![].span()))
+            };
 
-                TokenTypeData::erc20(ERC20Data { amount: packed.amount, distribution, distribution_count })
-            },
-            PackedTokenTypeData::erc721(erc721_data) => TokenTypeData::erc721(erc721_data),
-        };
+            // Reconstruct distribution_count
+            let distribution_count = if packed.count == 0 {
+                Option::None
+            } else {
+                Option::Some(packed.count)
+            };
 
+            TokenTypeData::erc20(
+                ERC20Data { amount: packed.amount, distribution, distribution_count },
+            )
+        },
+        PackedTokenTypeData::erc721(erc721_data) => TokenTypeData::erc721(erc721_data),
+    }
+}
+
+/// Helper functions to convert between Prize (API) and StoredPrize (storage)
+#[generate_trait]
+pub impl StoredPrizeImpl of StoredPrizeTrait {
+    /// Convert Prize to StoredPrize (for writing to storage)
+    fn from_prize(prize: Prize) -> StoredPrize {
+        let packed_token_type = pack_token_type(prize.token_type);
+        StoredPrize {
+            context_id: prize.context_id,
+            token_address: prize.token_address,
+            token_type: packed_token_type,
+            sponsor_address: prize.sponsor_address,
+        }
+    }
+
+    /// Convert StoredPrize to Prize (for reading from storage)
+    fn to_prize(self: StoredPrize, id: u64) -> Prize {
+        let token_type = unpack_token_type(self.token_type);
         Prize {
-            id: 0, // Will be set by the component when reading
-            context_id,
-            token_address,
+            id,
+            context_id: self.context_id,
+            token_address: self.token_address,
             token_type,
-            sponsor_address,
+            sponsor_address: self.sponsor_address,
         }
     }
 }
-
-#[allow(starknet::store_no_default_variant)]
-#[derive(Copy, Drop, Serde, PartialEq, starknet::Store)]
-pub enum PrizeType {
-    /// Claim a non-distributed prize by prize_id
-    /// Position is determined by the caller's token on the leaderboard
-    Single: u64,
-    /// Claim from a distributed prize pool: (prize_id, payout_index)
-    /// payout_index determines which share of the distribution is being claimed
-    /// e.g., payout_index 1 claims the 1st place share, payout_index 2 claims 2nd place share
-    Distributed: (u64, u32),
-}
-
-#[derive(Copy, Drop, Serde, starknet::Store)]
-pub struct PrizeClaim {
-    pub context_id: u64,
-    pub prize_type: PrizeType,
-    pub claimed: bool,
-}
-
-#[derive(Copy, Drop, Serde, starknet::Store)]
-pub struct PrizeMetrics {
-    pub key: felt252,
-    pub total_prizes: u64,
-}
-
-use budokan_prize::libs::share_math::{get_packed_share, set_packed_share, SHARES_PER_SLOT};
+use budokan_prize::libs::share_math::{SHARES_PER_SLOT, get_packed_share, set_packed_share};
 
 /// Custom shares - stores up to 15 u16 shares in a single felt252
 /// Each share = 16 bits, Layout: [share0(16)] | [share1(16)] | ... | [share14(16)] = 240 bits

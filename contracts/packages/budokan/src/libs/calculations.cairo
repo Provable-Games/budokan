@@ -89,7 +89,9 @@ mod tests {
     #[test]
     fn test_calculate_remaining_share_partial() {
         // 30% + 20% = 50%, so 50% remaining
-        let result = calculate_remaining_share(Option::Some(3000), Option::Some(2000), Option::None);
+        let result = calculate_remaining_share(
+            Option::Some(3000), Option::Some(2000), Option::None,
+        );
         assert!(result == 5000, "expected 5000 (50%)");
     }
 

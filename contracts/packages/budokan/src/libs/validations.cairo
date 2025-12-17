@@ -90,19 +90,17 @@ pub fn assert_prize_exists(token_address: ContractAddress, prize_id: u64) {
 
 #[cfg(test)]
 mod tests {
+    use starknet::contract_address_const;
     use super::{
         assert_position_is_valid, assert_valid_entry_fee_shares, contains_address,
         validate_entry_fee_shares, validate_position,
     };
-    use starknet::contract_address_const;
 
     #[test]
     fn test_validate_entry_fee_shares_valid() {
         // 50% + 30% + 20% = 100%
         assert!(
-            validate_entry_fee_shares(
-                Option::Some(5000), Option::Some(3000), Option::Some(2000),
-            ),
+            validate_entry_fee_shares(Option::Some(5000), Option::Some(3000), Option::Some(2000)),
         );
     }
 

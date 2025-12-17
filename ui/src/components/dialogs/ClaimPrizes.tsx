@@ -9,13 +9,14 @@ import {
 } from "@/components/ui/dialog";
 import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
 import { useAccount } from "@starknet-react/core";
-import { Tournament, PrizeClaim } from "@/generated/models.gen";
+import { Tournament, RewardClaim } from "@/generated/models.gen";
 import { feltToString, formatNumber, getOrdinalSuffix } from "@/lib/utils";
 import {
   extractEntryFeePrizes,
   getClaimablePrizes,
   expandDistributedPrizes,
   formatRewardTypes,
+  processPrizeFromSql,
 } from "@/lib/utils/formatting";
 import { useConnectToSelectedChain } from "@/dojo/hooks/useChain";
 import { TokenPrices } from "@/hooks/useEkuboPrices";
@@ -27,10 +28,9 @@ import {
 import { useDojo } from "@/context/dojo";
 import { LoadingSpinner } from "@/components/ui/spinner";
 import {
-  useGetTournamentPrizeClaims,
+  useGetTournamentRewardClaims,
   useGetAllTournamentPrizes,
 } from "@/dojo/hooks/useSqlQueries";
-import { Prize } from "@/generated/models.gen";
 
 interface ClaimPrizesDialogProps {
   open: boolean;
@@ -66,16 +66,20 @@ export function ClaimPrizesDialog({
     active: !!tournamentModel?.id && open,
   });
 
-  const sponsoredPrizes = (sponsoredPrizesData || []) as Prize[];
+  // Process SQL prizes to proper Prize objects with CairoCustomEnum structures
+  const sponsoredPrizes = useMemo(
+    () => (sponsoredPrizesData || []).map(processPrizeFromSql),
+    [sponsoredPrizesData]
+  );
 
-  // Fetch claimed prizes using SQL query
-  const { data: prizeClaimsData } = useGetTournamentPrizeClaims({
+  // Fetch claimed rewards using SQL query
+  const { data: rewardClaimsData } = useGetTournamentRewardClaims({
     namespace,
     tournamentId: Number(tournamentModel?.id),
     active: !!tournamentModel?.id && open,
   });
 
-  const claimedPrizes: PrizeClaim[] = (prizeClaimsData || []) as PrizeClaim[];
+  const claimedRewards: RewardClaim[] = (rewardClaimsData || []) as RewardClaim[];
 
   const leaderboardSize =
     tournamentModel?.entry_fee?.Some?.distribution_positions?.isSome()
@@ -116,10 +120,10 @@ export function ClaimPrizesDialog({
     expandedSponsoredPrizes,
   ]);
 
-  // Calculate which prizes are claimable (using old format for filtering)
+  // Calculate which prizes are claimable (using new RewardClaim format for filtering)
   const { claimablePrizes } = useMemo(
-    () => getClaimablePrizes(allPrizes, claimedPrizes),
-    [allPrizes, claimedPrizes]
+    () => getClaimablePrizes(allPrizes, claimedRewards),
+    [allPrizes, claimedRewards]
   );
 
   // Convert claimable prizes to new RewardType format

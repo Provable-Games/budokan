@@ -736,10 +736,15 @@ const getTournamentQualificationWhereClause = (
       switch (type) {
         case "token":
           return `(qe.'qualification_proof.NFT.token_id' = '${tokenId}')`;
-        case "tournament":
-          return `(qe.'qualification_proof.Tournament.tournament_id' = '${tournamentId}' AND qe.'qualification_proof.Tournament.token_id' = '${gameId}' AND qe.'qualification_proof.Tournament.position' = ${position})`;
         case "allowlist":
           return `(qe.'qualification_proof.Address' = '${address}')`;
+        case "extension":
+          // For tournament validators, extension proofs contain tournament data
+          if (tournamentId && gameId && position !== undefined) {
+            return `(qe.'qualification_proof.Extension.tournament_id' = '${tournamentId}' AND qe.'qualification_proof.Extension.token_id' = '${gameId}' AND qe.'qualification_proof.Extension.position' = ${position})`;
+          }
+          // For generic extensions, match by address
+          return `(qe.'qualification_proof.Extension.address' = '${address}')`;
         default:
           return null;
       }
@@ -1016,7 +1021,7 @@ export const useGetTournamentPrizePositions = ({
   };
 };
 
-export const useGetTournamentPrizeClaims = ({
+export const useGetTournamentRewardClaims = ({
   namespace,
   tournamentId,
   active = false,
@@ -1030,7 +1035,7 @@ export const useGetTournamentPrizeClaims = ({
       active && namespace && tournamentId
         ? `
     SELECT *
-    FROM '${namespace}-PrizeClaim'
+    FROM '${namespace}-RewardClaim'
     WHERE tournament_id = '${padU64(BigInt(tournamentId))}'
   `
         : null,
@@ -1040,7 +1045,7 @@ export const useGetTournamentPrizeClaims = ({
   return { data, loading, error };
 };
 
-export const useGetTournamentPrizeClaimsAggregations = ({
+export const useGetTournamentRewardClaimsAggregations = ({
   namespace,
   tournamentId,
   active = false,
@@ -1055,55 +1060,55 @@ export const useGetTournamentPrizeClaimsAggregations = ({
         ? `
     WITH prize_counts AS (
       SELECT
-        -- Count sponsored prizes
-        (SELECT COUNT(*) FROM '${namespace}-Prize' WHERE tournament_id = '${padU64(
+        -- Count sponsored prizes (accounting for distributed prizes)
+        COALESCE((SELECT SUM(
+          CASE
+            -- If it's a distributed prize, count the distribution positions
+            WHEN "token_type.erc20.distribution_count" = 'Some'
+              AND "token_type.erc20.distribution_count.Some" IS NOT NULL
+            THEN CAST("token_type.erc20.distribution_count.Some" AS INTEGER)
+            -- Otherwise it's a single prize
+            ELSE 1
+          END
+        ) FROM '${namespace}-Prize' WHERE tournament_id = '${padU64(
             BigInt(tournamentId)
-          )}') as sponsored_count,
+          )}'), 0) as sponsored_count,
 
         -- Count entry fee prizes
-        (SELECT
+        COALESCE((SELECT
+          -- Game creator share (0 or 1)
           CASE
-            WHEN '${namespace}-Tournament'.id = '${padU64(
-            BigInt(tournamentId)
-          )}'
-              AND '${namespace}-Tournament'.'entry_fee.Some.amount' IS NOT NULL
-              AND '${namespace}-Tournament'.'entry_fee.Some.amount' != '0'
-            THEN
-              -- Game creator share (0 or 1)
-              CASE
-                WHEN '${namespace}-Tournament'.'entry_fee.Some.game_creator_share.Some' IS NOT NULL
-                  AND '${namespace}-Tournament'.'entry_fee.Some.game_creator_share.Some' != '0'
-                THEN 1 ELSE 0
-              END
-              +
-              -- Tournament creator share (0 or 1)
-              CASE
-                WHEN '${namespace}-Tournament'.'entry_fee.Some.tournament_creator_share.Some' IS NOT NULL
-                  AND '${namespace}-Tournament'.'entry_fee.Some.tournament_creator_share.Some' != '0'
-                THEN 1 ELSE 0
-              END
-              +
-              -- Count distribution positions from distribution_positions field
-              COALESCE('${namespace}-Tournament'.'entry_fee.Some.distribution_positions.Some', 0)
-            ELSE 0
+            WHEN "entry_fee.Some.game_creator_share.Some" IS NOT NULL
+              AND CAST("entry_fee.Some.game_creator_share.Some" AS INTEGER) > 0
+            THEN 1 ELSE 0
           END
+          +
+          -- Tournament creator share (0 or 1)
+          CASE
+            WHEN "entry_fee.Some.tournament_creator_share.Some" IS NOT NULL
+              AND CAST("entry_fee.Some.tournament_creator_share.Some" AS INTEGER) > 0
+            THEN 1 ELSE 0
+          END
+          +
+          -- Count distribution positions from distribution_positions field
+          COALESCE(CAST("entry_fee.Some.distribution_positions.Some" AS INTEGER), 0)
          FROM '${namespace}-Tournament'
          WHERE id = '${padU64(BigInt(tournamentId))}'
-        ) as entry_fee_count,
+        ), 0) as entry_fee_count,
 
-        -- Count claimed prizes
+        -- Count claimed rewards
         (SELECT COUNT(*)
-         FROM '${namespace}-PrizeClaim'
+         FROM '${namespace}-RewardClaim'
          WHERE tournament_id = '${padU64(BigInt(tournamentId))}'
            AND claimed = 1
         ) as claimed_count,
 
-        -- Get claimed prizes details
+        -- Get claimed rewards details
         (SELECT GROUP_CONCAT(
-          json_object('prizeType', prize_type, 'claimed', claimed),
+          json_object('rewardType', reward_type, 'claimed', claimed),
           '|'
          )
-         FROM '${namespace}-PrizeClaim'
+         FROM '${namespace}-RewardClaim'
          WHERE tournament_id = '${padU64(BigInt(tournamentId))}'
            AND claimed = 1
         ) as claimed_prizes

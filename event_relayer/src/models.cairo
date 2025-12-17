@@ -111,6 +111,28 @@ pub enum PrizeType {
     Distributed: (u64, u32),
 }
 
+/// Entry fee reward subtypes for claiming entry fee shares
+#[derive(Copy, Drop, Serde, Introspect)]
+pub enum EntryFeeRewardType {
+    /// Claim entry fee position-based distribution
+    Position: u32,
+    /// Claim tournament creator's entry fee share
+    TournamentCreator,
+    /// Claim game creator's entry fee share
+    GameCreator,
+    /// Claim refund for a specific token_id
+    Refund: u64,
+}
+
+/// Unified reward type for claiming both prizes and entry fee shares
+#[derive(Copy, Drop, Serde, Introspect)]
+pub enum RewardType {
+    /// Claim a sponsored prize (Single or Distributed)
+    Prize: PrizeType,
+    /// Claim entry fee share
+    EntryFee: EntryFeeRewardType,
+}
+
 // ============ Game Config Models ============
 
 #[derive(Drop, Serde, Introspect)]

@@ -1,7 +1,16 @@
 // SPDX-License-Identifier: BUSL-1.1
 
-use budokan_registration::models::Registration;
 use starknet::ContractAddress;
+
+#[derive(Copy, Drop, Serde)]
+pub struct Registration {
+    pub game_address: ContractAddress,
+    pub game_token_id: u64,
+    pub context_id: u64,
+    pub entry_number: u32,
+    pub has_submitted: bool,
+    pub is_banned: bool,
+}
 
 #[starknet::interface]
 pub trait IRegistration<TState> {

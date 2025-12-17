@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 use budokan_event_relayer::models::{
-    EntryFee, EntryRequirement, GameConfig, Metadata, PrizeType, QualificationProof, Schedule,
+    EntryFee, EntryRequirement, GameConfig, Metadata, QualificationProof, RewardType, Schedule,
     TokenTypeData,
 };
 use starknet::ContractAddress;
@@ -82,15 +82,15 @@ pub struct Prize {
     pub sponsor_address: ContractAddress,
 }
 
-/// Emitted when a prize is claimed
-/// Mirrors the PrizeClaim dojo model
+/// Emitted when a reward is claimed (prizes or entry fees)
+/// Mirrors the RewardClaim dojo model
 #[derive(Drop, Serde)]
 #[dojo::event]
-pub struct PrizeClaim {
+pub struct RewardClaim {
     #[key]
     pub tournament_id: u64,
     #[key]
-    pub prize_type: PrizeType,
+    pub reward_type: RewardType,
     pub claimed: bool,
 }
 

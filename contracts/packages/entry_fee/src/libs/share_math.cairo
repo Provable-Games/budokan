@@ -116,7 +116,7 @@ pub fn calculate_slot_position(share_index: u32) -> (u8, u8) {
 
 #[cfg(test)]
 mod tests {
-    use super::{get_packed_share, pow_2_u256_15, set_packed_share, SHARES_PER_SLOT};
+    use super::{SHARES_PER_SLOT, get_packed_share, pow_2_u256_15, set_packed_share};
 
     #[test]
     fn test_pow_2_common_values() {

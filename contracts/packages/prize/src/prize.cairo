@@ -6,15 +6,15 @@
 /// - Prize deposit processing
 /// - Prize claim tracking
 /// - Total prize count metrics
-/// 
+///
 /// TODO: Reclaim prize functionality for unclaimed prizes based on some context rules
 
 #[starknet::component]
 pub mod PrizeComponent {
     use budokan_interfaces::prize::IPrize;
     use budokan_prize::models::{
-        CUSTOM_SHARES_PER_SLOT, CustomShares, CustomSharesImpl, CustomSharesTrait, ERC20Data,
-        Prize, PrizeType, TokenTypeData,
+        CUSTOM_SHARES_PER_SLOT, CustomShares, CustomSharesImpl, CustomSharesTrait, ERC20Data, Prize,
+        PrizeType, StoredPrize, StoredPrizeTrait, TokenTypeData,
     };
     use core::num::traits::Zero;
     use core::poseidon::poseidon_hash_span;
@@ -28,9 +28,9 @@ pub mod PrizeComponent {
     #[storage]
     pub struct Storage {
         /// Prize data keyed by prize_id
-        /// Uses StorePacking to pack Prize without the id field
+        /// Uses StoredPrize for storage (with Store trait)
         /// For ERC20: amount + distribution config packed efficiently
-        Prize_prizes: Map<u64, Prize>,
+        Prize_prizes: Map<u64, StoredPrize>,
         /// Prize claims keyed by (context_id, prize_type_hash)
         /// where prize_type_hash is poseidon hash of serialized PrizeType
         Prize_claims: Map<(u64, felt252), bool>,
@@ -74,9 +74,9 @@ pub mod PrizeComponent {
         /// Get a prize by its ID
         /// The Prize struct is unpacked from storage and the id field is set
         fn _get_prize(self: @ComponentState<TContractState>, prize_id: u64) -> Prize {
-            let mut prize = self.Prize_prizes.entry(prize_id).read();
-            // StorePacking sets id to 0, so we need to restore it
-            prize.id = prize_id;
+            let stored = self.Prize_prizes.entry(prize_id).read();
+            // Convert StoredPrize to Prize
+            let mut prize = stored.to_prize(prize_id);
 
             // For custom distributions, restore the shares from separate storage
             prize.token_type = match prize.token_type {
@@ -88,7 +88,9 @@ pub mod PrizeComponent {
                                     // Reconstruct custom shares from storage
                                     let shares = self._get_custom_shares(prize_id);
                                     Option::Some(
-                                        budokan_distribution::models::Distribution::Custom(shares.span()),
+                                        budokan_distribution::models::Distribution::Custom(
+                                            shares.span(),
+                                        ),
                                     )
                                 },
                                 _ => Option::Some(dist),
@@ -142,9 +144,10 @@ pub mod PrizeComponent {
             shares
         }
 
-        /// Store a prize (id will be managed by StorePacking)
+        /// Store a prize (converts to StoredPrize for storage)
         fn set_prize(ref self: ComponentState<TContractState>, prize_id: u64, prize: Prize) {
-            self.Prize_prizes.entry(prize_id).write(prize);
+            let stored = StoredPrizeTrait::from_prize(prize);
+            self.Prize_prizes.entry(prize_id).write(stored);
         }
 
         /// Get total prizes count (internal)
@@ -244,9 +247,11 @@ pub mod PrizeComponent {
                     let token_id = *erc721_data.id;
                     let token_dispatcher = IERC721Dispatcher { contract_address: token_address };
                     token_dispatcher
-                        .transfer_from(get_caller_address(), get_contract_address(), token_id.into());
+                        .transfer_from(
+                            get_caller_address(), get_contract_address(), token_id.into(),
+                        );
                 },
-            };
+            }
 
             // Get next prize ID
             let id = self.increment_prize_count();
@@ -298,7 +303,9 @@ pub mod PrizeComponent {
 
             // Create the prize (StorePacking handles the packing in storage)
             let sponsor = get_caller_address();
-            let prize = Prize { id, context_id, token_address, token_type, sponsor_address: sponsor };
+            let prize = Prize {
+                id, context_id, token_address, token_type, sponsor_address: sponsor,
+            };
 
             // Store and return the prize
             self.set_prize(id, prize);
@@ -331,9 +338,7 @@ pub mod PrizeComponent {
 
         /// Refund ERC20 prize to the original sponsor
         fn refund_prize_erc20(
-            ref self: ComponentState<TContractState>,
-            prize_id: u64,
-            amount: u128,
+            ref self: ComponentState<TContractState>, prize_id: u64, amount: u128,
         ) {
             let prize = self._get_prize(prize_id);
             let erc20 = IERC20Dispatcher { contract_address: prize.token_address };
@@ -342,9 +347,7 @@ pub mod PrizeComponent {
 
         /// Refund ERC721 prize to the original sponsor
         fn refund_prize_erc721(
-            ref self: ComponentState<TContractState>,
-            prize_id: u64,
-            token_id: u128,
+            ref self: ComponentState<TContractState>, prize_id: u64, token_id: u128,
         ) {
             let prize = self._get_prize(prize_id);
             let erc721 = IERC721Dispatcher { contract_address: prize.token_address };

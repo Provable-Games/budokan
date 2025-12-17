@@ -21,8 +21,15 @@ import { useGameTokens, useGameTokensCount } from "metagame-sdk/sql";
 import { REFRESH, VERIFIED } from "@/components/Icons";
 import { Search } from "lucide-react";
 import { useDebounce } from "@/hooks/useDebounce";
-import { useGetTournamentRegistrants } from "@/dojo/hooks/useSqlQueries";
+import { useGetTournamentRegistrants, useGetTournamentLeaderboards, useGetTournament } from "@/dojo/hooks/useSqlQueries";
 import { useDojo } from "@/context/dojo";
+import { Tournament } from "@/generated/models.gen";
+import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
+import { useMemo } from "react";
+import { indexAddress, padU64 } from "@/lib/utils";
+import { useExtensionQualification, TournamentValidatorInput } from "@/dojo/hooks/useExtensionQualification";
+import { isTournamentValidator } from "@/lib/extensionConfig";
+import { useAccount } from "@starknet-react/core";
 
 interface ScoreTableDialogProps {
   open: boolean;
@@ -31,6 +38,8 @@ interface ScoreTableDialogProps {
   entryCount: number;
   isStarted: boolean;
   isEnded: boolean;
+  tournamentModel?: Tournament;
+  tournamentsData?: Tournament[];
 }
 
 export const ScoreTableDialog = ({
@@ -40,10 +49,14 @@ export const ScoreTableDialog = ({
   entryCount,
   isStarted,
   isEnded,
+  tournamentModel,
+  tournamentsData = [],
 }: ScoreTableDialogProps) => {
   const { namespace, selectedChainConfig } = useDojo();
+  const { address } = useAccount();
   const tournamentAddress = selectedChainConfig.budokanAddress!;
   const [searchQuery, setSearchQuery] = useState("");
+  const { validateEntry } = useSystemCalls();
 
   // Debounce search query to avoid too many requests
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
@@ -99,6 +112,98 @@ export const ScoreTableDialog = ({
       );
     });
   }, [games, registrants]);
+
+  // Parse tournament validator config if this tournament has extension requirements
+  const hasEntryRequirement = tournamentModel?.entry_requirement.isSome();
+  const requirementVariant = tournamentModel?.entry_requirement.Some?.entry_requirement_type?.activeVariant();
+  const extensionConfig = tournamentModel?.entry_requirement.Some?.entry_requirement_type?.variant?.extension;
+
+  // Check if this extension is a tournament validator
+  const isTournamentValidatorExtension = useMemo(() => {
+    if (!extensionConfig?.address || !selectedChainConfig?.tournamentValidatorAddress) return false;
+    const normalizedExtensionAddress = indexAddress(extensionConfig.address);
+    const normalizedValidatorAddress = indexAddress(selectedChainConfig.tournamentValidatorAddress);
+    return normalizedExtensionAddress === normalizedValidatorAddress;
+  }, [extensionConfig?.address, selectedChainConfig?.tournamentValidatorAddress]);
+
+  // Parse tournament validator config: [qualifier_type, qualifying_mode, top_positions, ...tournament_ids]
+  const tournamentValidatorConfig = useMemo(() => {
+    if (!isTournamentValidatorExtension || !extensionConfig?.config) return null;
+
+    const config = extensionConfig.config;
+    if (!config || config.length < 3) return null;
+
+    const qualifierType = config[0]; // "0" = participated, "1" = won
+    const qualifyingMode = config[1];
+    const topPositions = config[2];
+    const tournamentIds = config.slice(3);
+
+    return {
+      requirementType: qualifierType === "1" ? "won" : "participated",
+      qualifyingMode: Number(qualifyingMode),
+      topPositions: Number(topPositions),
+      tournamentIds: tournamentIds.map((id: any) => BigInt(id)),
+    };
+  }, [isTournamentValidatorExtension, extensionConfig?.config]);
+
+  // Get tournament data for validator extensions
+  const validatorTournaments = useMemo(() => {
+    if (!tournamentValidatorConfig) return [];
+    return tournamentsData.filter((t) =>
+      tournamentValidatorConfig.tournamentIds.some((id: any) => BigInt(t.id) === id)
+    );
+  }, [tournamentValidatorConfig, tournamentsData]);
+
+  // Fetch leaderboards for required tournaments (for win checking)
+  const { data: leaderboards } = useGetTournamentLeaderboards({
+    namespace: namespace ?? "",
+    tournamentIds: validatorTournaments.map((tournament) => padU64(BigInt(tournament.id))),
+    active: isTournamentValidatorExtension && !!tournamentValidatorConfig && !isStarted,
+  });
+
+  // Validation checking function for each participant
+  const getParticipantValidation = useMemo(() => {
+    if (!hasEntryRequirement || requirementVariant !== "extension" || !isTournamentValidatorExtension || !tournamentValidatorConfig) {
+      return new Map<string, { isValid: boolean; reason?: string }>();
+    }
+
+    const validationMap = new Map<string, { isValid: boolean; reason?: string }>();
+
+    // For each participant (game token), check if they meet the entry requirements
+    if (!registrants || !orderedRegistrants) return validationMap;
+
+    orderedRegistrants.forEach((registration, index) => {
+      if (!registration) return;
+
+      const gameTokenId = registration.game_token_id;
+      const game = games?.[index];
+      if (!game) return;
+
+      // Get the owner of this game token
+      const ownerAddress = game.owner;
+
+      // Check if this participant meets entry requirements
+      // For now, mark all as needing validation (actual validation would require checking their historical data)
+      validationMap.set(gameTokenId, {
+        isValid: true, // Will be updated with actual validation
+        reason: "Validation pending",
+      });
+    });
+
+    return validationMap;
+  }, [hasEntryRequirement, requirementVariant, isTournamentValidatorExtension, tournamentValidatorConfig, registrants, orderedRegistrants, games]);
+
+  // Handle ban action
+  const handleBan = async (gameTokenId: string) => {
+    try {
+      // Call validate_entry with empty proof to ban the participant
+      await validateEntry(tournamentId, gameTokenId, []);
+      // Refresh the data
+      refetch();
+    } catch (error) {
+      console.error("Error banning participant:", error);
+    }
+  };
 
   // Get the filtered count based on the same search parameters
   const { count: filteredCount } = useGameTokensCount({
@@ -190,6 +295,9 @@ export const ScoreTableDialog = ({
                 {isEnded && (
                   <TableHead className="text-center">Submitted</TableHead>
                 )}
+                {!isStarted && hasEntryRequirement && isTournamentValidatorExtension && (
+                  <TableHead className="text-center">Actions</TableHead>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody className="overflow-y-auto">
@@ -238,13 +346,28 @@ export const ScoreTableDialog = ({
                           )}
                         </TableCell>
                       )}
+                      {!isStarted && hasEntryRequirement && isTournamentValidatorExtension && (
+                        <TableCell className="text-center">
+                          <Button
+                            size="xs"
+                            variant="destructive"
+                            onClick={() => handleBan(game.token_id.toString())}
+                            disabled={!address}
+                          >
+                            Ban
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   );
                 })
               ) : (
                 <TableRow>
                   <TableCell
-                    colSpan={isEnded ? 4 : 3}
+                    colSpan={
+                      isEnded ? 4 :
+                      (!isStarted && hasEntryRequirement && isTournamentValidatorExtension) ? 4 : 3
+                    }
                     className="text-center text-muted-foreground py-8"
                   >
                     {loading

@@ -69,6 +69,8 @@ const formSchema = z.object({
         .object({
           tournaments: z.array(z.custom<Tournament>()),
           requirement: z.enum(["participated", "won"]),
+          qualifying_mode: z.number().min(0).max(5).default(0),
+          top_positions: z.number().min(0).max(200).default(0),
         })
         .optional(),
       addresses: z.array(z.string()).default([]),
@@ -129,7 +131,7 @@ const formSchema = z.object({
 const CreateTournament = () => {
   const navigate = useNavigate();
   const { address } = useAccount();
-  const { namespace } = useDojo();
+  const { namespace, selectedChainConfig } = useDojo();
   const { createTournamentAndApproveAndAddPrizes } = useSystemCalls();
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -166,6 +168,8 @@ const CreateTournament = () => {
         tournament: {
           tournaments: [],
           requirement: "participated",
+          qualifying_mode: 0,
+          top_positions: 0,
         },
         extension: {
           address: "",
@@ -436,7 +440,8 @@ const CreateTournament = () => {
       const processedTournament = processTournamentData(
         formData,
         address!,
-        Number(tournamentCount)
+        Number(tournamentCount),
+        selectedChainConfig?.tournamentValidatorAddress
       );
       console.log("Processed tournament:", JSON.stringify(processedTournament, (_key, value) =>
         typeof value === 'bigint' ? value.toString() : value

@@ -7,7 +7,7 @@ import { indexAddress } from "@/lib/utils";
  * Each extension can specify what data should be passed as qualification proof.
  */
 
-export type ExtensionProofType = "address" | "custom" | "snapshot";
+export type ExtensionProofType = "address" | "custom" | "snapshot" | "tournament";
 
 export interface ExtensionConfig {
   name: string;
@@ -19,6 +19,8 @@ export interface ExtensionConfig {
   isPreset?: boolean;
   // For snapshot extensions, indicates if snapshot ID is required in config
   requiresSnapshotId?: boolean;
+  // For tournament validators, indicates this validates tournament participation
+  isTournamentValidator?: boolean;
 }
 
 // Preset extension configurations
@@ -30,6 +32,14 @@ export const PRESET_EXTENSIONS: Record<string, ExtensionConfig> = {
     extractProof: () => [], // No proof required for snapshot extension
     isPreset: true,
     requiresSnapshotId: true,
+  },
+  tournament: {
+    name: "Tournament Qualification",
+    description: "Validates entry based on previous tournament participation or wins",
+    proofType: "tournament",
+    extractProof: () => [], // Proof will be tournament token ID
+    isPreset: true,
+    isTournamentValidator: true,
   },
 };
 
@@ -87,6 +97,24 @@ export const registerExtensionConfig = (
 export const hasExtensionConfig = (extensionAddress: string): boolean => {
   const normalizedAddress = indexAddress(extensionAddress);
   return normalizedAddress in extensionConfigs;
+};
+
+/**
+ * Check if an extension is a tournament validator
+ */
+export const isTournamentValidator = (extensionAddress: string): boolean => {
+  const config = getExtensionConfig(extensionAddress);
+  return config?.isTournamentValidator === true;
+};
+
+/**
+ * Register the tournament validator address for a chain
+ * This should be called when the chain config is loaded
+ */
+export const registerTournamentValidator = (
+  tournamentValidatorAddress: string
+): void => {
+  registerExtensionConfig(tournamentValidatorAddress, PRESET_EXTENSIONS.tournament);
 };
 
 export default extensionConfigs;

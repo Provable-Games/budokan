@@ -78,6 +78,7 @@ name = "budokan_distribution"
 version = "0.0.1"
 dependencies = [
  "alexandria_math",
+ "budokan_interfaces",
  "math",
  "snforge_std",
 ]
@@ -107,12 +108,6 @@ dependencies = [
 name = "budokan_interfaces"
 version = "0.0.1"
 dependencies = [
- "budokan",
- "budokan_distribution",
- "budokan_entry_fee",
- "budokan_entry_requirement",
- "budokan_prize",
- "budokan_registration",
  "snforge_std",
 ]
 
