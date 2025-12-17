@@ -1,0 +1,59 @@
+[workspace]
+members = [
+    "contracts/packages/math",
+    "contracts/packages/distribution",
+    "contracts/packages/interfaces",
+    "contracts/packages/entry_fee",
+    "contracts/packages/entry_requirement",
+    "contracts/packages/prize",
+    "contracts/packages/registration",
+    "contracts/packages/budokan",
+]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024_07"
+cairo-version = "2.13.1"
+
+[workspace.dependencies]
+starknet = "2.13.1"
+cairo_test = "2.13.1"
+snforge_std = { git = "https://github.com/foundry-rs/starknet-foundry", tag = "v0.53.0" }
+dojo = { git = "https://github.com/dojoengine/dojo", tag = "v1.8.0" }
+openzeppelin_access = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0-alpha.3" }
+openzeppelin_introspection = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0-alpha.3" }
+openzeppelin_token = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0-alpha.3" }
+openzeppelin_interfaces = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0-alpha.3" }
+openzeppelin_upgrades = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0-alpha.3" }
+game_components_metagame = { git = "https://github.com/Provable-Games/game-components.git", branch = "main" }
+game_components_minigame = { git = "https://github.com/Provable-Games/game-components.git", branch = "main" }
+game_components_utils = { git = "https://github.com/Provable-Games/game-components.git", branch = "main" }
+game_components_test_starknet = { git = "https://github.com/Provable-Games/game-components.git", branch = "main" }
+game_components_token = { git = "https://github.com/Provable-Games/game-components.git", branch = "main" }
+game_components_leaderboard = { git = "https://github.com/Provable-Games/game-components.git", branch = "main" }
+
+[scripts]
+test = "snforge test"
+
+[profile.dev.cairo]
+unstable-add-statements-code-locations-debug-info = true
+unstable-add-statements-functions-debug-info = true
+inlining-strategy = "avoid"
+
+[profile.dev]
+[profile.slot]
+[profile.sepolia]
+[profile.mainnet]
+
+[tool.snforge]
+# Fork configurations for testing
+[[tool.snforge.fork]]
+name = "sepolia"
+url = "https://starknet-sepolia.public.blastapi.io"
+block_id.tag = "latest"
+
+[[tool.snforge.fork]]
+name = "mainnet"
+url = "https://starknet-mainnet.public.blastapi.io"
+block_id.tag = "latest"
+
