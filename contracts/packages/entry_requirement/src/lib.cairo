@@ -8,8 +8,6 @@ pub mod examples {
     pub mod erc20_balance_validator;
     pub mod governance_validator;
     pub mod snapshot_validator;
-    pub mod tournament_validator;
-    pub mod tournament_validator_v2;
     // The following validators require external dependencies not in this package:
 // pub mod opus_troves_validator;     // requires opus, wadray
 // pub mod snapshot_ETHEREUM_validator; // requires snapshot contracts
@@ -29,9 +27,6 @@ pub mod tests {
     // pub mod test_opus_troves_validator_budokan_fork;
     pub mod test_snapshot_validator_budokan_fork;
     // pub mod test_snapshot_validator_fork;
-    pub mod test_tournament_validator_budokan_fork;
-    pub mod test_tournament_validator_integration;
-    // pub mod test_tournament_validator_v2_budokan_fork;
 
     pub mod mocks {
         pub mod entry_validator_mock;

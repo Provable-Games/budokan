@@ -22,7 +22,6 @@ starknet.workspace = true
 openzeppelin_interfaces.workspace = true
 openzeppelin_introspection.workspace = true
 budokan_interfaces = { path = "../interfaces" }
-game_components_minigame.workspace = true
 
 [dev-dependencies]
 snforge_std.workspace = true
