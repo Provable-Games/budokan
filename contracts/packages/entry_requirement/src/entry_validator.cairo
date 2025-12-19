@@ -40,9 +40,6 @@ pub mod EntryValidatorComponent {
             qualification: Span<felt252>,
         ) -> Option<u8>;
 
-        /// Returns true if this validator only validates during registration period
-        fn registration_only(self: @TContractState) -> bool;
-
         /// Add configuration for a tournament
         fn add_config(
             ref self: TContractState, tournament_id: u64, entry_limit: u8, config: Span<felt252>,
@@ -79,7 +76,7 @@ pub mod EntryValidatorComponent {
 
         fn registration_only(self: @ComponentState<TContractState>) -> bool {
             let contract = self.get_contract();
-            EntryValidator::registration_only(contract)
+            self.registration_only.read()
         }
 
         fn valid_entry(

@@ -3,7 +3,7 @@
 use starknet::ContractAddress;
 
 // Interface ID for entry validator - derived from selector
-pub const IENTRY_VALIDATOR_ID: felt252 = 0x2a9a9c6b2e7f77e4df7b79a1c6b3c4d5e6f7a8b9;
+pub const IENTRY_VALIDATOR_ID: felt252 = 0x01158754d5cc62137c4de2cbd0e65cbd163990af29f0182006f26fe0cac00bb6;
 
 #[starknet::interface]
 pub trait IEntryValidator<TState> {
