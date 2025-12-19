@@ -97,7 +97,6 @@ name = "budokan_entry_requirement"
 version = "0.0.1"
 dependencies = [
  "budokan_interfaces",
- "game_components_minigame",
  "openzeppelin_interfaces",
  "openzeppelin_introspection",
  "openzeppelin_token",
