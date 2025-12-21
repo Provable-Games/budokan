@@ -150,8 +150,9 @@ const Overview = () => {
     namespace: namespace,
     currentTime: currentTime,
     fromTournamentId: fromTournamentId,
-    excludedTournamentIds: EXCLUDED_TOURNAMENT_IDS,
   });
+
+  console.log(upcomingTournamentsCount);
 
   const { data: liveTournamentsCount } = useGetLiveTournamentsCount({
     namespace: namespace,

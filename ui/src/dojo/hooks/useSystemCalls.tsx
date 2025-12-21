@@ -1082,6 +1082,27 @@ export const useSystemCalls = () => {
     }
   };
 
+  const checkRegistrationOnly = async (
+    extensionAddress: string
+  ): Promise<boolean> => {
+    try {
+      if (!provider) return false;
+
+      const result = await provider.callContract({
+        contractAddress: extensionAddress,
+        entrypoint: "registration_only",
+        calldata: [],
+      });
+
+      // Result is a boolean (0 = false, 1 = true)
+      return result[0] === "0x1" || BigInt(result[0]) === 1n;
+    } catch (error) {
+      console.error("Error checking registration_only:", error);
+      // If the function doesn't exist, assume it doesn't require registration
+      return false;
+    }
+  };
+
   const getExtensionEntriesLeft = async (
     extensionAddress: string,
     tournamentId: BigNumberish,
@@ -1141,5 +1162,6 @@ export const useSystemCalls = () => {
     registerToken,
     checkExtensionValidEntry,
     getExtensionEntriesLeft,
+    checkRegistrationOnly,
   };
 };

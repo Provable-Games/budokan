@@ -22,13 +22,16 @@ import {
   calculateDistribution,
 } from "@/lib/utils";
 import { calculatePaidPlaces } from "@/lib/utils/formatting";
-import { getTokenLogoUrl } from "@/lib/tokensMeta";
+import { getTokenLogoUrl, getTokenDecimals } from "@/lib/tokensMeta";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useDojo } from "@/context/dojo";
 // import { calculateTotalValue } from "@/lib/utils/formatting";
 import { LoadingSpinner } from "@/components/ui/spinner";
 import { useSettings } from "metagame-sdk/sql";
+import { getExtensionAddresses } from "@/lib/extensionConfig";
+import { getTokenByAddress } from "@/lib/tokenUtils";
+import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
 
 interface TournamentConfirmationProps {
   formData: TournamentFormData;
@@ -48,6 +51,8 @@ const TournamentConfirmation = ({
   const { selectedChainConfig } = useDojo();
   const { gameData, getGameImage } = useUIStore();
   const [isCreating, setIsCreating] = useState(false);
+  const [extensionRequiresRegistration, setExtensionRequiresRegistration] = useState(false);
+  const { checkRegistrationOnly } = useSystemCalls();
 
   const { settings } = useSettings({
     settingsIds: [Number(formData.settings)],
@@ -73,6 +78,35 @@ const TournamentConfirmation = ({
   const isStartTimeValid =
     formData.type === "fixed" ? startTime - currentTime >= 900n : true;
   const isDurationValid = formData.duration >= 900n;
+
+  // Check if extension requires registration period by calling the contract
+  useEffect(() => {
+    const checkExtensionRegistrationRequirement = async () => {
+      if (
+        formData.enableGating &&
+        formData.gatingOptions?.type === "extension" &&
+        formData.gatingOptions.extension?.address
+      ) {
+        const requiresReg = await checkRegistrationOnly(
+          formData.gatingOptions.extension.address
+        );
+        setExtensionRequiresRegistration(requiresReg);
+      } else {
+        setExtensionRequiresRegistration(false);
+      }
+    };
+
+    checkExtensionRegistrationRequirement();
+  }, [
+    formData.enableGating,
+    formData.gatingOptions?.type,
+    formData.gatingOptions?.extension?.address,
+    checkRegistrationOnly,
+  ]);
+
+  // Check if there's a conflict between extension requirement and tournament type
+  const hasRegistrationConflict =
+    extensionRequiresRegistration && formData.type === "open";
 
   // Then convert the full prize distribution to JSON
   const prizeDistributionString = useMemo(
@@ -174,6 +208,101 @@ const TournamentConfirmation = ({
     return expanded;
   }, [formData.bonusPrizes, prices]);
 
+  // Parse ERC20 balance validator config if present
+  const erc20BalanceConfig = useMemo(() => {
+    if (
+      formData.gatingOptions?.type !== "extension" ||
+      !formData.gatingOptions?.extension?.config
+    ) {
+      return null;
+    }
+
+    const extensionAddresses = getExtensionAddresses(
+      selectedChainConfig?.chainId ?? ""
+    );
+    const isERC20Validator =
+      formData.gatingOptions.extension.address ===
+      extensionAddresses.erc20BalanceValidator;
+
+    if (!isERC20Validator) return null;
+
+    // Parse config: [token_address, min_threshold_low, min_threshold_high, max_threshold_low, max_threshold_high, value_per_entry_low, value_per_entry_high, max_entries]
+    const configParts =
+      formData.gatingOptions.extension.config.split(",");
+    if (configParts.length < 8) return null;
+
+    const tokenAddress = configParts[0];
+    const minThresholdLow = BigInt(configParts[1]);
+    const minThresholdHigh = BigInt(configParts[2]);
+    const maxThresholdLow = BigInt(configParts[3]);
+    const maxThresholdHigh = BigInt(configParts[4]);
+    const valuePerEntryLow = BigInt(configParts[5]);
+    const valuePerEntryHigh = BigInt(configParts[6]);
+    const maxEntriesValue = Number(configParts[7]);
+
+    // Combine high and low parts to form u256 values
+    const minThreshold = (minThresholdHigh << 128n) | minThresholdLow;
+    const maxThreshold = (maxThresholdHigh << 128n) | maxThresholdLow;
+    const valuePerEntry = (valuePerEntryHigh << 128n) | valuePerEntryLow;
+
+    const token = getTokenByAddress(
+      tokenAddress,
+      selectedChainConfig?.chainId ?? ""
+    );
+
+    // Get token decimals (default to 18 if not available)
+    const decimals = getTokenDecimals(
+      selectedChainConfig?.chainId ?? "",
+      tokenAddress
+    ) || 18;
+    const divisor = BigInt(10 ** decimals);
+
+    // Convert wei values to human-readable format
+    const formatTokenAmount = (value: bigint) => {
+      if (value === 0n) return "0";
+      const integerPart = value / divisor;
+      const remainder = value % divisor;
+      if (remainder === 0n) {
+        return integerPart.toString();
+      }
+      // Format with decimals, removing trailing zeros
+      const decimalStr = remainder.toString().padStart(decimals, "0");
+      const trimmed = decimalStr.replace(/0+$/, "");
+      return trimmed ? `${integerPart}.${trimmed}` : integerPart.toString();
+    };
+
+    // Calculate USD values
+    const tokenPrice = prices?.[tokenAddress] ?? 0;
+    const calculateUSD = (value: bigint): number => {
+      if (value === 0n || tokenPrice === 0) return 0;
+      const amount = Number(value) / (10 ** decimals);
+      return amount * tokenPrice;
+    };
+
+    return {
+      tokenAddress,
+      token,
+      minThreshold: minThreshold,
+      maxThreshold: maxThreshold,
+      valuePerEntry: valuePerEntry,
+      maxEntries: maxEntriesValue,
+      // Human-readable formatted values
+      minThresholdFormatted: formatTokenAmount(minThreshold),
+      maxThresholdFormatted: formatTokenAmount(maxThreshold),
+      valuePerEntryFormatted: formatTokenAmount(valuePerEntry),
+      // USD values
+      minThresholdUSD: calculateUSD(minThreshold),
+      maxThresholdUSD: calculateUSD(maxThreshold),
+      valuePerEntryUSD: calculateUSD(valuePerEntry),
+    };
+  }, [
+    formData.gatingOptions?.type,
+    formData.gatingOptions?.extension?.address,
+    formData.gatingOptions?.extension?.config,
+    selectedChainConfig?.chainId,
+    prices,
+  ]);
+
   const handleConfirm = async () => {
     setIsCreating(true);
     try {
@@ -256,24 +385,38 @@ const TournamentConfirmation = ({
 
             {/* Schedule Section */}
             <div className="space-y-2">
-              <div className="flex flex-row justify-between items-center">
-                <h3 className="font-bold text-lg">Schedule</h3>
-                {!isStartTimeValid && (
-                  <div className="flex flex-row gap-2 items-center text-destructive">
-                    <span className="w-6">
-                      <ALERT />
-                    </span>
-                    Registration period is less than 15 minutes
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-row justify-between items-center">
+                  <h3 className="font-bold text-lg">Schedule</h3>
+                  <div className="flex flex-col gap-1">
+                    {!isStartTimeValid && (
+                      <div className="flex flex-row gap-2 items-center text-destructive">
+                        <span className="w-6">
+                          <ALERT />
+                        </span>
+                        Registration period is less than 15 minutes
+                      </div>
+                    )}
+                    {!isDurationValid && (
+                      <span className="flex flex-row gap-2 items-center text-destructive">
+                        <span className="w-6">
+                          <ALERT />
+                        </span>
+                        Tournament duration is less than 15 minutes
+                      </span>
+                    )}
+                    {hasRegistrationConflict && (
+                      <div className="flex flex-row gap-2 items-center text-destructive">
+                        <span className="w-6">
+                          <ALERT />
+                        </span>
+                        <span className="text-sm">
+                          This extension requires a Fixed tournament with registration period
+                        </span>
+                      </div>
+                    )}
                   </div>
-                )}
-                {!isDurationValid && (
-                  <span className="flex flex-row gap-2 items-center text-destructive">
-                    <span className="w-6">
-                      <ALERT />
-                    </span>
-                    Tournament duration is less than 15 minutes
-                  </span>
-                )}
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <span className="text-muted-foreground">
@@ -491,7 +634,100 @@ const TournamentConfirmation = ({
                       </>
                     ) : formData.gatingOptions.type === "extension" ? (
                       <>
-                        {formData.gatingOptions.extension?.address ? (
+                        {erc20BalanceConfig ? (
+                          <>
+                            <span className="text-muted-foreground">
+                              Extension Type:
+                            </span>
+                            <span>ERC20 Balance Validation</span>
+                            <span className="text-muted-foreground">
+                              Token:
+                            </span>
+                            <div className="flex flex-row items-center gap-2">
+                              <img
+                                src={erc20BalanceConfig.token?.image ?? ""}
+                                alt={erc20BalanceConfig.token?.symbol ?? ""}
+                                className="w-6 h-6 rounded-full"
+                              />
+                              <span>{erc20BalanceConfig.token?.symbol ?? "Unknown"}</span>
+                              <span className="text-neutral font-mono text-xs">
+                                {displayAddress(erc20BalanceConfig.tokenAddress)}
+                              </span>
+                              <a
+                                href={`${selectedChainConfig.blockExplorerUrl}/contract/${erc20BalanceConfig.tokenAddress}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="w-6 text-neutral"
+                              >
+                                <EXTERNAL_LINK />
+                              </a>
+                            </div>
+                            <span className="text-muted-foreground">
+                              Min Balance:
+                            </span>
+                            <div className="flex flex-row items-center gap-2">
+                              <span>
+                                {erc20BalanceConfig.minThresholdFormatted}
+                              </span>
+                              <span className="text-neutral">
+                                {erc20BalanceConfig.token?.symbol ?? "tokens"}
+                              </span>
+                              {erc20BalanceConfig.minThresholdUSD > 0 && (
+                                <span className="text-neutral">
+                                  (≈ ${erc20BalanceConfig.minThresholdUSD.toFixed(2)})
+                                </span>
+                              )}
+                            </div>
+                            {erc20BalanceConfig.maxThreshold > 0n && (
+                              <>
+                                <span className="text-muted-foreground">
+                                  Max Balance:
+                                </span>
+                                <div className="flex flex-row items-center gap-2">
+                                  <span>
+                                    {erc20BalanceConfig.maxThresholdFormatted}
+                                  </span>
+                                  <span className="text-neutral">
+                                    {erc20BalanceConfig.token?.symbol ?? "tokens"}
+                                  </span>
+                                  {erc20BalanceConfig.maxThresholdUSD > 0 && (
+                                    <span className="text-neutral">
+                                      (≈ ${erc20BalanceConfig.maxThresholdUSD.toFixed(2)})
+                                    </span>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                            {erc20BalanceConfig.valuePerEntry > 0n && (
+                              <>
+                                <span className="text-muted-foreground">
+                                  Value Per Entry:
+                                </span>
+                                <div className="flex flex-row items-center gap-2">
+                                  <span>
+                                    {erc20BalanceConfig.valuePerEntryFormatted}
+                                  </span>
+                                  <span className="text-neutral">
+                                    {erc20BalanceConfig.token?.symbol ?? "tokens"}
+                                  </span>
+                                  {erc20BalanceConfig.valuePerEntryUSD > 0 && (
+                                    <span className="text-neutral">
+                                      (≈ ${erc20BalanceConfig.valuePerEntryUSD.toFixed(2)})
+                                    </span>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                            {erc20BalanceConfig.maxEntries > 0 && (
+                              <>
+                                <span className="text-muted-foreground">
+                                  Max Entries:
+                                </span>
+                                <span>{erc20BalanceConfig.maxEntries}</span>
+                              </>
+                            )}
+                          </>
+                        ) : formData.gatingOptions.extension?.address ? (
                           <>
                             <span className="text-muted-foreground">
                               Extension Contract:
@@ -511,6 +747,16 @@ const TournamentConfirmation = ({
                                 <EXTERNAL_LINK />
                               </a>
                             </div>
+                            {formData.gatingOptions.extension?.config && (
+                              <>
+                                <span className="text-muted-foreground">
+                                  Extension Config:
+                                </span>
+                                <span className="font-mono text-xs break-all">
+                                  {formData.gatingOptions.extension.config}
+                                </span>
+                              </>
+                            )}
                           </>
                         ) : (
                           <>
@@ -518,18 +764,16 @@ const TournamentConfirmation = ({
                               Extension Type:
                             </span>
                             <span>Snapshot Voting</span>
-                          </>
-                        )}
-                        {formData.gatingOptions.extension?.config && (
-                          <>
-                            <span className="text-muted-foreground">
-                              {formData.gatingOptions.extension?.address
-                                ? "Extension Config:"
-                                : "Snapshot ID:"}
-                            </span>
-                            <span className="font-mono text-xs break-all">
-                              {formData.gatingOptions.extension.config}
-                            </span>
+                            {formData.gatingOptions.extension?.config && (
+                              <>
+                                <span className="text-muted-foreground">
+                                  Snapshot ID:
+                                </span>
+                                <span className="font-mono text-xs break-all">
+                                  {formData.gatingOptions.extension.config}
+                                </span>
+                              </>
+                            )}
                           </>
                         )}
                       </>
@@ -734,7 +978,12 @@ const TournamentConfirmation = ({
           {address ? (
             <Button
               onClick={handleConfirm}
-              disabled={!isStartTimeValid || !isDurationValid || isCreating}
+              disabled={
+                !isStartTimeValid ||
+                !isDurationValid ||
+                hasRegistrationConflict ||
+                isCreating
+              }
             >
               {isCreating ? (
                 <div className="flex items-center gap-2">

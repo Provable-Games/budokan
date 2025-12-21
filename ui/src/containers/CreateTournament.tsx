@@ -25,6 +25,7 @@ import {
   useGetPlatformMetrics,
   useGetPrizeMetrics,
 } from "@/dojo/hooks/useSqlQueries";
+import { getExtensionAddresses } from "@/lib/extensionConfig";
 
 export type TournamentFormData = z.infer<typeof formSchema>;
 
@@ -436,12 +437,14 @@ const CreateTournament = () => {
   const handleCreateTournament = async () => {
     try {
       const formData = form.getValues();
+      // Get extension addresses for the current chain
+      const extensionAddresses = getExtensionAddresses(selectedChainConfig?.chainId ?? "");
       // Process the tournament data
       const processedTournament = processTournamentData(
         formData,
         address!,
         Number(tournamentCount),
-        selectedChainConfig?.tournamentValidatorAddress
+        extensionAddresses.tournamentValidator
       );
       console.log("Processed tournament:", JSON.stringify(processedTournament, (_key, value) =>
         typeof value === 'bigint' ? value.toString() : value

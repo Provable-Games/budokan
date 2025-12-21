@@ -41,6 +41,7 @@ import {
   getExtensionProof,
   isTournamentValidator,
   registerTournamentValidator,
+  getExtensionAddresses,
 } from "@/lib/extensionConfig";
 import { useVoyagerNfts } from "@/hooks/useVoyagerNfts";
 import {
@@ -287,32 +288,30 @@ export function EnterTournamentDialog({
     tournamentModel?.entry_requirement.Some?.entry_requirement_type?.variant
       ?.extension;
 
+  // Get extension addresses for the current chain
+  const extensionAddresses = useMemo(
+    () => getExtensionAddresses(selectedChainConfig?.chainId ?? ""),
+    [selectedChainConfig?.chainId]
+  );
+
   // Register tournament validator when config loads
   useEffect(() => {
-    if (selectedChainConfig?.tournamentValidatorAddress) {
-      registerTournamentValidator(
-        selectedChainConfig.tournamentValidatorAddress
-      );
+    if (extensionAddresses.tournamentValidator) {
+      registerTournamentValidator(extensionAddresses.tournamentValidator);
     }
-  }, [selectedChainConfig?.tournamentValidatorAddress]);
+  }, [extensionAddresses.tournamentValidator]);
 
   // Check if this extension is a tournament validator
   const isTournamentValidatorExtension = useMemo(() => {
-    if (
-      !extensionConfig?.address ||
-      !selectedChainConfig?.tournamentValidatorAddress
-    )
+    if (!extensionConfig?.address || !extensionAddresses.tournamentValidator)
       return false;
     // Normalize both addresses for comparison
     const normalizedExtensionAddress = indexAddress(extensionConfig.address);
     const normalizedValidatorAddress = indexAddress(
-      selectedChainConfig.tournamentValidatorAddress
+      extensionAddresses.tournamentValidator
     );
     return normalizedExtensionAddress === normalizedValidatorAddress;
-  }, [
-    extensionConfig?.address,
-    selectedChainConfig?.tournamentValidatorAddress,
-  ]);
+  }, [extensionConfig?.address, extensionAddresses.tournamentValidator]);
 
   // Parse tournament validator config: [qualifier_type, qualifying_mode, top_positions, ...tournament_ids]
   const tournamentValidatorConfig = useMemo(() => {

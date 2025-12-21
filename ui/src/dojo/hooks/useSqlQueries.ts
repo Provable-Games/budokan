@@ -137,6 +137,7 @@ export const useGetUpcomingTournamentsCount = ({
   `,
     [namespace, currentTime, fromTournamentId, excludedIdsKey]
   );
+  console.log(query);
   const { data, loading, error, refetch } = useSqlExecute(query);
   return { data: data?.[0]?.count, loading, error, refetch };
 };

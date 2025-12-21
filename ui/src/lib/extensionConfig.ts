@@ -1,4 +1,5 @@
 import { indexAddress } from "@/lib/utils";
+import { ChainId } from "@/dojo/setup/networks";
 
 /**
  * Extension Configuration
@@ -7,7 +8,12 @@ import { indexAddress } from "@/lib/utils";
  * Each extension can specify what data should be passed as qualification proof.
  */
 
-export type ExtensionProofType = "address" | "custom" | "snapshot" | "tournament";
+export type ExtensionProofType =
+  | "address"
+  | "custom"
+  | "snapshot"
+  | "tournament"
+  | "erc20_balance";
 
 export interface ExtensionConfig {
   name: string;
@@ -21,6 +27,8 @@ export interface ExtensionConfig {
   requiresSnapshotId?: boolean;
   // For tournament validators, indicates this validates tournament participation
   isTournamentValidator?: boolean;
+  // For ERC20 balance validators, indicates this validates ERC20 token balance
+  isERC20BalanceValidator?: boolean;
 }
 
 // Preset extension configurations
@@ -33,14 +41,47 @@ export const PRESET_EXTENSIONS: Record<string, ExtensionConfig> = {
     isPreset: true,
     requiresSnapshotId: true,
   },
-  tournament: {
-    name: "Tournament Qualification",
-    description: "Validates entry based on previous tournament participation or wins",
-    proofType: "tournament",
-    extractProof: () => [], // Proof will be tournament token ID
+  erc20_balance: {
+    name: "ERC20 Balance",
+    description: "Validates entry based on ERC20 token balance thresholds",
+    proofType: "erc20_balance",
+    extractProof: () => [], // No proof required for balance check
     isPreset: true,
-    isTournamentValidator: true,
+    isERC20BalanceValidator: true,
   },
+};
+
+/**
+ * Extension Addresses by Chain
+ *
+ * Stores the deployed extension contract addresses for each chain.
+ * Add new extension addresses here when they are deployed.
+ */
+export const EXTENSION_ADDRESSES: Record<
+  string,
+  {
+    tournamentValidator?: string;
+    erc20BalanceValidator?: string;
+  }
+> = {
+  [ChainId.SN_SEPOLIA]: {
+    tournamentValidator:
+      "0x04beaeea6de96394bd7256040e1396b387a7652a6d3287fc9a48ff068edee843",
+    erc20BalanceValidator:
+      "0x028112199f873e919963277b41ef1231365986e2fd7722501cd7d293de60b64e",
+  },
+  [ChainId.SN_MAIN]: {
+    // tournamentValidator: "0x...", // Add when deployed
+    erc20BalanceValidator:
+      "0x0326478e7c5a367b59bcd441c9f453ce782395faf32ec00ec1e0e6083b6e95be",
+  },
+};
+
+/**
+ * Get extension addresses for a specific chain
+ */
+export const getExtensionAddresses = (chainId: string) => {
+  return EXTENSION_ADDRESSES[chainId] || {};
 };
 
 // Extension configurations by contract address
@@ -114,7 +155,31 @@ export const isTournamentValidator = (extensionAddress: string): boolean => {
 export const registerTournamentValidator = (
   tournamentValidatorAddress: string
 ): void => {
-  registerExtensionConfig(tournamentValidatorAddress, PRESET_EXTENSIONS.tournament);
+  registerExtensionConfig(
+    tournamentValidatorAddress,
+    PRESET_EXTENSIONS.tournament
+  );
+};
+
+/**
+ * Check if an extension is an ERC20 balance validator
+ */
+export const isERC20BalanceValidator = (extensionAddress: string): boolean => {
+  const config = getExtensionConfig(extensionAddress);
+  return config?.isERC20BalanceValidator === true;
+};
+
+/**
+ * Register the ERC20 balance validator address for a chain
+ * This should be called when the chain config is loaded
+ */
+export const registerERC20BalanceValidator = (
+  erc20BalanceValidatorAddress: string
+): void => {
+  registerExtensionConfig(
+    erc20BalanceValidatorAddress,
+    PRESET_EXTENSIONS.erc20_balance
+  );
 };
 
 export default extensionConfigs;

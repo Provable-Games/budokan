@@ -11,7 +11,7 @@ export const manifests: Record<ChainId, DojoManifest> = {
 };
 
 export const namespace: Record<ChainId, string> = {
-  [ChainId.SN_MAIN]: "budokan_1_0_8",
+  [ChainId.SN_MAIN]: "budokan_relayer_0_0_9",
   [ChainId.SN_SEPOLIA]: "budokan_relayer_0_0_9",
 };
 

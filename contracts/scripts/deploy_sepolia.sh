@@ -42,38 +42,37 @@ cd ../..
 # declare
 #
 echo ">>> Declaring Budokan contract..."
-DECLARE_OUTPUT=$(sncast --profile sepolia declare \
+sncast --profile sepolia declare \
     --contract-name Budokan \
     --package budokan \
-    2>&1) || true
+    2>&1 || echo "Declaration command completed (may already be declared)"
 
-# Extract class hash from output
-if echo "$DECLARE_OUTPUT" | grep -qi "class hash:"; then
+#-----------------
+# get class hash from artifact (reliable method)
+#
+echo ">>> Getting class hash from compiled artifact..."
+CLASS_HASH_OUTPUT=$(sncast --profile sepolia utils class-hash --contract-name Budokan --package budokan 2>&1)
+
+# Extract class hash from class-hash command output
+if echo "$CLASS_HASH_OUTPUT" | grep -qi "class hash:"; then
     # New sncast format: "Class Hash:       0x..."
-    CLASS_HASH=$(echo "$DECLARE_OUTPUT" | grep -i "class hash:" | awk '{print $3}')
-    echo "Declared with class hash: $CLASS_HASH"
-elif echo "$DECLARE_OUTPUT" | grep -q "class_hash:"; then
-    # Old sncast format: "class_hash: 0x..."
-    CLASS_HASH=$(echo "$DECLARE_OUTPUT" | grep "class_hash:" | awk '{print $2}')
-    echo "Declared with class hash: $CLASS_HASH"
-elif echo "$DECLARE_OUTPUT" | grep -qi "already declared"; then
-    # New sncast doesn't show class hash for already declared contracts
-    # Calculate it from the compiled artifact using sncast
-    echo "Contract already declared, calculating class hash from artifact..."
-    CLASS_HASH_OUTPUT=$(sncast --profile sepolia utils class-hash --contract-name Budokan --package budokan 2>&1)
     CLASS_HASH=$(echo "$CLASS_HASH_OUTPUT" | grep -i "class hash:" | awk '{print $3}')
-    if [ -z "$CLASS_HASH" ]; then
-        echo "Error: Could not calculate class hash from artifact"
-        echo "Class hash output: $CLASS_HASH_OUTPUT"
-        echo "Declaration output: $DECLARE_OUTPUT"
-        exit 1
-    fi
-    echo "Contract already declared with class hash: $CLASS_HASH"
+elif echo "$CLASS_HASH_OUTPUT" | grep -q "class_hash:"; then
+    # Old sncast format: "class_hash: 0x..."
+    CLASS_HASH=$(echo "$CLASS_HASH_OUTPUT" | grep "class_hash:" | awk '{print $2}')
 else
-    echo "Declaration output: $DECLARE_OUTPUT"
-    echo "Error: Could not extract class hash"
+    echo "Error: Could not calculate class hash from artifact"
+    echo "Class hash output: $CLASS_HASH_OUTPUT"
     exit 1
 fi
+
+if [ -z "$CLASS_HASH" ]; then
+    echo "Error: Class hash is empty"
+    echo "Class hash output: $CLASS_HASH_OUTPUT"
+    exit 1
+fi
+
+echo "Using class hash: $CLASS_HASH"
 
 #-----------------
 # deploy

@@ -51,9 +51,14 @@ import { getTokenByAddress } from "@/lib/tokenUtils";
 import {
   isTournamentValidator,
   registerTournamentValidator,
+  isERC20BalanceValidator,
+  registerERC20BalanceValidator,
+  getExtensionAddresses,
 } from "@/lib/extensionConfig";
 import { useEffect } from "react";
 import { indexAddress } from "@/lib/utils";
+import { getTokenDecimals } from "@/lib/tokensMeta";
+import { useEkuboPrices } from "@/hooks/useEkuboPrices";
 
 // Helper component for Entry Limit display with info tooltip
 const EntryLimitInfo = ({ limit }: { limit: number }) => (
@@ -165,32 +170,52 @@ const EntryRequirements = ({
     [entryRequirement]
   );
 
+  // Get extension addresses for the current chain
+  const extensionAddresses = useMemo(
+    () => getExtensionAddresses(selectedChainConfig?.chainId ?? ""),
+    [selectedChainConfig?.chainId]
+  );
+
   // Register tournament validator when config loads
   useEffect(() => {
-    if (selectedChainConfig?.tournamentValidatorAddress) {
-      registerTournamentValidator(
-        selectedChainConfig.tournamentValidatorAddress
-      );
+    if (extensionAddresses.tournamentValidator) {
+      registerTournamentValidator(extensionAddresses.tournamentValidator);
     }
-  }, [selectedChainConfig?.tournamentValidatorAddress]);
+  }, [extensionAddresses.tournamentValidator]);
+
+  // Register ERC20 balance validator when config loads
+  useEffect(() => {
+    if (extensionAddresses.erc20BalanceValidator) {
+      registerERC20BalanceValidator(extensionAddresses.erc20BalanceValidator);
+    }
+  }, [extensionAddresses.erc20BalanceValidator]);
 
   // Check if this extension is a tournament validator
   const isTournamentValidatorExtension = useMemo(() => {
+    if (!extensionConfig?.address || !extensionAddresses.tournamentValidator)
+      return false;
+    // Normalize both addresses for comparison
+    const normalizedExtensionAddress = indexAddress(extensionConfig.address);
+    const normalizedValidatorAddress = indexAddress(
+      extensionAddresses.tournamentValidator
+    );
+    return normalizedExtensionAddress === normalizedValidatorAddress;
+  }, [extensionConfig?.address, extensionAddresses.tournamentValidator]);
+
+  // Check if this extension is an ERC20 balance validator
+  const isERC20BalanceValidatorExtension = useMemo(() => {
     if (
       !extensionConfig?.address ||
-      !selectedChainConfig?.tournamentValidatorAddress
+      !extensionAddresses.erc20BalanceValidator
     )
       return false;
     // Normalize both addresses for comparison
     const normalizedExtensionAddress = indexAddress(extensionConfig.address);
     const normalizedValidatorAddress = indexAddress(
-      selectedChainConfig.tournamentValidatorAddress
+      extensionAddresses.erc20BalanceValidator
     );
     return normalizedExtensionAddress === normalizedValidatorAddress;
-  }, [
-    extensionConfig?.address,
-    selectedChainConfig?.tournamentValidatorAddress,
-  ]);
+  }, [extensionConfig?.address, extensionAddresses.erc20BalanceValidator]);
 
   // Parse tournament validator config: [qualifier_type, qualifying_mode, top_positions, ...tournament_ids]
   const tournamentValidatorConfig = useMemo(() => {
@@ -214,6 +239,63 @@ const EntryRequirements = ({
     };
   }, [isTournamentValidatorExtension, extensionConfig?.config]);
 
+  // Parse ERC20 balance validator config: [token_address, min_threshold_low, min_threshold_high, max_threshold_low, max_threshold_high, value_per_entry_low, value_per_entry_high, max_entries]
+  const erc20BalanceValidatorConfig = useMemo(() => {
+    if (!isERC20BalanceValidatorExtension || !extensionConfig?.config) {
+      return null;
+    }
+
+    const config = extensionConfig.config;
+    if (!config || config.length < 8) return null;
+
+    const tokenAddress = config[0];
+    const minThresholdLow = BigInt(config[1]);
+    const minThresholdHigh = BigInt(config[2]);
+    const maxThresholdLow = BigInt(config[3]);
+    const maxThresholdHigh = BigInt(config[4]);
+    const valuePerEntryLow = BigInt(config[5]);
+    const valuePerEntryHigh = BigInt(config[6]);
+    const maxEntriesFromConfig = Number(config[7]);
+
+    // Combine high and low parts to form u256 values
+    const minThreshold = (minThresholdHigh << 128n) | minThresholdLow;
+    const maxThreshold = (maxThresholdHigh << 128n) | maxThresholdLow;
+    const valuePerEntry = (valuePerEntryHigh << 128n) | valuePerEntryLow;
+
+    // Get token decimals for formatting
+    const decimals = getTokenDecimals(
+      selectedChainConfig?.chainId ?? "",
+      tokenAddress
+    ) || 18;
+    const divisor = BigInt(10 ** decimals);
+
+    // Convert wei values to human-readable format
+    const formatTokenAmount = (value: bigint) => {
+      if (value === 0n) return "0";
+      const integerPart = value / divisor;
+      const remainder = value % divisor;
+      if (remainder === 0n) {
+        return integerPart.toString();
+      }
+      // Format with decimals, removing trailing zeros
+      const decimalStr = remainder.toString().padStart(decimals, "0");
+      const trimmed = decimalStr.replace(/0+$/, "");
+      return trimmed ? `${integerPart}.${trimmed}` : integerPart.toString();
+    };
+
+    return {
+      tokenAddress,
+      minThreshold,
+      maxThreshold,
+      valuePerEntry,
+      maxEntries: maxEntriesFromConfig,
+      // Human-readable formatted values
+      minThresholdFormatted: formatTokenAmount(minThreshold),
+      maxThresholdFormatted: formatTokenAmount(maxThreshold),
+      valuePerEntryFormatted: formatTokenAmount(valuePerEntry),
+    };
+  }, [isERC20BalanceValidatorExtension, extensionConfig?.config, selectedChainConfig?.chainId]);
+
   // Get tournament data for validator extensions
   const validatorTournaments = useMemo(() => {
     if (
@@ -228,6 +310,20 @@ const EntryRequirements = ({
       )
     );
   }, [tournamentValidatorConfig, tournamentsData]);
+
+  // Get token data for ERC20 balance validator
+  const erc20Token = useMemo(() => {
+    if (!erc20BalanceValidatorConfig?.tokenAddress) return undefined;
+    return getTokenByAddress(
+      erc20BalanceValidatorConfig.tokenAddress,
+      selectedChainConfig?.chainId ?? ""
+    );
+  }, [erc20BalanceValidatorConfig?.tokenAddress, selectedChainConfig]);
+
+  // Get price for ERC20 token
+  const { prices } = useEkuboPrices({
+    tokens: erc20Token?.token_address ? [erc20Token.token_address] : [],
+  });
 
   const blockExplorerExists =
     selectedChainConfig.blockExplorerUrl !== undefined;
@@ -259,6 +355,19 @@ const EntryRequirements = ({
             </span>
             <span className="hidden sm:block capitalize">
               {tournamentValidatorConfig?.requirementType || "Tournament"}
+            </span>
+          </div>
+        );
+      }
+      // Show as ERC20 Balance if it's an ERC20 balance validator
+      if (isERC20BalanceValidatorExtension) {
+        return (
+          <div className="flex flex-row items-center gap-1 w-full">
+            <span className="w-6">
+              <COIN />
+            </span>
+            <span className="hidden sm:block text-xs">
+              {erc20Token?.name || "ERC20 Balance"}
             </span>
           </div>
         );
@@ -320,6 +429,102 @@ const EntryRequirements = ({
         </>
       );
     } else if (activeVariant === "extension") {
+      // Show ERC20 balance details if it's an ERC20 balance validator
+      if (isERC20BalanceValidatorExtension && erc20BalanceValidatorConfig) {
+        return (
+          <>
+            <div className="flex flex-col gap-2">
+              <p className="text-muted-foreground text-xs">
+                To enter you must hold the required token balance:
+              </p>
+              <div className="flex flex-col gap-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="w-6 flex-shrink-0">
+                    <COIN />
+                  </span>
+                  <span className="font-medium text-sm">
+                    {erc20Token?.name || "ERC20 Token"}
+                  </span>
+                  <span
+                    className="text-brand-muted hover:cursor-pointer font-mono text-xs"
+                    onClick={() => {
+                      if (blockExplorerExists) {
+                        window.open(
+                          `${selectedChainConfig.blockExplorerUrl}/contract/${erc20BalanceValidatorConfig.tokenAddress}`,
+                          "_blank"
+                        );
+                      }
+                    }}
+                  >
+                    {displayAddress(erc20BalanceValidatorConfig.tokenAddress)}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-1 text-xs mt-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-brand-muted whitespace-nowrap">Min Balance:</span>
+                    <span className="font-medium">
+                      {erc20BalanceValidatorConfig.minThresholdFormatted}
+                    </span>
+                    <span className="text-brand-muted">
+                      {erc20Token?.symbol || "tokens"}
+                    </span>
+                  </div>
+                  {erc20BalanceValidatorConfig.maxThreshold > 0n && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-brand-muted whitespace-nowrap">Max Balance:</span>
+                      <span className="font-medium">
+                        {erc20BalanceValidatorConfig.maxThresholdFormatted}
+                      </span>
+                      <span className="text-brand-muted">
+                        {erc20Token?.symbol || "tokens"}
+                      </span>
+                    </div>
+                  )}
+                  {erc20BalanceValidatorConfig.valuePerEntry > 0n && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-brand-muted whitespace-nowrap">Value Per Entry:</span>
+                      <span className="font-medium">
+                        {erc20BalanceValidatorConfig.valuePerEntryFormatted}
+                      </span>
+                      <span className="text-brand-muted">
+                        {erc20Token?.symbol || "tokens"}
+                      </span>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="w-3 h-3 flex-shrink-0 text-brand-muted hover:text-brand cursor-help">
+                              <INFO />
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-xs">
+                            <p>
+                              Amount of token balance consumed per tournament entry
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                  )}
+                  {erc20BalanceValidatorConfig.maxEntries > 0 && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-brand-muted whitespace-nowrap">Max Entries:</span>
+                      <span className="font-medium">
+                        {erc20BalanceValidatorConfig.maxEntries}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {!!hasEntryLimit && (
+                <div className="flex flex-wrap items-center gap-2 text-xs mt-1">
+                  <span className="text-brand-muted whitespace-nowrap">Entry Limit:</span>
+                  <span className="font-medium">{Number(entryLimit)}</span>
+                </div>
+              )}
+            </div>
+          </>
+        );
+      }
       // Show tournament qualification details if it's a tournament validator
       if (isTournamentValidatorExtension && tournamentValidatorConfig) {
         return (

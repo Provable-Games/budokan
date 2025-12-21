@@ -136,6 +136,8 @@ const Tournament = () => {
       ? subscribedEntryCount
       : Number(entryCountModel?.count) ?? 0;
 
+  console.log(entryCount, subscribedEntryCount, entryCountModel);
+
   // Fetch leaderboard from SQL
   const { data: leaderboardData } = useGetTournamentLeaderboards({
     namespace,

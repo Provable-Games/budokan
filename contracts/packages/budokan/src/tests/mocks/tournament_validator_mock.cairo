@@ -120,10 +120,6 @@ pub mod tournament_validator_mock {
             return Option::Some(remaining_entries);
         }
 
-        fn registration_only(self: @ContractState) -> bool {
-            self.entry_validator.is_registration_only()
-        }
-
         fn add_config(
             ref self: ContractState, tournament_id: u64, entry_limit: u8, config: Span<felt252>,
         ) {

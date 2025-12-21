@@ -121,38 +121,37 @@ fi
 
 print_info "Declaring TournamentValidator contract..."
 
-DECLARE_OUTPUT=$(sncast --profile $SNCAST_PROFILE declare \
+sncast --profile $SNCAST_PROFILE declare \
     --contract-name TournamentValidator \
     --package budokan_entry_requirement \
-    2>&1) || true
+    2>&1 || echo "Declaration command completed (may already be declared)"
 
-# Extract class hash from output
-if echo "$DECLARE_OUTPUT" | grep -qi "class hash:"; then
+#-----------------
+# get class hash from artifact (reliable method)
+#
+print_info "Getting class hash from compiled artifact..."
+CLASS_HASH_OUTPUT=$(sncast --profile $SNCAST_PROFILE utils class-hash --contract-name TournamentValidator --package budokan_entry_requirement 2>&1)
+
+# Extract class hash from class-hash command output
+if echo "$CLASS_HASH_OUTPUT" | grep -qi "class hash:"; then
     # New sncast format: "Class Hash:       0x..."
-    CLASS_HASH=$(echo "$DECLARE_OUTPUT" | grep -i "class hash:" | awk '{print $3}')
-    print_info "Declared with class hash: $CLASS_HASH"
-elif echo "$DECLARE_OUTPUT" | grep -q "class_hash:"; then
-    # Old sncast format: "class_hash: 0x..."
-    CLASS_HASH=$(echo "$DECLARE_OUTPUT" | grep "class_hash:" | awk '{print $2}')
-    print_info "Declared with class hash: $CLASS_HASH"
-elif echo "$DECLARE_OUTPUT" | grep -qi "already declared"; then
-    # New sncast doesn't show class hash for already declared contracts
-    # Calculate it from the compiled artifact using sncast
-    print_info "Contract already declared, calculating class hash from artifact..."
-    CLASS_HASH_OUTPUT=$(sncast --profile $SNCAST_PROFILE utils class-hash --contract-name TournamentValidator --package budokan_entry_requirement 2>&1)
     CLASS_HASH=$(echo "$CLASS_HASH_OUTPUT" | grep -i "class hash:" | awk '{print $3}')
-    if [ -z "$CLASS_HASH" ]; then
-        print_error "Could not calculate class hash from artifact"
-        echo "Class hash output: $CLASS_HASH_OUTPUT"
-        echo "Declaration output: $DECLARE_OUTPUT"
-        exit 1
-    fi
-    print_warning "TournamentValidator contract already declared with class hash: $CLASS_HASH"
+elif echo "$CLASS_HASH_OUTPUT" | grep -q "class_hash:"; then
+    # Old sncast format: "class_hash: 0x..."
+    CLASS_HASH=$(echo "$CLASS_HASH_OUTPUT" | grep "class_hash:" | awk '{print $2}')
 else
-    echo "Declaration output: $DECLARE_OUTPUT"
-    print_error "Could not extract class hash"
+    print_error "Could not calculate class hash from artifact"
+    echo "Class hash output: $CLASS_HASH_OUTPUT"
     exit 1
 fi
+
+if [ -z "$CLASS_HASH" ]; then
+    print_error "Class hash is empty"
+    echo "Class hash output: $CLASS_HASH_OUTPUT"
+    exit 1
+fi
+
+print_info "Using class hash: $CLASS_HASH"
 
 # Deploy TournamentValidator contract
 print_info "Deploying TournamentValidator contract..."
