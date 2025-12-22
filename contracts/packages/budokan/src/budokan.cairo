@@ -533,31 +533,31 @@ pub mod Budokan {
             let should_ban = entry_validator_dispatcher
                 .should_ban(tournament_id, game_token_id, current_owner, proof);
 
-            // Ban if the extension says so
-            if should_ban {
-                // Notify the extension to update its entry tracking
-                entry_validator_dispatcher
-                    .remove_entry(tournament_id, game_token_id, current_owner, proof);
+            // Assert should be banned to avoid wasting gas on invalid ban attempts
+            assert!(should_ban, "Budokan: Entry should not be banned");
 
-                // Update registration to mark as banned using component
-                self.registration.ban_registration(game_address, game_token_id);
+            // Notify the extension to update its entry tracking
+            entry_validator_dispatcher
+                .remove_entry(tournament_id, game_token_id, current_owner, proof);
 
-                // Emit event if relayer is configured
-                let relayer_address = self.event_relayer.read();
-                if !relayer_address.is_zero() {
-                    let relayer = IBudokanEventRelayerDispatcher {
-                        contract_address: relayer_address,
-                    };
-                    relayer
-                        .emit_registration(
-                            game_address,
-                            game_token_id,
-                            tournament_id,
-                            0, // entry_number for banned registration
-                            false, // has_submitted
-                            true // is_banned
-                        );
-                }
+            // Update registration to mark as banned using component
+            self.registration.ban_registration(game_address, game_token_id);
+
+            // Emit event if relayer is configured
+            let relayer_address = self.event_relayer.read();
+            if !relayer_address.is_zero() {
+                let relayer = IBudokanEventRelayerDispatcher {
+                    contract_address: relayer_address,
+                };
+                relayer
+                    .emit_registration(
+                        game_address,
+                        game_token_id,
+                        tournament_id,
+                        0, // entry_number for banned registration
+                        false, // has_submitted
+                        true // is_banned
+                    );
             }
         }
 
