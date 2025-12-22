@@ -4193,9 +4193,8 @@ fn test_ban_game_ids_during_registration() {
         .is_registration_banned(contracts.minigame.contract_address, game_id_1);
     assert!(!is_banned_1, "Registration should not be banned initially");
 
-    // Call validate_entries - should ban game_id_1 because owner doesn't have qualifying token
+    // Ban game_id_1 - should be banned because owner doesn't have qualifying token
     contracts.budokan.ban_entry(tournament.id, game_id_1, array![].span());
-    contracts.budokan.ban_entry(tournament.id, game_id_2, array![].span());
 
     // Verify game_id_1 is now banned (owned by invalid_player)
     let is_banned_1_after = contracts
@@ -4203,7 +4202,8 @@ fn test_ban_game_ids_during_registration() {
         .is_registration_banned(contracts.minigame.contract_address, game_id_1);
     assert!(is_banned_1_after, "Game ID 1 should be banned - owner doesn't have qualifying token");
 
-    // Verify game_id_2 is NOT banned (still owned by valid_player)
+    // Verify game_id_2 is NOT banned (still owned by valid_player, and we didn't call ban_entry on
+    // it)
     let is_banned_2 = contracts
         .registration
         .is_registration_banned(contracts.minigame.contract_address, game_id_2);
@@ -4571,9 +4571,9 @@ fn test_ban_multiple_game_ids() {
     denshokan_erc721.transfer_from(owner, invalid_player, game_id_3.into());
     stop_cheat_caller_address(contracts.denshokan.contract_address);
 
-    // Ban multiple game IDs one at a time
+    // Ban game_id_1 and game_id_3 (owned by invalid player)
+    // Don't ban game_id_2 since it's still owned by valid player
     contracts.budokan.ban_entry(tournament.id, game_id_1, array![].span());
-    contracts.budokan.ban_entry(tournament.id, game_id_2, array![].span());
     contracts.budokan.ban_entry(tournament.id, game_id_3, array![].span());
 
     // Verify correct IDs are banned

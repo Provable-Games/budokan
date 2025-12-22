@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 use budokan_entry_fee::models::{
-    PackedAdditionalShares, PackedAdditionalSharesImpl, PackedAdditionalSharesTrait,
-    SHARES_PER_SLOT, StoredAdditionalShare,
+    PackedAdditionalSharesImpl, PackedAdditionalSharesTrait, SHARES_PER_SLOT, StoredAdditionalShare,
 };
 
 /// Test basic pack/unpack roundtrip for a single share

@@ -5,7 +5,6 @@
 pub mod EntryFeeMock {
     use budokan_entry_fee::entry_fee::EntryFeeComponent;
     use budokan_entry_fee::models::{AdditionalShare, EntryFee, EntryFeeClaimType};
-    use starknet::ContractAddress;
 
     component!(path: EntryFeeComponent, storage: entry_fee, event: EntryFeeEvent);
 

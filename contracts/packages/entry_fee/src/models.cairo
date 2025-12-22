@@ -2,7 +2,6 @@
 
 // Import types from interface for component trait implementation
 pub use budokan_interfaces::entry_fee::{AdditionalShare, EntryFee};
-use starknet::ContractAddress;
 use starknet::storage_access::StorePacking;
 
 /// Basis points constant: 10000 = 100%
@@ -139,7 +138,7 @@ pub impl PackedAdditionalSharesImpl of PackedAdditionalSharesTrait {
 
     /// Pack an array of shares (up to 16) into a PackedAdditionalShares
     fn from_array(shares: Span<StoredAdditionalShare>) -> PackedAdditionalShares {
-        let mut packed = PackedAdditionalSharesImpl::new();
+        let mut packed = Self::new();
         let len: u32 = if shares.len() > SHARES_PER_SLOT.into() {
             SHARES_PER_SLOT.into()
         } else {

@@ -5,7 +5,6 @@ pub use budokan_interfaces::entry_requirement::{
     EntryRequirement, EntryRequirementType, ExtensionConfig, NFTQualification, QualificationEntries,
     QualificationProof,
 };
-use starknet::ContractAddress;
 use starknet::storage_access::StorePacking;
 
 /// Entry requirement metadata

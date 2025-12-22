@@ -8,8 +8,8 @@ pub mod EntryValidatorComponent {
     use budokan_interfaces::entry_validator::{IENTRY_VALIDATOR_ID, IEntryValidator};
     use openzeppelin_introspection::src5::SRC5Component;
     use openzeppelin_introspection::src5::SRC5Component::InternalTrait as SRC5InternalTrait;
-    use starknet::{ContractAddress, get_caller_address};
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
+    use starknet::{ContractAddress, get_caller_address};
 
     #[storage]
     pub struct Storage {

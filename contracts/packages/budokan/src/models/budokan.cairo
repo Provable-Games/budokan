@@ -16,7 +16,6 @@ pub use budokan_interfaces::budokan::{
 pub use budokan_interfaces::entry_fee::{AdditionalShare};
 pub use budokan_interfaces::entry_requirement::QualificationEntries;
 pub use budokan_interfaces::registration::Registration;
-use starknet::ContractAddress;
 
 // Internal storage types (not part of public API)
 #[derive(Drop, Serde)]

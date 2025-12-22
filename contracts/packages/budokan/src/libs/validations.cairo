@@ -90,11 +90,7 @@ pub fn assert_prize_exists(token_address: ContractAddress, prize_id: u64) {
 
 #[cfg(test)]
 mod tests {
-    use starknet::contract_address_const;
-    use super::{
-        assert_position_is_valid, assert_valid_entry_fee_shares, contains_address,
-        validate_entry_fee_shares, validate_position,
-    };
+    use super::{contains_address, validate_entry_fee_shares, validate_position};
 
     #[test]
     fn test_validate_entry_fee_shares_valid() {
@@ -140,9 +136,9 @@ mod tests {
 
     #[test]
     fn test_contains_address_found() {
-        let addr1 = contract_address_const::<0x1>();
-        let addr2 = contract_address_const::<0x2>();
-        let addr3 = contract_address_const::<0x3>();
+        let addr1 = 0x1.try_into().unwrap();
+        let addr2 = 0x2.try_into().unwrap();
+        let addr3 = 0x3.try_into().unwrap();
         let addresses = array![addr1, addr2, addr3].span();
 
         assert!(contains_address(addresses, addr2));
@@ -150,10 +146,10 @@ mod tests {
 
     #[test]
     fn test_contains_address_not_found() {
-        let addr1 = contract_address_const::<0x1>();
-        let addr2 = contract_address_const::<0x2>();
-        let addr3 = contract_address_const::<0x3>();
-        let addr4 = contract_address_const::<0x4>();
+        let addr1 = 0x1.try_into().unwrap();
+        let addr2 = 0x2.try_into().unwrap();
+        let addr3 = 0x3.try_into().unwrap();
+        let addr4 = 0x4.try_into().unwrap();
         let addresses = array![addr1, addr2, addr3].span();
 
         assert!(!contains_address(addresses, addr4));
@@ -161,7 +157,7 @@ mod tests {
 
     #[test]
     fn test_contains_address_empty() {
-        let addr = contract_address_const::<0x1>();
+        let addr = 0x1.try_into().unwrap();
         let addresses: Span<starknet::ContractAddress> = array![].span();
 
         assert!(!contains_address(addresses, addr));

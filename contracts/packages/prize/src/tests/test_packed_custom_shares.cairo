@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 
-use budokan_prize::models::{
-    CUSTOM_SHARES_PER_SLOT, CustomShares, CustomSharesImpl, CustomSharesTrait,
-};
+use budokan_prize::models::{CUSTOM_SHARES_PER_SLOT, CustomSharesImpl, CustomSharesTrait};
 
 /// Test basic pack/unpack roundtrip for a single share
 #[test]

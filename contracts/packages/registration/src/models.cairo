@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: BUSL-1.1
 
-use starknet::ContractAddress;
 use starknet::storage_access::StorePacking;
 
 // Constants for packing/unpacking

@@ -215,7 +215,7 @@ pub impl CustomSharesImpl of CustomSharesTrait {
 
     /// Pack an array of shares (up to 15) into a CustomShares
     fn from_array(shares: Span<u16>) -> CustomShares {
-        let mut packed = CustomSharesImpl::new();
+        let mut packed = Self::new();
         let len: u32 = if shares.len() > SHARES_PER_SLOT.into() {
             SHARES_PER_SLOT.into()
         } else {

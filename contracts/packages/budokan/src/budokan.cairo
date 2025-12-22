@@ -546,9 +546,7 @@ pub mod Budokan {
             // Emit event if relayer is configured
             let relayer_address = self.event_relayer.read();
             if !relayer_address.is_zero() {
-                let relayer = IBudokanEventRelayerDispatcher {
-                    contract_address: relayer_address,
-                };
+                let relayer = IBudokanEventRelayerDispatcher { contract_address: relayer_address };
                 relayer
                     .emit_registration(
                         game_address,
