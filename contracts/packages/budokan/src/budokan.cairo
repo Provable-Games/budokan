@@ -429,6 +429,25 @@ pub mod Budokan {
                     tournament.game_config.soulbound // soulbound
                 );
 
+            // For extension-based entry requirements, register the entry with the extension
+            // now that we have the game_token_id
+            if let Option::Some(entry_requirement) = tournament.entry_requirement {
+                if let EntryRequirementType::extension(extension_config) = entry_requirement
+                    .entry_requirement_type {
+                    let qualification_proof = match qualification {
+                        Option::Some(QualificationProof::Extension(proof)) => proof,
+                        _ => array![].span(),
+                    };
+                    let entry_validator = IEntryValidatorDispatcher {
+                        contract_address: extension_config.address,
+                    };
+                    entry_validator
+                        .add_entry(
+                            tournament_id, game_token_id, caller_address, qualification_proof,
+                        );
+                }
+            }
+
             let entry_number = self._increment_entry_count(tournament_id);
 
             // associate game token with tournament via registration
@@ -446,17 +465,16 @@ pub mod Budokan {
             (game_token_id, entry_number)
         }
 
-        /// @title Validate entry
-        /// @notice Validates a tournament entry against extension-based entry requirements and bans
-        /// invalid entries.
+        /// @title Ban entry
+        /// @notice Bans a tournament entry if the extension determines it should be banned.
         /// @dev Only works with extension-based entry requirements. Can only be called between
         /// registration start and game start.
-        ///      If validation fails, the entry is marked as banned.
+        ///      Uses the extension's should_ban method which has access to entry ordering context.
         /// @param self A reference to the ContractState object.
-        /// @param tournament_id The tournament ID to validate entry for.
-        /// @param game_token_id The game token ID to validate.
-        /// @param proof Proof data to validate against the entry validator extension.
-        fn validate_entry(
+        /// @param tournament_id The tournament ID to ban entry for.
+        /// @param game_token_id The game token ID to evaluate for banning.
+        /// @param proof Proof data to pass to the entry validator extension.
+        fn ban_entry(
             ref self: ContractState, tournament_id: u64, game_token_id: u64, proof: Span<felt252>,
         ) {
             let tournament = self._get_tournament(tournament_id);
@@ -477,9 +495,9 @@ pub mod Budokan {
 
             // Can only ban from registration start up until game starts
             let current_time = get_block_timestamp();
-            if let Option::Some(registration) = tournament.schedule.registration {
+            if let Option::Some(registration_period) = tournament.schedule.registration {
                 assert!(
-                    current_time >= registration.start
+                    current_time >= registration_period.start
                         && current_time < tournament.schedule.game.start,
                     "Budokan: Can only ban from registration start until game starts",
                 );
@@ -507,15 +525,20 @@ pub mod Budokan {
             // Assert game ID is not already banned
             assert!(!registration.is_banned, "Budokan: Game ID is already banned");
 
-            // Get the owner of this game token
-            let token_owner = game_dispatcher.owner_of(game_token_id.into());
+            // Get the current owner of this game token
+            let current_owner = game_dispatcher.owner_of(game_token_id.into());
 
-            // Check if the owner has valid entry according to the extension
-            let is_valid = entry_validator_dispatcher
-                .valid_entry(tournament_id, token_owner, proof);
+            // Ask the extension if this entry should be banned
+            // The extension has context about entry ordering and can make informed decisions
+            let should_ban = entry_validator_dispatcher
+                .should_ban(tournament_id, game_token_id, current_owner, proof);
 
-            // Ban if not valid
-            if !is_valid {
+            // Ban if the extension says so
+            if should_ban {
+                // Notify the extension to update its entry tracking
+                entry_validator_dispatcher
+                    .remove_entry(tournament_id, game_token_id, current_owner, proof);
+
                 // Update registration to mark as banned using component
                 self.registration.ban_registration(game_address, game_token_id);
 

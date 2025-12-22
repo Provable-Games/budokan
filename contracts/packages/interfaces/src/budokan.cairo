@@ -123,9 +123,7 @@ pub trait IBudokan<TState> {
         qualification: Option<QualificationProof>,
     ) -> (u64, u32);
 
-    fn validate_entry(
-        ref self: TState, tournament_id: u64, game_token_id: u64, proof: Span<felt252>,
-    );
+    fn ban_entry(ref self: TState, tournament_id: u64, game_token_id: u64, proof: Span<felt252>);
 
     fn submit_score(ref self: TState, tournament_id: u64, token_id: u64, position: u8);
 

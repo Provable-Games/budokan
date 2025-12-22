@@ -241,6 +241,8 @@ pub mod EntryRequirementComponent {
 
         /// Update qualification entries after a successful entry
         /// Handles both extension-based and standard entry counting
+        /// NOTE: For extensions, this only validates entries_left. The actual add_entry
+        /// call must be made by the caller (Budokan) after minting when game_token_id is available.
         fn update_qualification_entries(
             ref self: ComponentState<TContractState>,
             context_id: u64,
@@ -276,8 +278,6 @@ pub mod EntryRequirementComponent {
                         },
                         Option::None => {},
                     }
-
-                    entry_validator_dispatcher.add_entry(context_id, caller_address, qualification);
                 },
                 _ => {
                     let entry_limit = entry_requirement.entry_limit;

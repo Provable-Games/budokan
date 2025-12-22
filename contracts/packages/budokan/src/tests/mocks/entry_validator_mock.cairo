@@ -66,6 +66,18 @@ pub mod entry_validator_mock {
             self.validate_entry_internal(tournament_id, player_address, qualification)
         }
 
+        fn should_ban_entry(
+            self: @ContractState,
+            tournament_id: u64,
+            game_token_id: u64,
+            current_owner: ContractAddress,
+            qualification: Span<felt252>,
+        ) -> bool {
+            // Check if the current owner still holds the required ERC721
+            // If not, this entry should be banned
+            !self.validate_entry_internal(tournament_id, current_owner, qualification)
+        }
+
         fn entries_left(
             self: @ContractState,
             tournament_id: u64,
@@ -91,23 +103,32 @@ pub mod entry_validator_mock {
             self.tournament_entry_limit.write(tournament_id, entry_limit);
         }
 
-        fn add_entry(
+        fn on_entry_added(
             ref self: ContractState,
             tournament_id: u64,
+            game_token_id: u64,
             player_address: ContractAddress,
             qualification: Span<felt252>,
         ) {
+            // Track entry count (component already tracks game_token_ids)
             let key = (tournament_id, player_address);
             let current_entries = self.tournament_entries.read(key);
             self.tournament_entries.write(key, current_entries + 1);
         }
 
-        fn remove_entry(
+        fn on_entry_removed(
             ref self: ContractState,
             tournament_id: u64,
+            game_token_id: u64,
             player_address: ContractAddress,
             qualification: Span<felt252>,
-        ) { // No specific action needed for this mock on remove_entry
+        ) {
+            // Decrement entry count
+            let key = (tournament_id, player_address);
+            let current_entries = self.tournament_entries.read(key);
+            if current_entries > 0 {
+                self.tournament_entries.write(key, current_entries - 1);
+            }
         }
     }
 

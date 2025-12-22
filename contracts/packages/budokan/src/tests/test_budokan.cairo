@@ -4194,8 +4194,8 @@ fn test_ban_game_ids_during_registration() {
     assert!(!is_banned_1, "Registration should not be banned initially");
 
     // Call validate_entries - should ban game_id_1 because owner doesn't have qualifying token
-    contracts.budokan.validate_entry(tournament.id, game_id_1, array![].span());
-    contracts.budokan.validate_entry(tournament.id, game_id_2, array![].span());
+    contracts.budokan.ban_entry(tournament.id, game_id_1, array![].span());
+    contracts.budokan.ban_entry(tournament.id, game_id_2, array![].span());
 
     // Verify game_id_1 is now banned (owned by invalid_player)
     let is_banned_1_after = contracts
@@ -4261,7 +4261,7 @@ fn test_banned_game_id_cannot_submit_score() {
     stop_cheat_caller_address(contracts.denshokan.contract_address);
 
     // Ban the game ID (will be banned because owner doesn't have qualifying token)
-    contracts.budokan.validate_entry(tournament.id, game_id, array![].span());
+    contracts.budokan.ban_entry(tournament.id, game_id, array![].span());
 
     // Set score for the game (would happen during game period)
     let game_time = TEST_START_TIME().into();
@@ -4330,7 +4330,7 @@ fn test_anyone_can_ban() {
     start_cheat_caller_address(contracts.budokan.contract_address, non_creator);
 
     // Anyone can ban - should succeed
-    contracts.budokan.validate_entry(tournament.id, game_id, array![].span());
+    contracts.budokan.ban_entry(tournament.id, game_id, array![].span());
 
     // Verify game ID is now banned
     let is_banned = contracts
@@ -4386,7 +4386,7 @@ fn test_cannot_ban_after_game_starts() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, game_time);
 
     // Attempt to ban after game starts - should panic
-    contracts.budokan.validate_entry(tournament.id, game_id, array![].span());
+    contracts.budokan.ban_entry(tournament.id, game_id, array![].span());
 }
 
 #[test]
@@ -4459,7 +4459,7 @@ fn test_can_ban_during_staging_phase() {
     );
 
     // Banning should succeed during staging phase
-    contracts.budokan.validate_entry(tournament.id, game_id, array![].span());
+    contracts.budokan.ban_entry(tournament.id, game_id, array![].span());
 
     // Verify game ID is now banned
     let is_banned = contracts
@@ -4516,7 +4516,7 @@ fn test_ban_without_registration_period() {
         .enter_tournament(tournament.id, 'player1', owner, Option::Some(qualification));
 
     // Attempt to ban without registration period - should panic
-    contracts.budokan.validate_entry(tournament.id, game_id, array![].span());
+    contracts.budokan.ban_entry(tournament.id, game_id, array![].span());
 }
 
 #[test]
@@ -4572,9 +4572,9 @@ fn test_ban_multiple_game_ids() {
     stop_cheat_caller_address(contracts.denshokan.contract_address);
 
     // Ban multiple game IDs one at a time
-    contracts.budokan.validate_entry(tournament.id, game_id_1, array![].span());
-    contracts.budokan.validate_entry(tournament.id, game_id_2, array![].span());
-    contracts.budokan.validate_entry(tournament.id, game_id_3, array![].span());
+    contracts.budokan.ban_entry(tournament.id, game_id_1, array![].span());
+    contracts.budokan.ban_entry(tournament.id, game_id_2, array![].span());
+    contracts.budokan.ban_entry(tournament.id, game_id_3, array![].span());
 
     // Verify correct IDs are banned
     let is_banned_1 = contracts
@@ -4643,7 +4643,7 @@ fn test_cannot_ban_already_banned_game_id() {
     stop_cheat_caller_address(contracts.denshokan.contract_address);
 
     // Ban the game ID for the first time
-    contracts.budokan.validate_entry(tournament.id, game_id, array![].span());
+    contracts.budokan.ban_entry(tournament.id, game_id, array![].span());
 
     // Verify game ID is banned
     let is_banned = contracts
@@ -4652,7 +4652,7 @@ fn test_cannot_ban_already_banned_game_id() {
     assert!(is_banned, "Game ID should be banned");
 
     // Attempt to ban the same game ID again - should panic
-    contracts.budokan.validate_entry(tournament.id, game_id, array![].span());
+    contracts.budokan.ban_entry(tournament.id, game_id, array![].span());
 }
 
 // ==================== Extension Gated Tests (Additional) ====================
