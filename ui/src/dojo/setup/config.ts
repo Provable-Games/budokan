@@ -11,8 +11,8 @@ export const manifests: Record<ChainId, DojoManifest> = {
 };
 
 export const namespace: Record<ChainId, string> = {
-  [ChainId.SN_MAIN]: "budokan_relayer_0_0_9",
-  [ChainId.SN_SEPOLIA]: "budokan_relayer_0_0_9",
+  [ChainId.SN_MAIN]: "budokan_relayer_0_0_10",
+  [ChainId.SN_SEPOLIA]: "budokan_relayer_0_0_10",
 };
 
 export const isChainIdSupported = (chainId: ChainId): boolean => {
