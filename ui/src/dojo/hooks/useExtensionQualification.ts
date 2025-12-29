@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useSystemCalls } from "./useSystemCalls";
-import { Tournament } from "@/generated/models.gen";
 
 /**
  * Represents a single qualification method for an extension

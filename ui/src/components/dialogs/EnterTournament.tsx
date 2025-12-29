@@ -39,10 +39,10 @@ import { getTokenLogoUrl, getTokenDecimals } from "@/lib/tokensMeta";
 import { LoadingSpinner } from "@/components/ui/spinner";
 import {
   getExtensionProof,
-  isTournamentValidator,
   registerTournamentValidator,
   getExtensionAddresses,
 } from "@/lib/extensionConfig";
+import { getTokenByAddress } from "@/lib/tokenUtils";
 import { useVoyagerNfts } from "@/hooks/useVoyagerNfts";
 import {
   useExtensionQualification,
@@ -272,9 +272,15 @@ export function EnterTournamentDialog({
     tournamentModel?.entry_requirement.Some?.entry_requirement_type?.variant
       ?.token;
 
-  const token = tokens.find(
-    (token) => token.token_address === requiredTokenAddress
-  );
+  // Get token data from static tokens - same approach as EntryRequirements.tsx
+  const token = useMemo(() => {
+    if (requirementVariant !== "token" || !requiredTokenAddress)
+      return undefined;
+    return getTokenByAddress(
+      requiredTokenAddress,
+      selectedChainConfig?.chainId ?? ""
+    );
+  }, [requiredTokenAddress, requirementVariant, selectedChainConfig]);
 
   const requiredTokenAddresses = requiredTokenAddress
     ? [indexAddress(requiredTokenAddress ?? "")]
@@ -420,6 +426,7 @@ export function EnterTournamentDialog({
   } = useVoyagerNfts({
     contractAddress: requiredTokenAddress ?? "0x0",
     owner: address,
+    // owner: "0x03c0f67740e3fe298a52fe75dd24b4981217406f133e0835331379731b67dc92",
     limit: 100,
     fetchAll: true, // Fetch all pages
     maxPages: 20, // Allow up to 20 pages (2000 NFTs max)
@@ -429,6 +436,8 @@ export function EnterTournamentDialog({
       requiredTokenAddress !== undefined &&
       address !== undefined,
   });
+
+  console.log(nfts);
 
   const ownedTokenIds = useMemo(() => {
     // Use Voyager NFT data - tokenId is already a string
@@ -511,8 +520,6 @@ export function EnterTournamentDialog({
     if (!requiredTournamentRegistrations) return {};
 
     return requiredTournamentRegistrations.reduce((acc, registration) => {
-      const registrationTournamentId = registration.tournament_id;
-
       // For participation, we don't care if tournament is finalized
       // Just track that they participated
       // Initialize array if it doesn't exist
@@ -1279,9 +1286,17 @@ export function EnterTournamentDialog({
                 <>
                   <div className="flex flex-col gap-2 px-4">
                     <div className="flex flex-row items-center gap-2">
-                      <span className="w-8">
-                        <COIN />
-                      </span>
+                      {token?.logo_url ? (
+                        <img
+                          src={token.logo_url}
+                          alt={token.name || "Token"}
+                          className="w-8 h-8 object-cover rounded"
+                        />
+                      ) : (
+                        <span className="w-8">
+                          <COIN />
+                        </span>
+                      )}
                       <span>{token?.name}</span>
                       <span className="text-neutral">{token?.symbol}</span>
                       {address ? (

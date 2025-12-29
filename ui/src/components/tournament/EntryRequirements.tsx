@@ -1,5 +1,4 @@
 import { Card } from "@/components/ui/card";
-import { CairoCustomEnum } from "starknet";
 import { Tournament } from "@/generated/models.gen";
 import { displayAddress, feltToString } from "@/lib/utils";
 import { useDojo } from "@/context/dojo";
@@ -49,9 +48,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { getTokenByAddress } from "@/lib/tokenUtils";
 import {
-  isTournamentValidator,
   registerTournamentValidator,
-  isERC20BalanceValidator,
   registerERC20BalanceValidator,
   getExtensionAddresses,
 } from "@/lib/extensionConfig";
@@ -321,7 +318,7 @@ const EntryRequirements = ({
   }, [erc20BalanceValidatorConfig?.tokenAddress, selectedChainConfig]);
 
   // Get price for ERC20 token
-  const { prices } = useEkuboPrices({
+  const { prices: _prices } = useEkuboPrices({
     tokens: erc20Token?.token_address ? [erc20Token.token_address] : [],
   });
 
@@ -335,9 +332,17 @@ const EntryRequirements = ({
     if (activeVariant === "token") {
       return (
         <div className="text-brand flex flex-row items-center gap-1 w-full">
-          <span className="w-8">
-            <COIN />
-          </span>
+          {token?.logo_url ? (
+            <img
+              src={token.logo_url}
+              alt={token.name || "Token"}
+              className="w-8 h-8 object-cover rounded"
+            />
+          ) : (
+            <span className="w-8">
+              <COIN />
+            </span>
+          )}
           {tokenLoading ? (
             <Skeleton className="hidden sm:block h-4 w-20" />
           ) : (
@@ -401,9 +406,17 @@ const EntryRequirements = ({
             To enter this tournament you must hold:
           </p>
           <div className="flex items-center gap-2">
-            <span className="w-8">
-              <COIN />
-            </span>
+            {token?.logo_url ? (
+              <img
+                src={token.logo_url}
+                alt={token.name || "Token"}
+                className="w-8 h-8 object-cover rounded"
+              />
+            ) : (
+              <span className="w-8">
+                <COIN />
+              </span>
+            )}
             {tokenLoading ? (
               <Skeleton className="h-4 w-32" />
             ) : (

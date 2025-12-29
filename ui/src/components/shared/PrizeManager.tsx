@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { FormLabel } from "@/components/ui/form";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { getTokenSymbol, getTokenLogoUrl } from "@/lib/tokensMeta";
+import { getTokenLogoUrl } from "@/lib/tokensMeta";
 import { X } from "@/components/Icons";
 import { getOrdinalSuffix, formatNumber } from "@/lib/utils";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";

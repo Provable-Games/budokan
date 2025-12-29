@@ -71,9 +71,10 @@ export const EXTENSION_ADDRESSES: Record<
       "0x028112199f873e919963277b41ef1231365986e2fd7722501cd7d293de60b64e",
   },
   [ChainId.SN_MAIN]: {
-    // tournamentValidator: "0x...", // Add when deployed
+    tournamentValidator:
+      "0x04afc81a9392abfee4e70b6238a6ceaa30322010aaf09cb55894164935abb555",
     erc20BalanceValidator:
-      "0x0326478e7c5a367b59bcd441c9f453ce782395faf32ec00ec1e0e6083b6e95be",
+      "0x051fc2681f65ee18e99dab3cc2ca2eca1b4532c735e752f575ace91ed30f17b7",
   },
 };
 

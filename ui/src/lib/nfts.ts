@@ -28,6 +28,8 @@ export const mainnetNFTs = [
     address:
       "0x0377c2d65debb3978ea81904e7d59740da1f07412e30d01c5ded1c5d6f1ddc43",
     image: "https://claim.focustree.app/focus-tree-logo.svg",
+    name: "Focus Tree | Tile",
+    symbol: "TILE",
   },
 ];
 

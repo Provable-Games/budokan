@@ -119,7 +119,7 @@ const EntryRequirements = ({ form }: StepProps) => {
 
     form.setValue("gatingOptions.token", undefined);
     form.setValue("gatingOptions.tournament.requirement", "participated");
-    form.setValue("gatingOptions.tournament.qualifying_mode", 0); // Default to ANY
+    form.setValue("gatingOptions.tournament.qualifying_mode", 2); // Default to ALL
     form.setValue("gatingOptions.tournament.top_positions", 0); // Default to 0 for participated
     form.setValue("gatingOptions.tournament.tournaments", []);
     form.setValue("gatingOptions.addresses", []);
@@ -181,7 +181,6 @@ const EntryRequirements = ({ form }: StepProps) => {
                   address: token.token_address,
                   name: token.name,
                   symbol: token.symbol,
-                  image: token.image,
                 } as FormToken);
               }
 
@@ -718,22 +717,9 @@ const EntryRequirements = ({ form }: StepProps) => {
                                       <div className="flex flex-col gap-2">
                                         <div>
                                           <span className="font-semibold">
-                                            At Least One:
-                                          </span>{" "}
-                                          Qualify in at least one tournament
-                                        </div>
-                                        <div>
-                                          <span className="font-semibold">
                                             All:
                                           </span>{" "}
                                           Must qualify in all tournaments
-                                        </div>
-                                        <div>
-                                          <span className="font-semibold">
-                                            Cumulative per Tournament:
-                                          </span>{" "}
-                                          Track entries per qualifying
-                                          tournament
                                         </div>
                                         <div>
                                           <span className="font-semibold">
@@ -741,28 +727,6 @@ const EntryRequirements = ({ form }: StepProps) => {
                                           </span>{" "}
                                           Track entries per qualifying token ID
                                         </div>
-                                        {form.watch(
-                                          "gatingOptions.tournament.requirement"
-                                        ) === "won" && (
-                                          <>
-                                            <div>
-                                              <span className="font-semibold">
-                                                All Participated, Any Top
-                                                Positions:
-                                              </span>{" "}
-                                              Must participate in all, but only
-                                              need to win in any one
-                                            </div>
-                                            <div>
-                                              <span className="font-semibold">
-                                                All Particpated, Cumulative Top
-                                                Positions:
-                                              </span>{" "}
-                                              Must participate in all, entries
-                                              multiply by tournament count
-                                            </div>
-                                          </>
-                                        )}
                                       </div>
                                     </HoverCardContent>
                                   </HoverCard>
@@ -777,31 +741,11 @@ const EntryRequirements = ({ form }: StepProps) => {
                                     type="button"
                                     size="sm"
                                     variant={
-                                      field.value === 0 ? "default" : "outline"
-                                    }
-                                    onClick={() => field.onChange(0)}
-                                  >
-                                    At Least One
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant={
                                       field.value === 2 ? "default" : "outline"
                                     }
                                     onClick={() => field.onChange(2)}
                                   >
                                     All
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant={
-                                      field.value === 1 ? "default" : "outline"
-                                    }
-                                    onClick={() => field.onChange(1)}
-                                  >
-                                    Cumulative per Tournament
                                   </Button>
                                   <Button
                                     type="button"
@@ -813,37 +757,6 @@ const EntryRequirements = ({ form }: StepProps) => {
                                   >
                                     Cumulative per Entry
                                   </Button>
-                                  {form.watch(
-                                    "gatingOptions.tournament.requirement"
-                                  ) === "won" && (
-                                    <>
-                                      <Button
-                                        type="button"
-                                        size="sm"
-                                        variant={
-                                          field.value === 4
-                                            ? "default"
-                                            : "outline"
-                                        }
-                                        onClick={() => field.onChange(4)}
-                                      >
-                                        All Participated, Any Top Positions
-                                      </Button>
-                                      <Button
-                                        type="button"
-                                        size="sm"
-                                        variant={
-                                          field.value === 5
-                                            ? "default"
-                                            : "outline"
-                                        }
-                                        onClick={() => field.onChange(5)}
-                                      >
-                                        All Particpated, Cumulative Top
-                                        Positions
-                                      </Button>
-                                    </>
-                                  )}
                                 </div>
                               </FormControl>
                             </FormItem>

@@ -12,13 +12,12 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useProvider } from "@starknet-react/core";
 import TournamentTimeline from "@/components/TournamentTimeline";
 import {
-  bigintToHex,
   feltToString,
   formatTime,
   indexAddress,
   padU64,
 } from "@/lib/utils";
-import { addAddressPadding, CairoCustomEnum } from "starknet";
+import { addAddressPadding } from "starknet";
 import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
 import {
   Tournament as TournamentModel,
@@ -30,7 +29,6 @@ import { useDojo } from "@/context/dojo";
 import {
   extractEntryFeePrizes,
   processTournamentFromSql,
-  convertTokenAmount,
 } from "@/lib/utils/formatting";
 import { EnterTournamentDialog } from "@/components/dialogs/EnterTournament";
 import ScoreTable from "@/components/tournament/table/ScoreTable";
@@ -48,7 +46,7 @@ import {
   useGetTournamentsCount,
   useGetTournamentLeaderboards,
 } from "@/dojo/hooks/useSqlQueries";
-import { getTokenByAddress, getTokensByAddresses } from "@/lib/tokenUtils";
+import { getTokensByAddresses } from "@/lib/tokenUtils";
 import NotFound from "@/containers/NotFound";
 import {
   Tooltip,
@@ -263,12 +261,6 @@ const Tournament = () => {
   const hasEntryFee = tournamentModel?.entry_fee.isSome();
 
   const entryFeeToken = tournamentModel?.entry_fee.Some?.token_address;
-
-  // Get entry fee token data from static tokens
-  const entryFeeTokenData = useMemo(() => {
-    if (!hasEntryFee || !entryFeeToken) return undefined;
-    return getTokenByAddress(entryFeeToken, selectedChainConfig?.chainId ?? "");
-  }, [entryFeeToken, hasEntryFee, selectedChainConfig]);
 
   const tournamentId = tournamentModel?.id;
 

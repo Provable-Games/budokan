@@ -292,30 +292,6 @@ export function AddPrizesDialog({
     }
   };
 
-  const aggregatedPrizes = currentPrizes.reduce((acc, prize) => {
-    const key = `${prize.position}-${prize.token.address}-${prize.type}`;
-
-    if (!acc[key]) {
-      acc[key] = {
-        ...prize,
-        amount: prize.type === "ERC20" ? prize.amount : undefined,
-        tokenIds: prize.type === "ERC721" ? [prize.tokenId] : [],
-        count: 1,
-      };
-    } else {
-      if (prize.type === "ERC20") {
-        acc[key].amount =
-          (acc[key].amount || 0) + (prize.type === "ERC20" ? prize.amount : 0);
-      } else if (prize.type === "ERC721") {
-        acc[key].tokenIds = [...(acc[key].tokenIds || []), prize.tokenId];
-      }
-      acc[key].count += 1;
-    }
-
-    return acc;
-  }, {} as Record<string, any>);
-
-
   return (
     <FormProvider {...form}>
       <Dialog open={open} onOpenChange={onOpenChange}>

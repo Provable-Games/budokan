@@ -645,7 +645,7 @@ const TournamentConfirmation = ({
                             </span>
                             <div className="flex flex-row items-center gap-2">
                               <img
-                                src={erc20BalanceConfig.token?.image ?? ""}
+                                src={erc20BalanceConfig.token?.logo_url ?? ""}
                                 alt={erc20BalanceConfig.token?.symbol ?? ""}
                                 className="w-6 h-6 rounded-full"
                               />

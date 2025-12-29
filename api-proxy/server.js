@@ -10,18 +10,40 @@ const VOYAGER_API_BASE_URL = process.env.VOYAGER_API_BASE_URL || 'https://api.vo
 // Allowed origins for CORS
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:3000')
   .split(',')
-  .map(origin => origin.trim());
+  .map(origin => origin.trim())
+  .filter(origin => origin.length > 0);
+
+// Helper to normalize origin (remove trailing slash)
+const normalizeOrigin = (origin) => {
+  return origin?.replace(/\/$/, '');
+};
+
+// Normalize allowed origins
+const normalizedAllowedOrigins = allowedOrigins.map(normalizeOrigin);
+
+console.log('Configured allowed origins:', normalizedAllowedOrigins);
 
 // CORS configuration
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
+    if (!origin) {
+      console.log('Request with no origin - allowing');
+      return callback(null, true);
+    }
 
-    if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+    const normalizedOrigin = normalizeOrigin(origin);
+
+    // Check if origin is allowed (including wildcard)
+    if (normalizedAllowedOrigins.includes('*')) {
+      console.log(`Origin ${origin} - allowed (wildcard)`);
+      callback(null, true);
+    } else if (normalizedAllowedOrigins.includes(normalizedOrigin)) {
+      console.log(`Origin ${origin} - allowed`);
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      console.error(`Origin ${origin} - BLOCKED. Allowed origins:`, normalizedAllowedOrigins);
+      callback(new Error(`Not allowed by CORS. Origin: ${origin}`));
     }
   },
   credentials: true
@@ -34,6 +56,8 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     hasApiKey: !!VOYAGER_API_KEY,
+    allowedOrigins: normalizedAllowedOrigins,
+    requestOrigin: req.headers.origin || 'none',
     timestamp: new Date().toISOString()
   });
 });

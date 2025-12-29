@@ -30,11 +30,6 @@ import { Tournament } from "@/generated/models.gen";
 import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
 import { indexAddress, padU64 } from "@/lib/utils";
 import {
-  useExtensionQualification,
-  TournamentValidatorInput,
-} from "@/dojo/hooks/useExtensionQualification";
-import {
-  isTournamentValidator,
   getExtensionAddresses,
   getExtensionProof,
 } from "@/lib/extensionConfig";
@@ -70,10 +65,7 @@ export const ScoreTableDialog = ({
   const [bannableEntries, setBannableEntries] = useState<Set<string>>(
     new Set()
   );
-  const [bannedEntries, setBannedEntries] = useState<Set<string>>(
-    new Set()
-  );
-  const { validateEntry, checkRegistrationOnly, checkExtensionValidEntry, getExtensionEntriesLeft } =
+  const { banEntry, checkRegistrationOnly, checkShouldBan } =
     useSystemCalls();
 
   // Debounce search query to avoid too many requests
@@ -156,6 +148,12 @@ export const ScoreTableDialog = ({
         const requiresReg = await checkRegistrationOnly(
           extensionConfig.address
         );
+        console.log(
+          "Extension registration_only check:",
+          extensionConfig.address,
+          "result:",
+          requiresReg
+        );
         setExtensionRegistrationOnly(requiresReg);
       } else {
         setExtensionRegistrationOnly(false);
@@ -170,39 +168,42 @@ export const ScoreTableDialog = ({
     checkRegistrationOnly,
   ]);
 
-  // Check which entries can be banned by validating their current qualification
+  // Check which entries can be banned using the should_ban extension method
   useEffect(() => {
     const checkBannableEntries = async () => {
+      console.log("checkBannableEntries called", {
+        open,
+        extensionRegistrationOnly,
+        extensionAddress: extensionConfig?.address,
+        gamesLength: games?.length,
+        isStarted,
+      });
+
       if (
         !open ||
-        !extensionRegistrationOnly ||
         !extensionConfig?.address ||
         !games ||
         games.length === 0 ||
         isStarted
       ) {
+        console.log("checkBannableEntries early return - conditions not met");
         setBannableEntries(new Set());
         return;
       }
 
+      console.log("Starting ban checks for", games.length, "games");
       const bannable = new Set<string>();
-      const banned = new Set<string>();
 
-      // Group games by owner address
-      const gamesByOwner = new Map<string, typeof games>();
-      games.forEach((game) => {
-        const owner = game?.owner;
-        if (!owner) return;
-        if (!gamesByOwner.has(owner)) {
-          gamesByOwner.set(owner, []);
-        }
-        gamesByOwner.get(owner)?.push(game);
-      });
-
-      // Check each unique player's qualification status
+      // Check each game token to see if it should be banned
       await Promise.all(
-        Array.from(gamesByOwner.entries()).map(async ([owner, playerGames]) => {
+        games.map(async (game) => {
           try {
+            const owner = game?.owner;
+            if (!owner) {
+              console.log("Game", game.token_id, "has no owner, skipping");
+              return;
+            }
+
             // Get qualification proof for this player
             const qualification = getExtensionProof(
               extensionConfig.address,
@@ -210,75 +211,40 @@ export const ScoreTableDialog = ({
               {} // Additional context if needed
             );
 
-            // First, check each individual game token to see if it's still valid (not banned)
-            const gameValidityChecks = await Promise.all(
-              playerGames.map(async (game) => {
-                try {
-                  // Check if this specific game token is valid
-                  const tokenIsValid = await checkExtensionValidEntry(
-                    extensionConfig.address,
-                    tournamentId,
-                    owner,
-                    [game.token_id.toString()] // Pass token_id as proof to check this specific entry
-                  );
-                  return { game, isValid: tokenIsValid };
-                } catch {
-                  return { game, isValid: false };
-                }
-              })
+            console.log(
+              `Checking game token ${game.token_id} (owner: ${owner}) with qualification:`,
+              qualification
             );
 
-            // Separate valid and invalid (banned) tokens
-            const currentValidGames = gameValidityChecks
-              .filter(({ isValid }) => isValid)
-              .map(({ game }) => game);
-
-            // Track banned entries for display
-            gameValidityChecks
-              .filter(({ isValid }) => !isValid)
-              .forEach(({ game }) => banned.add(game.token_id.toString()));
-
-            // Check if player still meets basic requirements
-            const playerStillQualifies = await checkExtensionValidEntry(
+            // Check if this game token should be banned
+            // Signature: should_ban(tournament_id, game_token_id, current_owner, qualification)
+            const shouldBan = await checkShouldBan(
               extensionConfig.address,
               tournamentId,
+              game.token_id.toString(),
               owner,
               qualification
             );
 
-            // If they don't meet basic requirements, all remaining valid entries can be banned
-            if (!playerStillQualifies) {
-              currentValidGames.forEach(game => bannable.add(game.token_id.toString()));
-              return;
-            }
-
-            // Check how many entries they can have now
-            const entriesLeft = await getExtensionEntriesLeft(
-              extensionConfig.address,
-              tournamentId,
-              owner,
-              qualification
+            console.log(
+              `Game token ${game.token_id} (owner: ${owner}) shouldBan: ${shouldBan}`
             );
 
-            // If entriesLeft is not null and they have more valid entries than allowed
-            if (entriesLeft !== null && currentValidGames.length > entriesLeft) {
-              // Mark the excess entries as bannable (mark the later ones)
-              const excessCount = currentValidGames.length - entriesLeft;
-              const sortedGames = [...currentValidGames].sort((a, b) =>
-                Number(b.token_id) - Number(a.token_id)
-              );
-              sortedGames.slice(0, excessCount).forEach(game => {
-                bannable.add(game.token_id.toString());
-              });
+            if (shouldBan) {
+              bannable.add(game.token_id.toString());
             }
           } catch (error) {
-            console.error("Error checking ban-ability for player:", owner, error);
+            console.error(
+              "Error checking ban-ability for game:",
+              game.token_id,
+              error
+            );
           }
         })
       );
 
+      console.log("Bannable entries:", Array.from(bannable));
       setBannableEntries(bannable);
-      setBannedEntries(banned);
     };
 
     checkBannableEntries();
@@ -286,7 +252,8 @@ export const ScoreTableDialog = ({
     open,
     extensionRegistrationOnly,
     extensionConfig?.address,
-    games?.length, // Only depend on length, not the array itself
+    games,
+    tournamentId,
     isStarted,
   ]);
 
@@ -333,7 +300,7 @@ export const ScoreTableDialog = ({
   }, [tournamentValidatorConfig, tournamentsData]);
 
   // Fetch leaderboards for required tournaments (for win checking)
-  const { data: leaderboards } = useGetTournamentLeaderboards({
+  const { data: _leaderboards } = useGetTournamentLeaderboards({
     namespace: namespace ?? "",
     tournamentIds: validatorTournaments.map((tournament) =>
       padU64(BigInt(tournament.id))
@@ -344,59 +311,20 @@ export const ScoreTableDialog = ({
       !isStarted,
   });
 
-  // Validation checking function for each participant
-  const getParticipantValidation = useMemo(() => {
-    if (
-      !hasEntryRequirement ||
-      requirementVariant !== "extension" ||
-      !isTournamentValidatorExtension ||
-      !tournamentValidatorConfig
-    ) {
-      return new Map<string, { isValid: boolean; reason?: string }>();
-    }
-
-    const validationMap = new Map<
-      string,
-      { isValid: boolean; reason?: string }
-    >();
-
-    // For each participant (game token), check if they meet the entry requirements
-    if (!registrants || !orderedRegistrants) return validationMap;
-
-    orderedRegistrants.forEach((registration, index) => {
-      if (!registration) return;
-
-      const gameTokenId = registration.game_token_id;
-      const game = games?.[index];
-      if (!game) return;
-
-      // Get the owner of this game token
-      const ownerAddress = game.owner;
-
-      // Check if this participant meets entry requirements
-      // For now, mark all as needing validation (actual validation would require checking their historical data)
-      validationMap.set(gameTokenId, {
-        isValid: true, // Will be updated with actual validation
-        reason: "Validation pending",
-      });
-    });
-
-    return validationMap;
-  }, [
-    hasEntryRequirement,
-    requirementVariant,
-    isTournamentValidatorExtension,
-    tournamentValidatorConfig,
-    registrants,
-    orderedRegistrants,
-    games,
-  ]);
-
   // Handle ban action
-  const handleBan = async (gameTokenId: string) => {
+  const handleBan = async (gameTokenId: string, ownerAddress: string) => {
     try {
-      // Call validate_entry with empty proof to ban the participant
-      await validateEntry(tournamentId, gameTokenId, []);
+      if (!extensionConfig?.address) return;
+
+      // Get qualification proof for the player
+      const qualification = getExtensionProof(
+        extensionConfig.address,
+        ownerAddress,
+        {} // Additional context if needed
+      );
+
+      // Call ban_entry with the qualification proof
+      await banEntry(tournamentId, gameTokenId, qualification);
       // Refresh the data
       refetch();
     } catch (error) {
@@ -515,7 +443,8 @@ export const ScoreTableDialog = ({
                   )}...${ownerAddress?.slice(-4)}`;
                   const registration = orderedRegistrants[index];
                   const hasSubmitted = registration?.has_submitted === 1;
-                  const isBanned = bannedEntries.has(game.token_id.toString());
+                  const isBanned = registration?.is_banned === 1;
+                  const isBannable = bannableEntries.has(game.token_id.toString());
 
                   return (
                     <TableRow
@@ -557,13 +486,13 @@ export const ScoreTableDialog = ({
                         hasEntryRequirement &&
                         requirementVariant === "extension" &&
                         extensionRegistrationOnly &&
-                        bannableEntries.has(game.token_id.toString()) && (
+                        isBannable && (
                           <TableCell className="text-center">
                             <Button
                               size="xs"
                               variant="destructive"
                               onClick={() =>
-                                handleBan(game.token_id.toString())
+                                handleBan(game.token_id.toString(), ownerAddress)
                               }
                               disabled={!address}
                             >

@@ -129,7 +129,7 @@ export const useSystemCalls = () => {
     }
   };
 
-  const validateEntry = async (
+  const banEntry = async (
     tournamentId: BigNumberish,
     gameTokenId: BigNumberish,
     proof: string[]
@@ -137,13 +137,13 @@ export const useSystemCalls = () => {
     try {
       const tx = await account?.execute({
         contractAddress: tournamentAddress,
-        entrypoint: "validate_entry",
+        entrypoint: "ban_entry",
         calldata: CallData.compile([tournamentId, gameTokenId, proof]),
       });
 
       return tx;
     } catch (error) {
-      console.error("Error executing validate entry:", error);
+      console.error("Error executing ban entry:", error);
       throw error;
     }
   };
@@ -1140,9 +1140,38 @@ export const useSystemCalls = () => {
     }
   };
 
+  const checkShouldBan = async (
+    extensionAddress: string,
+    tournamentId: BigNumberish,
+    gameTokenId: string,
+    playerAddress: string,
+    qualification: string[]
+  ): Promise<boolean> => {
+    try {
+      if (!provider) return false;
+
+      // should_ban signature: (tournament_id: u64, game_token_id: u64, current_owner: ContractAddress, qualification: Span<felt252>)
+      const result = await provider.callContract({
+        contractAddress: extensionAddress,
+        entrypoint: "should_ban",
+        calldata: CallData.compile([
+          tournamentId,
+          gameTokenId, // u64, not u256
+          playerAddress,
+          qualification,
+        ]),
+      });
+
+      return result[0] === "0x1" || BigInt(result[0]) === 1n;
+    } catch (error) {
+      console.error("Error checking should_ban:", error);
+      return false;
+    }
+  };
+
   return {
     approveAndEnterTournament,
-    validateEntry,
+    banEntry,
     submitScores,
     submitScoresBatched,
     approveAndAddPrizes,
@@ -1163,5 +1192,6 @@ export const useSystemCalls = () => {
     checkExtensionValidEntry,
     getExtensionEntriesLeft,
     checkRegistrationOnly,
+    checkShouldBan,
   };
 };
