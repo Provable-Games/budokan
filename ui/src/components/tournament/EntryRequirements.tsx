@@ -11,6 +11,7 @@ import {
   USER,
   EXTERNAL_LINK,
   INFO,
+  OPUS,
 } from "@/components/Icons";
 import {
   HoverCard,
@@ -106,12 +107,14 @@ const getQualifyingModeInfo = (mode: number) => {
     case 4:
       return {
         label: "All Participate, Any Win",
-        description: "Must participate in all tournaments, but only need to win in any one",
+        description:
+          "Must participate in all tournaments, but only need to win in any one",
       };
     case 5:
       return {
         label: "All With Cumulative",
-        description: "Must participate in all tournaments, entries multiply by tournament count",
+        description:
+          "Must participate in all tournaments, entries multiply by tournament count",
       };
     default:
       return { label: "Unknown", description: "" };
@@ -154,6 +157,14 @@ const EntryRequirements = ({
     if (activeVariant !== "token" || !tokenAddress) return undefined;
     return getTokenByAddress(tokenAddress, selectedChainConfig?.chainId ?? "");
   }, [tokenAddress, activeVariant, selectedChainConfig]);
+
+  // Get CASH token for display
+  const cashToken = useMemo(() => {
+    return getTokenByAddress(
+      "0x0498edfaf50ca5855666a700c25dd629d577eb9afccdf3b5977aec79aee55ada",
+      selectedChainConfig?.chainId ?? ""
+    );
+  }, [selectedChainConfig?.chainId]);
 
   const tokenLoading = false; // No loading needed for static data
 
@@ -201,10 +212,7 @@ const EntryRequirements = ({
 
   // Check if this extension is an ERC20 balance validator
   const isERC20BalanceValidatorExtension = useMemo(() => {
-    if (
-      !extensionConfig?.address ||
-      !extensionAddresses.erc20BalanceValidator
-    )
+    if (!extensionConfig?.address || !extensionAddresses.erc20BalanceValidator)
       return false;
     // Normalize both addresses for comparison
     const normalizedExtensionAddress = indexAddress(extensionConfig.address);
@@ -213,6 +221,18 @@ const EntryRequirements = ({
     );
     return normalizedExtensionAddress === normalizedValidatorAddress;
   }, [extensionConfig?.address, extensionAddresses.erc20BalanceValidator]);
+
+  // Check if this extension is an Opus Troves validator
+  const isOpusTrovesValidatorExtension = useMemo(() => {
+    if (!extensionConfig?.address || !extensionAddresses.opusTrovesValidator)
+      return false;
+    // Normalize both addresses for comparison
+    const normalizedExtensionAddress = indexAddress(extensionConfig.address);
+    const normalizedValidatorAddress = indexAddress(
+      extensionAddresses.opusTrovesValidator
+    );
+    return normalizedExtensionAddress === normalizedValidatorAddress;
+  }, [extensionConfig?.address, extensionAddresses.opusTrovesValidator]);
 
   // Parse tournament validator config: [qualifier_type, qualifying_mode, top_positions, ...tournament_ids]
   const tournamentValidatorConfig = useMemo(() => {
@@ -260,10 +280,8 @@ const EntryRequirements = ({
     const valuePerEntry = (valuePerEntryHigh << 128n) | valuePerEntryLow;
 
     // Get token decimals for formatting
-    const decimals = getTokenDecimals(
-      selectedChainConfig?.chainId ?? "",
-      tokenAddress
-    ) || 18;
+    const decimals =
+      getTokenDecimals(selectedChainConfig?.chainId ?? "", tokenAddress) || 18;
     const divisor = BigInt(10 ** decimals);
 
     // Convert wei values to human-readable format
@@ -291,7 +309,73 @@ const EntryRequirements = ({
       maxThresholdFormatted: formatTokenAmount(maxThreshold),
       valuePerEntryFormatted: formatTokenAmount(valuePerEntry),
     };
-  }, [isERC20BalanceValidatorExtension, extensionConfig?.config, selectedChainConfig?.chainId]);
+  }, [
+    isERC20BalanceValidatorExtension,
+    extensionConfig?.config,
+    selectedChainConfig?.chainId,
+  ]);
+
+  // Parse Opus Troves validator config: [asset_count, ...asset_addresses, threshold, value_per_entry, max_entries]
+  const opusTrovesValidatorConfig = useMemo(() => {
+    if (!isOpusTrovesValidatorExtension || !extensionConfig?.config) {
+      return null;
+    }
+
+    const config = extensionConfig.config;
+    if (!config || config.length < 4) return null;
+
+    const assetCount = Number(config[0]);
+
+    // Asset addresses are next N elements
+    const assetAddresses = config.slice(1, assetCount + 1);
+
+    // Remaining config elements
+    const threshold = BigInt(config[assetCount + 1] || "0");
+    const valuePerEntry = BigInt(config[assetCount + 2] || "0");
+    const maxEntriesFromConfig = Number(config[assetCount + 3] || "0");
+
+    // CASH uses 18 decimals, 1:1 USD parity
+    const CASH_DECIMALS = 18;
+    const divisor = BigInt(10 ** CASH_DECIMALS);
+
+    // Format CASH amount to USD
+    const formatCashToUSD = (value: bigint) => {
+      if (value === 0n) return "0";
+      const integerPart = value / divisor;
+      const remainder = value % divisor;
+      if (remainder === 0n) {
+        return integerPart.toString();
+      }
+      // Format with decimals, removing trailing zeros
+      const decimalStr = remainder.toString().padStart(CASH_DECIMALS, "0");
+      const trimmed = decimalStr.replace(/0+$/, "");
+      return trimmed ? `${integerPart}.${trimmed}` : integerPart.toString();
+    };
+
+    // Get token data for each asset
+    const assets = assetAddresses
+      .map((addr: any) =>
+        getTokenByAddress(addr, selectedChainConfig?.chainId ?? "")
+      )
+      .filter((token: any) => token !== undefined);
+
+    return {
+      assetCount,
+      assetAddresses,
+      assets,
+      threshold,
+      valuePerEntry,
+      maxEntries: maxEntriesFromConfig,
+      // Human-readable formatted values
+      thresholdUSD: formatCashToUSD(threshold),
+      valuePerEntryUSD: formatCashToUSD(valuePerEntry),
+      isWildcard: assetCount === 0,
+    };
+  }, [
+    isOpusTrovesValidatorExtension,
+    extensionConfig?.config,
+    selectedChainConfig?.chainId,
+  ]);
 
   // Get tournament data for validator extensions
   const validatorTournaments = useMemo(() => {
@@ -374,6 +458,17 @@ const EntryRequirements = ({
             <span className="hidden sm:block text-xs">
               {erc20Token?.name || "ERC20 Balance"}
             </span>
+          </div>
+        );
+      }
+      // Show as Opus Troves if it's an Opus Troves validator
+      if (isOpusTrovesValidatorExtension) {
+        return (
+          <div className="flex flex-row items-center gap-1 w-full">
+            <span className="w-6">
+              <OPUS />
+            </span>
+            <span className="hidden sm:block text-xs">Opus Troves</span>
           </div>
         );
       }
@@ -474,7 +569,9 @@ const EntryRequirements = ({
                 </div>
                 <div className="flex flex-col gap-1 text-xs mt-2">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-brand-muted whitespace-nowrap">Min Balance:</span>
+                    <span className="text-brand-muted whitespace-nowrap">
+                      Min Balance:
+                    </span>
                     <span className="font-medium">
                       {erc20BalanceValidatorConfig.minThresholdFormatted}
                     </span>
@@ -484,7 +581,9 @@ const EntryRequirements = ({
                   </div>
                   {erc20BalanceValidatorConfig.maxThreshold > 0n && (
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-brand-muted whitespace-nowrap">Max Balance:</span>
+                      <span className="text-brand-muted whitespace-nowrap">
+                        Max Balance:
+                      </span>
                       <span className="font-medium">
                         {erc20BalanceValidatorConfig.maxThresholdFormatted}
                       </span>
@@ -495,7 +594,9 @@ const EntryRequirements = ({
                   )}
                   {erc20BalanceValidatorConfig.valuePerEntry > 0n && (
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-brand-muted whitespace-nowrap">Value Per Entry:</span>
+                      <span className="text-brand-muted whitespace-nowrap">
+                        Value Per Entry:
+                      </span>
                       <span className="font-medium">
                         {erc20BalanceValidatorConfig.valuePerEntryFormatted}
                       </span>
@@ -511,7 +612,8 @@ const EntryRequirements = ({
                           </TooltipTrigger>
                           <TooltipContent className="max-w-xs">
                             <p>
-                              Amount of token balance consumed per tournament entry
+                              Amount of token balance consumed per tournament
+                              entry
                             </p>
                           </TooltipContent>
                         </Tooltip>
@@ -520,7 +622,9 @@ const EntryRequirements = ({
                   )}
                   {erc20BalanceValidatorConfig.maxEntries > 0 && (
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-brand-muted whitespace-nowrap">Max Entries:</span>
+                      <span className="text-brand-muted whitespace-nowrap">
+                        Max Entries:
+                      </span>
                       <span className="font-medium">
                         {erc20BalanceValidatorConfig.maxEntries}
                       </span>
@@ -530,7 +634,133 @@ const EntryRequirements = ({
               </div>
               {!!hasEntryLimit && (
                 <div className="flex flex-wrap items-center gap-2 text-xs mt-1">
-                  <span className="text-brand-muted whitespace-nowrap">Entry Limit:</span>
+                  <span className="text-brand-muted whitespace-nowrap">
+                    Entry Limit:
+                  </span>
+                  <span className="font-medium">{Number(entryLimit)}</span>
+                </div>
+              )}
+            </div>
+          </>
+        );
+      }
+      // Show Opus Troves details if it's an Opus Troves validator
+      if (isOpusTrovesValidatorExtension && opusTrovesValidatorConfig) {
+        return (
+          <>
+            <div className="flex flex-col gap-2">
+              <p className="text-muted-foreground text-xs">
+                To enter you must have an Opus Trove with:
+              </p>
+              <div className="flex flex-col gap-1 text-xs">
+                {/* Asset requirement */}
+                <div className="flex flex-wrap items-start gap-2">
+                  <span className="text-brand-muted whitespace-nowrap">
+                    Collateral Assets:
+                  </span>
+                  {opusTrovesValidatorConfig.isWildcard ? (
+                    <span className="font-medium">Any (wildcard)</span>
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {opusTrovesValidatorConfig.assets.map(
+                        (asset: any, idx: number) => (
+                          <span
+                            key={idx}
+                            className="font-medium bg-brand/10 px-2 py-0.5 rounded"
+                          >
+                            {asset.symbol}
+                          </span>
+                        )
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Threshold */}
+                {opusTrovesValidatorConfig.threshold > 0n && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-brand-muted whitespace-nowrap">
+                      Min CASH Debt:
+                    </span>
+                    {cashToken?.logo_url && (
+                      <img
+                        src={cashToken.logo_url}
+                        alt="CASH"
+                        className="w-3 h-3 flex-shrink-0"
+                      />
+                    )}
+                    <span className="font-medium">
+                      ${opusTrovesValidatorConfig.thresholdUSD}
+                    </span>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="w-3 h-3 flex-shrink-0 text-brand-muted hover:text-brand cursor-help">
+                            <INFO />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs">
+                          <p>
+                            Minimum CASH debt required in your trove to qualify
+                            (~$1 USD per CASH)
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                )}
+
+                {/* Value per entry */}
+                {opusTrovesValidatorConfig.valuePerEntry > 0n && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-brand-muted whitespace-nowrap">
+                      CASH Per Entry:
+                    </span>
+                    {cashToken?.logo_url && (
+                      <img
+                        src={cashToken.logo_url}
+                        alt="CASH"
+                        className="w-3 h-3 flex-shrink-0"
+                      />
+                    )}
+                    <span className="font-medium">
+                      ${opusTrovesValidatorConfig.valuePerEntryUSD}
+                    </span>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="w-3 h-3 flex-shrink-0 text-brand-muted hover:text-brand cursor-help">
+                            <INFO />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs">
+                          <p>
+                            Amount of CASH that needs to be borrowed per
+                            tournament entry
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                )}
+
+                {/* Max entries */}
+                {opusTrovesValidatorConfig.maxEntries > 0 && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-brand-muted whitespace-nowrap">
+                      Max Entries:
+                    </span>
+                    <span className="font-medium">
+                      {opusTrovesValidatorConfig.maxEntries}
+                    </span>
+                  </div>
+                )}
+              </div>
+              {!!hasEntryLimit && (
+                <div className="flex flex-wrap items-center gap-2 text-xs mt-1">
+                  <span className="text-brand-muted whitespace-nowrap">
+                    Entry Limit:
+                  </span>
                   <span className="font-medium">{Number(entryLimit)}</span>
                 </div>
               )}
@@ -561,7 +791,11 @@ const EntryRequirements = ({
               <div className="flex flex-row items-center gap-2 text-xs">
                 <span className="text-brand-muted">Mode:</span>
                 <span className="font-medium">
-                  {getQualifyingModeInfo(tournamentValidatorConfig.qualifyingMode).label}
+                  {
+                    getQualifyingModeInfo(
+                      tournamentValidatorConfig.qualifyingMode
+                    ).label
+                  }
                 </span>
                 <TooltipProvider>
                   <Tooltip>
@@ -572,7 +806,11 @@ const EntryRequirements = ({
                     </TooltipTrigger>
                     <TooltipContent className="max-w-xs">
                       <p>
-                        {getQualifyingModeInfo(tournamentValidatorConfig.qualifyingMode).description}
+                        {
+                          getQualifyingModeInfo(
+                            tournamentValidatorConfig.qualifyingMode
+                          ).description
+                        }
                       </p>
                     </TooltipContent>
                   </Tooltip>

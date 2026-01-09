@@ -49,6 +49,13 @@ export const PRESET_EXTENSIONS: Record<string, ExtensionConfig> = {
     isPreset: true,
     isERC20BalanceValidator: true,
   },
+  opus_troves: {
+    name: "Opus Troves",
+    description: "Validates entry based on Opus Trove collateral",
+    proofType: "custom",
+    extractProof: () => [], // No proof required
+    isPreset: true,
+  },
 };
 
 /**
@@ -62,6 +69,7 @@ export const EXTENSION_ADDRESSES: Record<
   {
     tournamentValidator?: string;
     erc20BalanceValidator?: string;
+    opusTrovesValidator?: string;
   }
 > = {
   [ChainId.SN_SEPOLIA]: {
@@ -69,13 +77,35 @@ export const EXTENSION_ADDRESSES: Record<
       "0x04beaeea6de96394bd7256040e1396b387a7652a6d3287fc9a48ff068edee843",
     erc20BalanceValidator:
       "0x028112199f873e919963277b41ef1231365986e2fd7722501cd7d293de60b64e",
+    opusTrovesValidator: "", // TODO: Add Opus Troves validator address for Sepolia
   },
   [ChainId.SN_MAIN]: {
     tournamentValidator:
       "0x04afc81a9392abfee4e70b6238a6ceaa30322010aaf09cb55894164935abb555",
     erc20BalanceValidator:
       "0x051fc2681f65ee18e99dab3cc2ca2eca1b4532c735e752f575ace91ed30f17b7",
+    opusTrovesValidator:
+      "0x05c6d4a9cef65f7b96b790d8754d5c0b0793093db228f8652c15872da5563e41",
   },
+};
+
+/**
+ * Supported Opus Trove Assets
+ *
+ * List of ERC20 tokens that Opus supports as collateral.
+ * Only these assets can be selected when configuring Opus Troves extension.
+ */
+export const OPUS_SUPPORTED_ASSETS: Record<string, string[]> = {
+  [ChainId.SN_SEPOLIA]: [
+    // TODO: Add Sepolia Opus supported asset addresses
+  ],
+  [ChainId.SN_MAIN]: [
+    "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7", // ETH
+    "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d", // STRK
+    "0x0124aeb495b947201f5fac96fd1138e326ad86195b98df6dec9009158a533b49", // LORDS
+    "0x075afe6402ad5a5c20dd25e10ec3b3986acaa647b77e4ae24b0cbc9a54a27a87", // EKUBO
+    "0x03fe2b97c1fd336e750087d68b9b867997fd64a2661ff3ca5a7c771641e8e7ac", // WBTC
+  ],
 };
 
 /**
@@ -83,6 +113,13 @@ export const EXTENSION_ADDRESSES: Record<
  */
 export const getExtensionAddresses = (chainId: string) => {
   return EXTENSION_ADDRESSES[chainId] || {};
+};
+
+/**
+ * Get supported Opus trove assets for a specific chain
+ */
+export const getOpusSupportedAssets = (chainId: string): string[] => {
+  return OPUS_SUPPORTED_ASSETS[chainId] || [];
 };
 
 // Extension configurations by contract address

@@ -731,7 +731,12 @@ export const DISCORD: React.FC = () => (
 );
 
 export const REFRESH: React.FC<{ className?: string }> = ({ className }) => (
-  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    className={className}
+  >
     <path
       d="M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C14.3051 3 16.4077 3.83599 18.0052 5.21759L16.5 6.5M20 3V7H16"
       stroke="currentColor"
@@ -739,5 +744,25 @@ export const REFRESH: React.FC<{ className?: string }> = ({ className }) => (
       strokeLinecap="round"
       strokeLinejoin="round"
     />
+  </svg>
+);
+
+export const OPUS: React.FC = () => (
+  <svg viewBox="0 0 85 84" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <g clip-path="url(#clip0_5710_374)">
+      <path
+        d="M23.7508 6.1958L20.6547 6.1958L0.882812 42.6719L2.58403 44.2568C3.42792 44.0569 4.65096 43.5934 6.36572 42.9434C12.3333 40.6815 18.8766 39.4322 25.6571 39.4322C29.5713 39.4322 33.3985 40.0145 37.0309 41.1154C38.7427 41.6342 40.8006 42.147 40.8006 42.147L42.4844 40.6919L23.7508 6.1958Z"
+        fill="currentColor"
+      ></path>
+      <path
+        d="M61.2179 78.7808L64.314 78.7808L84.0859 42.3046L82.3847 40.7197C81.5408 40.9196 80.3178 41.3832 78.603 42.0332C72.6354 44.2951 66.0922 45.5443 59.3117 45.5443C55.3975 45.5443 51.5703 44.9621 47.9379 43.8612C46.226 43.3424 44.1681 42.8296 44.1681 42.8296L42.4843 44.2847L61.2179 78.7808Z"
+        fill="currentColor"
+      ></path>
+    </g>
+    <defs>
+      <clipPath id="clip0_5710_374">
+        <rect width="84.9735" height="84.9735" fill="currentColor"></rect>
+      </clipPath>
+    </defs>
   </svg>
 );

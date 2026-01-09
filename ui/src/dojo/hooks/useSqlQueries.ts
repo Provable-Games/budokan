@@ -401,9 +401,9 @@ export const useGetTournaments = ({
       active
         ? `
     WITH tournament_data AS (
-      SELECT 
+      SELECT
       t.*,
-      CASE 
+      CASE
           WHEN COUNT(p.tournament_id) = 0 THEN NULL
           ELSE GROUP_CONCAT(
               json_object(
@@ -411,12 +411,12 @@ export const useGetTournaments = ({
                   'position', p.payout_position,
                   'tokenType', p.token_type,
                   'tokenAddress', p.token_address,
-                  'amount', CASE 
+                  'amount', CASE
                       WHEN p.token_type = 'erc20' THEN p."token_type.erc20.amount"
                       WHEN p.token_type = 'erc721' THEN p."token_type.erc721.id"
-                      ELSE NULL 
+                      ELSE NULL
                   END,
-                  'isValid', CASE 
+                  'isValid', CASE
                       WHEN p.token_type = 'erc20' AND p."token_type.erc20.amount" IS NOT NULL THEN 1
                       WHEN p.token_type = 'erc721' AND p."token_type.erc721.id" IS NOT NULL THEN 1
                       ELSE 0
@@ -447,9 +447,46 @@ export const useGetTournaments = ({
       ${getSortClause(sortBy)}
       LIMIT ${limit}
       OFFSET ${offset}
+    ),
+    prize_aggregations AS (
+      SELECT
+        p.tournament_id,
+        GROUP_CONCAT(
+          json_object(
+            'tokenAddress', token_address,
+            'tokenType', token_type,
+            'totalAmount', total_amount,
+            'nftCount', nft_count
+          ),
+          '|'
+        ) as token_totals
+      FROM (
+        SELECT
+          p.tournament_id,
+          p.token_address,
+          p.token_type,
+          CASE
+            WHEN p.token_type = 'erc20' THEN
+              GROUP_CONCAT(
+                CASE
+                  WHEN p."token_type.erc20.amount" IS NOT NULL AND p."token_type.erc20.amount" != 'NULL'
+                  THEN p."token_type.erc20.amount"
+                  ELSE NULL
+                END,
+                ','
+              )
+            ELSE NULL
+          END as total_amount,
+          COUNT(CASE WHEN p.token_type = 'erc721' THEN 1 END) as nft_count
+        FROM '${namespace}-Prize' p
+        WHERE p.tournament_id IN (SELECT id FROM tournament_data)
+        GROUP BY p.tournament_id, p.token_address, p.token_type
+      ) p
+      GROUP BY p.tournament_id
     )
-    SELECT td.*
+    SELECT td.*, pa.token_totals as aggregations
     FROM tournament_data td
+    LEFT JOIN prize_aggregations pa ON td.id = pa.tournament_id
   `
         : null,
     [
@@ -468,7 +505,56 @@ export const useGetTournaments = ({
   );
   const { data, loading, error, refetch } = useSqlExecute(query);
 
-  return { data, loading, error, refetch };
+  // Parse aggregations for each tournament
+  const parsedData = useMemo(() => {
+    if (!data) return data;
+
+    return data.map((tournament: any) => {
+      // Check if aggregations exist and are valid (not null, 0, or empty string)
+      if (!tournament.aggregations || tournament.aggregations === 0 || tournament.aggregations === "0") {
+        return tournament;
+      }
+
+      const tokenTotals = tournament.aggregations
+        .split("|")
+        .map((item: string) => {
+          try {
+            const parsed = JSON.parse(item);
+            if (parsed.totalAmount && parsed.tokenType === "erc20") {
+              // Sum all hex amounts from the comma-separated list
+              const amounts = parsed.totalAmount
+                .split(",")
+                .filter((a: string) => a && a !== "NULL");
+              const totalAmount = amounts.reduce(
+                (sum: bigint, hexAmount: string) => {
+                  try {
+                    return sum + BigInt(hexAmount);
+                  } catch (e) {
+                    console.warn("Failed to parse hex amount:", hexAmount, e);
+                    return sum;
+                  }
+                },
+                0n
+              );
+              return { ...parsed, totalAmount: totalAmount.toString() };
+            }
+            return parsed;
+          } catch {
+            return null;
+          }
+        })
+        .filter(Boolean);
+
+      return {
+        ...tournament,
+        aggregations: tokenTotals.length > 0 ? {
+          token_totals: tokenTotals,
+        } : undefined,
+      };
+    });
+  }, [data]);
+
+  return { data: parsedData, loading, error, refetch };
 };
 
 export const useGetMyTournaments = ({
@@ -517,9 +603,9 @@ export const useGetMyTournaments = ({
             .join(",")})
     ),
     tournament_data AS (
-      SELECT 
+      SELECT
         t.*,
-        CASE 
+        CASE
           WHEN COUNT(p.tournament_id) = 0 THEN NULL
           ELSE GROUP_CONCAT(
             json_object(
@@ -527,12 +613,12 @@ export const useGetMyTournaments = ({
               'position', p.payout_position,
               'tokenType', p.token_type,
               'tokenAddress', p.token_address,
-              'amount', CASE 
+              'amount', CASE
                 WHEN p.token_type = 'erc20' THEN p."token_type.erc20.amount"
                 WHEN p.token_type = 'erc721' THEN p."token_type.erc721.id"
-                ELSE NULL 
+                ELSE NULL
               END,
-              'isValid', CASE 
+              'isValid', CASE
                 WHEN p.token_type = 'erc20' AND p."token_type.erc20.amount" IS NOT NULL THEN 1
                 WHEN p.token_type = 'erc721' AND p."token_type.erc721.id" IS NOT NULL THEN 1
                 ELSE 0
@@ -543,7 +629,7 @@ export const useGetMyTournaments = ({
         END as prizes,
         COALESCE(e.count, 0) as entry_count
       FROM registered_tournaments rt
-      JOIN '${namespace}-Tournament' t 
+      JOIN '${namespace}-Tournament' t
         ON rt.tournament_id = t.id
       LEFT JOIN '${namespace}-Prize' p ON t.id = p.tournament_id
       LEFT JOIN '${namespace}-EntryCount' e ON t.id = e.tournament_id
@@ -560,9 +646,46 @@ export const useGetMyTournaments = ({
       ${getSortClause(sortBy)}
       LIMIT ${limit}
       OFFSET ${offset}
+    ),
+    prize_aggregations AS (
+      SELECT
+        p.tournament_id,
+        GROUP_CONCAT(
+          json_object(
+            'tokenAddress', token_address,
+            'tokenType', token_type,
+            'totalAmount', total_amount,
+            'nftCount', nft_count
+          ),
+          '|'
+        ) as token_totals
+      FROM (
+        SELECT
+          p.tournament_id,
+          p.token_address,
+          p.token_type,
+          CASE
+            WHEN p.token_type = 'erc20' THEN
+              GROUP_CONCAT(
+                CASE
+                  WHEN p."token_type.erc20.amount" IS NOT NULL AND p."token_type.erc20.amount" != 'NULL'
+                  THEN p."token_type.erc20.amount"
+                  ELSE NULL
+                END,
+                ','
+              )
+            ELSE NULL
+          END as total_amount,
+          COUNT(CASE WHEN p.token_type = 'erc721' THEN 1 END) as nft_count
+        FROM '${namespace}-Prize' p
+        WHERE p.tournament_id IN (SELECT id FROM tournament_data)
+        GROUP BY p.tournament_id, p.token_address, p.token_type
+      ) p
+      GROUP BY p.tournament_id
     )
-    SELECT td.*
+    SELECT td.*, pa.token_totals as aggregations
     FROM tournament_data td
+    LEFT JOIN prize_aggregations pa ON td.id = pa.tournament_id
     `
         : null,
     [
@@ -580,7 +703,56 @@ export const useGetMyTournaments = ({
   );
   const { data, loading, error, refetch } = useSqlExecute(query);
 
-  return { data, loading, error, refetch };
+  // Parse aggregations for each tournament
+  const parsedData = useMemo(() => {
+    if (!data) return data;
+
+    return data.map((tournament: any) => {
+      // Check if aggregations exist and are valid (not null, 0, or empty string)
+      if (!tournament.aggregations || tournament.aggregations === 0 || tournament.aggregations === "0") {
+        return tournament;
+      }
+
+      const tokenTotals = tournament.aggregations
+        .split("|")
+        .map((item: string) => {
+          try {
+            const parsed = JSON.parse(item);
+            if (parsed.totalAmount && parsed.tokenType === "erc20") {
+              // Sum all hex amounts from the comma-separated list
+              const amounts = parsed.totalAmount
+                .split(",")
+                .filter((a: string) => a && a !== "NULL");
+              const totalAmount = amounts.reduce(
+                (sum: bigint, hexAmount: string) => {
+                  try {
+                    return sum + BigInt(hexAmount);
+                  } catch (e) {
+                    console.warn("Failed to parse hex amount:", hexAmount, e);
+                    return sum;
+                  }
+                },
+                0n
+              );
+              return { ...parsed, totalAmount: totalAmount.toString() };
+            }
+            return parsed;
+          } catch {
+            return null;
+          }
+        })
+        .filter(Boolean);
+
+      return {
+        ...tournament,
+        aggregations: tokenTotals.length > 0 ? {
+          token_totals: tokenTotals,
+        } : undefined,
+      };
+    });
+  }, [data]);
+
+  return { data: parsedData, loading, error, refetch };
 };
 
 export const useGetAccountTokenIds = (
@@ -712,8 +884,8 @@ export const useGetTournamentRegistrants = ({
         : null,
     [namespace, gameIdsKey, offset, limit, active]
   );
-  const { data, loading, error } = useSqlExecute(query);
-  return { data, loading, error };
+  const { data, loading, error, refetch } = useSqlExecute(query);
+  return { data, loading, error, refetch };
 };
 
 const getTournamentQualificationWhereClause = (
@@ -946,7 +1118,7 @@ export const useGetTournamentPrizesAggregations = ({
         : null,
     [namespace, tournamentId, active]
   );
-  const { data, loading, error } = useSqlExecute(query);
+  const { data, loading, error, refetch } = useSqlExecute(query);
 
   // Parse the token_totals string into an array and sum hex amounts
   const parsedData = data?.[0]
@@ -990,7 +1162,7 @@ export const useGetTournamentPrizesAggregations = ({
       }
     : null;
 
-  return { data: parsedData, loading, error };
+  return { data: parsedData, loading, error, refetch };
 };
 
 export const useGetTournamentPrizePositions = ({
@@ -1127,7 +1299,7 @@ export const useGetTournamentRewardClaimsAggregations = ({
 
   console.log(query);
 
-  const { data, loading, error } = useSqlExecute(query);
+  const { data, loading, error, refetch } = useSqlExecute(query);
 
   const parsedData = useMemo(() => {
     if (!data || data.length === 0) return null;
@@ -1154,7 +1326,7 @@ export const useGetTournamentRewardClaimsAggregations = ({
     };
   }, [data]);
 
-  return { data: parsedData, loading, error };
+  return { data: parsedData, loading, error, refetch };
 };
 
 export const useGetPrizeMetrics = ({

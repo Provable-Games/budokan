@@ -4,12 +4,12 @@ import { feltToString, formatTime } from "@/lib/utils";
 import TokenGameIcon from "@/components/icons/TokenGameIcon";
 import { SOLID_CLOCK, USER, CALENDAR } from "@/components/Icons";
 import { useNavigate } from "react-router-dom";
+import Countdown from "@/components/Countdown";
 import { Tournament, Prize } from "@/generated/models.gen";
 import { TokenMetadata } from "@/lib/types";
 import { useDojo } from "@/context/dojo";
 import {
   groupPrizesByTokens,
-  calculateTotalValue,
   countTotalNFTs,
   extractEntryFeePrizes,
 } from "@/lib/utils/formatting";
@@ -25,6 +25,17 @@ import { Badge } from "@/components/ui/badge";
 import { ChainId } from "@/dojo/setup/networks";
 import { TokenPrices } from "@/hooks/useEkuboPrices";
 import { getTokenLogoUrl } from "@/lib/tokensMeta";
+import { useTournamentPrizeValue } from "@/hooks/useTournamentPrizeValue";
+
+interface TokenTotal {
+  tokenAddress: string;
+  tokenType: string;
+  totalAmount: number;
+}
+
+interface Aggregations {
+  token_totals?: TokenTotal[];
+}
 
 interface TournamentCardProps {
   tournament: Tournament;
@@ -36,6 +47,7 @@ interface TournamentCardProps {
   tokenPrices: TokenPrices;
   pricesLoading: boolean;
   tokenDecimals: Record<string, number>;
+  aggregations?: Aggregations;
 }
 
 export const TournamentCard = ({
@@ -48,6 +60,7 @@ export const TournamentCard = ({
   tokenPrices,
   pricesLoading,
   tokenDecimals,
+  aggregations,
 }: TournamentCardProps) => {
   const { selectedChainConfig } = useDojo();
   const navigate = useNavigate();
@@ -75,12 +88,27 @@ export const TournamentCard = ({
 
   const groupedPrizes = groupPrizesByTokens(allPrizes, tokens);
 
-  const totalPrizesValueUSD = calculateTotalValue(
-    groupedPrizes,
+  // Calculate total prize value using the hook
+  const totalPrizesValueUSD = useTournamentPrizeValue({
+    aggregations,
+    distributionPrizes,
     tokenPrices,
+    pricesLoading,
+    tokenDecimals,
+  });
+
+  const totalPrizeNFTs = countTotalNFTs(groupedPrizes);
+
+  console.log(
+    totalPrizesValueUSD,
+    allPrizes,
+    groupedPrizes,
+    aggregations,
+    distributionPrizes,
+    tokenPrices,
+    pricesLoading,
     tokenDecimals
   );
-  const totalPrizeNFTs = countTotalNFTs(groupedPrizes);
 
   // Get unique ERC20 tokens from prizes for display
   const uniqueErc20Tokens = useMemo(() => {
@@ -438,17 +466,28 @@ export const TournamentCard = ({
         <div className="flex flex-row items-center justify-center gap-5 w-full mx-auto">
           {/* Time Status */}
           {status === "upcoming" ? (
-            <div className="flex flex-row items-center gap-2">
-              <span className="text-brand-muted">Starts In:</span>
-              <span className={renderTimeClass(startsInSeconds)}>
-                {startsIn}
-              </span>
-            </div>
+            <Countdown
+              targetTimestamp={gameStart}
+              label="Starts In"
+              labelPosition="vertical"
+              className="scale-75 origin-center"
+            />
           ) : status === "live" ? (
-            <div className="flex flex-row items-center gap-2">
-              <span className="text-brand-muted">Ends In:</span>
-              <span className={renderTimeClass(endsInSeconds)}>{endsIn}</span>
-            </div>
+            <Countdown
+              targetTimestamp={gameEnd}
+              label="Ends In"
+              labelPosition="vertical"
+              className="scale-75 origin-center"
+            />
+          ) : submissionEnd &&
+            currentTimestamp >= gameEnd &&
+            currentTimestamp < submissionEnd ? (
+            <Countdown
+              targetTimestamp={submissionEnd}
+              label="Submission Ends In"
+              labelPosition="vertical"
+              className="scale-75 origin-center"
+            />
           ) : (
             <></>
           )}

@@ -238,6 +238,7 @@ export interface Registration {
   game_token_id: BigNumberish;
   entry_number: BigNumberish;
   has_submitted: boolean;
+  is_banned: boolean;
 }
 
 // Type definition for `tournaments::components::models::tournament::RegistrationValue` struct
@@ -725,6 +726,7 @@ export const schemaTemplate: {
     game_token_id: 0,
     entry_number: 0,
     has_submitted: false,
+    is_banned: false,
   },
   RegistrationValue: {
     fieldOrder: ["entry_number", "has_submitted"],

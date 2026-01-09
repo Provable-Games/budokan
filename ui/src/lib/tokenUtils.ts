@@ -140,14 +140,23 @@ export const getPaginatedTokens = (
     search?: string;
     limit?: number;
     offset?: number;
+    allowedAddresses?: string[];
   } = {}
 ): {
   tokens: TokenForDisplay[];
   total: number;
 } => {
-  const { tokenType, search = "", limit = 10, offset = 0 } = options;
+  const { tokenType, search = "", limit = 10, offset = 0, allowedAddresses } = options;
 
-  const allTokens = searchTokens(search, chainId, tokenType);
+  let allTokens = searchTokens(search, chainId, tokenType);
+
+  // Filter by allowed addresses if provided
+  if (allowedAddresses && allowedAddresses.length > 0) {
+    const indexedAllowedAddresses = allowedAddresses.map(indexAddress);
+    allTokens = allTokens.filter((token) =>
+      indexedAllowedAddresses.includes(indexAddress(token.token_address))
+    );
+  }
 
   return {
     tokens: allTokens.slice(offset, offset + limit),

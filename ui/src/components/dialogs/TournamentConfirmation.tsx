@@ -32,6 +32,7 @@ import { useSettings } from "metagame-sdk/sql";
 import { getExtensionAddresses } from "@/lib/extensionConfig";
 import { getTokenByAddress } from "@/lib/tokenUtils";
 import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
+import { OPUS } from "@/components/Icons";
 
 interface TournamentConfirmationProps {
   formData: TournamentFormData;
@@ -51,6 +52,14 @@ const TournamentConfirmation = ({
   const { selectedChainConfig } = useDojo();
   const { gameData, getGameImage } = useUIStore();
   const [isCreating, setIsCreating] = useState(false);
+
+  // Get CASH token for display
+  const cashToken = useMemo(() => {
+    return getTokenByAddress(
+      "0x0498edfaf50ca5855666a700c25dd629d577eb9afccdf3b5977aec79aee55ada",
+      selectedChainConfig?.chainId ?? ""
+    );
+  }, [selectedChainConfig?.chainId]);
   const [extensionRequiresRegistration, setExtensionRequiresRegistration] = useState(false);
   const { checkRegistrationOnly } = useSystemCalls();
 
@@ -301,6 +310,72 @@ const TournamentConfirmation = ({
     formData.gatingOptions?.extension?.config,
     selectedChainConfig?.chainId,
     prices,
+  ]);
+
+  // Parse Opus Troves validator config if present
+  const opusTrovesValidatorConfig = useMemo(() => {
+    if (
+      formData.gatingOptions?.type !== "extension" ||
+      !formData.gatingOptions?.extension?.config
+    ) {
+      return null;
+    }
+
+    const extensionAddresses = getExtensionAddresses(
+      selectedChainConfig?.chainId ?? ""
+    );
+    const isOpusTrovesValidator =
+      formData.gatingOptions.extension.address ===
+      extensionAddresses.opusTrovesValidator;
+
+    if (!isOpusTrovesValidator) return null;
+
+    // Parse config: [asset_count, ...asset_addresses, threshold, value_per_entry, max_entries]
+    const configParts = formData.gatingOptions.extension.config.split(",");
+    if (configParts.length < 4) return null;
+
+    const assetCount = Number(configParts[0]);
+    const assetAddresses = configParts.slice(1, assetCount + 1);
+    const threshold = BigInt(configParts[assetCount + 1] || "0");
+    const valuePerEntry = BigInt(configParts[assetCount + 2] || "0");
+    const maxEntriesValue = Number(configParts[assetCount + 3] || "0");
+
+    // Format CASH to USD (18 decimals, 1:1 parity)
+    const divisor = 10n ** 18n;
+    const formatCashToUSD = (value: bigint) => {
+      if (value === 0n) return "0";
+      const integerPart = value / divisor;
+      const remainder = value % divisor;
+
+      // Format with 2 decimal places
+      const decimalPart = (remainder * 100n) / divisor;
+      if (decimalPart === 0n) {
+        return integerPart.toString();
+      }
+      return `${integerPart}.${decimalPart.toString().padStart(2, "0")}`;
+    };
+
+    // Get token info for each asset
+    const assets = assetAddresses
+      .map((addr) => getTokenByAddress(addr, selectedChainConfig?.chainId ?? ""))
+      .filter((token) => token !== undefined);
+
+    return {
+      assetCount,
+      assetAddresses,
+      assets,
+      threshold,
+      valuePerEntry,
+      maxEntries: maxEntriesValue,
+      thresholdUSD: formatCashToUSD(threshold),
+      valuePerEntryUSD: formatCashToUSD(valuePerEntry),
+      isWildcard: assetCount === 0,
+    };
+  }, [
+    formData.gatingOptions?.type,
+    formData.gatingOptions?.extension?.address,
+    formData.gatingOptions?.extension?.config,
+    selectedChainConfig?.chainId,
   ]);
 
   const handleConfirm = async () => {
@@ -724,6 +799,93 @@ const TournamentConfirmation = ({
                                   Max Entries:
                                 </span>
                                 <span>{erc20BalanceConfig.maxEntries}</span>
+                              </>
+                            )}
+                          </>
+                        ) : opusTrovesValidatorConfig ? (
+                          <>
+                            <span className="text-muted-foreground">
+                              Extension Type:
+                            </span>
+                            <div className="flex flex-row items-center gap-2">
+                              <span className="w-6">
+                                <OPUS />
+                              </span>
+                              <span>Opus Troves Validator</span>
+                            </div>
+                            <span className="text-muted-foreground">
+                              Collateral Assets:
+                            </span>
+                            {opusTrovesValidatorConfig.isWildcard ? (
+                              <span>Any (wildcard)</span>
+                            ) : (
+                              <div className="flex flex-wrap gap-2">
+                                {opusTrovesValidatorConfig.assets.map((asset, idx) => (
+                                  <div
+                                    key={idx}
+                                    className="flex items-center gap-2 bg-brand/10 px-3 py-1 rounded-md"
+                                  >
+                                    {asset.logo_url && (
+                                      <img
+                                        src={asset.logo_url}
+                                        alt={asset.symbol}
+                                        className="w-4 h-4 rounded-full"
+                                      />
+                                    )}
+                                    <span className="font-medium">{asset.symbol}</span>
+                                    <span className="text-xs text-neutral font-mono">
+                                      {displayAddress(asset.address)}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {opusTrovesValidatorConfig.threshold > 0n && (
+                              <>
+                                <span className="text-muted-foreground">
+                                  Min Debt Threshold:
+                                </span>
+                                <div className="flex flex-row items-center gap-2">
+                                  {cashToken?.logo_url && (
+                                    <img
+                                      src={cashToken.logo_url}
+                                      alt="CASH"
+                                      className="w-4 h-4"
+                                    />
+                                  )}
+                                  <span>${opusTrovesValidatorConfig.thresholdUSD}</span>
+                                  <span className="text-neutral text-xs">
+                                    (CASH debt must exceed this amount)
+                                  </span>
+                                </div>
+                              </>
+                            )}
+                            {opusTrovesValidatorConfig.valuePerEntry > 0n && (
+                              <>
+                                <span className="text-muted-foreground">
+                                  Value Per Entry:
+                                </span>
+                                <div className="flex flex-row items-center gap-2">
+                                  {cashToken?.logo_url && (
+                                    <img
+                                      src={cashToken.logo_url}
+                                      alt="CASH"
+                                      className="w-4 h-4"
+                                    />
+                                  )}
+                                  <span>${opusTrovesValidatorConfig.valuePerEntryUSD}</span>
+                                  <span className="text-neutral text-xs">
+                                    (1 entry per ${opusTrovesValidatorConfig.valuePerEntryUSD} CASH borrowed)
+                                  </span>
+                                </div>
+                              </>
+                            )}
+                            {opusTrovesValidatorConfig.maxEntries > 0 && (
+                              <>
+                                <span className="text-muted-foreground">
+                                  Max Entries:
+                                </span>
+                                <span>{opusTrovesValidatorConfig.maxEntries}</span>
                               </>
                             )}
                           </>

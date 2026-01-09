@@ -6,7 +6,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogClose,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Search, ChevronLeft, ChevronRight } from "lucide-react";
@@ -24,9 +23,15 @@ interface TokenDialogProps {
   selectedToken: FormToken | undefined;
   onSelect: (token: FormToken) => void;
   type?: "erc20" | "erc721";
+  allowedAddresses?: string[];
 }
 
-const TokenDialog = ({ selectedToken, onSelect, type }: TokenDialogProps) => {
+const TokenDialog = ({
+  selectedToken,
+  onSelect,
+  type,
+  allowedAddresses,
+}: TokenDialogProps) => {
   const [tokenSearchQuery, setTokenSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
@@ -45,8 +50,16 @@ const TokenDialog = ({ selectedToken, onSelect, type }: TokenDialogProps) => {
       search: debouncedSearch,
       limit: tokensPerPage,
       offset,
+      allowedAddresses,
     });
-  }, [selectedChainConfig, debouncedSearch, type, offset, tokensPerPage]);
+  }, [
+    selectedChainConfig,
+    debouncedSearch,
+    type,
+    offset,
+    tokensPerPage,
+    allowedAddresses,
+  ]);
 
   const newTokensLoading = false; // No loading needed for static data
 
@@ -70,7 +83,10 @@ const TokenDialog = ({ selectedToken, onSelect, type }: TokenDialogProps) => {
 
   const getTokenImage = (token: TokenForDisplay) => {
     if (token.token_type === "erc20") {
-      return getTokenLogoUrl(selectedChainConfig?.chainId ?? "", token.token_address);
+      return getTokenLogoUrl(
+        selectedChainConfig?.chainId ?? "",
+        token.token_address
+      );
     } else {
       const whitelistedImage = whitelistedNFTTokens.find(
         (nft) => indexAddress(nft.address) === indexAddress(token.token_address)
@@ -168,46 +184,44 @@ const TokenDialog = ({ selectedToken, onSelect, type }: TokenDialogProps) => {
               {displayTokens.map((token, index) => {
                 const tokenLogo = getTokenImage(token);
                 return (
-                  <DialogClose asChild key={index}>
-                    <div
-                      className={`w-full flex flex-row items-center justify-between hover:bg-brand/20 hover:cursor-pointer px-5 py-2 ${
-                        selectedToken?.address === token.token_address
-                          ? "bg-terminal-green/75 text-terminal-black"
-                          : ""
-                      }`}
-                      onClick={() =>
-                        onSelect({
-                          address: token.token_address,
-                          name: token.name,
-                          symbol: token.symbol,
-                          token_type: token.token_type,
-                          image: getTokenImage(token) ?? undefined,
-                        })
-                      }
-                    >
-                      <div className="flex flex-row gap-5 items-center">
-                        {tokenLogo ? (
-                          <img
-                            src={tokenLogo}
-                            className="w-8 h-8 rounded-full"
-                          />
-                        ) : (
-                          <div className="w-8 h-8 ">
-                            <QUESTION />
-                          </div>
-                        )}
-                        <div className="flex flex-col">
-                          <span className="font-bold">{token.name}</span>
-                          <span className="uppercase text-neutral">
-                            {token.symbol}
-                          </span>
+                  <div
+                    key={index}
+                    className={`w-full flex flex-row items-center justify-between hover:bg-brand/20 hover:cursor-pointer px-5 py-2 ${
+                      selectedToken?.address === token.token_address
+                        ? "bg-terminal-green/75 text-terminal-black"
+                        : ""
+                    }`}
+                    onClick={() => {
+                      onSelect({
+                        address: token.token_address,
+                        name: token.name,
+                        symbol: token.symbol,
+                        token_type: token.token_type,
+                        image: getTokenImage(token) ?? undefined,
+                      });
+                      // Close dialog after selection
+                      setTimeout(() => setIsOpen(false), 0);
+                    }}
+                  >
+                    <div className="flex flex-row gap-5 items-center">
+                      {tokenLogo ? (
+                        <img src={tokenLogo} className="w-8 h-8 rounded-full" />
+                      ) : (
+                        <div className="w-8 h-8 ">
+                          <QUESTION />
                         </div>
+                      )}
+                      <div className="flex flex-col">
+                        <span className="font-bold">{token.name}</span>
+                        <span className="uppercase text-neutral">
+                          {token.symbol}
+                        </span>
                       </div>
-                      <span className="uppercase text-neutral">
-                        {token.token_type}
-                      </span>
                     </div>
-                  </DialogClose>
+                    <span className="uppercase text-neutral">
+                      {token.token_type}
+                    </span>
+                  </div>
                 );
               })}
             </div>

@@ -11,6 +11,7 @@ import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
 import { useAccount, useConnect } from "@starknet-react/core";
 import { Tournament } from "@/generated/models.gen";
 import { TokenMetadata } from "@/lib/types";
+import { OPUS } from "@/components/Icons";
 import {
   feltToString,
   indexAddress,
@@ -100,6 +101,8 @@ export function EnterTournamentDialog({
     checkExtensionValidEntry,
     getExtensionEntriesLeft,
     getBalanceGeneral,
+    getUserTroveIds,
+    getTroveHealth,
   } = useSystemCalls();
   const [playerName, setPlayerName] = useState("");
   const [controllerUsername, setControllerUsername] = useState("");
@@ -120,6 +123,8 @@ export function EnterTournamentDialog({
   const [manualTokenOwnershipVerified, setManualTokenOwnershipVerified] =
     useState(false);
   const [showManualTokenInput, setShowManualTokenInput] = useState(false);
+  const [troveDebt, setTroveDebt] = useState<bigint | null>(null);
+  const [loadingTroveDebt, setLoadingTroveDebt] = useState(false);
 
   const chainId = selectedChainConfig?.chainId ?? "";
   const isController = connector ? isControllerAccount(connector) : false;
@@ -282,6 +287,15 @@ export function EnterTournamentDialog({
     );
   }, [requiredTokenAddress, requirementVariant, selectedChainConfig]);
 
+  // Get CASH token for display
+  const cashToken = useMemo(() => {
+    const tokens = getTokenByAddress(
+      "0x0498edfaf50ca5855666a700c25dd629d577eb9afccdf3b5977aec79aee55ada",
+      selectedChainConfig?.chainId ?? ""
+    );
+    return tokens;
+  }, [selectedChainConfig?.chainId]);
+
   const requiredTokenAddresses = requiredTokenAddress
     ? [indexAddress(requiredTokenAddress ?? "")]
     : [];
@@ -340,6 +354,59 @@ export function EnterTournamentDialog({
       tournamentIds: tournamentIds.map((id: any) => BigInt(id)),
     };
   }, [isTournamentValidatorExtension, extensionConfig?.config]);
+
+  // Check if this extension is an Opus Troves validator
+  const isOpusTrovesValidatorExtension = useMemo(() => {
+    if (!extensionConfig?.address || !extensionAddresses.opusTrovesValidator)
+      return false;
+    const normalizedExtensionAddress = indexAddress(extensionConfig.address);
+    const normalizedValidatorAddress = indexAddress(
+      extensionAddresses.opusTrovesValidator
+    );
+    return normalizedExtensionAddress === normalizedValidatorAddress;
+  }, [extensionConfig?.address, extensionAddresses.opusTrovesValidator]);
+
+  // Parse Opus Troves validator config: [asset_count, ...asset_addresses, threshold, value_per_entry, max_entries]
+  const opusTrovesValidatorConfig = useMemo(() => {
+    if (!isOpusTrovesValidatorExtension || !extensionConfig?.config) {
+      return null;
+    }
+
+    const config = extensionConfig.config;
+    if (!config || config.length < 4) return null;
+
+    const assetCount = Number(config[0]);
+    const assetAddresses = config.slice(1, assetCount + 1);
+    const threshold = BigInt(config[assetCount + 1] || "0");
+    const valuePerEntry = BigInt(config[assetCount + 2] || "0");
+    const maxEntriesFromConfig = Number(config[assetCount + 3] || "0");
+
+    // Format CASH to USD (18 decimals, 1:1 parity)
+    const divisor = 10n ** 18n;
+    const formatCashToUSD = (value: bigint) => {
+      if (value === 0n) return "0";
+      const integerPart = value / divisor;
+      const remainder = value % divisor;
+
+      // Format with 2 decimal places
+      const decimalPart = (remainder * 100n) / divisor;
+      if (decimalPart === 0n) {
+        return integerPart.toString();
+      }
+      return `${integerPart}.${decimalPart.toString().padStart(2, "0")}`;
+    };
+
+    return {
+      assetCount,
+      assetAddresses,
+      threshold,
+      valuePerEntry,
+      maxEntries: maxEntriesFromConfig,
+      thresholdUSD: formatCashToUSD(threshold),
+      valuePerEntryUSD: formatCashToUSD(valuePerEntry),
+      isWildcard: assetCount === 0,
+    };
+  }, [isOpusTrovesValidatorExtension, extensionConfig?.config]);
 
   console.log(tournamentsData);
 
@@ -417,6 +484,52 @@ export function EnterTournamentDialog({
     getExtensionEntriesLeft,
     isTournamentValidatorExtension,
   ]);
+
+  // Fetch trove debt for Opus Troves validator
+  useEffect(() => {
+    const fetchTroveDebt = async () => {
+      if (
+        isOpusTrovesValidatorExtension &&
+        address &&
+        open
+      ) {
+        try {
+          setLoadingTroveDebt(true);
+
+          // First, get all trove IDs for this user
+          const troveIds = await getUserTroveIds(address);
+
+          if (troveIds.length === 0) {
+            setTroveDebt(0n);
+            return;
+          }
+
+          // Get health for each trove and sum up the debt
+          // TODO: If config specifies specific assets (not wildcard), filter troves by asset type
+          let totalDebt = 0n;
+
+          for (const troveId of troveIds) {
+            const debt = await getTroveHealth(troveId);
+            if (debt !== null) {
+              totalDebt += debt;
+            }
+          }
+
+          setTroveDebt(totalDebt);
+        } catch (error) {
+          console.error("Error fetching trove debt:", error);
+          setTroveDebt(null);
+        } finally {
+          setLoadingTroveDebt(false);
+        }
+      } else {
+        setTroveDebt(null);
+      }
+    };
+
+    fetchTroveDebt();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpusTrovesValidatorExtension, address, open]);
 
   // Fetch NFTs using Voyager API with pagination
   const {
@@ -1540,6 +1653,151 @@ export function EnterTournamentDialog({
                           left across all qualifying tournaments
                         </div>
                       )}
+                    </div>
+                  ) : isOpusTrovesValidatorExtension &&
+                    opusTrovesValidatorConfig ? (
+                    // Opus Troves validator
+                    <div className="flex flex-col gap-2 px-4">
+                      <div className="flex flex-col gap-3 border border-brand-muted rounded-md p-3">
+                        <div className="flex flex-row items-center gap-2">
+                          <span className="w-6">
+                            <OPUS />
+                          </span>
+                          <span className="font-medium">Opus Troves</span>
+                        </div>
+                        {loadingTroveDebt ? (
+                          <div className="flex flex-row items-center gap-2">
+                            <LoadingSpinner />
+                            <span className="text-brand-muted text-sm">
+                              Checking trove debt...
+                            </span>
+                          </div>
+                        ) : troveDebt !== null && troveDebt > 0n ? (
+                          <div className="flex flex-col gap-2">
+                            <div className="flex flex-col gap-1 text-sm">
+                              <div className="flex flex-row items-center gap-2">
+                                <span className="text-brand-muted">
+                                  Borrowed:
+                                </span>
+                                {cashToken?.logo_url && (
+                                  <img
+                                    src={cashToken.logo_url}
+                                    alt="CASH"
+                                    className="w-4 h-4"
+                                  />
+                                )}
+                                <span className="font-medium">
+                                  $
+                                  {opusTrovesValidatorConfig.thresholdUSD &&
+                                    (() => {
+                                      const divisor = 10n ** 18n;
+                                      const integerPart = troveDebt / divisor;
+                                      const remainder = troveDebt % divisor;
+                                      const decimalPart =
+                                        (remainder * 100n) / divisor;
+                                      return decimalPart === 0n
+                                        ? integerPart.toString()
+                                        : `${integerPart}.${decimalPart
+                                            .toString()
+                                            .padStart(2, "0")}`;
+                                    })()}
+                                </span>
+                              </div>
+                              {opusTrovesValidatorConfig.threshold > 0n && (
+                                <div className="flex flex-row items-center gap-2">
+                                  <span className="text-brand-muted">
+                                    Threshold:
+                                  </span>
+                                  <span className="font-medium">
+                                    ${opusTrovesValidatorConfig.thresholdUSD}
+                                  </span>
+                                </div>
+                              )}
+                              <div className="flex flex-row items-center gap-2">
+                                <span className="text-brand-muted">
+                                  Entry calculation:
+                                </span>
+                                {cashToken?.logo_url && (
+                                  <img
+                                    src={cashToken.logo_url}
+                                    alt="CASH"
+                                    className="w-4 h-4"
+                                  />
+                                )}
+                                <span className="font-medium">
+                                  1 entry per $
+                                  {opusTrovesValidatorConfig.valuePerEntryUSD} CASH borrowed
+                                </span>
+                              </div>
+                            </div>
+                            {meetsEntryRequirements ? (
+                              <div className="flex flex-col gap-1 mt-1">
+                                <div className="flex flex-row items-center gap-2">
+                                  <span className="w-5">
+                                    <CHECK />
+                                  </span>
+                                  <span className="text-success">
+                                    {(() => {
+                                      const entriesLeft =
+                                        entriesLeftByTournament.find(
+                                          (entry) => entry.address === address
+                                        )?.entriesLeft;
+
+                                      if (
+                                        entriesLeft !== undefined &&
+                                        entriesLeft !== Infinity
+                                      ) {
+                                        // Calculate total entries from debt
+                                        const debt = troveDebt || 0n;
+                                        const threshold = opusTrovesValidatorConfig.threshold;
+                                        const valuePerEntry = opusTrovesValidatorConfig.valuePerEntry;
+
+                                        let totalEntries = 0;
+                                        if (debt > threshold && valuePerEntry > 0n) {
+                                          totalEntries = Number((debt - threshold) / valuePerEntry);
+                                          // Cap at max entries if specified
+                                          if (opusTrovesValidatorConfig.maxEntries > 0) {
+                                            totalEntries = Math.min(totalEntries, opusTrovesValidatorConfig.maxEntries);
+                                          }
+                                        }
+
+                                        const entriesUsed = totalEntries - entriesLeft;
+
+                                        return `${entriesLeft} ${
+                                          entriesLeft === 1 ? "entry" : "entries"
+                                        } remaining (${totalEntries} total, ${entriesUsed} used)`;
+                                      }
+                                      return "Can enter";
+                                    })()}
+                                  </span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex flex-row items-center gap-2 mt-1">
+                                <span className="w-5">
+                                  <X />
+                                </span>
+                                <span className="text-warning">
+                                  Insufficient debt for entry
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex flex-row items-center gap-2">
+                            <span className="w-5">
+                              <X />
+                            </span>
+                            <span className="text-warning">
+                              No trove debt found
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        Note: Final validation will be performed by the
+                        extension contract on-chain
+                      </span>
                     </div>
                   ) : (
                     // Generic extension

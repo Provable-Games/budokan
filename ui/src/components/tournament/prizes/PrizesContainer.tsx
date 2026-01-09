@@ -32,6 +32,8 @@ interface PrizesContainerProps {
   aggregations: any;
   aggregationsLoading: boolean;
   totalPrizesValueUSD: number;
+  paidPlaces: number;
+  subscibedPrizeCount: number;
 }
 
 const PrizesContainer = ({
@@ -44,6 +46,8 @@ const PrizesContainer = ({
   aggregations,
   aggregationsLoading,
   totalPrizesValueUSD,
+  paidPlaces,
+  subscibedPrizeCount,
 }: PrizesContainerProps) => {
   const { namespace } = useDojo();
   const [showPrizes, setShowPrizes] = useState(false);
@@ -51,7 +55,11 @@ const PrizesContainer = ({
   const [showSponsorsDialog, setShowSponsorsDialog] = useState(false);
 
   // Always fetch top 5 positions for container view
-  const { data: prizesData, loading: prizesLoading } = useGetTournamentPrizes({
+  const {
+    data: prizesData,
+    loading: prizesLoading,
+    refetch: refetchPrizes,
+  } = useGetTournamentPrizes({
     namespace,
     tournamentId: tournamentId ?? 0,
     active: !!tournamentId,
@@ -60,6 +68,12 @@ const PrizesContainer = ({
   });
 
   console.log(prizesData);
+
+  console.log(aggregations);
+
+  useEffect(() => {
+    refetchPrizes();
+  }, [subscibedPrizeCount]);
 
   // Process prizes data into grouped format (including entry fee prizes for current page)
   const groupedPrizes: PositionPrizes = useMemo(() => {
@@ -165,12 +179,6 @@ const PrizesContainer = ({
 
   const totalPrizes = (aggregations?.total_prizes || 0) + entryFeePrizes.length;
   const prizesExist = totalPrizes > 0;
-  const lowestPrizePosition = Math.max(
-    aggregations?.lowest_prize_position || 0,
-    ...(entryFeePrizes.length > 0
-      ? entryFeePrizes.map((p) => Number(p.position ?? 0))
-      : [0])
-  );
 
   // Calculate total NFTs from aggregated data + entry fee NFTs
   const dbNFTs =
@@ -297,10 +305,7 @@ const PrizesContainer = ({
             checkedLabel="Hide"
             uncheckedLabel="Show Prizes"
           />
-          <TournamentCardMetric
-            icon={<TROPHY />}
-            metric={lowestPrizePosition}
-          />
+          <TournamentCardMetric icon={<TROPHY />} metric={paidPlaces} />
         </div>
       </TournamentCardHeader>
       <TournamentCardContent

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,11 +17,10 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { StepProps } from "@/containers/CreateTournament";
 import { FormToken } from "@/lib/types";
 import { USER, X, INFO } from "@/components/Icons";
-import { displayAddress, feltToString } from "@/lib/utils";
+import { displayAddress, feltToString, indexAddress } from "@/lib/utils";
 import TokenGameIcon from "@/components/icons/TokenGameIcon";
 import { Search } from "lucide-react";
 import TokenDialog from "@/components/dialogs/Token";
@@ -49,10 +48,19 @@ import { getChecksumAddress, validateChecksumAddress } from "starknet";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
-import { PRESET_EXTENSIONS, getExtensionAddresses } from "@/lib/extensionConfig";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  PRESET_EXTENSIONS,
+  getExtensionAddresses,
+  getOpusSupportedAssets,
+} from "@/lib/extensionConfig";
 import { getTokenByAddress } from "@/lib/tokenUtils";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
 import { getTokenDecimals } from "@/lib/tokensMeta";
+import { SnapshotConfig } from "./extensions/SnapshotConfig";
+import { ERC20BalanceConfig } from "./extensions/ERC20BalanceConfig";
+import { OpusTrovesConfig } from "./extensions/OpusTrovesConfig";
+import { CustomExtensionConfig } from "./extensions/CustomExtensionConfig";
 
 const EntryRequirements = ({ form }: StepProps) => {
   const { namespace, selectedChainConfig } = useDojo();
@@ -64,17 +72,6 @@ const EntryRequirements = ({ form }: StepProps) => {
   const [addressError, setAddressError] = useState("");
   const [extensionError, setExtensionError] = useState("");
   const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
-  const [snapshotId, setSnapshotId] = useState("");
-  const [erc20Token, setErc20Token] = useState<FormToken | undefined>(undefined);
-  const [minThreshold, setMinThreshold] = useState("");
-  const [maxThreshold, setMaxThreshold] = useState("");
-  const [valuePerEntry, setValuePerEntry] = useState("");
-  const [maxEntries, setMaxEntries] = useState("");
-
-  // Get price for ERC20 token
-  const { prices } = useEkuboPrices({
-    tokens: erc20Token?.address ? [erc20Token.address] : [],
-  });
 
   const ENTRY_LIMIT_OPTIONS = [
     { value: 1, label: "1" },
@@ -149,47 +146,18 @@ const EntryRequirements = ({ form }: StepProps) => {
       const extensionConfig = form.watch("gatingOptions.extension.config");
 
       if (extensionAddress) {
-        const extensionAddresses = getExtensionAddresses(selectedChainConfig?.chainId ?? "");
+        const extensionAddresses = getExtensionAddresses(
+          selectedChainConfig?.chainId ?? ""
+        );
 
         // Check if it's ERC20 balance validator
         if (extensionAddress === extensionAddresses.erc20BalanceValidator) {
           setSelectedPreset("erc20_balance");
-
-          // Parse and restore the config values
-          if (extensionConfig) {
-            const configParts = extensionConfig.split(",");
-            if (configParts.length >= 8) {
-              // Reconstruct the values from the config
-              const tokenAddr = configParts[0];
-              const minLow = BigInt(configParts[1]);
-              const minHigh = BigInt(configParts[2]);
-              const maxLow = BigInt(configParts[3]);
-              const maxHigh = BigInt(configParts[4]);
-              const valueLow = BigInt(configParts[5]);
-              const valueHigh = BigInt(configParts[6]);
-              const maxEntr = configParts[7];
-
-              const minThresh = ((minHigh << 128n) | minLow).toString();
-              const maxThresh = ((maxHigh << 128n) | maxLow).toString();
-              const valPerEntry = ((valueHigh << 128n) | valueLow).toString();
-
-              // Get the token from the address
-              const token = getTokenByAddress(tokenAddr, selectedChainConfig?.chainId ?? "");
-              if (token) {
-                // Map TokenForDisplay to FormToken
-                setErc20Token({
-                  address: token.token_address,
-                  name: token.name,
-                  symbol: token.symbol,
-                } as FormToken);
-              }
-
-              setMinThreshold(minThresh);
-              setMaxThreshold(maxThresh);
-              setValuePerEntry(valPerEntry);
-              setMaxEntries(maxEntr);
-            }
-          }
+        } else if (
+          extensionAddress === extensionAddresses.opusTrovesValidator
+        ) {
+          // Check if it's Opus Troves validator
+          setSelectedPreset("opus_troves");
         } else {
           // Custom contract
           setSelectedPreset(null);
@@ -197,7 +165,6 @@ const EntryRequirements = ({ form }: StepProps) => {
       } else if (extensionConfig && !extensionAddress) {
         // Snapshot preset (has config but no address)
         setSelectedPreset("snapshot");
-        setSnapshotId(extensionConfig);
       }
     }
   }, [
@@ -205,68 +172,6 @@ const EntryRequirements = ({ form }: StepProps) => {
     form.watch("gatingOptions.extension.address"),
     selectedChainConfig?.chainId,
   ]);
-
-  // Helper function to convert number to u256 (low, high) parts
-  const splitU256 = (value: string): [string, string] => {
-    if (!value || value === "0" || value === "") {
-      return ["0", "0"];
-    }
-    const bigIntValue = BigInt(value);
-    const low = bigIntValue & ((1n << 128n) - 1n);
-    const high = bigIntValue >> 128n;
-    return [low.toString(), high.toString()];
-  };
-
-  // Helper function to calculate USD value from wei amount
-  const calculateUSDValue = (weiAmount: string): string => {
-    if (!weiAmount || !erc20Token?.address || weiAmount === "0") return "0.00";
-
-    const tokenPrice = prices?.[erc20Token.address] ?? 0;
-    if (tokenPrice === 0) return "0.00";
-
-    const decimals = getTokenDecimals(
-      selectedChainConfig?.chainId ?? "",
-      erc20Token.address
-    ) || 18;
-
-    const amount = Number(weiAmount) / (10 ** decimals);
-    const usdValue = amount * tokenPrice;
-
-    return usdValue.toFixed(2);
-  };
-
-  // Update ERC20 config in form
-  const updateERC20Config = (
-    tokenAddr: string,
-    minThresh: string,
-    maxThresh: string,
-    valPerEntry: string,
-    maxEntr: string
-  ) => {
-    const [minLow, minHigh] = splitU256(minThresh);
-    const [maxLow, maxHigh] = splitU256(maxThresh);
-    const [valueLow, valueHigh] = splitU256(valPerEntry);
-
-    // Config format: [token_address, min_threshold_low, min_threshold_high, max_threshold_low, max_threshold_high, value_per_entry_low, value_per_entry_high, max_entries]
-    const config = [
-      tokenAddr,
-      minLow,
-      minHigh,
-      maxLow,
-      maxHigh,
-      valueLow,
-      valueHigh,
-      maxEntr || "0",
-    ].join(",");
-
-    form.setValue("gatingOptions.extension.config", config);
-
-    // Set the ERC20 balance validator address from extension config
-    const extensionAddresses = getExtensionAddresses(selectedChainConfig?.chainId ?? "");
-    if (extensionAddresses.erc20BalanceValidator) {
-      form.setValue("gatingOptions.extension.address", extensionAddresses.erc20BalanceValidator);
-    }
-  };
 
   console.log(form.getValues());
 
@@ -367,7 +272,6 @@ const EntryRequirements = ({ form }: StepProps) => {
                           }
                           onClick={() => {
                             setSelectedPreset(null);
-                            setSnapshotId("");
                             form.setValue(
                               "gatingOptions.extension.address",
                               ""
@@ -394,17 +298,7 @@ const EntryRequirements = ({ form }: StepProps) => {
                                   "gatingOptions.extension.config",
                                   ""
                                 );
-                                // Reset ERC20 state when switching presets
-                                if (key === "erc20_balance") {
-                                  setErc20Token(undefined);
-                                  setMinThreshold("");
-                                  setMaxThreshold("");
-                                  setValuePerEntry("");
-                                  setMaxEntries("");
-                                } else if (key === "snapshot") {
-                                  setSnapshotId("");
-                                }
-                                // Address will be set when submitting based on preset type
+                                // Address will be set by the component
                                 form.setValue(
                                   "gatingOptions.extension.address",
                                   ""
@@ -1296,288 +1190,30 @@ const EntryRequirements = ({ form }: StepProps) => {
                     <div className="space-y-4">
                       {/* Snapshot Preset Configuration */}
                       {selectedPreset === "snapshot" && (
-                        <FormItem>
-                          <div className="flex flex-row items-center justify-between">
-                            <div className="flex flex-row items-center gap-5">
-                              <FormLabel className="font-brand text-lg xl:text-xl 2xl:text-2xl 3xl:text-3xl">
-                                Snapshot ID
-                              </FormLabel>
-                              <FormDescription className="hidden sm:block">
-                                Enter the Snapshot space ID for validation
-                              </FormDescription>
-                            </div>
-                            {extensionError && (
-                              <div className="flex flex-row items-center gap-2">
-                                <span className="text-red-500 text-sm">
-                                  {extensionError}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                          <FormControl>
-                            <Input
-                              placeholder="e.g., 1"
-                              value={snapshotId}
-                              onChange={(e) => {
-                                const value = e.target.value.trim();
-                                setSnapshotId(value);
-                                // Store snapshot ID in the config field
-                                form.setValue(
-                                  "gatingOptions.extension.config",
-                                  value
-                                );
-                                setExtensionError("");
-                              }}
-                              className="font-mono"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
+                        <SnapshotConfig extensionError={extensionError} />
                       )}
 
                       {/* ERC20 Balance Preset Configuration */}
                       {selectedPreset === "erc20_balance" && (
-                        <div className="space-y-4">
-                          <FormItem>
-                            <div className="flex flex-row items-center gap-5">
-                              <FormLabel className="font-brand text-lg xl:text-xl 2xl:text-2xl 3xl:text-3xl">
-                                ERC20 Token
-                              </FormLabel>
-                              <FormDescription className="hidden sm:block">
-                                Select the ERC20 token for balance validation
-                              </FormDescription>
-                            </div>
-                            {extensionError && (
-                              <div className="flex flex-row items-center gap-2">
-                                <span className="text-red-500 text-sm">
-                                  {extensionError}
-                                </span>
-                              </div>
-                            )}
-                            <FormControl>
-                              <TokenDialog
-                                selectedToken={erc20Token}
-                                onSelect={(token) => {
-                                  setErc20Token(token);
-                                  setExtensionError("");
-                                  // Update config when token changes
-                                  updateERC20Config(token.address, minThreshold, maxThreshold, valuePerEntry, maxEntries);
-                                }}
-                                type="erc20"
-                              />
-                            </FormControl>
-                          </FormItem>
+                        <ERC20BalanceConfig extensionError={extensionError} />
+                      )}
 
-                          <div className="grid grid-cols-2 gap-4">
-                            <FormItem>
-                              <FormLabel>Minimum Balance Threshold</FormLabel>
-                              <FormControl>
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  placeholder="0"
-                                  value={minThreshold}
-                                  onChange={(e) => {
-                                    const value = e.target.value;
-                                    setMinThreshold(value);
-                                    updateERC20Config(erc20Token?.address || "", value, maxThreshold, valuePerEntry, maxEntries);
-                                  }}
-                                />
-                              </FormControl>
-                              <FormDescription className="text-xs flex flex-col gap-1">
-                                <span>Minimum token balance required (in wei)</span>
-                                {minThreshold && erc20Token && (
-                                  <span className="text-neutral">
-                                    ≈ ${calculateUSDValue(minThreshold)}
-                                  </span>
-                                )}
-                              </FormDescription>
-                            </FormItem>
-
-                            <FormItem>
-                              <FormLabel>Maximum Balance Threshold</FormLabel>
-                              <FormControl>
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  placeholder="0 (no max)"
-                                  value={maxThreshold}
-                                  onChange={(e) => {
-                                    const value = e.target.value;
-                                    setMaxThreshold(value);
-                                    updateERC20Config(erc20Token?.address || "", minThreshold, value, valuePerEntry, maxEntries);
-                                  }}
-                                />
-                              </FormControl>
-                              <FormDescription className="text-xs flex flex-col gap-1">
-                                <span>Maximum token balance allowed (in wei, 0 for unlimited)</span>
-                                {maxThreshold && maxThreshold !== "0" && erc20Token && (
-                                  <span className="text-neutral">
-                                    ≈ ${calculateUSDValue(maxThreshold)}
-                                  </span>
-                                )}
-                              </FormDescription>
-                            </FormItem>
-
-                            <FormItem>
-                              <FormLabel>Value Per Entry</FormLabel>
-                              <FormControl>
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  placeholder="0 (no cost per entry)"
-                                  value={valuePerEntry}
-                                  onChange={(e) => {
-                                    const value = e.target.value;
-                                    setValuePerEntry(value);
-                                    updateERC20Config(erc20Token?.address || "", minThreshold, maxThreshold, value, maxEntries);
-                                  }}
-                                />
-                              </FormControl>
-                              <FormDescription className="text-xs flex flex-col gap-1">
-                                <span>Token amount consumed per entry (in wei, 0 for no consumption)</span>
-                                {valuePerEntry && valuePerEntry !== "0" && erc20Token && (
-                                  <span className="text-neutral">
-                                    ≈ ${calculateUSDValue(valuePerEntry)}
-                                  </span>
-                                )}
-                              </FormDescription>
-                            </FormItem>
-
-                            <FormItem>
-                              <FormLabel>Max Entries</FormLabel>
-                              <FormControl>
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  placeholder="0 (unlimited)"
-                                  value={maxEntries}
-                                  onChange={(e) => {
-                                    const value = e.target.value;
-                                    setMaxEntries(value);
-                                    updateERC20Config(erc20Token?.address || "", minThreshold, maxThreshold, valuePerEntry, value);
-                                  }}
-                                />
-                              </FormControl>
-                              <FormDescription className="text-xs">
-                                Maximum number of entries allowed (0 for unlimited based on balance)
-                              </FormDescription>
-                            </FormItem>
-                          </div>
-                        </div>
+                      {/* Opus Troves Preset Configuration */}
+                      {selectedPreset === "opus_troves" && (
+                        <OpusTrovesConfig
+                          allowedAssetAddresses={getOpusSupportedAssets(
+                            selectedChainConfig?.chainId ?? ""
+                          )}
+                          extensionError={extensionError}
+                        />
                       )}
 
                       {/* Custom Contract Configuration */}
                       {selectedPreset === null && (
-                        <>
-                          <FormField
-                            control={form.control}
-                            name="gatingOptions.extension.address"
-                            render={({ field }) => (
-                              <FormItem>
-                                <div className="flex flex-row items-center justify-between">
-                                  <div className="flex flex-row items-center gap-5">
-                                    <FormLabel className="font-brand text-lg xl:text-xl 2xl:text-2xl 3xl:text-3xl">
-                                      Extension Contract
-                                    </FormLabel>
-                                    <FormDescription className="hidden sm:block">
-                                      Enter the contract address that will
-                                      validate entries
-                                    </FormDescription>
-                                  </div>
-                                  {extensionError && (
-                                    <div className="flex flex-row items-center gap-2">
-                                      <span className="text-red-500 text-sm">
-                                        {extensionError}
-                                      </span>
-                                    </div>
-                                  )}
-                                </div>
-                                <FormControl>
-                                  <Input
-                                    placeholder="0x..."
-                                    value={field.value}
-                                    onChange={(e) => {
-                                      const rawAddress = e.target.value.trim();
-
-                                      // Clear error when field is empty
-                                      if (!rawAddress) {
-                                        setExtensionError("");
-                                        field.onChange("");
-                                        return;
-                                      }
-
-                                      // Set the raw value immediately for user feedback
-                                      field.onChange(rawAddress);
-                                    }}
-                                    onBlur={() => {
-                                      const rawAddress = field.value?.trim();
-
-                                      if (!rawAddress) {
-                                        setExtensionError("");
-                                        return;
-                                      }
-
-                                      try {
-                                        // Try to convert to checksum address
-                                        const checksumAddr =
-                                          getChecksumAddress(rawAddress);
-
-                                        // Validate the checksum address
-                                        if (
-                                          !validateChecksumAddress(checksumAddr)
-                                        ) {
-                                          setExtensionError(
-                                            "Invalid contract address"
-                                          );
-                                          return;
-                                        }
-
-                                        // Update with checksum address
-                                        field.onChange(checksumAddr);
-                                        setExtensionError("");
-                                      } catch (e) {
-                                        setExtensionError(
-                                          "Invalid contract address format"
-                                        );
-                                      }
-                                    }}
-                                    className="font-mono"
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={form.control}
-                            name="gatingOptions.extension.config"
-                            render={({ field }) => (
-                              <FormItem>
-                                <div className="flex flex-row items-center gap-5">
-                                  <FormLabel className="font-brand text-lg xl:text-xl 2xl:text-2xl 3xl:text-3xl">
-                                    Extension Config
-                                  </FormLabel>
-                                  <FormDescription className="hidden sm:block">
-                                    Optional configuration values
-                                    (comma-separated felt252 values)
-                                  </FormDescription>
-                                </div>
-                                <FormControl>
-                                  <Textarea
-                                    placeholder="Enter configuration values separated by commas (optional)"
-                                    value={field.value || ""}
-                                    onChange={(e) =>
-                                      field.onChange(e.target.value)
-                                    }
-                                    className="font-mono h-20"
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </>
+                        <CustomExtensionConfig
+                          extensionError={extensionError}
+                          onExtensionErrorChange={setExtensionError}
+                        />
                       )}
                     </div>
                   </>

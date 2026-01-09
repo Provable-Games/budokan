@@ -18,6 +18,7 @@ interface TimelineCardProps {
   color?: string;
   active?: boolean;
   completed?: boolean;
+  highlighted?: boolean;
 }
 
 const TimelineCard = ({
@@ -28,6 +29,7 @@ const TimelineCard = ({
   showConnector = false,
   active = false,
   completed = false,
+  highlighted = false,
 }: TimelineCardProps) => {
   return (
     <div className="relative flex flex-col gap-2">
@@ -35,62 +37,72 @@ const TimelineCard = ({
         <TooltipTrigger asChild>
           <Card
             variant={completed ? "default" : "outline"}
-            className={`p-2 ${
-              completed ? "text-black bg-brand-muted" : "text-brand-muted"
-            } h-10 w-10 sm:h-14 sm:w-14 3xl:h-20 3xl:w-20 flex items-center justify-center z-20 cursor-pointer`}
+            className={`p-1.5 sm:p-2 bg-black ${
+              completed
+                ? "text-black bg-brand-muted"
+                : highlighted
+                ? "text-brand border-brand shadow-lg shadow-brand/20 bg-gradient-to-br from-brand/20 to-black"
+                : "text-brand-muted"
+            } h-8 w-8 sm:h-10 sm:w-10 lg:h-12 lg:w-12 3xl:h-16 3xl:w-16 flex items-center justify-center z-20 cursor-pointer transition-all duration-300`}
           >
             {icon}
           </Card>
         </TooltipTrigger>
-        {date && (
+        {(date || label) && (
           <TooltipContent className="border-brand-muted bg-black text-brand 3xl:text-lg">
-            <span className="text-brand-muted">
-              {label === "Registration"
-                ? "Registration Opened: "
-                : label === "Tournament" || label === "Duration"
-                ? completed
-                  ? "Tournament Started: "
-                  : "Tournament Starts: "
-                : label === "Submission"
-                ? completed
-                  ? "Tournament Ended: "
-                  : "Tournament Ends: "
-                : label === "Final"
-                ? completed
-                  ? "Submission Ended: "
-                  : "Submission Ends: "
-                : !label
-                ? completed
-                  ? "Registration Ended: "
-                  : "Registration Ends: "
-                : ""}
-            </span>
-            {format(date, "dd/MM")} - {format(date, "HH:mm")}
+            <div className="flex flex-col gap-1">
+              {label && (
+                <span className="font-bold text-brand">
+                  {label}
+                  {duraton && duraton > 0 && (
+                    <span className="ml-2 text-brand-muted">
+                      ({formatTime(duraton)})
+                    </span>
+                  )}
+                </span>
+              )}
+              {date && (
+                <span className="text-brand-muted text-sm">
+                  {label === "Registration"
+                    ? "Opened: "
+                    : label === "Preparation"
+                    ? completed
+                      ? "Ended: "
+                      : "Starts: "
+                    : label === "Tournament" || label === "Duration"
+                    ? completed
+                      ? "Started: "
+                      : "Starts: "
+                    : label === "Submission"
+                    ? completed
+                      ? "Ended: "
+                      : "Ends: "
+                    : !label
+                    ? completed
+                      ? "Ended: "
+                      : "Ends: "
+                    : ""}
+                  {format(date, "dd/MM")} - {format(date, "HH:mm")}
+                </span>
+              )}
+            </div>
           </TooltipContent>
         )}
       </Tooltip>
       {date && (
         <div className="flex flex-col items-center font-brand">
-          <span className="text-xs">{format(date, "dd/MM")}</span>
-          <span className="text-xs">{format(date, "HH:mm")}</span>
+          <span className="text-[10px] sm:text-xs">{format(date, "dd/MM")}</span>
+          <span className="text-[10px] sm:text-xs">{format(date, "HH:mm")}</span>
         </div>
       )}
       <div className={active ? "animate-pulse" : ""}>
-        {label && (
-          <span className="absolute -top-10 sm:-top-6 left-[calc(100%_-_0px)] w-[calc(100%_+_10px)] sm:w-[calc(100%_+_20px)] text-[10px] sm:text-[14px] 3xl:text-[16px] text-center font-brand whitespace-nowrap text-brand-muted">
-            {label}
-          </span>
-        )}
-        {duraton && (
-          <span className="absolute -top-6 sm:top-0 left-[calc(100%_-_0px)] w-[calc(100%_+_10px)] sm:w-[calc(100%_+_20px)] text-[12px] sm:text-[14px] 3xl:text-[16px] text-center whitespace-nowrap">
-            {duraton > 0 ? formatTime(duraton) : "Ended"}
-          </span>
-        )}
         {showConnector && (
           <motion.div
-            className="absolute top-5 sm:top-7 3xl:top-9 left-[calc(100%_-_0px)] w-[calc(100%_+_10px)] sm:w-[calc(100%_+_20px)] h-0.5 border-t-4 border-dotted border-brand-muted z-10"
+            className={`absolute top-4 sm:top-5 lg:top-6 3xl:top-8 left-full w-full h-0.5 border-t-2 border-dotted z-10 transition-all duration-300 ${
+              highlighted ? "border-brand" : "border-brand-muted"
+            }`}
             initial={{ width: 0 }}
-            animate={{ width: "calc(100% + var(--timeline-extension, 10px))" }}
+            animate={{ width: "100%" }}
             transition={{ duration: 0.5, delay: 0.3, ease: "easeOut" }}
           />
         )}

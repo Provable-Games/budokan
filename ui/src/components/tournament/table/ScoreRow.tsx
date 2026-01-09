@@ -6,6 +6,7 @@ import { PlayerDetails } from "@/components/tournament/table/PlayerCard";
 import { GameTokenData } from "metagame-sdk";
 import { displayAddress } from "@/lib/utils";
 import { indexAddress } from "@/lib/utils";
+import { Ban } from "lucide-react";
 
 interface ScoreRowProps {
   index: number;
@@ -35,6 +36,7 @@ const ScoreRow = ({
   const ownerAddress = game.owner;
 
   const hasSubmitted = registration?.has_submitted === 1 ? true : false;
+  const isBanned = registration?.is_banned === 1 ? true : false;
 
   //TODO: revert after devconnect
   const username =
@@ -50,7 +52,7 @@ const ScoreRow = ({
             <div
               className={`flex flex-row items-center sm:gap-1 xl:gap-2 px-2 hover:cursor-pointer hover:bg-brand/25 hover:border-brand/30 border border-transparent rounded transition-all duration-200 3xl:text-lg relative ${
                 hasSubmitted ? "pr-4" : ""
-              }`}
+              } ${isBanned ? "opacity-60" : ""}`}
             >
               <span className="w-4 flex-none font-brand">
                 {index + 1 + colIndex * 5 + currentPage * 10}.
@@ -61,6 +63,9 @@ const ScoreRow = ({
               <span className="flex-none lg:max-w-20 xl:max-w-24 2xl:max-w-28 3xl:max-w-44 group-hover:text-brand transition-colors duration-200 text-ellipsis overflow-hidden whitespace-nowrap">
                 {username}
               </span>
+              {isBanned && (
+                <Ban className="w-3 h-3 3xl:w-4 3xl:h-4 text-destructive flex-shrink-0" />
+              )}
               <p
                 className="flex-1 h-[2px] bg-repeat-x"
                 style={{
@@ -91,6 +96,7 @@ const ScoreRow = ({
               metadata={game.metadata}
               isEnded={isEnded}
               hasSubmitted={hasSubmitted}
+              isBanned={isBanned}
             />
           </HoverCardContent>
         </HoverCard>
@@ -98,11 +104,14 @@ const ScoreRow = ({
 
       {/* Mobile clickable row (hidden on desktop) */}
       <div
-        className="sm:hidden flex flex-row items-center sm:gap-2 hover:cursor-pointer hover:bg-brand/25 hover:border-brand/30 border border-transparent rounded transition-all duration-200"
+        className={`sm:hidden flex flex-row items-center sm:gap-2 hover:cursor-pointer hover:bg-brand/25 hover:border-brand/30 border border-transparent rounded transition-all duration-200 ${
+          isBanned ? "opacity-60" : ""
+        }`}
         onClick={() => {
           setSelectedPlayer({
             game,
             index: index + colIndex * 5,
+            registration,
           });
           setIsMobileDialogOpen(true);
         }}
@@ -116,6 +125,9 @@ const ScoreRow = ({
         <span className="flex-none max-w-16 group-hover:text-brand transition-colors duration-200 text-ellipsis overflow-hidden whitespace-nowrap">
           {playerName}
         </span>
+        {isBanned && (
+          <Ban className="w-3 h-3 text-destructive flex-shrink-0" />
+        )}
         <p
           className="flex-1 h-[2px] bg-repeat-x"
           style={{

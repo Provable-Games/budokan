@@ -327,6 +327,17 @@ const Overview = () => {
             }
           });
         }
+        // Extract from aggregations
+        if (
+          item.aggregations?.token_totals &&
+          Array.isArray(item.aggregations.token_totals)
+        ) {
+          item.aggregations.token_totals.forEach((tokenTotal: any) => {
+            if (tokenTotal?.tokenAddress) {
+              addresses.add(tokenTotal.tokenAddress);
+            }
+          });
+        }
       });
     }
 
@@ -341,9 +352,11 @@ const Overview = () => {
     );
   }, [uniqueTokenAddresses, selectedChainConfig?.chainId]);
 
-  // Extract unique token symbols for price fetching
+  // Extract unique token addresses for price fetching
   const allUniqueTokens = useMemo(() => {
-    return tokensArray.map((t: any) => t.symbol).filter((s: any) => s);
+    return tokensArray
+      .map((t: any) => t.token_address)
+      .filter((addr: any) => addr);
   }, [tokensArray]);
 
   // Fetch prices for all unique token addresses at once
@@ -450,6 +463,8 @@ const Overview = () => {
     setIsLoading,
     processTournamentsFromRaw,
   ]);
+
+  console.log("TOURNAMENTS", tournaments);
 
   // Infinite scroll implementation with debounce to prevent multiple triggers
   useEffect(() => {
@@ -720,6 +735,7 @@ const Overview = () => {
                     tokenPrices={tokenPrices}
                     pricesLoading={pricesLoading}
                     tokenDecimals={tokenDecimals}
+                    aggregations={tournament.aggregations}
                   />
                 ))}
 

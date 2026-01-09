@@ -127,6 +127,14 @@ export const processTournamentData = (
           .map((v) => v.trim())
           .filter((v) => v !== "");
 
+        console.log("Extension config parsing:", {
+          extensionAddress: formData.gatingOptions.extension?.address,
+          configString,
+          configArrayBeforeFilter: configString.split(","),
+          configArrayAfterTrim: configString.split(",").map((v) => v.trim()),
+          configArrayFinal: configArray,
+        });
+
         entryRequirementType = new CairoCustomEnum({
           token: undefined,
           tournament: undefined,

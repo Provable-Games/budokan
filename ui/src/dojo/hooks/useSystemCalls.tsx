@@ -1169,6 +1169,62 @@ export const useSystemCalls = () => {
     }
   };
 
+  const getUserTroveIds = async (
+    userAddress: BigNumberish
+  ): Promise<bigint[]> => {
+    try {
+      if (!provider) return [];
+
+      const ABBOT_ADDRESS =
+        "0x04d0bb0a4c40012384e7c419e6eb3c637b28e8363fb66958b60d90505b9c072f";
+
+      // get_user_trove_ids returns an array of trove IDs
+      const result = await provider.callContract({
+        contractAddress: ABBOT_ADDRESS,
+        entrypoint: "get_user_trove_ids",
+        calldata: CallData.compile([userAddress]),
+      });
+
+      // Result format is array length followed by the trove IDs
+      const arrayLength = Number(result[0] || 0);
+      const troveIds: bigint[] = [];
+
+      for (let i = 1; i <= arrayLength; i++) {
+        troveIds.push(BigInt(result[i] || 0));
+      }
+
+      return troveIds;
+    } catch (error) {
+      console.error("Error getting user trove IDs:", error);
+      return [];
+    }
+  };
+
+  const getTroveHealth = async (
+    troveId: BigNumberish
+  ): Promise<bigint | null> => {
+    try {
+      if (!provider) return null;
+
+      const SHRINE_ADDRESS =
+        "0x0498edfaf50ca5855666a700c25dd629d577eb9afccdf3b5977aec79aee55ada";
+
+      // get_trove_health returns [value, threshold, ltv, debt]
+      // We need the debt (last element, index 3) with 18 decimals
+      const result = await provider.callContract({
+        contractAddress: SHRINE_ADDRESS,
+        entrypoint: "get_trove_health",
+        calldata: CallData.compile([troveId]),
+      });
+
+      // Return debt amount (last element in result)
+      return BigInt(result[3] || 0);
+    } catch (error) {
+      console.error("Error getting trove health:", error);
+      return null;
+    }
+  };
+
   return {
     approveAndEnterTournament,
     banEntry,
@@ -1193,5 +1249,7 @@ export const useSystemCalls = () => {
     getExtensionEntriesLeft,
     checkRegistrationOnly,
     checkShouldBan,
+    getUserTroveIds,
+    getTroveHealth,
   };
 };

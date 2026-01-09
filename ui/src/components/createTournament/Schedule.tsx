@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { FormLabel, FormDescription } from "@/components/ui/form";
 import {
   HoverCard,
@@ -52,17 +52,17 @@ const Schedule = ({ form }: StepProps) => {
   });
 
   const PREDEFINED_DURATIONS = [
-    { value: 86400, label: "1D" },
-    { value: 259200, label: "3D" },
-    { value: 604800, label: "1W" },
-    { value: 1209600, label: "2W" },
+    { value: 86400, label: "1 Day" },
+    { value: 259200, label: "3 Days" },
+    { value: 604800, label: "1 Week" },
+    { value: 1209600, label: "2 Weeks" },
   ];
 
   const DURATION_TO_DEFAULT_SUBMISSION = {
-    "1D": 86400, // 1 day -> 1 day (24 hours)
-    "3D": 86400, // 3 days -> 1 day (24 hours)
-    "1W": 86400, // 1 week -> 1 day (24 hours)
-    "2W": 172800, // 2 weeks -> 2 days (48 hours)
+    "1 Day": 86400, // 1 day -> 1 day (24 hours)
+    "3 Days": 86400, // 3 days -> 1 day (24 hours)
+    "1 Week": 86400, // 1 week -> 1 day (24 hours)
+    "2 Weeks": 172800, // 2 weeks -> 2 days (48 hours)
   } as const;
 
   // Updated function to disable dates before the minimum start time
@@ -224,8 +224,167 @@ const Schedule = ({ form }: StepProps) => {
 
         {/* Interactive Schedule Slider */}
         <div className="px-4 overflow-visible">
-          {/* Header Row */}
-          <div className="flex flex-row items-center justify-between gap-4 mb-4 overflow-visible">
+          {/* Controls Section - Bordered Boxes */}
+          <div className="flex flex-col lg:flex-row gap-4 mb-6">
+            {/* Duration Box */}
+            <div className="flex-1 border-2 border-brand-muted rounded-lg p-4 bg-black/20">
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-row items-center gap-2">
+                  <FormLabel className="font-brand text-base xl:text-lg">
+                    Duration
+                  </FormLabel>
+                  <FormDescription className="text-xs xl:text-sm">
+                    - How long the tournament will run
+                  </FormDescription>
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  {PREDEFINED_DURATIONS.map(({ value, label }) => (
+                    <Button
+                      key={value}
+                      type="button"
+                      size="sm"
+                      variant={
+                        form.watch("duration") === value ? "default" : "outline"
+                      }
+                      onClick={() => {
+                        form.setValue("duration", value);
+
+                        const selectedDuration = PREDEFINED_DURATIONS.find(
+                          (d) => d.value === value
+                        );
+                        const durationLabel = selectedDuration?.label;
+
+                        if (
+                          durationLabel &&
+                          DURATION_TO_DEFAULT_SUBMISSION[
+                            durationLabel as keyof typeof DURATION_TO_DEFAULT_SUBMISSION
+                          ]
+                        ) {
+                          form.setValue(
+                            "submissionPeriod",
+                            DURATION_TO_DEFAULT_SUBMISSION[
+                              durationLabel as keyof typeof DURATION_TO_DEFAULT_SUBMISSION
+                            ]
+                          );
+                        } else {
+                          form.setValue("submissionPeriod", SECONDS_IN_DAY);
+                        }
+                      }}
+                    >
+                      {label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Registration Period Box */}
+            <div className="flex-1 border-2 border-brand-muted rounded-lg p-4 bg-black/20">
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-row items-center justify-between gap-4">
+                  <div className="flex flex-row items-center gap-2 flex-1">
+                    <FormLabel className="font-brand text-base xl:text-lg">
+                      Registration Period
+                    </FormLabel>
+                    <FormDescription className="text-xs xl:text-sm">
+                      - Control when users can register
+                    </FormDescription>
+                    <HoverCard openDelay={50} closeDelay={0}>
+                      <HoverCardTrigger asChild>
+                        <button
+                          type="button"
+                          className="w-4 h-4 text-neutral hover:text-brand transition-colors cursor-pointer flex-shrink-0"
+                        >
+                          <INFO />
+                        </button>
+                      </HoverCardTrigger>
+                      <HoverCardContent
+                        side="bottom"
+                        align="end"
+                        className="w-80 xl:w-96 p-4 text-sm z-[9999] whitespace-normal"
+                      >
+                        <div className="flex flex-col gap-3">
+                          <h4 className="text-base font-semibold whitespace-normal break-words">
+                            Registration Period
+                          </h4>
+                          <p className="text-sm text-neutral leading-relaxed whitespace-normal break-words">
+                            <span className="font-medium text-brand">
+                              Off (Open):
+                            </span>{" "}
+                            Users can register anytime during the tournament
+                          </p>
+                          <p className="text-sm text-neutral leading-relaxed whitespace-normal break-words">
+                            <span className="font-medium text-brand">
+                              On (Pre-register):
+                            </span>{" "}
+                            Set a specific registration window before the tournament
+                            with capped entries
+                          </p>
+                        </div>
+                      </HoverCardContent>
+                    </HoverCard>
+                  </div>
+                  <Switch
+                    id="registration-period"
+                    checked={registrationType === "fixed"}
+                    onCheckedChange={(checked: boolean) =>
+                      form.setValue("type", checked ? "fixed" : "open")
+                    }
+                  />
+                </div>
+
+                {/* Registration Period Presets (only shown when enabled) */}
+                {registrationType === "fixed" && enableRegistration && (
+                  <div className="grid grid-cols-4 gap-2 pt-2">
+                    {PREDEFINED_DURATIONS.map(({ value, label }) => (
+                      <Button
+                        key={value}
+                        type="button"
+                        size="sm"
+                        variant={
+                          registrationStartTime &&
+                          registrationEndTime &&
+                          Math.floor(
+                            (registrationEndTime.getTime() -
+                              registrationStartTime.getTime()) /
+                              1000
+                          ) === value
+                            ? "default"
+                            : "outline"
+                        }
+                        onClick={() => {
+                          if (registrationStartTime) {
+                            const newRegEndTime = new Date(
+                              registrationStartTime.getTime() + value * 1000
+                            );
+                            setRegistrationEndTime(newRegEndTime);
+
+                            // Also update tournament start to match new registration end
+                            form.setValue("startTime", newRegEndTime);
+
+                            // Update tournament end to maintain current duration
+                            const currentDuration = form.watch("duration");
+                            const newTournamentEndTime = new Date(
+                              newRegEndTime.getTime() + currentDuration * 1000
+                            );
+                            form.setValue("endTime", newTournamentEndTime);
+                          }
+                        }}
+                      >
+                        {label}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div className="w-full h-0.5 bg-brand/25 mb-6" />
+
+          {/* Timeline Header */}
+          <div className="flex flex-row items-center justify-between gap-4 mb-4">
             <div className="flex flex-row items-center gap-4">
               <FormLabel className="font-brand text-lg xl:text-xl 2xl:text-2xl 3xl:text-3xl">
                 Timeline
@@ -294,287 +453,6 @@ const Schedule = ({ form }: StepProps) => {
             >
               Reset
             </Button>
-          </div>
-
-          {/* Controls Row - Desktop (hidden on mobile) */}
-          <div className="hidden lg:flex flex-row items-center justify-between gap-6 mb-6 overflow-visible">
-            {/* Duration Presets - Left */}
-            <div className="flex flex-row items-center gap-3">
-              <span className="text-sm font-medium text-neutral">
-                Duration:
-              </span>
-              <div className="flex flex-row items-center gap-2">
-                {PREDEFINED_DURATIONS.map(({ value, label }) => (
-                  <Button
-                    key={value}
-                    type="button"
-                    size="sm"
-                    variant={
-                      form.watch("duration") === value ? "default" : "outline"
-                    }
-                    className="px-3"
-                    onClick={() => {
-                      form.setValue("duration", value);
-
-                      const selectedDuration = PREDEFINED_DURATIONS.find(
-                        (d) => d.value === value
-                      );
-                      const durationLabel = selectedDuration?.label;
-
-                      if (
-                        durationLabel &&
-                        DURATION_TO_DEFAULT_SUBMISSION[
-                          durationLabel as keyof typeof DURATION_TO_DEFAULT_SUBMISSION
-                        ]
-                      ) {
-                        form.setValue(
-                          "submissionPeriod",
-                          DURATION_TO_DEFAULT_SUBMISSION[
-                            durationLabel as keyof typeof DURATION_TO_DEFAULT_SUBMISSION
-                          ]
-                        );
-                      } else {
-                        form.setValue("submissionPeriod", SECONDS_IN_DAY);
-                      }
-                    }}
-                  >
-                    {label}
-                  </Button>
-                ))}
-              </div>
-            </div>
-
-            {/* Pre-register Checkbox - Middle */}
-            <div className="flex flex-row items-center gap-3">
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="fixed-registration"
-                  checked={registrationType === "fixed"}
-                  onCheckedChange={(checked: boolean) =>
-                    form.setValue("type", checked ? "fixed" : "open")
-                  }
-                />
-                <label
-                  htmlFor="fixed-registration"
-                  className="text-sm font-medium text-neutral cursor-pointer select-none"
-                >
-                  Pre-register
-                </label>
-              </div>
-              <HoverCard openDelay={50} closeDelay={0}>
-                <HoverCardTrigger asChild>
-                  <button
-                    type="button"
-                    className="w-5 h-5 text-neutral hover:text-brand transition-colors cursor-pointer"
-                  >
-                    <INFO />
-                  </button>
-                </HoverCardTrigger>
-                <HoverCardContent
-                  side="bottom"
-                  align="end"
-                  className="w-80 xl:w-96 p-4 text-sm z-[9999] whitespace-normal"
-                >
-                  <div className="flex flex-col gap-3">
-                    <h4 className="text-base font-semibold whitespace-normal break-words">
-                      Pre-registration
-                    </h4>
-                    <p className="text-sm text-neutral leading-relaxed whitespace-normal break-words">
-                      <span className="font-medium text-brand">
-                        Unchecked (Open):
-                      </span>{" "}
-                      Users can register anytime during the tournament
-                    </p>
-                    <p className="text-sm text-neutral leading-relaxed whitespace-normal break-words">
-                      <span className="font-medium text-brand">
-                        Checked (Pre-register):
-                      </span>{" "}
-                      Set a specific registration period before the tournament
-                      with capped entries
-                    </p>
-                  </div>
-                </HoverCardContent>
-              </HoverCard>
-            </div>
-
-            {/* Registration Period Presets - Right (only for fixed registration) */}
-            {registrationType === "fixed" && enableRegistration ? (
-              <div className="flex flex-row items-center gap-3">
-                <span className="text-sm font-medium text-neutral">
-                  Reg Period:
-                </span>
-                <div className="flex flex-row items-center gap-2">
-                  {PREDEFINED_DURATIONS.map(({ value, label }) => (
-                    <Button
-                      key={value}
-                      type="button"
-                      size="sm"
-                      variant={
-                        registrationStartTime &&
-                        registrationEndTime &&
-                        Math.floor(
-                          (registrationEndTime.getTime() -
-                            registrationStartTime.getTime()) /
-                            1000
-                        ) === value
-                          ? "default"
-                          : "outline"
-                      }
-                      className="px-3"
-                      onClick={() => {
-                        if (registrationStartTime) {
-                          const newRegEndTime = new Date(
-                            registrationStartTime.getTime() + value * 1000
-                          );
-                          setRegistrationEndTime(newRegEndTime);
-
-                          // Also update tournament start to match new registration end
-                          form.setValue("startTime", newRegEndTime);
-
-                          // Update tournament end to maintain current duration
-                          const currentDuration = form.watch("duration");
-                          const newTournamentEndTime = new Date(
-                            newRegEndTime.getTime() + currentDuration * 1000
-                          );
-                          form.setValue("endTime", newTournamentEndTime);
-                        }
-                      }}
-                    >
-                      {label}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              // Spacer to maintain layout when registration period is hidden
-              <div className="flex flex-row items-center gap-3 invisible">
-                <span className="text-sm font-medium text-neutral">
-                  Reg Period:
-                </span>
-                <div className="flex flex-row items-center gap-2">
-                  {PREDEFINED_DURATIONS.map(({ value, label }) => (
-                    <Button
-                      key={value}
-                      size="sm"
-                      variant="outline"
-                      className="px-3"
-                    >
-                      {label}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Controls - Mobile (visible on mobile only) */}
-          <div className="lg:hidden flex flex-col gap-4 mb-6">
-            {/* Pre-register Checkbox */}
-            <div className="flex flex-row items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="fixed-registration-mobile"
-                  checked={registrationType === "fixed"}
-                  onCheckedChange={(checked: boolean) =>
-                    form.setValue("type", checked ? "fixed" : "open")
-                  }
-                />
-                <label
-                  htmlFor="fixed-registration-mobile"
-                  className="text-sm font-medium text-neutral cursor-pointer select-none"
-                >
-                  Pre-register
-                </label>
-              </div>
-            </div>
-
-            {/* Registration Period Presets (if pre-register is checked) */}
-            {registrationType === "fixed" && enableRegistration && (
-              <div className="flex flex-col gap-2">
-                <span className="text-sm font-medium text-neutral">
-                  Reg Period:
-                </span>
-                <div className="grid grid-cols-4 gap-2">
-                  {PREDEFINED_DURATIONS.map(({ value, label }) => (
-                    <Button
-                      key={value}
-                      type="button"
-                      size="sm"
-                      variant={
-                        registrationStartTime &&
-                        registrationEndTime &&
-                        Math.floor(
-                          (registrationEndTime.getTime() -
-                            registrationStartTime.getTime()) /
-                            1000
-                        ) === value
-                          ? "default"
-                          : "outline"
-                      }
-                      onClick={() => {
-                        if (registrationStartTime) {
-                          const newRegEndTime = new Date(
-                            registrationStartTime.getTime() + value * 1000
-                          );
-                          setRegistrationEndTime(newRegEndTime);
-                          form.setValue("startTime", newRegEndTime);
-                          const currentDuration = form.watch("duration");
-                          const newTournamentEndTime = new Date(
-                            newRegEndTime.getTime() + currentDuration * 1000
-                          );
-                          form.setValue("endTime", newTournamentEndTime);
-                        }
-                      }}
-                    >
-                      {label}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Duration Presets */}
-            <div className="flex flex-col gap-2">
-              <span className="text-sm font-medium text-neutral">
-                Duration:
-              </span>
-              <div className="grid grid-cols-4 gap-2">
-                {PREDEFINED_DURATIONS.map(({ value, label }) => (
-                  <Button
-                    key={value}
-                    type="button"
-                    size="sm"
-                    variant={
-                      form.watch("duration") === value ? "default" : "outline"
-                    }
-                    onClick={() => {
-                      form.setValue("duration", value);
-                      const selectedDuration = PREDEFINED_DURATIONS.find(
-                        (d) => d.value === value
-                      );
-                      const durationLabel = selectedDuration?.label;
-                      if (
-                        durationLabel &&
-                        DURATION_TO_DEFAULT_SUBMISSION[
-                          durationLabel as keyof typeof DURATION_TO_DEFAULT_SUBMISSION
-                        ]
-                      ) {
-                        form.setValue(
-                          "submissionPeriod",
-                          DURATION_TO_DEFAULT_SUBMISSION[
-                            durationLabel as keyof typeof DURATION_TO_DEFAULT_SUBMISSION
-                          ]
-                        );
-                      } else {
-                        form.setValue("submissionPeriod", SECONDS_IN_DAY);
-                      }
-                    }}
-                  >
-                    {label}
-                  </Button>
-                ))}
-              </div>
-            </div>
           </div>
 
           {/* Visual Slider - Desktop only (hidden on mobile) */}

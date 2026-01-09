@@ -71,10 +71,29 @@ export const useEntityUpdates = () => {
     );
   };
 
+  const waitForBannedEntry = async (
+    tournamentId: BigNumberish,
+    gameTokenId: BigNumberish
+  ) => {
+    const registrationEntityId = getEntityIdFromKeys([
+      BigInt(tournamentId),
+      BigInt(gameTokenId),
+    ]);
+
+    await state.waitForEntityChange(
+      registrationEntityId,
+      (entity) => {
+        return entity?.models?.[namespace]?.Registration?.is_banned === true;
+      },
+      30000
+    );
+  };
+
   return {
     waitForTournamentCreation,
     waitForTournamentEntry,
     waitForAddPrizes,
     waitForSubmitScores,
+    waitForBannedEntry,
   };
 };

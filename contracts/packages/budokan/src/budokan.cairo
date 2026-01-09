@@ -552,7 +552,7 @@ pub mod Budokan {
                         game_address,
                         game_token_id,
                         tournament_id,
-                        0, // entry_number for banned registration
+                        registration.entry_number,
                         false, // has_submitted
                         true // is_banned
                     );
