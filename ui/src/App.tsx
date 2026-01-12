@@ -28,7 +28,6 @@ const Overview = lazy(() => {
 });
 const Tournament = lazy(() => import("@/containers/Tournament"));
 const Play = lazy(() => import("@/containers/Play"));
-const RegisterToken = lazy(() => import("@/containers/RegisterToken"));
 const CreateTournament = lazy(() => import("@/containers/CreateTournament"));
 
 function App() {
@@ -199,14 +198,6 @@ function App() {
                   }
                 >
                   <CreateTournament />
-                </Suspense>
-              }
-            />
-            <Route
-              path="/register-token"
-              element={
-                <Suspense fallback={<div>Loading...</div>}>
-                  <RegisterToken />
                 </Suspense>
               }
             />

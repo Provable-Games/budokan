@@ -5,10 +5,22 @@ import {
 } from "@/lib/utils/formatting";
 import { Tournament, Prize } from "@/generated/models.gen";
 
+interface TokenTotal {
+  tokenAddress: string;
+  tokenType: string;
+  totalAmount: number;
+  nftCount?: number;
+}
+
+interface Aggregations {
+  token_totals?: TokenTotal[];
+}
+
 export type ProcessedTournament = {
   tournament: Tournament;
   prizes: Prize[];
   entryCount: number;
+  aggregations?: Aggregations;
 };
 
 export type TournamentTab = "upcoming" | "live" | "ended" | "my";
@@ -173,6 +185,7 @@ const useTournamentStore = create<TournamentState>((set, get) => ({
         tournament: processedTournament,
         prizes: processedPrizes!,
         entryCount: Number(tournament.entry_count),
+        aggregations: tournament.aggregations,
       };
     });
   },

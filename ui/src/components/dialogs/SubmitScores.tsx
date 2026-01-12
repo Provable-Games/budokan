@@ -15,7 +15,8 @@ import { useGameTokens } from "metagame-sdk";
 import { getSubmittableScores } from "@/lib/utils/formatting";
 import { useState, useMemo } from "react";
 import { LoadingSpinner } from "@/components/ui/spinner";
-import { useTournamentContracts } from "@/dojo/hooks/useTournamentContracts";
+import { useDojo } from "@/context/dojo";
+import { useGetTournamentRegistrants } from "@/dojo/hooks/useSqlQueries";
 
 interface SubmitScoresDialogProps {
   open: boolean;
@@ -33,21 +34,28 @@ export function SubmitScoresDialog({
   const { address } = useAccount();
   const { connect } = useConnectToSelectedChain();
   const { submitScores, submitScoresBatched } = useSystemCalls();
+  const { namespace, selectedChainConfig } = useDojo();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [batchProgress, setBatchProgress] = useState<{
     current: number;
     total: number;
   } | null>(null);
-  const { tournamentAddress } = useTournamentContracts();
+  const tournamentAddress = selectedChainConfig.budokanAddress!;
 
-  const leaderboardSize = Number(tournamentModel?.game_config.prize_spots);
+  // Calculate leaderboard size from entry fee distribution positions, or default to 10
+  const leaderboardSize = tournamentModel?.entry_fee && 'Some' in tournamentModel.entry_fee && tournamentModel.entry_fee.Some?.distribution_positions && 'Some' in tournamentModel.entry_fee.Some.distribution_positions
+    ? Number(tournamentModel.entry_fee.Some.distribution_positions.Some)
+    : 10;
+
+  // Fetch extra games beyond leaderboard size to account for banned entries
+  const fetchSize = (leaderboardSize || 10) + 10;
 
   const { games } = useGameTokens({
     context: {
       id: Number(tournamentModel?.id) ?? 0,
     },
     pagination: {
-      pageSize: leaderboardSize || 10,
+      pageSize: fetchSize,
     },
     sortBy: "score",
     sortOrder: "desc",
@@ -68,7 +76,40 @@ export function SubmitScoresDialog({
     });
   }, [games]);
 
-  const submittableScores = getSubmittableScores(sortedGames, leaderboard);
+  // Fetch game IDs for registration data
+  const gameIds = useMemo(
+    () => sortedGames?.map((game) => Number(game.token_id)) || [],
+    [sortedGames]
+  );
+
+  // Fetch registration data to check banned status
+  const { data: registrants } = useGetTournamentRegistrants({
+    namespace,
+    gameIds,
+    active: gameIds.length > 0,
+    limit: 1000,
+  });
+
+  // Filter out banned games and take only top leaderboardSize entries
+  const nonBannedGames = useMemo(() => {
+    if (!sortedGames || !registrants) return sortedGames;
+
+    const filtered = sortedGames.filter((game) => {
+      const registration = registrants.find(
+        (reg) => Number(reg.game_token_id) === Number(game.token_id)
+      );
+      // Filter out if banned (is_banned === 1)
+      return registration?.is_banned !== 1;
+    });
+
+    // Take only top leaderboardSize entries to ensure correct number of submissions
+    return filtered.slice(0, leaderboardSize);
+  }, [sortedGames, registrants, leaderboardSize]);
+
+  const submittableScores = getSubmittableScores(nonBannedGames, leaderboard);
+
+  // Calculate banned count for display
+  const bannedCount = (sortedGames?.length || 0) - (nonBannedGames?.length || 0);
 
   const handleSubmitScores = async () => {
     setIsSubmitting(true);
@@ -121,11 +162,16 @@ export function SubmitScoresDialog({
           </div>
         )}
         <div className="flex flex-col gap-2">
+          {bannedCount > 0 && (
+            <div className="text-sm text-muted-foreground text-center">
+              {bannedCount} banned {bannedCount === 1 ? 'entry' : 'entries'} excluded from submission
+            </div>
+          )}
           <span className="text-center">
             Submitting {submittableScores.length} scores
           </span>
           <div className="space-y-2 px-5 py-2 max-h-[300px] overflow-y-auto">
-            {sortedGames?.map((game, index) => (
+            {nonBannedGames?.map((game, index) => (
               <div className="flex flex-row items-center gap-5" key={index}>
                 <span className="font-brand w-10">
                   {index + 1}

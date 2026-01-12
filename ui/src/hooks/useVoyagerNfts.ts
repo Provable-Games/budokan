@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
 import { addAddressPadding } from "starknet";
-import { usePGNfts, shouldUsePGApi } from "./usePGNfts";
 
 export interface VoyagerNftItem {
   tokenId: string;
@@ -16,10 +15,29 @@ interface VoyagerPagination {
   next?: string;
 }
 
-interface VoyagerNftResponse {
-  items: VoyagerNftItem[];
+// Raw API response from Voyager (uses camelCase)
+interface VoyagerApiNftItem {
+  contractAddress: string;
+  tokenId: string;
+  ownerAddress?: string;
+  balance?: {
+    ownerAddress: string;
+    balance: string;
+    contractAddress: string;
+    tokenId: string;
+  };
+  name?: string;
+  imageUrl?: string;
+  imageLargeUrl?: string;
+  imageSmallUrl?: string;
+  [key: string]: any; // For additional fields
+}
+
+interface VoyagerApiResponse {
+  items: VoyagerApiNftItem[];
   pagination?: VoyagerPagination;
 }
+
 
 interface UseVoyagerNftsProps {
   contractAddress: string;
@@ -39,6 +57,8 @@ interface UseVoyagerNftsResult {
   hasMore: boolean;
 }
 
+// Use proxy URL if configured, otherwise fall back to direct API access
+const VOYAGER_PROXY_URL = import.meta.env.VITE_VOYAGER_PROXY_URL;
 const VOYAGER_API_KEY = import.meta.env.VITE_VOYAGER_API_KEY;
 const VOYAGER_API_BASE_URL =
   import.meta.env.VITE_VOYAGER_API_BASE_URL ||
@@ -53,29 +73,22 @@ export const useVoyagerNfts = ({
   maxPages = 10,
   delayMs = 500, // Default 500ms delay between requests
 }: UseVoyagerNftsProps): UseVoyagerNftsResult => {
-  // Check if we should use the PG API instead
-  const usePGApi = shouldUsePGApi(contractAddress);
-
-  // Use PG API hook if applicable
-  const pgResult = usePGNfts({
-    contractAddress,
-    owner,
-    active: active && usePGApi,
-  });
-
   const [nfts, setNfts] = useState<VoyagerNftItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
   const [hasMore, setHasMore] = useState<boolean>(false);
 
   const fetchNfts = useCallback(async () => {
-    // Skip if using PG API or inactive
-    if (usePGApi || !active || !contractAddress) {
+    // Skip if inactive
+    if (!active || !contractAddress) {
       return;
     }
 
-    if (!VOYAGER_API_KEY) {
-      setError(new Error("Voyager API key not configured"));
+    // When using proxy, API key is not needed in frontend
+    if (!VOYAGER_PROXY_URL && !VOYAGER_API_KEY) {
+      setError(
+        new Error("Either Voyager proxy URL or API key must be configured")
+      );
       return;
     }
 
@@ -105,7 +118,12 @@ export const useVoyagerNfts = ({
 
       params.append("limit", limit.toString());
 
-      currentUrl = `${VOYAGER_API_BASE_URL}/nft-items?${params.toString()}`;
+      // Use proxy URL if configured, otherwise use direct API
+      if (VOYAGER_PROXY_URL) {
+        currentUrl = `${VOYAGER_PROXY_URL}/api/voyager/nft-items?${params.toString()}`;
+      } else {
+        currentUrl = `${VOYAGER_API_BASE_URL}/nft-items?${params.toString()}`;
+      }
 
       // Fetch pages
       while (currentUrl && pageCount < maxPages) {
@@ -114,12 +132,19 @@ export const useVoyagerNfts = ({
           await new Promise((resolve) => setTimeout(resolve, delayMs));
         }
 
+        // Build headers - only include API key if not using proxy
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+        if (!VOYAGER_PROXY_URL && VOYAGER_API_KEY) {
+          headers["x-api-key"] = VOYAGER_API_KEY;
+        }
+
+        console.log(currentUrl);
+
         const response = await fetch(currentUrl, {
           method: "GET",
-          headers: {
-            "x-api-key": VOYAGER_API_KEY,
-            "Content-Type": "application/json",
-          },
+          headers,
         });
 
         if (!response.ok) {
@@ -128,14 +153,34 @@ export const useVoyagerNfts = ({
           );
         }
 
-        const data: VoyagerNftResponse = await response.json();
-        allNfts.push(...(data.items || []));
+        const data: VoyagerApiResponse = await response.json();
+
+        // Map the API response to match our interface
+        const mappedItems: VoyagerNftItem[] = (data.items || []).map(
+          (item) => ({
+            tokenId: item.tokenId,
+            contract_address: item.contractAddress,
+            owner: item.balance?.ownerAddress || item.ownerAddress || "",
+            name: item.name,
+            image: item.imageUrl || item.imageLargeUrl || item.imageSmallUrl,
+            metadata: item,
+          })
+        );
+
+        console.log(mappedItems);
+
+        allNfts.push(...mappedItems);
         pageCount++;
 
         // Check if we should continue fetching
         if (fetchAll && data.pagination?.next) {
           // Extract the next page URL
-          currentUrl = `${VOYAGER_API_BASE_URL}${data.pagination.next}`;
+          if (VOYAGER_PROXY_URL) {
+            // When using proxy, construct the full proxy URL
+            currentUrl = `${VOYAGER_PROXY_URL}/api/voyager${data.pagination.next}`;
+          } else {
+            currentUrl = `${VOYAGER_API_BASE_URL}${data.pagination.next}`;
+          }
         } else {
           setHasMore(!!data.pagination?.next);
           currentUrl = null;
@@ -152,47 +197,15 @@ export const useVoyagerNfts = ({
     } finally {
       setLoading(false);
     }
-  }, [
-    usePGApi,
-    contractAddress,
-    owner,
-    limit,
-    active,
-    fetchAll,
-    maxPages,
-    delayMs,
-  ]);
+  }, [contractAddress, owner, limit, active, fetchAll, maxPages, delayMs]);
 
   useEffect(() => {
-    if (!usePGApi) {
-      fetchNfts();
-    }
-  }, [fetchNfts, usePGApi]);
+    fetchNfts();
+  }, [fetchNfts]);
 
   const refetch = useCallback(() => {
-    if (usePGApi) {
-      pgResult.refetch();
-    } else {
-      fetchNfts();
-    }
-  }, [usePGApi, pgResult, fetchNfts]);
-
-  // If using PG API, convert and return its results
-  if (usePGApi) {
-    const convertedNfts: VoyagerNftItem[] = pgResult.nfts.map((nft) => ({
-      tokenId: nft.tokenId,
-      contract_address: contractAddress,
-      owner: owner || "",
-    }));
-
-    return {
-      nfts: convertedNfts,
-      loading: pgResult.loading,
-      error: pgResult.error,
-      refetch,
-      hasMore: false, // PG API doesn't support pagination
-    };
-  }
+    fetchNfts();
+  }, [fetchNfts]);
 
   return {
     nfts,

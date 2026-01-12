@@ -1,14 +1,15 @@
 import { useMemo } from "react";
 import { Card } from "@/components/ui/card";
-import { feltToString, formatTime } from "@/lib/utils";
+import { feltToString } from "@/lib/utils";
 import TokenGameIcon from "@/components/icons/TokenGameIcon";
 import { SOLID_CLOCK, USER, CALENDAR } from "@/components/Icons";
 import { useNavigate } from "react-router-dom";
-import { Tournament, Token, Prize } from "@/generated/models.gen";
+import Countdown from "@/components/Countdown";
+import { Tournament, Prize } from "@/generated/models.gen";
+import { TokenMetadata } from "@/lib/types";
 import { useDojo } from "@/context/dojo";
 import {
   groupPrizesByTokens,
-  calculateTotalValue,
   countTotalNFTs,
   extractEntryFeePrizes,
 } from "@/lib/utils/formatting";
@@ -24,6 +25,17 @@ import { Badge } from "@/components/ui/badge";
 import { ChainId } from "@/dojo/setup/networks";
 import { TokenPrices } from "@/hooks/useEkuboPrices";
 import { getTokenLogoUrl } from "@/lib/tokensMeta";
+import { useTournamentPrizeValue } from "@/hooks/useTournamentPrizeValue";
+
+interface TokenTotal {
+  tokenAddress: string;
+  tokenType: string;
+  totalAmount: number;
+}
+
+interface Aggregations {
+  token_totals?: TokenTotal[];
+}
 
 interface TournamentCardProps {
   tournament: Tournament;
@@ -31,10 +43,11 @@ interface TournamentCardProps {
   status: TabType;
   prizes: Prize[] | null;
   entryCount: number;
-  tokens: Token[];
+  tokens: TokenMetadata[];
   tokenPrices: TokenPrices;
   pricesLoading: boolean;
   tokenDecimals: Record<string, number>;
+  aggregations?: Aggregations;
 }
 
 export const TournamentCard = ({
@@ -47,6 +60,7 @@ export const TournamentCard = ({
   tokenPrices,
   pricesLoading,
   tokenDecimals,
+  aggregations,
 }: TournamentCardProps) => {
   const { selectedChainConfig } = useDojo();
   const navigate = useNavigate();
@@ -54,25 +68,47 @@ export const TournamentCard = ({
 
   const entryFeeToken = tournament?.entry_fee.Some?.token_address;
   const entryFeeTokenSymbol = tokens.find(
-    (t) => t.address === entryFeeToken
+    (t) => t.token_address === entryFeeToken
   )?.symbol;
+
+  // Use distribution_positions from entry fee if available, otherwise use entry count
+  const leaderboardSize =
+    tournament?.entry_fee?.Some?.distribution_positions?.isSome()
+      ? Number(tournament.entry_fee.Some.distribution_positions.Some)
+      : entryCount;
 
   const { distributionPrizes } = extractEntryFeePrizes(
     tournament?.id,
     tournament?.entry_fee,
-    entryCount
+    entryCount,
+    leaderboardSize
   );
 
   const allPrizes = [...distributionPrizes, ...(prizes ?? [])];
 
   const groupedPrizes = groupPrizesByTokens(allPrizes, tokens);
 
-  const totalPrizesValueUSD = calculateTotalValue(
-    groupedPrizes,
+  // Calculate total prize value using the hook
+  const totalPrizesValueUSD = useTournamentPrizeValue({
+    aggregations,
+    distributionPrizes,
     tokenPrices,
+    pricesLoading,
+    tokenDecimals,
+  });
+
+  const totalPrizeNFTs = countTotalNFTs(groupedPrizes);
+
+  console.log(
+    totalPrizesValueUSD,
+    allPrizes,
+    groupedPrizes,
+    aggregations,
+    distributionPrizes,
+    tokenPrices,
+    pricesLoading,
     tokenDecimals
   );
-  const totalPrizeNFTs = countTotalNFTs(groupedPrizes);
 
   // Get unique ERC20 tokens from prizes for display
   const uniqueErc20Tokens = useMemo(() => {
@@ -83,14 +119,14 @@ export const TournamentCard = ({
 
     Object.entries(groupedPrizes).forEach(([, prize]) => {
       if (prize.type === "erc20") {
-        const token = tokens.find((t) => t.address === prize.address);
-        if (token && !tokenMap.has(token.address)) {
+        const token = tokens.find((t) => t.token_address === prize.address);
+        if (token && !tokenMap.has(token.token_address)) {
           const logo = getTokenLogoUrl(
             selectedChainConfig.chainId ?? ChainId.SN_MAIN,
-            token.address
+            token.token_address
           );
-          tokenMap.set(token.address, {
-            address: token.address,
+          tokenMap.set(token.token_address, {
+            address: token.token_address,
             symbol: token.symbol,
             logo,
           });
@@ -102,16 +138,11 @@ export const TournamentCard = ({
   }, [groupedPrizes, tokens, selectedChainConfig.chainId]);
 
   const startDate = new Date(Number(tournament.schedule.game.start) * 1000);
-  const endDate = new Date(Number(tournament.schedule.game.end) * 1000);
   const duration =
     Number(tournament.schedule.game.end) -
     Number(tournament.schedule.game.start);
   const currentDate = new Date();
   const currentTimestamp = Math.floor(currentDate.getTime() / 1000);
-  const startsInSeconds = (startDate.getTime() - currentDate.getTime()) / 1000;
-  const startsIn = formatTime(startsInSeconds);
-  const endsInSeconds = (endDate.getTime() - currentDate.getTime()) / 1000;
-  const endsIn = formatTime(endsInSeconds);
 
   // Determine tournament status based on schedule
   const registrationStart = tournament?.schedule?.registration?.isSome()
@@ -239,14 +270,6 @@ export const TournamentCard = ({
   const tournamentRequirementVariant =
     tournament?.entry_requirement.Some?.entry_requirement_type?.variant?.tournament?.activeVariant();
 
-  const renderTimeClass = (time: number) => {
-    if (time > 3600) {
-      return "text-success";
-    } else {
-      return "text-warning";
-    }
-  };
-
   return (
     <Card
       variant="outline"
@@ -312,20 +335,6 @@ export const TournamentCard = ({
                 </TooltipTrigger>
                 <TooltipContent side="top" align="center">
                   <p>Tournament Status: {tournamentStatus.text}</p>
-                </TooltipContent>
-              </Tooltip>
-
-              {/* Prize Spots */}
-              <Tooltip delayDuration={50}>
-                <TooltipTrigger asChild>
-                  <div className="flex-shrink-0">
-                    <Badge variant="outline" className="text-xs p-1 rounded-md">
-                      {Number(tournament.game_config.prize_spots)} Winners
-                    </Badge>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent side="top" align="center">
-                  <p>{Number(tournament.game_config.prize_spots)} Winners</p>
                 </TooltipContent>
               </Tooltip>
 
@@ -444,17 +453,28 @@ export const TournamentCard = ({
         <div className="flex flex-row items-center justify-center gap-5 w-full mx-auto">
           {/* Time Status */}
           {status === "upcoming" ? (
-            <div className="flex flex-row items-center gap-2">
-              <span className="text-brand-muted">Starts In:</span>
-              <span className={renderTimeClass(startsInSeconds)}>
-                {startsIn}
-              </span>
-            </div>
+            <Countdown
+              targetTimestamp={gameStart}
+              label="Starts In"
+              labelPosition="vertical"
+              className="scale-75 origin-center"
+            />
           ) : status === "live" ? (
-            <div className="flex flex-row items-center gap-2">
-              <span className="text-brand-muted">Ends In:</span>
-              <span className={renderTimeClass(endsInSeconds)}>{endsIn}</span>
-            </div>
+            <Countdown
+              targetTimestamp={gameEnd}
+              label="Ends In"
+              labelPosition="vertical"
+              className="scale-75 origin-center"
+            />
+          ) : submissionEnd &&
+            currentTimestamp >= gameEnd &&
+            currentTimestamp < submissionEnd ? (
+            <Countdown
+              targetTimestamp={submissionEnd}
+              label="Submission Ends In"
+              labelPosition="vertical"
+              className="scale-75 origin-center"
+            />
           ) : (
             <></>
           )}

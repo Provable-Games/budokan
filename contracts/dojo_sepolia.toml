@@ -5,17 +5,18 @@ description = "DNC"
 seed = "DNC"
 
 [env]
-rpc_url = "https://api.cartridge.gg/x/starknet/sepolia/rpc/v0_8"
+rpc_url = "https://api.cartridge.gg/x/starknet/sepolia/rpc/v0_9"
 world_address = "0x785401cf74071ec444e37dbbd87281aba48afc86570b1a1537193d1ce39086f"
 
 [namespace]
-default = "budokan_1_0_9"
+default = "budokan_relayer_0_0_1"
 
 [writers]
-"budokan_1_0_9" = ["budokan_1_0_9-Budokan"]
+"budokan_relayer_0_0_1" = [
+    "budokan_relayer_0_0_1-BudokanEventRelayer",
+]
 
 [init_call_args]
-"budokan_1_0_9-Budokan" = [
-    "0x02334dc9c950c74c3228e2a343d495ae36f0b4edf06767a679569e9f9de08776", # denshokan address
-    "0", # array length - ON SEPOLIA ALL TOKENS ARE REGISTERED
+"budokan_relayer_0_0_1-BudokanEventRelayer" = [
+    "0x065d2AB17338b5AffdEbAF95E2D79834B5f30Bac596fF55563c62C3c98700150", # deployer address
 ]

@@ -1,6 +1,7 @@
 import { displayAddress } from "@/lib/utils";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { VERIFIED, QUESTION } from "@/components/Icons";
+import { Ban } from "lucide-react";
 
 export const PlayerDetails = ({
   playerName,
@@ -8,12 +9,14 @@ export const PlayerDetails = ({
   metadata,
   isEnded,
   hasSubmitted,
+  isBanned,
 }: {
   playerName: string;
   username: string;
   metadata: string;
   isEnded: boolean;
   hasSubmitted: boolean;
+  isBanned?: boolean;
 }) => {
   return (
     <div className="flex flex-col gap-4">
@@ -26,6 +29,14 @@ export const PlayerDetails = ({
           <span className="text-brand-muted">Owner:</span>
           <span>{username}</span>
         </div>
+        {isBanned && (
+          <div className="flex flex-row gap-2 items-center">
+            <Ban className="w-4 h-4 text-destructive" />
+            <span className="text-destructive font-medium">
+              This entry has been banned
+            </span>
+          </div>
+        )}
       </div>
       <div className="w-full h-0.5 bg-brand/50" />
       {metadata !== "" && metadata !== undefined ? (
@@ -67,6 +78,7 @@ export const MobilePlayerCard = ({
   const username =
     usernames?.get(ownerAddress ?? "0x0") ||
     displayAddress(ownerAddress ?? "0x0");
+  const isBanned = selectedPlayer?.registration?.is_banned === 1;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:hidden">
@@ -81,6 +93,7 @@ export const MobilePlayerCard = ({
             metadata={selectedPlayer.game?.metadata}
             isEnded={isEnded}
             hasSubmitted={selectedPlayer.game?.has_submitted}
+            isBanned={isBanned}
           />
         )}
       </DialogContent>

@@ -1,8 +1,7 @@
 name: Claude Code
 
 env:
-  SCARB_VERSION: 2.10.1
-  DOJO_VERSION: 1.6.0
+  SCARB_VERSION: 2.13.1
 
 on:
   issue_comment:
@@ -33,12 +32,6 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Install Dojo
-        run: |
-          curl -L -o dojo-linux-x86_64.tar.gz https://github.com/dojoengine/dojo/releases/download/v${{ env.DOJO_VERSION }}/dojo_v${{ env.DOJO_VERSION }}_linux_amd64.tar.gz
-          tar -xzf dojo-linux-x86_64.tar.gz
-          sudo mv sozo /usr/local/bin/
-
       - name: Setup Scarb
         uses: software-mansion/setup-scarb@v1
         with:
@@ -51,4 +44,4 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           additional_permissions: |
             actions: read
-          allowed_tools: "Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(git checkout:*),Bash(git branch:*),Bash(git status),Bash(git diff:*),Bash(git log:*),Bash(git pull:*),Bash(cd:*),Bash(ls:*),Bash(find:*),Bash(grep:*),Bash(cat:*),Bash(pwd),Bash(sozo build),Bash(sozo test),Bash(sozo test -f *),Bash(scarb fmt),Bash(scarb build),Bash(bun install),Bash(bun run:*),Bash(bun test:*),Bash(npm install),Bash(npm run:*),Edit,View"
+          allowed_tools: "Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(git checkout:*),Bash(git branch:*),Bash(git status),Bash(git diff:*),Bash(git log:*),Bash(git pull:*),Bash(cd:*),Bash(ls:*),Bash(find:*),Bash(grep:*),Bash(cat:*),Bash(pwd),Bash(scarb build),Bash(scarb test),Bash(scarb test *),Bash(scarb fmt),Bash(bun install),Bash(bun run:*),Bash(bun test:*),Bash(npm install),Bash(npm run:*),Edit,View"

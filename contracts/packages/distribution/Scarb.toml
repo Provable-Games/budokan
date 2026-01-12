@@ -1,0 +1,19 @@
+[package]
+name = "budokan_distribution"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+
+[cairo]
+sierra-replace-ids = true
+
+[dependencies]
+starknet.workspace = true
+math = { path = "../math" }
+alexandria_math = { git = "https://github.com/keep-starknet-strange/alexandria.git", tag = "v0.7.0" }
+budokan_interfaces = { path = "../interfaces" }
+
+[dev-dependencies]
+snforge_std.workspace = true
+cairo_test.workspace = true

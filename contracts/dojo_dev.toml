@@ -1,32 +1,22 @@
 [world]
-name = "Budokan"
-description = "Budokan local dev world"
-cover_uri = "file://assets/cover.png"
-icon_uri = "file://assets/icon.png"
-website = "https://github.com/dojoengine/dojo-starter"
-seed = "budokan"
-
-[world.socials]
-x = "https://x.com/ohayo_dojo"
-discord = "https://discord.gg/FB2wR6uF"
-github = "https://github.com/dojoengine/dojo-starter"
-telegram = "https://t.me/dojoengine"
-
-[namespace]
-default = "budokan_1_0_8"
+name = "Realms World"
+website = "https://realms.world/"
+description = "DNC"
+seed = "DNC"
 
 [env]
-chain_id = "KATANA_LOCAL"
-rpc_url = "http://localhost:5050/"
-account_address = "0x127fd5f1fe78a71f8bcd1fec63e3fe2f0486b6ecd5c86a0466c3a21fa5cfcec"
-private_key = "0xc5b2fcab997346f3ea1c00b002ecf6f382c5f9c9659a3894eb783c5320f912"
-# world_address = "0x02f808e319783173b7a36bae6ab318fb98f6553fce73786b430cc02110483fd4"  # Uncomment and update this line with your world address.
+rpc_url = "https://api.cartridge.gg/x/starknet/sepolia/rpc/v0_9"
+world_address = "0x785401cf74071ec444e37dbbd87281aba48afc86570b1a1537193d1ce39086f"
+
+[namespace]
+default = "budokan_relayer_0_0_1"
 
 [writers]
-# Tournament
-"budokan_1_0_8" = ["budokan_1_0_8-tournament_mock"]
+"budokan_relayer_0_0_1" = [
+    "budokan_relayer_0_0_1-BudokanEventRelayer",
+]
 
-
-[migration]
-order_inits = []
-skip_contracts = ["budokan_1_0_8-Budokan"]
+[init_call_args]
+"budokan_relayer_0_0_1-BudokanEventRelayer" = [
+    "0x065d2AB17338b5AffdEbAF95E2D79834B5f30Bac596fF55563c62C3c98700150", # deployer address
+]

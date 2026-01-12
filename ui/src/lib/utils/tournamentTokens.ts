@@ -1,4 +1,5 @@
-import { Tournament, Token, Prize } from "@/generated/models.gen";
+import { Tournament, Prize } from "@/generated/models.gen";
+import { TokenMetadata } from "@/lib/types";
 import { extractEntryFeePrizes, groupPrizesByTokens } from "./formatting";
 
 export interface TournamentWithPrizes {
@@ -12,7 +13,7 @@ export interface TournamentWithPrizes {
  */
 export function extractUniqueTokenSymbols(
   tournaments: TournamentWithPrizes[],
-  tokens: Token[]
+  tokens: TokenMetadata[]
 ): string[] {
   const uniqueSymbols = new Set<string>();
 
@@ -21,7 +22,7 @@ export function extractUniqueTokenSymbols(
     const entryFeeToken = tournament?.entry_fee.Some?.token_address;
     if (entryFeeToken) {
       const entryFeeTokenSymbol = tokens.find(
-        (t) => t.address === entryFeeToken
+        (t) => t.token_address === entryFeeToken
       )?.symbol;
       if (entryFeeTokenSymbol) {
         uniqueSymbols.add(entryFeeTokenSymbol);
@@ -32,7 +33,8 @@ export function extractUniqueTokenSymbols(
     const { distributionPrizes } = extractEntryFeePrizes(
       tournament?.id,
       tournament?.entry_fee,
-      entryCount
+      entryCount,
+      3 // Default prize positions
     );
 
     // Combine all prizes

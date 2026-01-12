@@ -11,44 +11,45 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 import { useProvider } from "@starknet-react/core";
 import TournamentTimeline from "@/components/TournamentTimeline";
-import {
-  bigintToHex,
-  feltToString,
-  formatTime,
-  indexAddress,
-  padU64,
-} from "@/lib/utils";
-import { addAddressPadding, CairoCustomEnum } from "starknet";
+import Countdown from "@/components/Countdown";
+import { feltToString, indexAddress, padAddress, padU64 } from "@/lib/utils";
+import { addAddressPadding } from "starknet";
 import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
 import {
   Tournament as TournamentModel,
-  Token,
   EntryCount,
   Leaderboard,
   getModelsMapping,
+  PrizeMetrics,
 } from "@/generated/models.gen";
 import { useDojo } from "@/context/dojo";
 import {
   extractEntryFeePrizes,
   processTournamentFromSql,
+  expandDistributedPrizes,
+  processPrizeFromSql,
 } from "@/lib/utils/formatting";
 import { EnterTournamentDialog } from "@/components/dialogs/EnterTournament";
 import ScoreTable from "@/components/tournament/table/ScoreTable";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
+import { useTournamentPrizeValue } from "@/hooks/useTournamentPrizeValue";
 import MyEntries from "@/components/tournament/MyEntries";
 import TokenGameIcon from "@/components/icons/TokenGameIcon";
+import { useGameTokens } from "metagame-sdk";
 import EntryRequirements from "@/components/tournament/EntryRequirements";
 import PrizesContainer from "@/components/tournament/prizes/PrizesContainer";
 import { ClaimPrizesDialog } from "@/components/dialogs/ClaimPrizes";
 import { SubmitScoresDialog } from "@/components/dialogs/SubmitScores";
 import {
   useGetTournamentPrizesAggregations,
-  useGetTournamentPrizeClaimsAggregations,
+  useGetTournamentRewardClaimsAggregations,
   useGetTournaments,
   useGetTournamentsCount,
-  useGetTokens,
   useGetTournamentLeaderboards,
+  useGetTournamentRegistrants,
+  useGetAllTournamentPrizes,
 } from "@/dojo/hooks/useSqlQueries";
+import { getTokensByAddresses } from "@/lib/tokenUtils";
 import NotFound from "@/containers/NotFound";
 import {
   Tooltip,
@@ -68,6 +69,7 @@ import remarkGfm from "remark-gfm";
 import { useSettings } from "metagame-sdk/sql";
 import { getEntityIdFromKeys } from "@dojoengine/utils";
 import useModel from "@/dojo/hooks/useModel";
+import { TOURNAMENT_VERSION_KEY } from "@/lib/constants";
 
 const Tournament = () => {
   const { id } = useParams<{ id: string }>();
@@ -89,6 +91,7 @@ const Tournament = () => {
   );
   const [tokenDecimalsLoading, setTokenDecimalsLoading] = useState(false);
   const [creatorAddress, setCreatorAddress] = useState<string | null>(null);
+  const [banRefreshTrigger, setBanRefreshTrigger] = useState(0);
   const { data: tournamentsCount } = useGetTournamentsCount({
     namespace: namespace,
   });
@@ -136,6 +139,18 @@ const Tournament = () => {
       ? subscribedEntryCount
       : Number(entryCountModel?.count) ?? 0;
 
+  const prizeMetricsEntityId = getEntityIdFromKeys([
+    BigInt(TOURNAMENT_VERSION_KEY),
+  ]);
+
+  const subscribedPrizesMetricsModel = useModel(
+    prizeMetricsEntityId,
+    getModelsMapping(namespace).PrizeMetrics
+  ) as unknown as PrizeMetrics;
+
+  const subscribedPrizeCount =
+    Number(subscribedPrizesMetricsModel?.total_prizes) ?? 0;
+
   // Fetch leaderboard from SQL
   const { data: leaderboardData } = useGetTournamentLeaderboards({
     namespace,
@@ -180,20 +195,65 @@ const Tournament = () => {
     };
   }, [id, tournamentsCount]);
 
-  const leaderboardSize = Number(tournamentModel?.game_config.prize_spots);
+  // Get leaderboard size from distribution_positions if specified, otherwise use entry count
+  const leaderboardSize =
+    tournamentModel?.entry_fee?.Some?.distribution_positions?.isSome()
+      ? Number(tournamentModel.entry_fee.Some.distribution_positions.Some)
+      : Number(entryCountModel?.count ?? 0);
+
+  // Fetch registration data to check for banned entries
+  const tournamentAddress = selectedChainConfig.budokanAddress!;
+  const { games: allTournamentGames } = useGameTokens({
+    context: {
+      id: Number(tournamentModel?.id) ?? 0,
+    },
+    pagination: {
+      pageSize: Math.max(entryCount, leaderboardSize) + 10, // Fetch all entries with buffer
+    },
+    sortBy: "score",
+    sortOrder: "desc",
+    mintedByAddress: padAddress(tournamentAddress),
+    includeMetadata: false,
+  });
+
+  // Get game IDs for registration check
+  const allGameIds = useMemo(
+    () => allTournamentGames?.map((game) => Number(game.token_id)) || [],
+    [allTournamentGames]
+  );
+
+  // Fetch registrations to check banned status
+  const { data: allRegistrants } = useGetTournamentRegistrants({
+    namespace,
+    gameIds: allGameIds,
+    active: allGameIds.length > 0 && !!tournamentModel?.id,
+    limit: 1000,
+  });
+
+  // Calculate non-banned entry count
+  const nonBannedEntryCount = useMemo(() => {
+    if (!allRegistrants || allRegistrants.length === 0) return entryCount;
+
+    const bannedCount = allRegistrants.filter(
+      (reg) => reg.is_banned === 1
+    ).length;
+
+    return entryCount - bannedCount;
+  }, [allRegistrants, entryCount]);
 
   const totalSubmissions = leaderboardModel?.token_ids.length ?? 0;
 
+  // Check if all non-banned games have been submitted
   const allSubmitted =
-    totalSubmissions ===
-    Math.min(Number(entryCountModel?.count), leaderboardSize);
+    totalSubmissions === Math.min(nonBannedEntryCount, leaderboardSize);
 
   // Calculate total potential prizes based on entry fees
   const { tournamentCreatorShare, gameCreatorShare, distributionPrizes } =
     extractEntryFeePrizes(
       tournamentModel?.id ?? 0,
       tournamentModel?.entry_fee!,
-      entryCount
+      entryCount,
+      leaderboardSize
     );
 
   const entryFeePrizesCount =
@@ -260,19 +320,53 @@ const Tournament = () => {
   const tournamentId = tournamentModel?.id;
 
   // Fetch aggregated data
-  const { data: aggregations, loading: aggregationsLoading } =
-    useGetTournamentPrizesAggregations({
+  const {
+    data: aggregations,
+    loading: aggregationsLoading,
+    refetch: refetchAggregations,
+  } = useGetTournamentPrizesAggregations({
+    namespace,
+    tournamentId: tournamentId ?? 0,
+    active: !!tournamentId,
+  });
+
+  // Fetch ALL sponsored prizes from database for accurate paid places calculation
+  const { data: sponsoredPrizesData } = useGetAllTournamentPrizes({
+    namespace,
+    tournamentId: Number(tournamentModel?.id || 0),
+    active: !!tournamentModel?.id,
+  });
+
+  // Process SQL prizes to proper Prize objects with CairoCustomEnum structures
+  const sponsoredPrizes = useMemo(
+    () => (sponsoredPrizesData || []).map(processPrizeFromSql),
+    [sponsoredPrizesData]
+  );
+
+  // Expand distributed sponsored prizes into individual positions
+  const expandedSponsoredPrizes = useMemo(
+    () => expandDistributedPrizes(sponsoredPrizes),
+    [sponsoredPrizes]
+  );
+
+  // useEffect(() => {
+
+  // Fetch reward claims aggregations to track claimed vs unclaimed prizes
+  const { data: claimsAggregations, refetch: refetchClaimsAggregations } =
+    useGetTournamentRewardClaimsAggregations({
       namespace,
       tournamentId: tournamentId ?? 0,
       active: !!tournamentId,
     });
 
-  // Fetch prize claims aggregations to track claimed vs unclaimed prizes
-  const { data: claimsAggregations } = useGetTournamentPrizeClaimsAggregations({
-    namespace,
-    tournamentId: tournamentId ?? 0,
-    active: !!tournamentId,
-  });
+  // Refetch prize aggregations when subscribedPrizeCount changes
+  useEffect(() => {
+    if (subscribedPrizeCount > 0) {
+      refetchAggregations();
+      refetchClaimsAggregations();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subscribedPrizeCount]);
 
   // Calculate total potential prizes including both entry fees and sponsored prizes
   const totalPotentialPrizes =
@@ -287,6 +381,30 @@ const Tournament = () => {
   const claimablePrizesCount = claimsAggregations
     ? claimsAggregations.total_unclaimed
     : 0;
+
+  // Calculate paid places based on actual non-zero prize amounts
+  // This counts unique positions that have at least one non-zero prize
+  const paidPlaces = useMemo(() => {
+    const positions = new Set<number>();
+
+    // Add positions from entry fee distribution prizes (already filtered for non-zero)
+    distributionPrizes.forEach((prize) => {
+      const position = Number(prize.position);
+      if (position > 0) {
+        positions.add(position);
+      }
+    });
+
+    // Add positions from expanded sponsored prizes (already filtered for non-zero by expandDistributedPrizes)
+    expandedSponsoredPrizes.forEach((prize) => {
+      const position = Number(prize.position);
+      if (position > 0) {
+        positions.add(position);
+      }
+    });
+
+    return positions.size;
+  }, [distributionPrizes, expandedSponsoredPrizes]);
 
   // Extract unique token addresses for fetching token data
   const uniqueTokenAddresses = useMemo(() => {
@@ -309,22 +427,16 @@ const Tournament = () => {
     return Array.from(addresses);
   }, [aggregations?.token_totals, entryFeeToken]);
 
-  // Fetch token data for all unique addresses in this tournament
-  const { data: tokensData } = useGetTokens({
-    namespace,
-    active: uniqueTokenAddresses.length > 0,
-    limit: 100, // Should be enough for tournament tokens
-  });
-
-  // Filter tokens to only include those used in this tournament
+  // Get token data for all unique addresses in this tournament from static tokens
   const tournamentTokens = useMemo(() => {
-    if (!tokensData) return [];
-    return (tokensData as Token[]).filter((token) =>
-      uniqueTokenAddresses.includes(token.address)
+    if (uniqueTokenAddresses.length === 0) return [];
+    return getTokensByAddresses(
+      uniqueTokenAddresses,
+      selectedChainConfig?.chainId ?? ""
     );
-  }, [tokensData, uniqueTokenAddresses]);
+  }, [uniqueTokenAddresses, selectedChainConfig]);
 
-  // Fetch prices for all ERC20 tokens using addresses
+  // Fetch prices for all ERC20 tokens
   const {
     prices: ownPrices,
     isLoading: ownPricesLoading,
@@ -333,73 +445,18 @@ const Tournament = () => {
     tokens: uniqueTokenAddresses,
   });
 
-  console.log(ownPrices);
-
   // Use prop prices if provided, otherwise use own prices
   const prices = ownPrices;
   const pricesLoading = ownPricesLoading;
 
   // Calculate total value in USD using aggregated data
-  const totalPrizesValueUSD = useMemo(() => {
-    // Return 0 if prices are loading OR if prices object is empty
-    if (pricesLoading || !prices || Object.keys(prices).length === 0) return 0;
-
-    let total = 0;
-    let hasAllPrices = true;
-
-    // Calculate USD from aggregated database prizes
-    if (aggregations?.token_totals) {
-      total += aggregations.token_totals.reduce(
-        (sum: number, tokenTotal: any) => {
-          if (tokenTotal.tokenType === "erc20" && tokenTotal.totalAmount) {
-            const price = prices[tokenTotal.tokenAddress];
-            // If any price is missing, mark that we don't have all prices yet
-            if (price === undefined) {
-              hasAllPrices = false;
-              return sum;
-            }
-            const decimals = tokenDecimals[tokenTotal.tokenAddress] || 18;
-            const amount = Number(tokenTotal.totalAmount);
-
-            return sum + (amount / 10 ** decimals) * price;
-          }
-          return sum;
-        },
-        0
-      );
-    }
-
-    // Calculate USD from entry fee prizes (ERC20 only)
-    // Only include distributionPrizes - not creator/game shares as those are fees, not prizes
-    distributionPrizes.forEach((prize) => {
-      if (prize.token_type?.variant?.erc20) {
-        const price = prices[prize.token_address];
-        // If any price is missing, mark that we don't have all prices yet
-        if (price === undefined) {
-          hasAllPrices = false;
-          return;
-        }
-        const amount = Number(prize.token_type.variant.erc20.amount || 0);
-        const decimals = tokenDecimals[prize.token_address] || 18;
-
-        total += (amount / 10 ** decimals) * price;
-      }
-    });
-
-    // If we don't have all prices yet, return 0 to avoid showing partial totals
-    if (!hasAllPrices) return 0;
-
-    return total;
-  }, [
-    aggregations?.token_totals,
-    prices,
+  const totalPrizesValueUSD = useTournamentPrizeValue({
+    aggregations,
+    distributionPrizes,
+    tokenPrices: prices,
     pricesLoading,
     tokenDecimals,
-    distributionPrizes,
-    tournamentTokens,
-  ]);
-
-  console.log(totalPrizesValueUSD);
+  });
 
   // Fetch token decimals only for tokens used in this tournament
   useEffect(() => {
@@ -557,46 +614,52 @@ const Tournament = () => {
         BigInt(tournamentModel?.schedule.submission_duration ?? 0n)
     ) < Number(BigInt(Date.now()) / 1000n);
 
-  const startsIn =
-    Number(tournamentModel?.schedule.game.start) -
-    Number(BigInt(Date.now()) / 1000n);
-  const endsIn =
-    Number(tournamentModel?.schedule.game.end) -
-    Number(BigInt(Date.now()) / 1000n);
-  const submissionEndsIn =
-    Number(
-      BigInt(tournamentModel?.schedule.game.end ?? 0n) +
-        BigInt(tournamentModel?.schedule.submission_duration ?? 0n)
-    ) - Number(BigInt(Date.now()) / 1000n);
+  // Detect preparation period (break between registration end and tournament start)
+  const registrationEndTime = tournamentModel?.schedule.registration?.Some?.end;
+  const tournamentStartTime = tournamentModel?.schedule.game.start;
+  const now = Number(BigInt(Date.now()) / 1000n);
+  const hasPreparationPeriod =
+    registrationEndTime &&
+    tournamentStartTime &&
+    registrationEndTime < tournamentStartTime;
+  const isInPreparationPeriod =
+    hasPreparationPeriod &&
+    Number(registrationEndTime) < now &&
+    Number(tournamentStartTime) > now;
+
+  // Check if we're in the registration period for fixed registration tournaments
+  const isInRegistrationPeriod =
+    registrationType === "fixed" &&
+    registrationEndTime &&
+    Number(registrationEndTime) > now;
 
   const status = useMemo(() => {
     if (isSubmitted) return "finalized";
     if (isEnded && !isSubmitted) return "submission";
     if (isStarted) return "live";
+    if (isInPreparationPeriod) return "preparation";
+    if (isInRegistrationPeriod) return "registration";
     return "upcoming";
-  }, [isStarted, isEnded, isSubmitted]);
+  }, [isStarted, isEnded, isSubmitted, isInPreparationPeriod, isInRegistrationPeriod]);
 
-  // handle fetching of tournament data if there is a tournament entry requirement
+  // handle fetching of tournament data if there is a tournament validator extension requirement
 
-  const tournament: CairoCustomEnum =
+  const extensionRequirement =
     tournamentModel?.entry_requirement.Some?.entry_requirement_type?.variant
-      ?.tournament;
-
-  const tournamentVariant = tournament?.activeVariant();
+      ?.extension;
 
   const tournamentIdsQuery = useMemo(() => {
-    if (!tournamentModel) return [];
-    if (tournamentVariant === "winners") {
-      return tournamentModel.entry_requirement.Some?.entry_requirement_type?.variant?.tournament?.variant?.winners?.map(
-        (winner: any) => addAddressPadding(bigintToHex(winner))
-      );
-    } else if (tournamentVariant === "participants") {
-      return tournamentModel.entry_requirement.Some?.entry_requirement_type?.variant?.tournament?.variant?.participants?.map(
-        (participant: any) => addAddressPadding(bigintToHex(participant))
-      );
-    }
-    return [];
-  }, [tournamentModel, tournamentVariant]);
+    if (!tournamentModel || !extensionRequirement) return [];
+
+    // Check if this extension is a tournament validator by looking at the config format
+    // Tournament validator config: [qualifier_type, ...tournament_ids]
+    const config = extensionRequirement.config;
+    if (!config || config.length < 2) return [];
+
+    // Extract tournament IDs (skip first element which is qualifier_type)
+    const tournamentIds = config.slice(1);
+    return tournamentIds.map((id: any) => padU64(BigInt(id)));
+  }, [tournamentModel, extensionRequirement]);
 
   const { data: tournaments } = useGetTournaments({
     namespace: namespace,
@@ -607,12 +670,13 @@ const Tournament = () => {
     active: tournamentIdsQuery.length > 0,
   });
 
-  const tournamentsData = tournaments?.map((tournament) => {
-    return {
+  const tournamentsData = useMemo(() => {
+    if (!tournaments) return [];
+    return tournaments.map((tournament) => ({
       ...processTournamentFromSql(tournament),
       entry_count: tournament.entry_count,
-    };
-  });
+    }));
+  }, [tournaments]);
 
   const { settings } = useSettings({
     gameAddresses: gameAddress ? [gameAddress] : [],
@@ -689,7 +753,9 @@ const Tournament = () => {
               <span className="hidden sm:block 3xl:text-lg">Add Prizes</span>
             </Button>
           )}
-          {(registrationType === "fixed" && !isStarted) ||
+          {(registrationType === "fixed" &&
+            !isStarted &&
+            !isInPreparationPeriod) ||
           (registrationType === "open" && !isEnded) ? (
             <Button
               className="uppercase [&_svg]:w-6 [&_svg]:h-6"
@@ -774,7 +840,6 @@ const Tournament = () => {
             onOpenChange={setAddPrizesDialogOpen}
             tournamentId={tournamentModel?.id}
             tournamentName={feltToString(tournamentModel?.metadata?.name ?? "")}
-            leaderboardSize={leaderboardSize}
           />
           <SettingsDialog
             open={settingsDialogOpen}
@@ -806,14 +871,16 @@ const Tournament = () => {
                   </div>
                 )}
                 <div className="flex flex-row gap-2 hidden sm:flex">
-                  <span>Winners:</span>
-                  <span className="text-brand">Top {leaderboardSize}</span>
+                  <span>Paid Places:</span>
+                  <span className="text-brand">
+                    {paidPlaces > 0 ? paidPlaces : "-"}
+                  </span>
                 </div>
                 <Badge
                   variant="outline"
                   className="text-xs p-1 rounded-md sm:hidden text-brand"
                 >
-                  {leaderboardSize} Winners
+                  {paidPlaces > 0 ? `${paidPlaces} Paid Places` : "No Prizes"}
                 </Badge>
                 <div className="flex flex-row gap-2 hidden sm:flex">
                   <span>Registration:</span>
@@ -831,23 +898,36 @@ const Tournament = () => {
               </div>
             </div>
             <div className="hidden sm:flex flex-row 3xl:text-lg">
-              {!isStarted ? (
-                <div>
-                  <span className="text-brand-muted">Starts In: </span>
-                  <span className="text-brand">{formatTime(startsIn)}</span>
-                </div>
+              {isInRegistrationPeriod ? (
+                <Countdown
+                  targetTimestamp={Number(registrationEndTime)}
+                  label="Registration Ends In"
+                />
+              ) : isInPreparationPeriod ? (
+                <Countdown
+                  targetTimestamp={Number(tournamentModel?.schedule.game.start)}
+                  label="Starts In"
+                />
+              ) : !isStarted ? (
+                <Countdown
+                  targetTimestamp={Number(tournamentModel?.schedule.game.start)}
+                  label="Starts In"
+                />
               ) : !isEnded ? (
-                <div>
-                  <span className="text-brand-muted">Ends In: </span>
-                  <span className="text-brand">{formatTime(endsIn)}</span>
-                </div>
+                <Countdown
+                  targetTimestamp={Number(tournamentModel?.schedule.game.end)}
+                  label="Ends In"
+                />
               ) : !isSubmitted ? (
-                <div>
-                  <span className="text-brand-muted">Submission Ends In: </span>
-                  <span className="text-brand">
-                    {formatTime(submissionEndsIn)}
-                  </span>
-                </div>
+                <Countdown
+                  targetTimestamp={Number(
+                    BigInt(tournamentModel?.schedule.game.end ?? 0n) +
+                      BigInt(
+                        tournamentModel?.schedule.submission_duration ?? 0n
+                      )
+                  )}
+                  label="Submission Ends In"
+                />
               ) : (
                 <></>
               )}
@@ -960,6 +1040,8 @@ const Tournament = () => {
               aggregations={aggregations}
               aggregationsLoading={aggregationsLoading}
               totalPrizesValueUSD={totalPrizesValueUSD}
+              subscibedPrizeCount={subscribedPrizeCount}
+              paidPlaces={paidPlaces}
             />
           </div>
           <div className="flex flex-col sm:flex-row gap-5">
@@ -968,12 +1050,15 @@ const Tournament = () => {
               entryCount={entryCount}
               isStarted={isStarted}
               isEnded={isEnded}
+              tournamentModel={tournamentModel}
+              onBanComplete={() => setBanRefreshTrigger((prev) => prev + 1)}
             />
             <MyEntries
               tournamentId={tournamentModel?.id}
               gameAddress={tournamentModel?.game_config?.address}
               tournamentModel={tournamentModel}
               totalEntryCount={entryCount}
+              banRefreshTrigger={banRefreshTrigger}
             />
           </div>
         </div>

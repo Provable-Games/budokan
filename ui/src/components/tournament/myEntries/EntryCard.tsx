@@ -42,6 +42,9 @@ const EntryCard = ({
   const gameImage = getGameImage(gameAddress);
 
   const entryNumber = registration?.entry_number;
+  const isBanned = registration?.is_banned === 1;
+
+  console.log("ENTRY CARD:", registration);
 
   if (!entryNumber) {
     return null;
@@ -50,8 +53,13 @@ const EntryCard = ({
   return (
     <Card
       variant="outline"
-      className="flex-none flex flex-col items-center justify-between h-full w-[100px] 3xl:w-[120px] p-1 relative group"
+      className={`flex-none flex flex-col items-center justify-between h-full w-[100px] 3xl:w-[120px] p-1 relative group ${
+        isBanned ? "opacity-60 border-destructive" : ""
+      }`}
     >
+      {isBanned && (
+        <div className="absolute inset-0 bg-destructive/10 pointer-events-none z-10 rounded-md" />
+      )}
       <div className="flex flex-col items-center justify-between w-full h-full pt-2">
         <Tooltip delayDuration={50}>
           <TooltipTrigger asChild>
@@ -67,12 +75,21 @@ const EntryCard = ({
             <p className="text-sm font-medium">{gameName}</p>
           </TooltipContent>
         </Tooltip>
-        <div className="absolute top-1 left-1 text-xs 3xl:text-sm">
+        <div className="absolute top-1 left-1 text-xs 3xl:text-sm z-20">
           #{Number(entryNumber)}
         </div>
+        {isBanned && (
+          <div className="absolute top-6 right-1 bg-destructive text-white text-[8px] px-1 py-0.5 rounded z-20 font-bold">
+            BANNED
+          </div>
+        )}
         <HoverCard openDelay={50} closeDelay={0}>
           <HoverCardTrigger asChild>
-            <div className="absolute top-0 right-0 text-brand-muted hover:cursor-pointer w-5 h-5 z-20">
+            <div
+              className={`absolute top-0 right-0 text-brand-muted hover:cursor-pointer w-5 h-5 z-20 ${
+                isBanned ? "opacity-100" : ""
+              }`}
+            >
               <INFO />
             </div>
           </HoverCardTrigger>
@@ -96,7 +113,7 @@ const EntryCard = ({
             <p className="text-sm font-medium">{game.player_name ?? ""}</p>
           </TooltipContent>
         </Tooltip>
-        {isActive && !gameOver && (
+        {isActive && !gameOver && !isBanned && (
           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/60 transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">
             <Button
               size="sm"

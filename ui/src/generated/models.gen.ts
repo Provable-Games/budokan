@@ -110,6 +110,8 @@ export interface TokenMetadataValue {
 // Type definition for `tournaments::components::models::tournament::ERC20Data` struct
 export interface ERC20Data {
   amount: BigNumberish;
+  distribution: CairoOption<DistributionEnum>;
+  distribution_count: CairoOption<BigNumberish>;
 }
 
 // Type definition for `tournaments::components::models::tournament::ERC721Data` struct
@@ -128,20 +130,32 @@ export interface EntryCountValue {
   count: BigNumberish;
 }
 
+// Type definition for `budokan_distribution::models::Distribution` enum
+export type Distribution = {
+  Linear: number; // u16 weight
+  Exponential: number; // u16 weight
+  Uniform: undefined;
+  Custom: Array<number>; // Array of u16 values
+};
+export type DistributionEnum = CairoCustomEnum;
+
 // Type definition for `tournaments::components::models::tournament::EntryFee` struct
 export interface EntryFee {
   token_address: string;
   amount: BigNumberish;
-  distribution: Array<BigNumberish>;
+  distribution: DistributionEnum;
   tournament_creator_share: CairoOption<BigNumberish>;
   game_creator_share: CairoOption<BigNumberish>;
+  refund_share: CairoOption<BigNumberish>;
+  distribution_positions: CairoOption<BigNumberish>;
 }
 
 // Type definition for `tournaments::components::models::tournament::GameConfig` struct
 export interface GameConfig {
   address: string;
   settings_id: BigNumberish;
-  prize_spots: BigNumberish;
+  soulbound: boolean;
+  play_url: string;
 }
 
 // Type definition for `tournaments::components::models::tournament::Leaderboard` struct
@@ -181,21 +195,21 @@ export interface PlatformMetricsValue {
 // Type definition for `tournaments::components::models::tournament::Prize` struct
 export interface Prize {
   id: BigNumberish;
-  tournament_id: BigNumberish;
-  payout_position: BigNumberish;
+  context_id: BigNumberish;
   token_address: string;
   token_type: TokenTypeDataEnum;
+  sponsor_address: string;
 }
 
-// Type definition for `tournaments::components::models::tournament::PrizeClaim` struct
-export interface PrizeClaim {
+// Type definition for `tournaments::components::models::tournament::RewardClaim` struct
+export interface RewardClaim {
   tournament_id: BigNumberish;
-  prize_type: PrizeTypeEnum;
+  reward_type: RewardTypeEnum;
   claimed: boolean;
 }
 
-// Type definition for `tournaments::components::models::tournament::PrizeClaimValue` struct
-export interface PrizeClaimValue {
+// Type definition for `tournaments::components::models::tournament::RewardClaimValue` struct
+export interface RewardClaimValue {
   claimed: boolean;
 }
 
@@ -224,6 +238,7 @@ export interface Registration {
   game_token_id: BigNumberish;
   entry_number: BigNumberish;
   has_submitted: boolean;
+  is_banned: boolean;
 }
 
 // Type definition for `tournaments::components::models::tournament::RegistrationValue` struct
@@ -237,15 +252,6 @@ export interface Schedule {
   registration: CairoOption<Period>;
   game: Period;
   submission_duration: BigNumberish;
-}
-
-// Type definition for `tournaments::components::models::tournament::Token` struct
-export interface Token {
-  address: string;
-  name: string;
-  symbol: string;
-  token_type: string;
-  is_registered: boolean;
 }
 
 // Type definition for `tournaments::components::models::tournament::TokenValue` struct
@@ -315,17 +321,38 @@ export type EntryRequirement = {
 // Type definition for `tournaments::components::models::tournament::EntryRequirementType` enum
 export type EntryRequirementType = {
   token: string;
-  tournament: TournamentType;
   allowlist: Array<string>;
+  extension: ExtensionConfig;
 };
 export type EntryRequirementTypeEnum = CairoCustomEnum;
 
+export type ExtensionConfig = {
+  address: string;
+  config: Array<BigNumberish>;
+};
+
+// Type definition for `tournaments::components::models::tournament::RewardType` enum
+export type RewardType = {
+  Prize: PrizeTypeEnum;
+  EntryFee: EntryFeeRewardTypeEnum;
+};
+export type RewardTypeEnum = CairoCustomEnum;
+
 // Type definition for `tournaments::components::models::tournament::PrizeType` enum
 export type PrizeType = {
-  EntryFees: Role;
-  Sponsored: BigNumberish;
+  Single: BigNumberish;
+  Distributed: [BigNumberish, BigNumberish];
 };
 export type PrizeTypeEnum = CairoCustomEnum;
+
+// Type definition for `tournaments::components::models::tournament::EntryFeeRewardType` enum
+export type EntryFeeRewardType = {
+  Position: BigNumberish;
+  TournamentCreator: any;
+  GameCreator: any;
+  Refund: BigNumberish;
+};
+export type EntryFeeRewardTypeEnum = CairoCustomEnum;
 
 // Type definition for `tournaments::components::models::tournament::Role` enum
 export enum Role {
@@ -402,15 +429,14 @@ export interface SchemaType extends ISchemaType {
     PlatformMetrics: WithFieldOrder<PlatformMetrics>;
     PlatformMetricsValue: WithFieldOrder<PlatformMetricsValue>;
     Prize: WithFieldOrder<Prize>;
-    PrizeClaim: WithFieldOrder<PrizeClaim>;
-    PrizeClaimValue: WithFieldOrder<PrizeClaimValue>;
+    RewardClaim: WithFieldOrder<RewardClaim>;
+    RewardClaimValue: WithFieldOrder<RewardClaimValue>;
     PrizeMetrics: WithFieldOrder<PrizeMetrics>;
     PrizeMetricsValue: WithFieldOrder<PrizeMetricsValue>;
     PrizeValue: WithFieldOrder<PrizeValue>;
     Registration: WithFieldOrder<Registration>;
     RegistrationValue: WithFieldOrder<RegistrationValue>;
     Schedule: WithFieldOrder<Schedule>;
-    Token: WithFieldOrder<Token>;
     TokenValue: WithFieldOrder<TokenValue>;
     Tournament: WithFieldOrder<Tournament>;
     TournamentConfig: WithFieldOrder<TournamentConfig>;
@@ -545,8 +571,10 @@ export const schemaTemplate: {
     expires_at: 0,
   },
   ERC20Data: {
-    fieldOrder: ["amount"],
+    fieldOrder: ["amount", "distribution", "distribution_count"],
     amount: 0,
+    distribution: new CairoOption(CairoOptionVariant.None),
+    distribution_count: new CairoOption(CairoOptionVariant.None),
   },
   ERC721Data: {
     fieldOrder: ["id"],
@@ -568,18 +596,34 @@ export const schemaTemplate: {
       "distribution",
       "tournament_creator_share",
       "game_creator_share",
+      "refund_share",
+      "distribution_positions",
     ],
     token_address: "",
     amount: 0,
-    distribution: [0],
+    distribution: new CairoCustomEnum({
+      Linear: undefined,
+      Exponential: 10, // Default weight 10 = 1.0
+      Uniform: undefined,
+      Custom: undefined,
+    }),
     tournament_creator_share: new CairoOption(CairoOptionVariant.None),
     game_creator_share: new CairoOption(CairoOptionVariant.None),
+    refund_share: new CairoOption(CairoOptionVariant.None),
+    distribution_positions: new CairoOption(CairoOptionVariant.None),
   },
   GameConfig: {
-    fieldOrder: ["address", "settings_id", "prize_spots"],
+    fieldOrder: [
+      "address",
+      "settings_id",
+      "prize_spots",
+      "soulbound",
+      "play_url",
+    ],
     address: "",
     settings_id: 0,
-    prize_spots: 0,
+    soulbound: false,
+    play_url: "",
   },
   Leaderboard: {
     fieldOrder: ["tournament_id", "token_ids"],
@@ -612,30 +656,38 @@ export const schemaTemplate: {
   Prize: {
     fieldOrder: [
       "id",
-      "tournament_id",
-      "payout_position",
+      "context_id",
       "token_address",
       "token_type",
+      "sponsor_address",
     ],
     id: 0,
-    tournament_id: 0,
-    payout_position: 0,
+    context_id: 0,
     token_address: "",
     token_type: new CairoCustomEnum({
-      erc20: { fieldOrder: ["amount"], amount: 0 },
+      erc20: {
+        fieldOrder: ["amount", "distribution", "distribution_count"],
+        amount: 0,
+        distribution: new CairoOption(CairoOptionVariant.None),
+        distribution_count: new CairoOption(CairoOptionVariant.None),
+      },
       erc721: undefined,
     }),
+    sponsor_address: "",
   },
-  PrizeClaim: {
-    fieldOrder: ["tournament_id", "prize_type", "claimed"],
+  RewardClaim: {
+    fieldOrder: ["tournament_id", "reward_type", "claimed"],
     tournament_id: 0,
-    prize_type: new CairoCustomEnum({
-      EntryFees: Role.TournamentCreator,
-      sponsored: undefined,
+    reward_type: new CairoCustomEnum({
+      Prize: new CairoCustomEnum({
+        Single: 1,
+        Distributed: undefined,
+      }),
+      EntryFee: undefined,
     }),
     claimed: false,
   },
-  PrizeClaimValue: {
+  RewardClaimValue: {
     fieldOrder: ["claimed"],
     claimed: false,
   },
@@ -674,6 +726,7 @@ export const schemaTemplate: {
     game_token_id: 0,
     entry_number: 0,
     has_submitted: false,
+    is_banned: false,
   },
   RegistrationValue: {
     fieldOrder: ["entry_number", "has_submitted"],
@@ -685,14 +738,6 @@ export const schemaTemplate: {
     registration: new CairoOption(CairoOptionVariant.None),
     game: { start: 0, end: 0 },
     submission_duration: 0,
-  },
-  Token: {
-    fieldOrder: ["address", "name", "symbol", "token_type", "is_registered"],
-    address: "",
-    name: "",
-    symbol: "",
-    token_type: "",
-    is_registered: false,
   },
   TokenValue: {
     fieldOrder: ["name", "symbol", "token_type", "is_registered"],
@@ -725,7 +770,12 @@ export const schemaTemplate: {
       game: { start: 0, end: 0 },
       submission_duration: 0,
     },
-    game_config: { address: "", settings_id: 0, prize_spots: 0 },
+    game_config: {
+      address: "",
+      settings_id: 0,
+      soulbound: false,
+      play_url: "",
+    },
     entry_fee: new CairoOption(CairoOptionVariant.None),
     entry_requirement: new CairoOption(CairoOptionVariant.None),
     soulbound: false,
@@ -775,7 +825,8 @@ export const schemaTemplate: {
     game_config: {
       address: "",
       settings_id: 0,
-      prize_spots: 0,
+      soulbound: false,
+      play_url: "",
     },
     entry_fee: new CairoOption(CairoOptionVariant.None),
     entry_requirement: new CairoOption(CairoOptionVariant.None),
@@ -822,7 +873,6 @@ export function getModelsMapping(namespace: string) {
     RegistrationValue: `${namespace}-RegistrationValue` as const,
     Role: `${namespace}-Role` as const,
     Schedule: `${namespace}-Schedule` as const,
-    Token: `${namespace}-Token` as const,
     TokenType: `${namespace}-TokenType` as const,
     TokenValue: `${namespace}-TokenValue` as const,
     Tournament: `${namespace}-Tournament` as const,

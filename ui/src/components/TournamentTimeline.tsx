@@ -4,6 +4,7 @@ import {
   LEADERBOARD,
   REGISTER,
 } from "@/components/Icons";
+import { Clock } from "lucide-react";
 import TimelineCard from "@/components/TimelineCard";
 
 interface TournamentTimelineProps {
@@ -38,10 +39,12 @@ const TournamentTimeline = ({
   // Use registrationEndTime if provided, otherwise default to startTime (no gap)
   const effectiveRegistrationEndTime = registrationEndTime ?? startTime;
   const registrationEndDate = new Date(effectiveRegistrationEndTime * 1000);
-  const registrationPeriod = effectiveRegistrationEndTime - effectiveRegistrationStartTime;
+  const registrationPeriod =
+    effectiveRegistrationEndTime - effectiveRegistrationStartTime;
 
-  // Gap between registration end and tournament start
+  // Gap between registration end and tournament start (preparation period)
   const hasGap = registrationEndTime && registrationEndTime < startTime;
+  const gapDuration = hasGap ? startTime - effectiveRegistrationEndTime : 0;
 
   const now = Number(BigInt(new Date().getTime()) / BigInt(1000));
   const isRegistrationEnded = effectiveRegistrationEndTime < now;
@@ -49,12 +52,16 @@ const TournamentTimeline = ({
   const isEnded = startTime + duration < now;
   const isSubmissionEnded = startTime + duration + submissionPeriod < now;
 
+  // New flag: Detect if we're in the break/preparation period
+  const isInPreparationPeriod = hasGap && isRegistrationEnded && !isStarted;
+
   return (
-    <div className="flex flex-row items-center justify-center gap-10 sm:gap-20 3xl:gap-[100px] mt-4">
+    <div className="w-full overflow-x-auto">
+      <div className="flex flex-row items-center justify-center gap-2 sm:gap-4 lg:gap-6 mt-4 px-2">
       {type === "fixed" && (
         <TimelineCard
           icon={
-            <span className="w-6 sm:w-8 3xl:w-10">
+            <span className="w-4 sm:w-5 lg:w-6 3xl:w-8">
               <REGISTER />
             </span>
           }
@@ -64,26 +71,24 @@ const TournamentTimeline = ({
           showConnector
           active={pulse ? !isRegistrationEnded : false}
           completed={isRegistrationEnded}
+          highlighted={!isRegistrationEnded}
         />
       )}
       {type === "fixed" && hasGap && (
-        <>
-          <TimelineCard
-            icon={
-              <span className="w-4 sm:w-6 3xl:w-8">
-                <REGISTER />
-              </span>
-            }
-            date={registrationEndDate}
-            active={pulse ? isRegistrationEnded && !isStarted : false}
-            completed={isStarted}
-          />
-          <div className="-mx-8 sm:-mx-16 3xl:-mx-20" />
-        </>
+        <TimelineCard
+          icon={<Clock className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5 3xl:w-7 3xl:h-7" />}
+          date={registrationEndDate}
+          duraton={gapDuration}
+          label="Preparation"
+          showConnector
+          active={pulse ? !!isInPreparationPeriod : false}
+          completed={isStarted}
+          highlighted={!!isInPreparationPeriod}
+        />
       )}
       <TimelineCard
         icon={
-          <span className="w-4 sm:w-6 3xl:w-8">
+          <span className="w-3 sm:w-4 lg:w-5 3xl:w-7">
             <START_FLAG />
           </span>
         }
@@ -93,10 +98,11 @@ const TournamentTimeline = ({
         showConnector
         active={pulse ? isStarted && !isEnded : false}
         completed={isStarted}
+        highlighted={isStarted && !isEnded}
       />
       <TimelineCard
         icon={
-          <span className="w-4 sm:w-6 3xl:w-8">
+          <span className="w-3 sm:w-4 lg:w-5 3xl:w-7">
             <END_FLAG />
           </span>
         }
@@ -106,17 +112,18 @@ const TournamentTimeline = ({
         showConnector
         active={pulse ? isEnded && !isSubmissionEnded : false}
         completed={isEnded}
+        highlighted={isEnded && !isSubmissionEnded}
       />
       <TimelineCard
         icon={
-          <span className="w-6 sm:w-8 3xl:w-10">
+          <span className="w-4 sm:w-5 lg:w-6 3xl:w-8">
             <LEADERBOARD />
           </span>
         }
         date={submissionEndDate}
-        label="Final"
         completed={isSubmissionEnded}
       />
+      </div>
     </div>
   );
 };

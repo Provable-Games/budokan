@@ -64,6 +64,8 @@ export const SponsorsDialog = ({
   const { selectedChainConfig, namespace } = useDojo();
   const chainId = selectedChainConfig?.chainId ?? "";
 
+  console.log("Token Prices", prices);
+
   // Fetch all prizes to get sponsored ones
   const { data: prizesData, loading: prizesLoading } =
     useGetAllTournamentPrizes({
@@ -127,8 +129,7 @@ export const SponsorsDialog = ({
 
         const decimals = tokenDecimals[tokenAddress] || 18;
         const tokenAmount = Number(amount) / 10 ** decimals;
-        const tokenSymbol = getTokenSymbol(chainId, tokenAddress);
-        const tokenPrice = prices[tokenSymbol ?? ""] ?? 0;
+        const tokenPrice = prices[tokenAddress] ?? 0;
         const usdValue = tokenAmount * tokenPrice;
 
         tokenContribution.usdValue += usdValue;
@@ -189,6 +190,8 @@ export const SponsorsDialog = ({
   }, [sponsorContributions]);
 
   const { tokenUris, loading: nftUrisLoading } = useNftTokenUris(allNfts);
+
+  console.log("Sponsor tokens", sponsorContributions);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -313,41 +316,48 @@ export const SponsorsDialog = ({
                   })}
 
                   {/* NFT Collections */}
-                  {Array.from(sponsor.nftCollections.values()).map((collection) => (
-                    <div
-                      key={collection.tokenAddress}
-                      className="bg-brand/5 rounded p-3 space-y-2"
-                    >
-                      <div className="flex items-center justify-between border-b border-brand/10 pb-2">
-                        <span className="font-medium text-sm">
-                          {collection.tokenSymbol}
-                        </span>
-                        <span className="text-xs text-brand-muted">
-                          {collection.nfts.length} NFT{collection.nfts.length !== 1 ? "s" : ""}
-                        </span>
+                  {Array.from(sponsor.nftCollections.values()).map(
+                    (collection) => (
+                      <div
+                        key={collection.tokenAddress}
+                        className="bg-brand/5 rounded p-3 space-y-2"
+                      >
+                        <div className="flex items-center justify-between border-b border-brand/10 pb-2">
+                          <span className="font-medium text-sm">
+                            {collection.tokenSymbol}
+                          </span>
+                          <span className="text-xs text-brand-muted">
+                            {collection.nfts.length} NFT
+                            {collection.nfts.length !== 1 ? "s" : ""}
+                          </span>
+                        </div>
+                        <div className="space-y-1">
+                          {collection.nfts.map((nft, idx) => (
+                            <div
+                              key={`${collection.tokenAddress}-${nft.tokenId}-${idx}`}
+                              className="flex items-center gap-2"
+                            >
+                              <NftPreview
+                                tokenUri={
+                                  tokenUris[
+                                    `${collection.tokenAddress}_${nft.tokenId}`
+                                  ]
+                                }
+                                tokenId={nft.tokenId}
+                                symbol={collection.tokenSymbol}
+                                size="sm"
+                                loading={nftUrisLoading}
+                                showTooltip={false}
+                              />
+                              <span className="text-xs text-brand-muted">
+                                #{nft.tokenId.toString()}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                      <div className="space-y-1">
-                        {collection.nfts.map((nft, idx) => (
-                          <div
-                            key={`${collection.tokenAddress}-${nft.tokenId}-${idx}`}
-                            className="flex items-center gap-2"
-                          >
-                            <NftPreview
-                              tokenUri={tokenUris[`${collection.tokenAddress}_${nft.tokenId}`]}
-                              tokenId={nft.tokenId}
-                              symbol={collection.tokenSymbol}
-                              size="sm"
-                              loading={nftUrisLoading}
-                              showTooltip={false}
-                            />
-                            <span className="text-xs text-brand-muted">
-                              #{nft.tokenId.toString()}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  )}
                 </div>
 
                 {/* Desktop: Table layout */}
@@ -409,42 +419,48 @@ export const SponsorsDialog = ({
                       )}
 
                       {/* NFT Collections */}
-                      {Array.from(sponsor.nftCollections.values()).map((collection) => (
-                        <>
-                          {/* Individual NFT rows */}
-                          {collection.nfts.map((nft, idx) => (
-                            <TableRow
-                              key={`${collection.tokenAddress}-${nft.tokenId}-${idx}`}
-                            >
-                              <TableCell>
-                                <div className="flex items-center gap-2">
-                                  <NftPreview
-                                    tokenUri={tokenUris[`${collection.tokenAddress}_${nft.tokenId}`]}
-                                    tokenId={nft.tokenId}
-                                    symbol={collection.tokenSymbol}
-                                    size="sm"
-                                    loading={nftUrisLoading}
-                                  />
-                                  <span className="text-sm text-brand-muted">
-                                    #{nft.tokenId.toString()}
+                      {Array.from(sponsor.nftCollections.values()).map(
+                        (collection) => (
+                          <>
+                            {/* Individual NFT rows */}
+                            {collection.nfts.map((nft, idx) => (
+                              <TableRow
+                                key={`${collection.tokenAddress}-${nft.tokenId}-${idx}`}
+                              >
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    <NftPreview
+                                      tokenUri={
+                                        tokenUris[
+                                          `${collection.tokenAddress}_${nft.tokenId}`
+                                        ]
+                                      }
+                                      tokenId={nft.tokenId}
+                                      symbol={collection.tokenSymbol}
+                                      size="sm"
+                                      loading={nftUrisLoading}
+                                    />
+                                    <span className="text-sm text-brand-muted">
+                                      #{nft.tokenId.toString()}
+                                    </span>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <span className="text-brand-muted">
+                                    {collection.tokenSymbol}
                                   </span>
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <span className="text-brand-muted">
-                                  {collection.tokenSymbol}
-                                </span>
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <span className="text-brand-muted">-</span>
-                              </TableCell>
-                              <TableCell className="text-right text-brand-muted">
-                                1
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </>
-                      ))}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <span className="text-brand-muted">-</span>
+                                </TableCell>
+                                <TableCell className="text-right text-brand-muted">
+                                  1
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </>
+                        )
+                      )}
                     </TableBody>
                   </Table>
                 </div>

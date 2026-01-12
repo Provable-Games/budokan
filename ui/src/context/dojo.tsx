@@ -11,7 +11,11 @@ import { setupWorld } from "@/generated/contracts.gen";
 import { SDK, init } from "@dojoengine/sdk";
 import { SchemaType } from "@/generated/models.gen";
 import { DojoManifest } from "@/dojo/hooks/useDojoSystem";
-import { DojoChainConfig, ChainId, getDefaultChainId } from "@/dojo/setup/networks";
+import {
+  DojoChainConfig,
+  ChainId,
+  getDefaultChainId,
+} from "@/dojo/setup/networks";
 import { StarknetDomain } from "starknet";
 import { useNetwork } from "@starknet-react/core";
 import { CHAINS } from "@/dojo/setup/networks";
@@ -75,7 +79,7 @@ export const DojoContextProvider = ({ children }: { children: ReactNode }) => {
     init<SchemaType>({
       client: {
         toriiUrl: selectedChainConfig.toriiUrl!,
-        worldAddress: manifest.world.address ?? "",
+        worldAddress: "0x0",
       },
       domain: {
         name: "WORLD_NAME",

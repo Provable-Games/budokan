@@ -13,13 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { StepProps } from "@/containers/CreateTournament";
 import TokenGameIcon from "@/components/icons/TokenGameIcon";
-import { Slider } from "@/components/ui/slider";
-import { INFO } from "@/components/Icons";
-import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from "@/components/ui/hover-card";
+import { Switch } from "@/components/ui/switch";
 import SettingsSection from "@/components/createTournament/settings/SettingsSection";
 import useUIStore from "@/hooks/useUIStore";
 import {
@@ -30,17 +24,24 @@ import {
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { getPlayUrl } from "@/assets/games";
 
 const Details = ({ form }: StepProps) => {
   const { gameData } = useUIStore();
-  const PREDEFINED_SIZES = [1, 3, 10, 20] as const;
   const [isMobileDialogOpen, setIsMobileDialogOpen] = useState(false);
   const [isMarkdownPreviewOpen, setIsMarkdownPreviewOpen] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   useEffect(() => {
     const subscription = form.watch((_value, { name }) => {
       if (name === "game") {
         form.setValue("settings", "0");
+        // Prefill play_url with the game's playUrl if available
+        const gameAddress = form.getValues("game");
+        const playUrl = getPlayUrl(gameAddress);
+        if (playUrl) {
+          form.setValue("play_url", playUrl);
+        }
       }
     });
 
@@ -116,7 +117,8 @@ const Details = ({ form }: StepProps) => {
               )}
             />
           </div>
-          <div className="w-full h-0.5 bg-brand/25 sm:hidden" />
+          <div className="w-full h-px bg-brand sm:hidden" />
+          <div className="hidden sm:block w-px bg-brand" />
           <div className="flex flex-col gap-5 w-full sm:w-2/5">
             <FormField
               control={form.control}
@@ -167,98 +169,77 @@ const Details = ({ form }: StepProps) => {
                       {...field}
                     />
                   </FormControl>
-                  <FormDescription className="text-xs">
-                    Markdown formatting is supported
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <div className="w-full h-0.5 bg-brand/25" />
-            <FormField
-              control={form.control}
-              name="leaderboardSize"
-              render={({ field }) => (
-                <FormItem>
-                  <div className="flex flex-row items-center gap-5 relative overflow-visible">
-                    <FormLabel className="font-brand text-lg xl:text-xl 2xl:text-2xl 3xl:text-3xl">
-                      Leaderboard Size
-                    </FormLabel>
-                    <FormDescription className="hidden sm:block sm:text-xs xl:text-sm 3xl:text-base">
-                      Size of the leaderboard
+                  <div className="flex flex-row items-center justify-between">
+                    <FormDescription className="text-xs">
+                      Markdown formatting is supported
                     </FormDescription>
-                    <div className="hidden sm:block">
-                      <HoverCard openDelay={50} closeDelay={0}>
-                        <HoverCardTrigger asChild>
-                          <span className="absolute -top-4 right-0 w-6 h-6 cursor-pointer">
-                            <INFO />
-                          </span>
-                        </HoverCardTrigger>
-                        <HoverCardContent className="w-80 p-4 text-sm z-50">
-                          <div className="div flex flex-col gap-2">
-                            <h4 className="text-lg">Leaderboard Size</h4>
-                            <p className="text-muted-foreground">
-                              Determines how many players are scored.
-                            </p>
-                            <p className="text-neutral text-wrap">
-                              The size of the leaderboard governs how many
-                              players can recieve entry fees and prizes as well
-                              as who can qualify for further tournaments.
-                            </p>
-                          </div>
-                        </HoverCardContent>
-                      </HoverCard>
-                    </div>
-                    <div
-                      className="sm:hidden absolute -top-4 right-0 w-6 h-6 cursor-pointer"
-                      onClick={() => setIsMobileDialogOpen(true)}
+                    <span
+                      onClick={() => setShowAdvanced(!showAdvanced)}
+                      className="text-xs text-brand hover:text-brand/80 cursor-pointer"
                     >
-                      <INFO />
-                    </div>
+                      {showAdvanced ? "Hide Advanced" : "Show Advanced"}
+                    </span>
                   </div>
-                  <FormControl>
-                    <div className="space-y-4">
-                      <div className="flex flex-row items-center justify-between w-full">
-                        <div className="flex flex-row items-center gap-2">
-                          {PREDEFINED_SIZES.map((size) => (
-                            <Button
-                              key={size}
-                              variant={
-                                field.value === size ? "default" : "outline"
-                              }
-                              className={`sm:px-2 2xl:px-4`}
-                              type="button"
-                              onClick={() => field.onChange(size)}
-                            >
-                              Top {size}
-                            </Button>
-                          ))}
-                        </div>
-                        <span className="text-lg xl:text-xl 2xl:text-2xl 3xl:text-3xl">
-                          {field.value}
-                        </span>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Slider
-                          min={1}
-                          max={255}
-                          step={1}
-                          value={[field.value]}
-                          onValueChange={(value) => field.onChange(value[0])}
-                          className="w-full"
-                        />
-                        <div className="flex justify-between text-xs text-muted-foreground">
-                          <span>1</span>
-                          <span>255</span>
-                        </div>
-                      </div>
-                    </div>
-                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
+            {showAdvanced && (
+              <>
+                <div className="w-full h-0.5 bg-brand/25" />
+                <FormField
+                  control={form.control}
+                  name="soulbound"
+                  render={({ field }) => (
+                    <FormItem>
+                      <div className="flex flex-row items-center justify-between gap-2">
+                        <div className="flex flex-row items-center gap-3">
+                          <FormLabel className="font-brand text-sm sm:text-base">
+                            Soulbound
+                          </FormLabel>
+                          <FormDescription className="hidden sm:block text-xs">
+                            Entry tokens cannot be transferred
+                          </FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="play_url"
+                  render={({ field: { value, onChange, ...fieldProps } }) => (
+                    <FormItem>
+                      <div className="flex flex-row items-center gap-3">
+                        <FormLabel className="font-brand text-sm sm:text-base">
+                          Play URL
+                        </FormLabel>
+                        <FormDescription className="hidden sm:block text-xs">
+                          Custom URL (optional)
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Input
+                          className="h-8 text-xs sm:text-sm"
+                          placeholder="https://example.com/play"
+                          {...fieldProps}
+                          value={typeof value === "string" ? value : ""}
+                          onChange={(e) => onChange(e.target.value)}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </>
+            )}
           </div>
         </div>
       </div>

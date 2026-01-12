@@ -6,7 +6,6 @@ import {
   PLAY,
   SPACE_INVADER_SOLID,
   TROPHY_LINE,
-  COIN,
   STARKNET,
   DISCORD,
 } from "@/components/Icons";
@@ -55,7 +54,6 @@ const Header = () => {
   const isMainnet = selectedChainConfig.chainId === ChainId.SN_MAIN;
   const isSepolia = selectedChainConfig.chainId === ChainId.SN_SEPOLIA;
   const isHomeScreen = location.pathname === "/";
-  const isLocal = selectedChainConfig.chainId === ChainId.KATANA_LOCAL;
   const isController = connector ? isControllerAccount(connector) : false;
   const walletIcon =
     connector && !isController ? getConnectorIcon(connector) : null;
@@ -189,7 +187,7 @@ const Header = () => {
                 Support
               </span>
             </Button>
-            {!isLocal && account && (
+            {account && (
               <DropdownMenu>
                 <DropdownMenuTrigger>
                   <Button variant="outline">
@@ -233,20 +231,6 @@ const Header = () => {
                 </span>
               </Button>
             )}
-            {!isMainnet &&
-              !isSepolia &&
-              location.pathname !== "/register-token" && (
-                <Button
-                  onClick={() => {
-                    navigate("/register-token");
-                  }}
-                >
-                  <span className="flex flex-row items-center gap-2">
-                    <COIN />
-                    Register Token
-                  </span>
-                </Button>
-              )}
             {location.pathname !== "/create-tournament" && (
               // && isAdmin
               <Button

@@ -1,0 +1,15 @@
+[package]
+name = "math"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+
+[cairo]
+sierra-replace-ids = true
+
+[dependencies]
+starknet.workspace = true
+
+[dev-dependencies]
+cairo_test.workspace = true

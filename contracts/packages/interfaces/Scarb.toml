@@ -1,0 +1,15 @@
+[package]
+name = "budokan_interfaces"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+
+[cairo]
+sierra-replace-ids = true
+
+[dependencies]
+starknet.workspace = true
+
+[dev-dependencies]
+snforge_std.workspace = true

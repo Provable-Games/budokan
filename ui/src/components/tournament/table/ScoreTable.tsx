@@ -17,17 +17,21 @@ import {
 } from "@/components/tournament/containers/TournamentCard";
 import ScoreRow from "@/components/tournament/table/ScoreRow";
 import EntrantRow from "@/components/tournament/table/EntrantRow";
-import { useTournamentContracts } from "@/dojo/hooks/useTournamentContracts";
 import { padAddress } from "@/lib/utils";
 import { ScoreTableDialog } from "@/components/dialogs/ScoreTable";
+import { BanManagementDialog } from "@/components/dialogs/BanManagement";
 import { useGetTournamentRegistrants } from "@/dojo/hooks/useSqlQueries";
 import { useDojo } from "@/context/dojo";
+import { Tournament } from "@/generated/models.gen";
+import { Ban } from "lucide-react";
 
 interface ScoreTableProps {
   tournamentId: BigNumberish;
   entryCount: number;
   isStarted: boolean;
   isEnded: boolean;
+  tournamentModel?: Tournament;
+  onBanComplete?: () => void;
 }
 
 const ScoreTable = ({
@@ -35,14 +39,37 @@ const ScoreTable = ({
   entryCount,
   isStarted,
   isEnded,
+  tournamentModel,
+  onBanComplete,
 }: ScoreTableProps) => {
-  const { namespace } = useDojo();
+  const { namespace, selectedChainConfig } = useDojo();
   const [showScores, setShowScores] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<any>(null);
   const [isMobileDialogOpen, setIsMobileDialogOpen] = useState(false);
   const [hasInitialized, setHasInitialized] = useState(false);
   const [showTableDialog, setShowTableDialog] = useState(false);
-  const { tournamentAddress } = useTournamentContracts();
+  const [showBanDialog, setShowBanDialog] = useState(false);
+  const [localBanRefreshTrigger, setLocalBanRefreshTrigger] = useState(0);
+  const tournamentAddress = selectedChainConfig.budokanAddress!;
+
+  // Check if this tournament has extension requirements that support banning
+  const hasEntryRequirement = tournamentModel?.entry_requirement.isSome();
+  const requirementVariant =
+    tournamentModel?.entry_requirement.Some?.entry_requirement_type?.activeVariant();
+  const extensionConfig =
+    tournamentModel?.entry_requirement.Some?.entry_requirement_type?.variant
+      ?.extension;
+
+  // Only show ban button if:
+  // 1. Tournament hasn't started
+  // 2. Has extension requirement
+  // 3. Has entries to potentially ban
+  const showBanButton =
+    !isStarted &&
+    hasEntryRequirement &&
+    requirementVariant === "extension" &&
+    extensionConfig?.address &&
+    entryCount > 0;
 
   const {
     games,
@@ -67,6 +94,8 @@ const ScoreTable = ({
     mintedByAddress: padAddress(tournamentAddress),
     includeMetadata: true,
   });
+
+  console.log(games);
 
   const gameIds = useMemo(
     () => games?.map((game) => Number(game.token_id)) || [],
@@ -172,6 +201,28 @@ const ScoreTable = ({
                   <TableProperties className="w-4 h-4" />
                 </Button>
               )}
+              {/* Desktop ban management button */}
+              {showBanButton && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowBanDialog(true)}
+                  className="hidden sm:flex"
+                >
+                  <Ban className="w-4 h-4" />
+                </Button>
+              )}
+              {/* Mobile ban management button */}
+              {showBanButton && (
+                <Button
+                  variant="outline"
+                  size="xs"
+                  onClick={() => setShowBanDialog(true)}
+                  className="flex sm:hidden"
+                >
+                  <Ban className="w-3 h-3" />
+                </Button>
+              )}
             </>
           )}
           <TournamentCardSwitch
@@ -223,6 +274,7 @@ const ScoreTable = ({
                       setSelectedPlayer={setSelectedPlayer}
                       setIsMobileDialogOpen={setIsMobileDialogOpen}
                       usernames={usernames}
+                      registration={orderedRegistrants?.[index + colIndex * 5]}
                     />
                   )}
                 </>
@@ -253,7 +305,26 @@ const ScoreTable = ({
         entryCount={entryCount}
         isStarted={isStarted}
         isEnded={isEnded}
+        banRefreshTrigger={localBanRefreshTrigger}
       />
+
+      {/* Ban management dialog */}
+      {showBanButton && (
+        <BanManagementDialog
+          open={showBanDialog}
+          onOpenChange={setShowBanDialog}
+          tournamentId={tournamentId}
+          tournamentModel={tournamentModel}
+          extensionAddress={extensionConfig?.address}
+          onBanComplete={() => {
+            refetch();
+            setLocalBanRefreshTrigger((prev) => prev + 1);
+            if (onBanComplete) {
+              onBanComplete();
+            }
+          }}
+        />
+      )}
     </TournamentCard>
   );
 };

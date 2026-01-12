@@ -18,9 +18,8 @@ import Pagination from "@/components/table/Pagination";
 import { useState, useEffect, useMemo } from "react";
 import { BigNumberish, addAddressPadding } from "starknet";
 import { useGameTokens, useGameTokensCount } from "metagame-sdk/sql";
-import { useTournamentContracts } from "@/dojo/hooks/useTournamentContracts";
 import { REFRESH, VERIFIED } from "@/components/Icons";
-import { Search } from "lucide-react";
+import { Search, Ban } from "lucide-react";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useGetTournamentRegistrants } from "@/dojo/hooks/useSqlQueries";
 import { useDojo } from "@/context/dojo";
@@ -32,6 +31,7 @@ interface ScoreTableDialogProps {
   entryCount: number;
   isStarted: boolean;
   isEnded: boolean;
+  banRefreshTrigger?: number;
 }
 
 export const ScoreTableDialog = ({
@@ -41,9 +41,10 @@ export const ScoreTableDialog = ({
   entryCount,
   isStarted,
   isEnded,
+  banRefreshTrigger,
 }: ScoreTableDialogProps) => {
-  const { namespace } = useDojo();
-  const { tournamentAddress } = useTournamentContracts();
+  const { namespace, selectedChainConfig } = useDojo();
+  const tournamentAddress = selectedChainConfig.budokanAddress!;
   const [searchQuery, setSearchQuery] = useState("");
 
   // Debounce search query to avoid too many requests
@@ -100,6 +101,13 @@ export const ScoreTableDialog = ({
       );
     });
   }, [games, registrants]);
+
+  // Refetch when a ban operation completes
+  useEffect(() => {
+    if (banRefreshTrigger && banRefreshTrigger > 0 && open) {
+      refetch();
+    }
+  }, [banRefreshTrigger, open]);
 
   // Get the filtered count based on the same search parameters
   const { count: filteredCount } = useGameTokensCount({
@@ -205,21 +213,27 @@ export const ScoreTableDialog = ({
                   )}...${ownerAddress?.slice(-4)}`;
                   const registration = orderedRegistrants[index];
                   const hasSubmitted = registration?.has_submitted === 1;
+                  const isBanned = registration?.is_banned === 1;
 
                   return (
-                    <TableRow key={index}>
+                    <TableRow key={index} className={isBanned ? "opacity-60" : ""}>
                       <TableCell className="text-center font-medium">
                         {globalIndex + 1}
                       </TableCell>
                       <TableCell>
-                        <div className="flex flex-col">
-                          <span className="font-medium">
-                            {playerName || shortAddress}
-                          </span>
-                          {playerName && (
-                            <span className="text-xs text-muted-foreground">
-                              {shortAddress}
+                        <div className="flex items-center gap-2">
+                          <div className="flex flex-col flex-1">
+                            <span className="font-medium">
+                              {playerName || shortAddress}
                             </span>
+                            {playerName && (
+                              <span className="text-xs text-muted-foreground">
+                                {shortAddress}
+                              </span>
+                            )}
+                          </div>
+                          {isBanned && (
+                            <Ban className="w-4 h-4 text-destructive flex-shrink-0" />
                           )}
                         </div>
                       </TableCell>

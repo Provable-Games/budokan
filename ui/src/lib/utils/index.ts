@@ -444,11 +444,15 @@ export const adjustColorOpacity = (color: string, opacity: number): string => {
   return color;
 };
 
+export type DistributionType = "linear" | "exponential" | "uniform";
+
 export const calculateDistribution = (
   positions: number,
   weight: number,
   creatorFee?: number,
-  gameFee?: number
+  gameFee?: number,
+  refundShare?: number,
+  distributionType: DistributionType = "exponential"
 ): number[] => {
   // Handle invalid inputs
   if (positions <= 0) {
@@ -457,21 +461,40 @@ export const calculateDistribution = (
 
   const safeCreatorFee = creatorFee ?? 0;
   const safeGameFee = gameFee ?? 0;
-  const availablePercentage = 100 - safeCreatorFee - safeGameFee;
+  const safeRefundShare = refundShare ?? 0;
+  const prizePoolPercentage = 100 - safeCreatorFee - safeGameFee - safeRefundShare;
 
   // If there's nothing to distribute, return array of zeros
-  if (availablePercentage <= 0) {
+  if (prizePoolPercentage <= 0) {
     return Array(positions).fill(0);
   }
 
-  // First calculate raw percentages
-  const rawDistributions: number[] = [];
-  for (let i = 0; i < positions; i++) {
-    const share = availablePercentage * Math.pow(1 - i / positions, weight);
-    rawDistributions.push(share);
+  let rawDistributions: number[] = [];
+
+  if (distributionType === "uniform") {
+    // Uniform distribution - everyone gets equal share
+    rawDistributions = Array(positions).fill(1);
+  } else if (distributionType === "linear") {
+    // Linear distribution with adjustable steepness
+    // Formula: share = 1 + (positionValue - 1) * weight
+    // Weight = 0: Uniform (everyone gets 1)
+    // Weight = 1: Standard linear (1st gets n, 2nd gets n-1, etc.)
+    // Weight > 1: Steeper (1st place gets proportionally more)
+    // Weight < 1: Flatter (more equal distribution)
+    for (let i = 0; i < positions; i++) {
+      const positionValue = positions - i; // For i=0 (1st place): n, i=1 (2nd): n-1, etc.
+      const share = 1 + (positionValue - 1) * (weight / 10);
+      rawDistributions.push(share);
+    }
+  } else {
+    // Exponential distribution (default)
+    for (let i = 0; i < positions; i++) {
+      const share = Math.pow(1 - i / positions, weight);
+      rawDistributions.push(share);
+    }
   }
 
-  // Normalize to get percentages
+  // Normalize to get the sum of all raw shares
   const total = rawDistributions.reduce((a, b) => a + b, 0);
 
   // Prevent division by zero
@@ -479,31 +502,24 @@ export const calculateDistribution = (
     return Array(positions).fill(0);
   }
 
+  // Calculate each position's percentage of the prize pool (not total entry fee)
+  // Each position gets (its raw share / total raw shares) * 100% of prize pool
   const normalizedDistributions = rawDistributions.map(
-    (d) => (d * availablePercentage) / total
+    (d) => (d / total) * 100
   );
 
-  // Round down to whole numbers only
+  // Round to 2 decimal places
   const roundedDistributions = normalizedDistributions.map((d) =>
-    Math.floor(d)
+    Math.round(d * 100) / 100
   );
 
-  // Calculate the remaining percentage points to distribute
+  // Calculate the remaining due to rounding
   const totalRounded = roundedDistributions.reduce((a, b) => a + b, 0);
-  let remaining = availablePercentage - totalRounded;
+  const remaining = 100 - totalRounded;
 
-  // Distribute remaining points based on decimal parts
-  const decimalParts = normalizedDistributions.map((d, i) => ({
-    index: i,
-    decimal: d - Math.floor(d),
-  }));
-
-  // Sort by decimal part descending
-  decimalParts.sort((a, b) => b.decimal - a.decimal);
-
-  // Add one point to each position with highest decimal until we reach 100%
-  for (let i = 0; i < remaining && i < positions; i++) {
-    roundedDistributions[decimalParts[i].index]++;
+  // Add remaining to the first position to ensure it sums to exactly 100%
+  if (remaining !== 0 && positions > 0) {
+    roundedDistributions[0] = Math.round((roundedDistributions[0] + remaining) * 100) / 100;
   }
 
   return roundedDistributions;

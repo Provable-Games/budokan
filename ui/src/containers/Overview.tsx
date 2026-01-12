@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { X, CHEVRON_DOWN } from "@/components/Icons";
 import useUIStore from "@/hooks/useUIStore";
+import { getTokensByAddresses } from "@/lib/tokenUtils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,7 +45,6 @@ import {
   EXCLUDED_TOURNAMENT_IDS,
 } from "@/lib/constants";
 import { LoadingSpinner } from "@/components/ui/spinner";
-import { useTournamentContracts } from "@/dojo/hooks/useTournamentContracts";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
 import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
 
@@ -69,7 +69,7 @@ const SORT_OPTIONS = {
 } as const;
 
 const Overview = () => {
-  const { namespace } = useDojo();
+  const { namespace, selectedChainConfig } = useDojo();
   const { address } = useAccount();
   const { chain } = useNetwork();
   const { getTokenDecimals } = useSystemCalls();
@@ -99,7 +99,7 @@ const Overview = () => {
     processTournamentsFromRaw,
   } = useTournamentStore();
 
-  const { tournamentAddress } = useTournamentContracts();
+  const tournamentAddress = selectedChainConfig.budokanAddress!;
 
   const [hasSelectedInitialTab, setHasSelectedInitialTab] = useState(false);
 
@@ -150,8 +150,9 @@ const Overview = () => {
     namespace: namespace,
     currentTime: currentTime,
     fromTournamentId: fromTournamentId,
-    excludedTournamentIds: EXCLUDED_TOURNAMENT_IDS,
   });
+
+  console.log(upcomingTournamentsCount);
 
   const { data: liveTournamentsCount } = useGetLiveTournamentsCount({
     namespace: namespace,
@@ -263,7 +264,6 @@ const Overview = () => {
   const {
     data: tournaments,
     loading: tournamentsLoading,
-    uniqueTokens: tournamentTokens,
     // refetch: refetchTournaments,
   } = useGetTournaments({
     namespace: namespace,
@@ -294,55 +294,88 @@ const Overview = () => {
     setPrevSubscribedTournaments(subscribedTournaments);
   }, [subscribedTournamentsKey, prevSubscribedTournaments]);
 
-  const {
-    data: myTournaments,
-    loading: myTournamentsLoading,
-    uniqueTokens: myTournamentTokens,
-  } = useGetMyTournaments({
-    namespace: namespace,
-    address: queryAddress,
-    gameAddresses: gameAddresses,
-    tokenIds: gameTokenIds,
-    gameFilters: gameFilters,
-    limit: 12,
-    offset: currentPage * 12,
-    active: selectedTab === "my",
-    sortBy: currentSortBy,
-    fromTournamentId: fromTournamentId,
+  const { data: myTournaments, loading: myTournamentsLoading } =
+    useGetMyTournaments({
+      namespace: namespace,
+      address: queryAddress,
+      gameAddresses: gameAddresses,
+      tokenIds: gameTokenIds,
+      gameFilters: gameFilters,
+      limit: 12,
+      offset: currentPage * 12,
+      active: selectedTab === "my",
+      sortBy: currentSortBy,
+      fromTournamentId: fromTournamentId,
+    });
+
+  // Extract unique token addresses from tournaments
+  const uniqueTokenAddresses = useMemo(() => {
+    const currentData = selectedTab === "my" ? myTournaments : tournaments;
+    const addresses = new Set<string>();
+
+    if (currentData && Array.isArray(currentData)) {
+      currentData.forEach((item: any) => {
+        // Extract from entry fees
+        if (item.tournament?.entry_fee?.Some?.token_address) {
+          addresses.add(item.tournament.entry_fee.Some.token_address);
+        }
+        // Extract from prizes
+        if (item.prizes && Array.isArray(item.prizes)) {
+          item.prizes.forEach((prize: any) => {
+            if (prize?.token_address) {
+              addresses.add(prize.token_address);
+            }
+          });
+        }
+        // Extract from aggregations
+        if (
+          item.aggregations?.token_totals &&
+          Array.isArray(item.aggregations.token_totals)
+        ) {
+          item.aggregations.token_totals.forEach((tokenTotal: any) => {
+            if (tokenTotal?.tokenAddress) {
+              addresses.add(tokenTotal.tokenAddress);
+            }
+          });
+        }
+      });
+    }
+
+    return Array.from(addresses);
+  }, [selectedTab, tournaments, myTournaments]);
+
+  // Get token metadata for all unique addresses from static lists
+  const tokensArray = useMemo(() => {
+    return getTokensByAddresses(
+      uniqueTokenAddresses,
+      selectedChainConfig?.chainId ?? ""
+    );
+  }, [uniqueTokenAddresses, selectedChainConfig?.chainId]);
+
+  // Extract unique token addresses for price fetching
+  const allUniqueTokens = useMemo(() => {
+    return tokensArray
+      .map((t: any) => t.token_address)
+      .filter((addr: any) => addr);
+  }, [tokensArray]);
+
+  // Fetch prices for all unique token addresses at once
+  const { prices: tokenPrices, isLoading: pricesLoading } = useEkuboPrices({
+    tokens: allUniqueTokens,
   });
 
-  // Extract unique token addresses for decimal fetching and price fetching
+  // Extract unique ERC20 token addresses for decimal fetching
   const allUniqueTokenAddresses = useMemo(() => {
-    const tokens = selectedTab === "my" ? myTournamentTokens : tournamentTokens;
     const uniqueAddresses = new Set<string>();
-    if (tokens && Array.isArray(tokens)) {
-      tokens.forEach((token: any) => {
-        if (token?.address && token?.type === "erc20") {
-          uniqueAddresses.add(token.address);
+    if (tokensArray && Array.isArray(tokensArray)) {
+      tokensArray.forEach((token: any) => {
+        if (token?.token_address && token?.token_type === "erc20") {
+          uniqueAddresses.add(token.token_address);
         }
       });
     }
     return Array.from(uniqueAddresses);
-  }, [selectedTab, tournamentTokens, myTournamentTokens]);
-
-  // Create tokens array from SQL data for passing to TournamentCard
-  const tokensArray = useMemo(() => {
-    const tokens = selectedTab === "my" ? myTournamentTokens : tournamentTokens;
-    if (!tokens || !Array.isArray(tokens)) return [];
-
-    return tokens.map((token: any) => ({
-      address: token.address,
-      name: token.name,
-      symbol: token.symbol,
-      is_registered: true,
-      token_type: token.type || "erc20",
-    }));
-  }, [selectedTab, tournamentTokens, myTournamentTokens]);
-
-  // Fetch prices for all unique token addresses at once
-  const { prices: tokenPrices, isLoading: pricesLoading } = useEkuboPrices({
-    tokens: allUniqueTokenAddresses,
-  });
+  }, [tokensArray]);
 
   // Fetch decimals for all unique tokens
   useEffect(() => {
@@ -430,6 +463,8 @@ const Overview = () => {
     setIsLoading,
     processTournamentsFromRaw,
   ]);
+
+  console.log("TOURNAMENTS", tournaments);
 
   // Infinite scroll implementation with debounce to prevent multiple triggers
   useEffect(() => {
@@ -700,6 +735,7 @@ const Overview = () => {
                     tokenPrices={tokenPrices}
                     pricesLoading={pricesLoading}
                     tokenDecimals={tokenDecimals}
+                    aggregations={tournament.aggregations}
                   />
                 ))}
 

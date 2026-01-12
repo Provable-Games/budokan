@@ -90,103 +90,6 @@ export const useGetGameSettings = ({
   return { data, loading, error };
 };
 
-export const useGetTokens = ({
-  namespace,
-  active = false,
-  limit = 20,
-  offset = 0,
-  search = "",
-  tokenType,
-}: {
-  namespace: string;
-  active?: boolean;
-  limit?: number;
-  offset?: number;
-  search?: string;
-  tokenType?: "erc20" | "erc721";
-}) => {
-  const query = useMemo(
-    () =>
-      namespace && active
-        ? `
-    SELECT *
-    FROM '${namespace}-Token'
-    WHERE is_registered = 1
-    ${
-      search
-        ? `AND (LOWER(name) LIKE '%${search.toLowerCase()}%' OR LOWER(symbol) LIKE '%${search.toLowerCase()}%')`
-        : ""
-    }
-    ${tokenType ? `AND token_type = '${tokenType}'` : ""}
-    ORDER BY name ASC
-    LIMIT ${limit}
-    OFFSET ${offset}
-  `
-        : null,
-    [namespace, active, limit, offset, search, tokenType]
-  );
-  const { data, loading, error } = useSqlExecute(query);
-  return { data, loading, error };
-};
-
-export const useGetTokensCount = ({
-  namespace,
-  active = false,
-  search = "",
-  tokenType,
-}: {
-  namespace: string;
-  active?: boolean;
-  search?: string;
-  tokenType?: "erc20" | "erc721";
-}) => {
-  const query = useMemo(
-    () =>
-      namespace && active
-        ? `
-    SELECT COUNT(*) as count
-    FROM '${namespace}-Token'
-    WHERE is_registered = 1
-    ${
-      search
-        ? `AND (LOWER(name) LIKE '%${search.toLowerCase()}%' OR LOWER(symbol) LIKE '%${search.toLowerCase()}%')`
-        : ""
-    }
-    ${tokenType ? `AND token_type = '${tokenType}'` : ""}
-  `
-        : null,
-    [namespace, active, search, tokenType]
-  );
-  const { data, loading, error } = useSqlExecute(query);
-  return { data: data?.[0]?.count, loading, error };
-};
-
-export const useGetTokenByAddress = ({
-  namespace,
-  address,
-  active = false,
-}: {
-  namespace: string;
-  address: string;
-  active?: boolean;
-}) => {
-  const query = useMemo(
-    () =>
-      namespace && address && active
-        ? `
-    SELECT *
-    FROM '${namespace}-Token'
-    WHERE address = '${address}'
-    AND is_registered = 1
-    LIMIT 1
-  `
-        : null,
-    [namespace, address, active]
-  );
-  const { data, loading, error } = useSqlExecute(query);
-  return { data: data?.[0], loading, error };
-};
-
 export const useGetTournamentsCount = ({
   namespace,
   fromTournamentId,
@@ -234,6 +137,7 @@ export const useGetUpcomingTournamentsCount = ({
   `,
     [namespace, currentTime, fromTournamentId, excludedIdsKey]
   );
+  console.log(query);
   const { data, loading, error, refetch } = useSqlExecute(query);
   return { data: data?.[0]?.count, loading, error, refetch };
 };
@@ -497,9 +401,9 @@ export const useGetTournaments = ({
       active
         ? `
     WITH tournament_data AS (
-      SELECT 
+      SELECT
       t.*,
-      CASE 
+      CASE
           WHEN COUNT(p.tournament_id) = 0 THEN NULL
           ELSE GROUP_CONCAT(
               json_object(
@@ -507,12 +411,12 @@ export const useGetTournaments = ({
                   'position', p.payout_position,
                   'tokenType', p.token_type,
                   'tokenAddress', p.token_address,
-                  'amount', CASE 
+                  'amount', CASE
                       WHEN p.token_type = 'erc20' THEN p."token_type.erc20.amount"
                       WHEN p.token_type = 'erc721' THEN p."token_type.erc721.id"
-                      ELSE NULL 
+                      ELSE NULL
                   END,
-                  'isValid', CASE 
+                  'isValid', CASE
                       WHEN p.token_type = 'erc20' AND p."token_type.erc20.amount" IS NOT NULL THEN 1
                       WHEN p.token_type = 'erc721' AND p."token_type.erc721.id" IS NOT NULL THEN 1
                       ELSE 0
@@ -544,42 +448,45 @@ export const useGetTournaments = ({
       LIMIT ${limit}
       OFFSET ${offset}
     ),
-    unique_tokens AS (
-      SELECT DISTINCT 
-        p.token_address,
-        p.token_type,
-        tk.symbol,
-        tk.name
-      FROM tournament_data td
-      JOIN '${namespace}-Prize' p ON td.id = p.tournament_id
-      LEFT JOIN '${namespace}-Token' tk ON p.token_address = tk.address
-      WHERE p.token_type = 'erc20' AND tk.is_registered = 1
-      
-      UNION
-      
-      SELECT DISTINCT
-        td.'entry_fee.Some.token_address' as token_address,
-        'erc20' as token_type,
-        tk.symbol,
-        tk.name
-      FROM tournament_data td
-      LEFT JOIN '${namespace}-Token' tk ON td.'entry_fee.Some.token_address' = tk.address
-      WHERE td.'entry_fee.Some.token_address' IS NOT NULL 
-        AND td.'entry_fee.Some.token_address' != 'NULL'
-        AND tk.is_registered = 1
+    prize_aggregations AS (
+      SELECT
+        p.tournament_id,
+        GROUP_CONCAT(
+          json_object(
+            'tokenAddress', token_address,
+            'tokenType', token_type,
+            'totalAmount', total_amount,
+            'nftCount', nft_count
+          ),
+          '|'
+        ) as token_totals
+      FROM (
+        SELECT
+          p.tournament_id,
+          p.token_address,
+          p.token_type,
+          CASE
+            WHEN p.token_type = 'erc20' THEN
+              GROUP_CONCAT(
+                CASE
+                  WHEN p."token_type.erc20.amount" IS NOT NULL AND p."token_type.erc20.amount" != 'NULL'
+                  THEN p."token_type.erc20.amount"
+                  ELSE NULL
+                END,
+                ','
+              )
+            ELSE NULL
+          END as total_amount,
+          COUNT(CASE WHEN p.token_type = 'erc721' THEN 1 END) as nft_count
+        FROM '${namespace}-Prize' p
+        WHERE p.tournament_id IN (SELECT id FROM tournament_data)
+        GROUP BY p.tournament_id, p.token_address, p.token_type
+      ) p
+      GROUP BY p.tournament_id
     )
-    SELECT 
-      td.*,
-      (SELECT GROUP_CONCAT(
-        json_object(
-          'address', token_address,
-          'type', token_type,
-          'symbol', symbol,
-          'name', name
-        ),
-        '|'
-      ) FROM unique_tokens) as unique_prize_tokens
+    SELECT td.*, pa.token_totals as aggregations
     FROM tournament_data td
+    LEFT JOIN prize_aggregations pa ON td.id = pa.tournament_id
   `
         : null,
     [
@@ -598,21 +505,56 @@ export const useGetTournaments = ({
   );
   const { data, loading, error, refetch } = useSqlExecute(query);
 
-  // Parse the unique tokens from the first result
-  const uniqueTokens = data?.[0]?.unique_prize_tokens
-    ? data[0].unique_prize_tokens
+  // Parse aggregations for each tournament
+  const parsedData = useMemo(() => {
+    if (!data) return data;
+
+    return data.map((tournament: any) => {
+      // Check if aggregations exist and are valid (not null, 0, or empty string)
+      if (!tournament.aggregations || tournament.aggregations === 0 || tournament.aggregations === "0") {
+        return tournament;
+      }
+
+      const tokenTotals = tournament.aggregations
         .split("|")
         .map((item: string) => {
           try {
-            return JSON.parse(item);
+            const parsed = JSON.parse(item);
+            if (parsed.totalAmount && parsed.tokenType === "erc20") {
+              // Sum all hex amounts from the comma-separated list
+              const amounts = parsed.totalAmount
+                .split(",")
+                .filter((a: string) => a && a !== "NULL");
+              const totalAmount = amounts.reduce(
+                (sum: bigint, hexAmount: string) => {
+                  try {
+                    return sum + BigInt(hexAmount);
+                  } catch (e) {
+                    console.warn("Failed to parse hex amount:", hexAmount, e);
+                    return sum;
+                  }
+                },
+                0n
+              );
+              return { ...parsed, totalAmount: totalAmount.toString() };
+            }
+            return parsed;
           } catch {
             return null;
           }
         })
-        .filter(Boolean)
-    : [];
+        .filter(Boolean);
 
-  return { data, loading, error, refetch, uniqueTokens };
+      return {
+        ...tournament,
+        aggregations: tokenTotals.length > 0 ? {
+          token_totals: tokenTotals,
+        } : undefined,
+      };
+    });
+  }, [data]);
+
+  return { data: parsedData, loading, error, refetch };
 };
 
 export const useGetMyTournaments = ({
@@ -661,9 +603,9 @@ export const useGetMyTournaments = ({
             .join(",")})
     ),
     tournament_data AS (
-      SELECT 
+      SELECT
         t.*,
-        CASE 
+        CASE
           WHEN COUNT(p.tournament_id) = 0 THEN NULL
           ELSE GROUP_CONCAT(
             json_object(
@@ -671,12 +613,12 @@ export const useGetMyTournaments = ({
               'position', p.payout_position,
               'tokenType', p.token_type,
               'tokenAddress', p.token_address,
-              'amount', CASE 
+              'amount', CASE
                 WHEN p.token_type = 'erc20' THEN p."token_type.erc20.amount"
                 WHEN p.token_type = 'erc721' THEN p."token_type.erc721.id"
-                ELSE NULL 
+                ELSE NULL
               END,
-              'isValid', CASE 
+              'isValid', CASE
                 WHEN p.token_type = 'erc20' AND p."token_type.erc20.amount" IS NOT NULL THEN 1
                 WHEN p.token_type = 'erc721' AND p."token_type.erc721.id" IS NOT NULL THEN 1
                 ELSE 0
@@ -687,7 +629,7 @@ export const useGetMyTournaments = ({
         END as prizes,
         COALESCE(e.count, 0) as entry_count
       FROM registered_tournaments rt
-      JOIN '${namespace}-Tournament' t 
+      JOIN '${namespace}-Tournament' t
         ON rt.tournament_id = t.id
       LEFT JOIN '${namespace}-Prize' p ON t.id = p.tournament_id
       LEFT JOIN '${namespace}-EntryCount' e ON t.id = e.tournament_id
@@ -705,42 +647,45 @@ export const useGetMyTournaments = ({
       LIMIT ${limit}
       OFFSET ${offset}
     ),
-    unique_tokens AS (
-      SELECT DISTINCT 
-        p.token_address,
-        p.token_type,
-        tk.symbol,
-        tk.name
-      FROM tournament_data td
-      JOIN '${namespace}-Prize' p ON td.id = p.tournament_id
-      LEFT JOIN '${namespace}-Token' tk ON p.token_address = tk.address
-      WHERE p.token_type = 'erc20' AND tk.is_registered = 1
-      
-      UNION
-      
-      SELECT DISTINCT
-        td.'entry_fee.Some.token_address' as token_address,
-        'erc20' as token_type,
-        tk.symbol,
-        tk.name
-      FROM tournament_data td
-      LEFT JOIN '${namespace}-Token' tk ON td.'entry_fee.Some.token_address' = tk.address
-      WHERE td.'entry_fee.Some.token_address' IS NOT NULL 
-        AND td.'entry_fee.Some.token_address' != 'NULL'
-        AND tk.is_registered = 1
+    prize_aggregations AS (
+      SELECT
+        p.tournament_id,
+        GROUP_CONCAT(
+          json_object(
+            'tokenAddress', token_address,
+            'tokenType', token_type,
+            'totalAmount', total_amount,
+            'nftCount', nft_count
+          ),
+          '|'
+        ) as token_totals
+      FROM (
+        SELECT
+          p.tournament_id,
+          p.token_address,
+          p.token_type,
+          CASE
+            WHEN p.token_type = 'erc20' THEN
+              GROUP_CONCAT(
+                CASE
+                  WHEN p."token_type.erc20.amount" IS NOT NULL AND p."token_type.erc20.amount" != 'NULL'
+                  THEN p."token_type.erc20.amount"
+                  ELSE NULL
+                END,
+                ','
+              )
+            ELSE NULL
+          END as total_amount,
+          COUNT(CASE WHEN p.token_type = 'erc721' THEN 1 END) as nft_count
+        FROM '${namespace}-Prize' p
+        WHERE p.tournament_id IN (SELECT id FROM tournament_data)
+        GROUP BY p.tournament_id, p.token_address, p.token_type
+      ) p
+      GROUP BY p.tournament_id
     )
-    SELECT 
-      td.*,
-      (SELECT GROUP_CONCAT(
-        json_object(
-          'address', token_address,
-          'type', token_type,
-          'symbol', symbol,
-          'name', name
-        ),
-        '|'
-      ) FROM unique_tokens) as unique_prize_tokens
+    SELECT td.*, pa.token_totals as aggregations
     FROM tournament_data td
+    LEFT JOIN prize_aggregations pa ON td.id = pa.tournament_id
     `
         : null,
     [
@@ -758,21 +703,56 @@ export const useGetMyTournaments = ({
   );
   const { data, loading, error, refetch } = useSqlExecute(query);
 
-  // Parse the unique tokens from the first result
-  const uniqueTokens = data?.[0]?.unique_prize_tokens
-    ? data[0].unique_prize_tokens
+  // Parse aggregations for each tournament
+  const parsedData = useMemo(() => {
+    if (!data) return data;
+
+    return data.map((tournament: any) => {
+      // Check if aggregations exist and are valid (not null, 0, or empty string)
+      if (!tournament.aggregations || tournament.aggregations === 0 || tournament.aggregations === "0") {
+        return tournament;
+      }
+
+      const tokenTotals = tournament.aggregations
         .split("|")
         .map((item: string) => {
           try {
-            return JSON.parse(item);
+            const parsed = JSON.parse(item);
+            if (parsed.totalAmount && parsed.tokenType === "erc20") {
+              // Sum all hex amounts from the comma-separated list
+              const amounts = parsed.totalAmount
+                .split(",")
+                .filter((a: string) => a && a !== "NULL");
+              const totalAmount = amounts.reduce(
+                (sum: bigint, hexAmount: string) => {
+                  try {
+                    return sum + BigInt(hexAmount);
+                  } catch (e) {
+                    console.warn("Failed to parse hex amount:", hexAmount, e);
+                    return sum;
+                  }
+                },
+                0n
+              );
+              return { ...parsed, totalAmount: totalAmount.toString() };
+            }
+            return parsed;
           } catch {
             return null;
           }
         })
-        .filter(Boolean)
-    : [];
+        .filter(Boolean);
 
-  return { data, loading, error, refetch, uniqueTokens };
+      return {
+        ...tournament,
+        aggregations: tokenTotals.length > 0 ? {
+          token_totals: tokenTotals,
+        } : undefined,
+      };
+    });
+  }, [data]);
+
+  return { data: parsedData, loading, error, refetch };
 };
 
 export const useGetAccountTokenIds = (
@@ -788,9 +768,8 @@ export const useGetAccountTokenIds = (
     () =>
       address && active
         ? `
-    SELECT tb.*, t.metadata
+    SELECT tb.*
     FROM token_balances tb
-    LEFT JOIN tokens t ON tb.token_id = t.id
     WHERE (tb.account_address = "${address}" AND tb.balance != '0x0000000000000000000000000000000000000000000000000000000000000000' AND tb.contract_address IN (${tokenAddresses
             .map((address) => `"${address}"`)
             .join(",")}));
@@ -905,8 +884,8 @@ export const useGetTournamentRegistrants = ({
         : null,
     [namespace, gameIdsKey, offset, limit, active]
   );
-  const { data, loading, error } = useSqlExecute(query);
-  return { data, loading, error };
+  const { data, loading, error, refetch } = useSqlExecute(query);
+  return { data, loading, error, refetch };
 };
 
 const getTournamentQualificationWhereClause = (
@@ -930,10 +909,15 @@ const getTournamentQualificationWhereClause = (
       switch (type) {
         case "token":
           return `(qe.'qualification_proof.NFT.token_id' = '${tokenId}')`;
-        case "tournament":
-          return `(qe.'qualification_proof.Tournament.tournament_id' = '${tournamentId}' AND qe.'qualification_proof.Tournament.token_id' = '${gameId}' AND qe.'qualification_proof.Tournament.position' = ${position})`;
         case "allowlist":
           return `(qe.'qualification_proof.Address' = '${address}')`;
+        case "extension":
+          // For tournament validators, extension proofs contain tournament data
+          if (tournamentId && gameId && position !== undefined) {
+            return `(qe.'qualification_proof.Extension.tournament_id' = '${tournamentId}' AND qe.'qualification_proof.Extension.token_id' = '${gameId}' AND qe.'qualification_proof.Extension.position' = ${position})`;
+          }
+          // For generic extensions, match by address
+          return `(qe.'qualification_proof.Extension.address' = '${address}')`;
         default:
           return null;
       }
@@ -1004,7 +988,6 @@ export const useGetTournamentPrizes = ({
         ? `
     SELECT * FROM '${namespace}-Prize'
     WHERE tournament_id = '${padU64(BigInt(tournamentId))}'
-      AND payout_position >= ${startPosition}
       AND payout_position <= ${endPosition}
     ORDER BY payout_position ASC
   `
@@ -1065,18 +1048,18 @@ export const useGetTournamentPrizesAggregations = ({
       WHERE p.tournament_id = '${padU64(BigInt(tournamentId))}'
     ),
     token_aggregates AS (
-      SELECT 
+      SELECT
         pd.token_address,
         pd.token_type,
-        t.symbol,
-        t.name,
-        CASE 
-          WHEN pd.token_type = 'erc20' THEN 
+        NULL as symbol,
+        NULL as name,
+        CASE
+          WHEN pd.token_type = 'erc20' THEN
             GROUP_CONCAT(
-              CASE 
-                WHEN pd.erc20_amount IS NOT NULL AND pd.erc20_amount != 'NULL' 
+              CASE
+                WHEN pd.erc20_amount IS NOT NULL AND pd.erc20_amount != 'NULL'
                 THEN pd.erc20_amount
-                ELSE NULL 
+                ELSE NULL
               END,
               ','
             )
@@ -1084,27 +1067,35 @@ export const useGetTournamentPrizesAggregations = ({
         END as total_amount,
         COUNT(CASE WHEN pd.token_type = 'erc721' THEN 1 END) as nft_count
       FROM prize_data pd
-      LEFT JOIN '${namespace}-Token' t ON pd.token_address = t.address
-      GROUP BY pd.token_address, pd.token_type, t.symbol, t.name
+      GROUP BY pd.token_address, pd.token_type
     ),
     position_count AS (
       SELECT COUNT(DISTINCT payout_position) as distinct_positions
       FROM prize_data
     ),
     final_aggregates AS (
-      SELECT 
+      SELECT
         COUNT(*) as total_prizes,
         MAX(payout_position) as lowest_prize_position,
         SUM(is_nft) as total_nfts,
         COUNT(DISTINCT token_address) as unique_tokens
       FROM prize_data
+    ),
+    distributed_prize_info AS (
+      SELECT
+        CAST(pd."token_type.erc20.distribution_count.Some" AS INTEGER) as distribution_count
+      FROM prize_data pd
+      WHERE pd.payout_position = 0
+        AND pd."token_type.erc20.distribution_count" = 'Some'
+      LIMIT 1
     )
-    SELECT 
+    SELECT
       fa.total_prizes,
       fa.lowest_prize_position,
       fa.total_nfts,
       fa.unique_tokens,
       pc.distinct_positions,
+      COALESCE(dpi.distribution_count, 0) as distributed_prize_count,
       (
         SELECT GROUP_CONCAT(
           json_object(
@@ -1122,11 +1113,12 @@ export const useGetTournamentPrizesAggregations = ({
       ) as token_totals
     FROM final_aggregates fa
     CROSS JOIN position_count pc
+    LEFT JOIN distributed_prize_info dpi ON 1=1
   `
         : null,
     [namespace, tournamentId, active]
   );
-  const { data, loading, error } = useSqlExecute(query);
+  const { data, loading, error, refetch } = useSqlExecute(query);
 
   // Parse the token_totals string into an array and sum hex amounts
   const parsedData = data?.[0]
@@ -1170,7 +1162,7 @@ export const useGetTournamentPrizesAggregations = ({
       }
     : null;
 
-  return { data: parsedData, loading, error };
+  return { data: parsedData, loading, error, refetch };
 };
 
 export const useGetTournamentPrizePositions = ({
@@ -1202,7 +1194,7 @@ export const useGetTournamentPrizePositions = ({
   };
 };
 
-export const useGetTournamentPrizeClaims = ({
+export const useGetTournamentRewardClaims = ({
   namespace,
   tournamentId,
   active = false,
@@ -1216,7 +1208,7 @@ export const useGetTournamentPrizeClaims = ({
       active && namespace && tournamentId
         ? `
     SELECT *
-    FROM '${namespace}-PrizeClaim'
+    FROM '${namespace}-RewardClaim'
     WHERE tournament_id = '${padU64(BigInt(tournamentId))}'
   `
         : null,
@@ -1226,7 +1218,7 @@ export const useGetTournamentPrizeClaims = ({
   return { data, loading, error };
 };
 
-export const useGetTournamentPrizeClaimsAggregations = ({
+export const useGetTournamentRewardClaimsAggregations = ({
   namespace,
   tournamentId,
   active = false,
@@ -1241,57 +1233,55 @@ export const useGetTournamentPrizeClaimsAggregations = ({
         ? `
     WITH prize_counts AS (
       SELECT
-        -- Count sponsored prizes
-        (SELECT COUNT(*) FROM '${namespace}-Prize' WHERE tournament_id = '${padU64(
+        -- Count sponsored prizes (accounting for distributed prizes)
+        COALESCE((SELECT SUM(
+          CASE
+            -- If it's a distributed prize, count the distribution positions
+            WHEN "token_type.erc20.distribution_count" = 'Some'
+              AND "token_type.erc20.distribution_count.Some" IS NOT NULL
+            THEN CAST("token_type.erc20.distribution_count.Some" AS INTEGER)
+            -- Otherwise it's a single prize
+            ELSE 1
+          END
+        ) FROM '${namespace}-Prize' WHERE tournament_id = '${padU64(
             BigInt(tournamentId)
-          )}') as sponsored_count,
+          )}'), 0) as sponsored_count,
 
         -- Count entry fee prizes
-        (SELECT
+        COALESCE((SELECT
+          -- Game creator share (0 or 1)
           CASE
-            WHEN '${namespace}-Tournament'.id = '${padU64(
-            BigInt(tournamentId)
-          )}'
-              AND '${namespace}-Tournament'.'entry_fee.Some.amount' IS NOT NULL
-              AND '${namespace}-Tournament'.'entry_fee.Some.amount' != '0'
-            THEN
-              -- Game creator share (0 or 1)
-              CASE
-                WHEN '${namespace}-Tournament'.'entry_fee.Some.game_creator_share.Some' IS NOT NULL
-                  AND '${namespace}-Tournament'.'entry_fee.Some.game_creator_share.Some' != '0'
-                THEN 1 ELSE 0
-              END
-              +
-              -- Tournament creator share (0 or 1)
-              CASE
-                WHEN '${namespace}-Tournament'.'entry_fee.Some.tournament_creator_share.Some' IS NOT NULL
-                  AND '${namespace}-Tournament'.'entry_fee.Some.tournament_creator_share.Some' != '0'
-                THEN 1 ELSE 0
-              END
-              +
-              -- Count non-zero distribution positions
-              (SELECT COUNT(*)
-               FROM json_each('${namespace}-Tournament'.'entry_fee.Some.distribution')
-               WHERE CAST(value AS INTEGER) > 0)
-            ELSE 0
+            WHEN "entry_fee.Some.game_creator_share.Some" IS NOT NULL
+              AND CAST("entry_fee.Some.game_creator_share.Some" AS INTEGER) > 0
+            THEN 1 ELSE 0
           END
+          +
+          -- Tournament creator share (0 or 1)
+          CASE
+            WHEN "entry_fee.Some.tournament_creator_share.Some" IS NOT NULL
+              AND CAST("entry_fee.Some.tournament_creator_share.Some" AS INTEGER) > 0
+            THEN 1 ELSE 0
+          END
+          +
+          -- Count distribution positions from distribution_positions field
+          COALESCE(CAST("entry_fee.Some.distribution_positions.Some" AS INTEGER), 0)
          FROM '${namespace}-Tournament'
          WHERE id = '${padU64(BigInt(tournamentId))}'
-        ) as entry_fee_count,
+        ), 0) as entry_fee_count,
 
-        -- Count claimed prizes
+        -- Count claimed rewards
         (SELECT COUNT(*)
-         FROM '${namespace}-PrizeClaim'
+         FROM '${namespace}-RewardClaim'
          WHERE tournament_id = '${padU64(BigInt(tournamentId))}'
            AND claimed = 1
         ) as claimed_count,
 
-        -- Get claimed prizes details
+        -- Get claimed rewards details
         (SELECT GROUP_CONCAT(
-          json_object('prizeType', prize_type, 'claimed', claimed),
+          json_object('rewardType', reward_type, 'claimed', claimed),
           '|'
          )
-         FROM '${namespace}-PrizeClaim'
+         FROM '${namespace}-RewardClaim'
          WHERE tournament_id = '${padU64(BigInt(tournamentId))}'
            AND claimed = 1
         ) as claimed_prizes
@@ -1307,7 +1297,9 @@ export const useGetTournamentPrizeClaimsAggregations = ({
     [namespace, tournamentId, active]
   );
 
-  const { data, loading, error } = useSqlExecute(query);
+  console.log(query);
+
+  const { data, loading, error, refetch } = useSqlExecute(query);
 
   const parsedData = useMemo(() => {
     if (!data || data.length === 0) return null;
@@ -1334,7 +1326,7 @@ export const useGetTournamentPrizeClaimsAggregations = ({
     };
   }, [data]);
 
-  return { data: parsedData, loading, error };
+  return { data: parsedData, loading, error, refetch };
 };
 
 export const useGetPrizeMetrics = ({

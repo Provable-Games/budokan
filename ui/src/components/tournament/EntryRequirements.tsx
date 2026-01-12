@@ -1,6 +1,5 @@
 import { Card } from "@/components/ui/card";
-import { CairoCustomEnum } from "starknet";
-import { Token, Tournament } from "@/generated/models.gen";
+import { Tournament } from "@/generated/models.gen";
 import { displayAddress, feltToString } from "@/lib/utils";
 import { useDojo } from "@/context/dojo";
 import {
@@ -12,6 +11,7 @@ import {
   USER,
   EXTERNAL_LINK,
   INFO,
+  OPUS,
 } from "@/components/Icons";
 import {
   HoverCard,
@@ -27,6 +27,14 @@ import {
 import { Tournament as TournamentModel } from "@/generated/models.gen";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useMemo, useState } from "react";
 import {
   Dialog,
@@ -38,8 +46,17 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
-import { useGetTokenByAddress } from "@/dojo/hooks/useSqlQueries";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getTokenByAddress } from "@/lib/tokenUtils";
+import {
+  registerTournamentValidator,
+  registerERC20BalanceValidator,
+  getExtensionAddresses,
+} from "@/lib/extensionConfig";
+import { useEffect } from "react";
+import { indexAddress } from "@/lib/utils";
+import { getTokenDecimals } from "@/lib/tokensMeta";
+import { useEkuboPrices } from "@/hooks/useEkuboPrices";
 
 // Helper component for Entry Limit display with info tooltip
 const EntryLimitInfo = ({ limit }: { limit: number }) => (
@@ -55,14 +72,54 @@ const EntryLimitInfo = ({ limit }: { limit: number }) => (
         </TooltipTrigger>
         <TooltipContent className="max-w-xs">
           <p>
-            Maximum number of times each eligible address can register for this tournament.
-            Set to limit multiple entries per participant.
+            Maximum number of times each eligible address can register for this
+            tournament. Set to limit multiple entries per participant.
           </p>
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
   </div>
 );
+
+// Helper to get qualifying mode label and description
+const getQualifyingModeInfo = (mode: number) => {
+  switch (mode) {
+    case 0:
+      return {
+        label: "At Least One",
+        description: "Qualify in at least one tournament",
+      };
+    case 1:
+      return {
+        label: "Cumulative per Tournament",
+        description: "Track entry limits separately for each tournament",
+      };
+    case 2:
+      return {
+        label: "All",
+        description: "Must qualify in all tournaments",
+      };
+    case 3:
+      return {
+        label: "Cumulative per Entry",
+        description: "Track entries per qualifying token ID",
+      };
+    case 4:
+      return {
+        label: "All Participate, Any Win",
+        description:
+          "Must participate in all tournaments, but only need to win in any one",
+      };
+    case 5:
+      return {
+        label: "All With Cumulative",
+        description:
+          "Must participate in all tournaments, entries multiply by tournament count",
+      };
+    default:
+      return { label: "Unknown", description: "" };
+  }
+};
 
 const EntryRequirements = ({
   tournamentModel,
@@ -74,7 +131,7 @@ const EntryRequirements = ({
   if (!tournamentModel?.entry_requirement?.isSome()) {
     return null;
   }
-  const { namespace, selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useDojo();
 
   const navigate = useNavigate();
 
@@ -84,6 +141,7 @@ const EntryRequirements = ({
   );
   const entryLimit = entryRequirement?.entry_limit;
   const hasEntryLimit = Number(entryLimit) > 0;
+  console.log(hasEntryLimit);
   const activeVariant = useMemo(
     () => entryRequirement?.entry_requirement_type.activeVariant(),
     [entryRequirement]
@@ -94,27 +152,21 @@ const EntryRequirements = ({
     [entryRequirement]
   );
 
-  // Fetch token data using SQL query
-  const { data: tokenData, loading: tokenLoading } = useGetTokenByAddress({
-    namespace,
-    address: tokenAddress || "",
-    active: activeVariant === "token" && !!tokenAddress,
-  });
+  // Get token data from static tokens
+  const token = useMemo(() => {
+    if (activeVariant !== "token" || !tokenAddress) return undefined;
+    return getTokenByAddress(tokenAddress, selectedChainConfig?.chainId ?? "");
+  }, [tokenAddress, activeVariant, selectedChainConfig]);
 
-  const token = tokenData as Token | undefined;
+  // Get CASH token for display
+  const cashToken = useMemo(() => {
+    return getTokenByAddress(
+      "0x0498edfaf50ca5855666a700c25dd629d577eb9afccdf3b5977aec79aee55ada",
+      selectedChainConfig?.chainId ?? ""
+    );
+  }, [selectedChainConfig?.chainId]);
 
-  const tournament = useMemo(
-    () =>
-      entryRequirement?.entry_requirement_type?.variant?.tournament as
-        | CairoCustomEnum
-        | undefined,
-    [entryRequirement]
-  );
-
-  const tournamentVariant = useMemo(
-    () => tournament?.activeVariant(),
-    [tournament]
-  );
+  const tokenLoading = false; // No loading needed for static data
 
   const allowlist = useMemo(
     () => entryRequirement?.entry_requirement_type?.variant?.allowlist,
@@ -126,6 +178,234 @@ const EntryRequirements = ({
     [entryRequirement]
   );
 
+  // Get extension addresses for the current chain
+  const extensionAddresses = useMemo(
+    () => getExtensionAddresses(selectedChainConfig?.chainId ?? ""),
+    [selectedChainConfig?.chainId]
+  );
+
+  // Register tournament validator when config loads
+  useEffect(() => {
+    if (extensionAddresses.tournamentValidator) {
+      registerTournamentValidator(extensionAddresses.tournamentValidator);
+    }
+  }, [extensionAddresses.tournamentValidator]);
+
+  // Register ERC20 balance validator when config loads
+  useEffect(() => {
+    if (extensionAddresses.erc20BalanceValidator) {
+      registerERC20BalanceValidator(extensionAddresses.erc20BalanceValidator);
+    }
+  }, [extensionAddresses.erc20BalanceValidator]);
+
+  // Check if this extension is a tournament validator
+  const isTournamentValidatorExtension = useMemo(() => {
+    if (!extensionConfig?.address || !extensionAddresses.tournamentValidator)
+      return false;
+    // Normalize both addresses for comparison
+    const normalizedExtensionAddress = indexAddress(extensionConfig.address);
+    const normalizedValidatorAddress = indexAddress(
+      extensionAddresses.tournamentValidator
+    );
+    return normalizedExtensionAddress === normalizedValidatorAddress;
+  }, [extensionConfig?.address, extensionAddresses.tournamentValidator]);
+
+  // Check if this extension is an ERC20 balance validator
+  const isERC20BalanceValidatorExtension = useMemo(() => {
+    if (!extensionConfig?.address || !extensionAddresses.erc20BalanceValidator)
+      return false;
+    // Normalize both addresses for comparison
+    const normalizedExtensionAddress = indexAddress(extensionConfig.address);
+    const normalizedValidatorAddress = indexAddress(
+      extensionAddresses.erc20BalanceValidator
+    );
+    return normalizedExtensionAddress === normalizedValidatorAddress;
+  }, [extensionConfig?.address, extensionAddresses.erc20BalanceValidator]);
+
+  // Check if this extension is an Opus Troves validator
+  const isOpusTrovesValidatorExtension = useMemo(() => {
+    if (!extensionConfig?.address || !extensionAddresses.opusTrovesValidator)
+      return false;
+    // Normalize both addresses for comparison
+    const normalizedExtensionAddress = indexAddress(extensionConfig.address);
+    const normalizedValidatorAddress = indexAddress(
+      extensionAddresses.opusTrovesValidator
+    );
+    return normalizedExtensionAddress === normalizedValidatorAddress;
+  }, [extensionConfig?.address, extensionAddresses.opusTrovesValidator]);
+
+  // Parse tournament validator config: [qualifier_type, qualifying_mode, top_positions, ...tournament_ids]
+  const tournamentValidatorConfig = useMemo(() => {
+    if (!isTournamentValidatorExtension || !extensionConfig?.config) {
+      return null;
+    }
+
+    const config = extensionConfig.config;
+    if (!config || config.length < 3) return null;
+
+    const qualifierType = config[0]; // "0" = participated, "1" = won
+    const qualifyingMode = config[1]; // "0" = ANY, "1" = ANY_PER_TOURNAMENT, "2" = ALL
+    const topPositions = config[2]; // "0" = all positions, or number of top positions
+    const tournamentIds = config.slice(3); // Rest are tournament IDs
+
+    return {
+      requirementType: qualifierType === "1" ? "won" : "participated",
+      qualifyingMode: Number(qualifyingMode),
+      topPositions: Number(topPositions),
+      tournamentIds: tournamentIds.map((id: any) => BigInt(id)),
+    };
+  }, [isTournamentValidatorExtension, extensionConfig?.config]);
+
+  // Parse ERC20 balance validator config: [token_address, min_threshold_low, min_threshold_high, max_threshold_low, max_threshold_high, value_per_entry_low, value_per_entry_high, max_entries]
+  const erc20BalanceValidatorConfig = useMemo(() => {
+    if (!isERC20BalanceValidatorExtension || !extensionConfig?.config) {
+      return null;
+    }
+
+    const config = extensionConfig.config;
+    if (!config || config.length < 8) return null;
+
+    const tokenAddress = config[0];
+    const minThresholdLow = BigInt(config[1]);
+    const minThresholdHigh = BigInt(config[2]);
+    const maxThresholdLow = BigInt(config[3]);
+    const maxThresholdHigh = BigInt(config[4]);
+    const valuePerEntryLow = BigInt(config[5]);
+    const valuePerEntryHigh = BigInt(config[6]);
+    const maxEntriesFromConfig = Number(config[7]);
+
+    // Combine high and low parts to form u256 values
+    const minThreshold = (minThresholdHigh << 128n) | minThresholdLow;
+    const maxThreshold = (maxThresholdHigh << 128n) | maxThresholdLow;
+    const valuePerEntry = (valuePerEntryHigh << 128n) | valuePerEntryLow;
+
+    // Get token decimals for formatting
+    const decimals =
+      getTokenDecimals(selectedChainConfig?.chainId ?? "", tokenAddress) || 18;
+    const divisor = BigInt(10 ** decimals);
+
+    // Convert wei values to human-readable format
+    const formatTokenAmount = (value: bigint) => {
+      if (value === 0n) return "0";
+      const integerPart = value / divisor;
+      const remainder = value % divisor;
+      if (remainder === 0n) {
+        return integerPart.toString();
+      }
+      // Format with decimals, removing trailing zeros
+      const decimalStr = remainder.toString().padStart(decimals, "0");
+      const trimmed = decimalStr.replace(/0+$/, "");
+      return trimmed ? `${integerPart}.${trimmed}` : integerPart.toString();
+    };
+
+    return {
+      tokenAddress,
+      minThreshold,
+      maxThreshold,
+      valuePerEntry,
+      maxEntries: maxEntriesFromConfig,
+      // Human-readable formatted values
+      minThresholdFormatted: formatTokenAmount(minThreshold),
+      maxThresholdFormatted: formatTokenAmount(maxThreshold),
+      valuePerEntryFormatted: formatTokenAmount(valuePerEntry),
+    };
+  }, [
+    isERC20BalanceValidatorExtension,
+    extensionConfig?.config,
+    selectedChainConfig?.chainId,
+  ]);
+
+  // Parse Opus Troves validator config: [asset_count, ...asset_addresses, threshold, value_per_entry, max_entries]
+  const opusTrovesValidatorConfig = useMemo(() => {
+    if (!isOpusTrovesValidatorExtension || !extensionConfig?.config) {
+      return null;
+    }
+
+    const config = extensionConfig.config;
+    if (!config || config.length < 4) return null;
+
+    const assetCount = Number(config[0]);
+
+    // Asset addresses are next N elements
+    const assetAddresses = config.slice(1, assetCount + 1);
+
+    // Remaining config elements
+    const threshold = BigInt(config[assetCount + 1] || "0");
+    const valuePerEntry = BigInt(config[assetCount + 2] || "0");
+    const maxEntriesFromConfig = Number(config[assetCount + 3] || "0");
+
+    // CASH uses 18 decimals, 1:1 USD parity
+    const CASH_DECIMALS = 18;
+    const divisor = BigInt(10 ** CASH_DECIMALS);
+
+    // Format CASH amount to USD
+    const formatCashToUSD = (value: bigint) => {
+      if (value === 0n) return "0";
+      const integerPart = value / divisor;
+      const remainder = value % divisor;
+      if (remainder === 0n) {
+        return integerPart.toString();
+      }
+      // Format with decimals, removing trailing zeros
+      const decimalStr = remainder.toString().padStart(CASH_DECIMALS, "0");
+      const trimmed = decimalStr.replace(/0+$/, "");
+      return trimmed ? `${integerPart}.${trimmed}` : integerPart.toString();
+    };
+
+    // Get token data for each asset
+    const assets = assetAddresses
+      .map((addr: any) =>
+        getTokenByAddress(addr, selectedChainConfig?.chainId ?? "")
+      )
+      .filter((token: any) => token !== undefined);
+
+    return {
+      assetCount,
+      assetAddresses,
+      assets,
+      threshold,
+      valuePerEntry,
+      maxEntries: maxEntriesFromConfig,
+      // Human-readable formatted values
+      thresholdUSD: formatCashToUSD(threshold),
+      valuePerEntryUSD: formatCashToUSD(valuePerEntry),
+      isWildcard: assetCount === 0,
+    };
+  }, [
+    isOpusTrovesValidatorExtension,
+    extensionConfig?.config,
+    selectedChainConfig?.chainId,
+  ]);
+
+  // Get tournament data for validator extensions
+  const validatorTournaments = useMemo(() => {
+    if (
+      !tournamentValidatorConfig ||
+      !tournamentsData ||
+      !Array.isArray(tournamentsData)
+    )
+      return [];
+    return tournamentsData.filter((t) =>
+      tournamentValidatorConfig.tournamentIds.some(
+        (id: any) => BigInt(t.id) === id
+      )
+    );
+  }, [tournamentValidatorConfig, tournamentsData]);
+
+  // Get token data for ERC20 balance validator
+  const erc20Token = useMemo(() => {
+    if (!erc20BalanceValidatorConfig?.tokenAddress) return undefined;
+    return getTokenByAddress(
+      erc20BalanceValidatorConfig.tokenAddress,
+      selectedChainConfig?.chainId ?? ""
+    );
+  }, [erc20BalanceValidatorConfig?.tokenAddress, selectedChainConfig]);
+
+  // Get price for ERC20 token
+  const { prices: _prices } = useEkuboPrices({
+    tokens: erc20Token?.token_address ? [erc20Token.token_address] : [],
+  });
+
   const blockExplorerExists =
     selectedChainConfig.blockExplorerUrl !== undefined;
 
@@ -136,9 +416,17 @@ const EntryRequirements = ({
     if (activeVariant === "token") {
       return (
         <div className="text-brand flex flex-row items-center gap-1 w-full">
-          <span className="w-8">
-            <COIN />
-          </span>
+          {token?.logo_url ? (
+            <img
+              src={token.logo_url}
+              alt={token.name || "Token"}
+              className="w-8 h-8 object-cover rounded"
+            />
+          ) : (
+            <span className="w-8">
+              <COIN />
+            </span>
+          )}
           {tokenLoading ? (
             <Skeleton className="hidden sm:block h-4 w-20" />
           ) : (
@@ -146,18 +434,45 @@ const EntryRequirements = ({
           )}
         </div>
       );
-    } else if (activeVariant === "tournament") {
-      return (
-        <div className="flex flex-row items-center gap-1">
-          <span className="w-6">
-            <TROPHY />
-          </span>
-          <span className="hidden sm:block capitalize">
-            {tournamentVariant}
-          </span>
-        </div>
-      );
     } else if (activeVariant === "extension") {
+      // Show as Tournament Qualification if it's a tournament validator
+      if (isTournamentValidatorExtension) {
+        return (
+          <div className="flex flex-row items-center gap-1 w-full">
+            <span className="w-6">
+              <TROPHY />
+            </span>
+            <span className="hidden sm:block capitalize">
+              {tournamentValidatorConfig?.requirementType || "Tournament"}
+            </span>
+          </div>
+        );
+      }
+      // Show as ERC20 Balance if it's an ERC20 balance validator
+      if (isERC20BalanceValidatorExtension) {
+        return (
+          <div className="flex flex-row items-center gap-1 w-full">
+            <span className="w-6">
+              <COIN />
+            </span>
+            <span className="hidden sm:block text-xs">
+              {erc20Token?.name || "ERC20 Balance"}
+            </span>
+          </div>
+        );
+      }
+      // Show as Opus Troves if it's an Opus Troves validator
+      if (isOpusTrovesValidatorExtension) {
+        return (
+          <div className="flex flex-row items-center gap-1 w-full">
+            <span className="w-6">
+              <OPUS />
+            </span>
+            <span className="hidden sm:block text-xs">Opus Troves</span>
+          </div>
+        );
+      }
+      // Otherwise show as generic extension
       return (
         <div className="flex flex-row items-center gap-1 w-full">
           <span className="w-6">
@@ -186,9 +501,17 @@ const EntryRequirements = ({
             To enter this tournament you must hold:
           </p>
           <div className="flex items-center gap-2">
-            <span className="w-8">
-              <COIN />
-            </span>
+            {token?.logo_url ? (
+              <img
+                src={token.logo_url}
+                alt={token.name || "Token"}
+                className="w-8 h-8 object-cover rounded"
+              />
+            ) : (
+              <span className="w-8">
+                <COIN />
+              </span>
+            )}
             {tokenLoading ? (
               <Skeleton className="h-4 w-32" />
             ) : (
@@ -199,13 +522,13 @@ const EntryRequirements = ({
                   onClick={() => {
                     if (blockExplorerExists) {
                       window.open(
-                        `${selectedChainConfig.blockExplorerUrl}/nft-contract/${token?.address}`,
+                        `${selectedChainConfig.blockExplorerUrl}/nft-contract/${token?.token_address}`,
                         "_blank"
                       );
                     }
                   }}
                 >
-                  {displayAddress(token?.address ?? "0x0")}
+                  {displayAddress(token?.token_address ?? "0x0")}
                 </span>
               </>
             )}
@@ -213,46 +536,352 @@ const EntryRequirements = ({
           {!!hasEntryLimit && <EntryLimitInfo limit={Number(entryLimit)} />}
         </>
       );
-    } else if (activeVariant === "tournament") {
-      return (
-        <>
-          <p className="text-muted-foreground">
-            {`To enter you must have ${
-              tournamentVariant === "participants" ? "participated in" : "won"
-            }:`}
-          </p>
-          <div className="h-[100px] flex flex-col gap-2 overflow-y-auto">
-            {tournamentsData?.map((tournament, index) => {
-              const tournamentEnd = tournament.schedule.game.end;
-              const tournamentEnded =
-                BigInt(tournamentEnd) < BigInt(Date.now()) / 1000n;
-              return (
-                <div key={index} className="flex flex-row items-center gap-2">
-                  <span>{feltToString(tournament.metadata.name)}</span>|
-                  <div className="flex flex-row items-center gap-1">
-                    <span className="w-4">
-                      <CLOCK />
-                    </span>
-                    <span>{tournamentEnded ? "Ended" : "Active"}</span>
-                  </div>
-                  |
-                  <Button
-                    size="xs"
-                    variant="outline"
+    } else if (activeVariant === "extension") {
+      // Show ERC20 balance details if it's an ERC20 balance validator
+      if (isERC20BalanceValidatorExtension && erc20BalanceValidatorConfig) {
+        return (
+          <>
+            <div className="flex flex-col gap-2">
+              <p className="text-muted-foreground text-xs">
+                To enter you must hold the required token balance:
+              </p>
+              <div className="flex flex-col gap-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="w-6 flex-shrink-0">
+                    <COIN />
+                  </span>
+                  <span className="font-medium text-sm">
+                    {erc20Token?.name || "ERC20 Token"}
+                  </span>
+                  <span
+                    className="text-brand-muted hover:cursor-pointer font-mono text-xs"
                     onClick={() => {
-                      navigate(`/tournament/${Number(tournament.id)}`);
+                      if (blockExplorerExists) {
+                        window.open(
+                          `${selectedChainConfig.blockExplorerUrl}/contract/${erc20BalanceValidatorConfig.tokenAddress}`,
+                          "_blank"
+                        );
+                      }
                     }}
                   >
-                    View
-                  </Button>
+                    {displayAddress(erc20BalanceValidatorConfig.tokenAddress)}
+                  </span>
                 </div>
-              );
-            })}
-          </div>
-          {!!hasEntryLimit && <EntryLimitInfo limit={Number(entryLimit)} />}
-        </>
-      );
-    } else if (activeVariant === "extension") {
+                <div className="flex flex-col gap-1 text-xs mt-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-brand-muted whitespace-nowrap">
+                      Min Balance:
+                    </span>
+                    <span className="font-medium">
+                      {erc20BalanceValidatorConfig.minThresholdFormatted}
+                    </span>
+                    <span className="text-brand-muted">
+                      {erc20Token?.symbol || "tokens"}
+                    </span>
+                  </div>
+                  {erc20BalanceValidatorConfig.maxThreshold > 0n && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-brand-muted whitespace-nowrap">
+                        Max Balance:
+                      </span>
+                      <span className="font-medium">
+                        {erc20BalanceValidatorConfig.maxThresholdFormatted}
+                      </span>
+                      <span className="text-brand-muted">
+                        {erc20Token?.symbol || "tokens"}
+                      </span>
+                    </div>
+                  )}
+                  {erc20BalanceValidatorConfig.valuePerEntry > 0n && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-brand-muted whitespace-nowrap">
+                        Value Per Entry:
+                      </span>
+                      <span className="font-medium">
+                        {erc20BalanceValidatorConfig.valuePerEntryFormatted}
+                      </span>
+                      <span className="text-brand-muted">
+                        {erc20Token?.symbol || "tokens"}
+                      </span>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="w-3 h-3 flex-shrink-0 text-brand-muted hover:text-brand cursor-help">
+                              <INFO />
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-xs">
+                            <p>
+                              Amount of token balance consumed per tournament
+                              entry
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                  )}
+                  {erc20BalanceValidatorConfig.maxEntries > 0 && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-brand-muted whitespace-nowrap">
+                        Max Entries:
+                      </span>
+                      <span className="font-medium">
+                        {erc20BalanceValidatorConfig.maxEntries}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {!!hasEntryLimit && (
+                <div className="flex flex-wrap items-center gap-2 text-xs mt-1">
+                  <span className="text-brand-muted whitespace-nowrap">
+                    Entry Limit:
+                  </span>
+                  <span className="font-medium">{Number(entryLimit)}</span>
+                </div>
+              )}
+            </div>
+          </>
+        );
+      }
+      // Show Opus Troves details if it's an Opus Troves validator
+      if (isOpusTrovesValidatorExtension && opusTrovesValidatorConfig) {
+        return (
+          <>
+            <div className="flex flex-col gap-2">
+              <p className="text-muted-foreground text-xs">
+                To enter you must have an Opus Trove with:
+              </p>
+              <div className="flex flex-col gap-1 text-xs">
+                {/* Asset requirement */}
+                <div className="flex flex-wrap items-start gap-2">
+                  <span className="text-brand-muted whitespace-nowrap">
+                    Collateral Assets:
+                  </span>
+                  {opusTrovesValidatorConfig.isWildcard ? (
+                    <span className="font-medium">Any (wildcard)</span>
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {opusTrovesValidatorConfig.assets.map(
+                        (asset: any, idx: number) => (
+                          <span
+                            key={idx}
+                            className="font-medium bg-brand/10 px-2 py-0.5 rounded"
+                          >
+                            {asset.symbol}
+                          </span>
+                        )
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Threshold */}
+                {opusTrovesValidatorConfig.threshold > 0n && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-brand-muted whitespace-nowrap">
+                      Min CASH Debt:
+                    </span>
+                    {cashToken?.logo_url && (
+                      <img
+                        src={cashToken.logo_url}
+                        alt="CASH"
+                        className="w-3 h-3 flex-shrink-0"
+                      />
+                    )}
+                    <span className="font-medium">
+                      ${opusTrovesValidatorConfig.thresholdUSD}
+                    </span>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="w-3 h-3 flex-shrink-0 text-brand-muted hover:text-brand cursor-help">
+                            <INFO />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs">
+                          <p>
+                            Minimum CASH debt required in your trove to qualify
+                            (~$1 USD per CASH)
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                )}
+
+                {/* Value per entry */}
+                {opusTrovesValidatorConfig.valuePerEntry > 0n && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-brand-muted whitespace-nowrap">
+                      CASH Per Entry:
+                    </span>
+                    {cashToken?.logo_url && (
+                      <img
+                        src={cashToken.logo_url}
+                        alt="CASH"
+                        className="w-3 h-3 flex-shrink-0"
+                      />
+                    )}
+                    <span className="font-medium">
+                      ${opusTrovesValidatorConfig.valuePerEntryUSD}
+                    </span>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="w-3 h-3 flex-shrink-0 text-brand-muted hover:text-brand cursor-help">
+                            <INFO />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs">
+                          <p>
+                            Amount of CASH that needs to be borrowed per
+                            tournament entry
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                )}
+
+                {/* Max entries */}
+                {opusTrovesValidatorConfig.maxEntries > 0 && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-brand-muted whitespace-nowrap">
+                      Max Entries:
+                    </span>
+                    <span className="font-medium">
+                      {opusTrovesValidatorConfig.maxEntries}
+                    </span>
+                  </div>
+                )}
+              </div>
+              {!!hasEntryLimit && (
+                <div className="flex flex-wrap items-center gap-2 text-xs mt-1">
+                  <span className="text-brand-muted whitespace-nowrap">
+                    Entry Limit:
+                  </span>
+                  <span className="font-medium">{Number(entryLimit)}</span>
+                </div>
+              )}
+            </div>
+          </>
+        );
+      }
+      // Show tournament qualification details if it's a tournament validator
+      if (isTournamentValidatorExtension && tournamentValidatorConfig) {
+        return (
+          <>
+            <div className="flex flex-col gap-1 mb-2">
+              <div className="flex flex-row items-center justify-between">
+                <p className="text-muted-foreground text-xs">
+                  {`To enter you must have ${
+                    tournamentValidatorConfig.requirementType === "won"
+                      ? "won"
+                      : "participated in"
+                  }:`}
+                </p>
+                {!!hasEntryLimit && (
+                  <div className="flex flex-row items-center gap-1 text-xs">
+                    <span className="text-brand-muted">Limit:</span>
+                    <span className="font-medium">{Number(entryLimit)}</span>
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-row items-center gap-2 text-xs">
+                <span className="text-brand-muted">Mode:</span>
+                <span className="font-medium">
+                  {
+                    getQualifyingModeInfo(
+                      tournamentValidatorConfig.qualifyingMode
+                    ).label
+                  }
+                </span>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="w-3 h-3 text-brand-muted hover:text-brand cursor-help">
+                        <INFO />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      <p>
+                        {
+                          getQualifyingModeInfo(
+                            tournamentValidatorConfig.qualifyingMode
+                          ).description
+                        }
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+              {tournamentValidatorConfig.requirementType === "won" && (
+                <div className="flex flex-row items-center gap-2 text-xs">
+                  <span className="text-brand-muted">Positions:</span>
+                  <span className="font-medium">
+                    Top {tournamentValidatorConfig.topPositions ?? 1}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="max-h-[80px] overflow-y-auto">
+              {validatorTournaments.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="h-8 px-2 text-xs">
+                        Tournament
+                      </TableHead>
+                      <TableHead className="h-8 px-2 text-xs text-right">
+                        Status
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {validatorTournaments.map((tournament, index) => {
+                      const tournamentEnd = tournament.schedule.game.end;
+                      const tournamentEnded =
+                        BigInt(tournamentEnd) < BigInt(Date.now()) / 1000n;
+                      return (
+                        <TableRow
+                          key={index}
+                          className="cursor-pointer hover:bg-brand-muted/20"
+                          onClick={() => {
+                            navigate(`/tournament/${Number(tournament.id)}`);
+                          }}
+                        >
+                          <TableCell className="p-2 text-xs font-medium">
+                            {feltToString(tournament.metadata.name)}
+                          </TableCell>
+                          <TableCell className="p-2 text-right">
+                            <div className="flex flex-row items-center justify-end gap-1">
+                              <span className="w-3">
+                                <CLOCK />
+                              </span>
+                              <span className="text-xs">
+                                {tournamentEnded ? "Ended" : "Active"}
+                              </span>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              ) : (
+                <span className="text-muted-foreground text-xs">
+                  Tournament IDs:{" "}
+                  {tournamentValidatorConfig.tournamentIds
+                    .map((id: any) => id.toString())
+                    .join(", ")}
+                </span>
+              )}
+            </div>
+          </>
+        );
+      }
+      // Otherwise show generic extension details
       return (
         <>
           <p className="text-muted-foreground">

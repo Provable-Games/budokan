@@ -6,7 +6,6 @@ import {
   Prize,
   EntryFee,
   QualificationProofEnum,
-  PrizeTypeEnum,
   TokenTypeDataEnum,
   ERC20Data,
   ERC721Data,
@@ -15,6 +14,7 @@ import {
   Account,
   BigNumberish,
   CairoOption,
+  CairoOptionVariant,
   CallData,
   ByteArray,
   byteArray,
@@ -24,17 +24,16 @@ import {
   Contract,
 } from "starknet";
 import { feltToString } from "@/lib/utils";
-import { useTournamentContracts } from "@/dojo/hooks/useTournamentContracts";
 import useUIStore from "@/hooks/useUIStore";
 import { useToastMessages } from "@/components/toast";
 import { useEntityUpdates } from "@/dojo/hooks/useEntityUpdates";
 import BUDOKAN_ABI from "@/lib/abis/budokan";
 
 export const useSystemCalls = () => {
-  const { client } = useDojo();
+  const { client, selectedChainConfig } = useDojo();
   const { account, address } = useAccount();
   const { provider } = useProvider();
-  const { tournamentAddress } = useTournamentContracts();
+  const tournamentAddress = selectedChainConfig.budokanAddress!;
   const { getGameName } = useUIStore();
   const {
     waitForTournamentCreation,
@@ -126,6 +125,25 @@ export const useSystemCalls = () => {
       }
     } catch (error) {
       console.error("Error executing enter tournament:", error);
+      throw error;
+    }
+  };
+
+  const banEntry = async (
+    tournamentId: BigNumberish,
+    gameTokenId: BigNumberish,
+    proof: string[]
+  ) => {
+    try {
+      const tx = await account?.execute({
+        contractAddress: tournamentAddress,
+        entrypoint: "ban_entry",
+        calldata: CallData.compile([tournamentId, gameTokenId, proof]),
+      });
+
+      return tx;
+    } catch (error) {
+      console.error("Error executing ban entry:", error);
       throw error;
     }
   };
@@ -291,17 +309,27 @@ export const useSystemCalls = () => {
       calls.push(...erc20ApprovalCalls, ...erc721ApprovalCalls);
 
       // Add prize calls
+      const budokanContract = initializeBudokanContract();
+
       for (const prize of prizes) {
+        // Create position as CairoOption
+        const position = (prize as any).position
+          ? new CairoOption(CairoOptionVariant.Some, (prize as any).position)
+          : new CairoOption(CairoOptionVariant.None);
+
+        const call = budokanContract.populate("add_prize", [
+          prize.context_id,
+          prize.token_address,
+          prize.token_type,
+          position,
+        ]);
+
         const addPrizesCall = {
           contractAddress: tournamentAddress,
           entrypoint: "add_prize",
-          calldata: CallData.compile([
-            prize.tournament_id,
-            prize.token_address,
-            prize.token_type,
-            prize.payout_position,
-          ]),
+          calldata: call.calldata,
         };
+
         calls.push(addPrizesCall);
       }
 
@@ -401,16 +429,23 @@ export const useSystemCalls = () => {
         }
 
         // Add prize calls
-        const prizeCalls = batch.map((prize) => ({
-          contractAddress: tournamentAddress,
-          entrypoint: "add_prize",
-          calldata: CallData.compile([
-            prize.tournament_id,
-            prize.token_address,
-            prize.token_type,
-            prize.payout_position,
-          ]),
-        }));
+        const prizeCalls = batch.map((prize) => {
+          // Create position as CairoOption
+          const position = (prize as any).position
+            ? new CairoOption(CairoOptionVariant.Some, (prize as any).position)
+            : new CairoOption(CairoOptionVariant.None);
+
+          return {
+            contractAddress: tournamentAddress,
+            entrypoint: "add_prize",
+            calldata: CallData.compile([
+              prize.context_id, // Changed from tournament_id
+              prize.token_address,
+              prize.token_type,
+              position, // Position as Option<u32>
+            ]),
+          };
+        });
         calls.push(...prizeCalls);
 
         console.log(
@@ -465,6 +500,14 @@ export const useSystemCalls = () => {
   ) => {
     const budokanContract = initializeBudokanContract();
     const game = getGameName(tournament.game_config.address);
+    console.log([
+      address!,
+      tournament.metadata,
+      tournament.schedule,
+      tournament.game_config,
+      tournament.entry_fee,
+      tournament.entry_requirement,
+    ]);
     try {
       const call = budokanContract.populate("create_tournament", [
         address!,
@@ -536,14 +579,19 @@ export const useSystemCalls = () => {
 
       calls.push(...erc20ApprovalCalls, ...erc721ApprovalCalls);
       for (const prize of prizes) {
+        // Create position as CairoOption
+        const position = (prize as any).position
+          ? new CairoOption(CairoOptionVariant.Some, (prize as any).position)
+          : new CairoOption(CairoOptionVariant.None);
+
         const addPrizesCall = {
           contractAddress: tournamentAddress,
           entrypoint: "add_prize",
           calldata: CallData.compile([
-            prize.tournament_id,
+            prize.context_id, // Changed from tournament_id
             prize.token_address,
             prize.token_type,
-            prize.payout_position,
+            position, // Position as Option<u32>
           ]),
         };
         calls.push(addPrizesCall);
@@ -678,16 +726,23 @@ export const useSystemCalls = () => {
         }
 
         // Add prize calls
-        const prizeCalls = batch.map((prize) => ({
-          contractAddress: tournamentAddress,
-          entrypoint: "add_prize",
-          calldata: CallData.compile([
-            prize.tournament_id,
-            prize.token_address,
-            prize.token_type,
-            prize.payout_position,
-          ]),
-        }));
+        const prizeCalls = batch.map((prize) => {
+          // Create position as CairoOption
+          const position = (prize as any).position
+            ? new CairoOption(CairoOptionVariant.Some, (prize as any).position)
+            : new CairoOption(CairoOptionVariant.None);
+
+          return {
+            contractAddress: tournamentAddress,
+            entrypoint: "add_prize",
+            calldata: CallData.compile([
+              prize.context_id, // Changed from tournament_id
+              prize.token_address,
+              prize.token_type,
+              position, // Position as Option<u32>
+            ]),
+          };
+        });
         calls.push(...prizeCalls);
 
         console.log(
@@ -740,17 +795,20 @@ export const useSystemCalls = () => {
   const claimPrizes = async (
     tournamentId: BigNumberish,
     tournamentName: string,
-    prizes: Array<PrizeTypeEnum>
+    rewardTypes: Array<CairoCustomEnum>
   ) => {
+    console.log(rewardTypes);
     try {
       let calls = [];
-      for (const prize of prizes) {
+      for (const rewardType of rewardTypes) {
         calls.push({
           contractAddress: tournamentAddress,
-          entrypoint: "claim_prize",
-          calldata: CallData.compile([tournamentId, prize]),
+          entrypoint: "claim_reward",
+          calldata: CallData.compile([tournamentId, rewardType]),
         });
       }
+
+      console.log(calls);
 
       const tx = await account?.execute(calls);
 
@@ -766,29 +824,29 @@ export const useSystemCalls = () => {
   const claimPrizesBatched = async (
     tournamentId: BigNumberish,
     tournamentName: string,
-    prizes: Array<PrizeTypeEnum>,
+    rewardTypes: Array<CairoCustomEnum>,
     batchSize: number = 30,
     onProgress?: (current: number, total: number) => void
   ) => {
     try {
-      // Split prizes into batches
+      // Split reward types into batches
       const batches = [];
-      for (let i = 0; i < prizes.length; i += batchSize) {
-        batches.push(prizes.slice(i, i + batchSize));
+      for (let i = 0; i < rewardTypes.length; i += batchSize) {
+        batches.push(rewardTypes.slice(i, i + batchSize));
       }
 
       let tx;
       for (const [index, batch] of batches.entries()) {
-        const calls = batch.map((prize) => ({
+        const calls = batch.map((rewardType) => ({
           contractAddress: tournamentAddress,
-          entrypoint: "claim_prize",
-          calldata: CallData.compile([tournamentId, prize]),
+          entrypoint: "claim_reward",
+          calldata: CallData.compile([tournamentId, rewardType]),
         }));
 
         console.log(
           `Processing claim batch ${index + 1}/${batches.length} with ${
             calls.length
-          } prizes`
+          } rewards`
         );
 
         // Call progress callback
@@ -1024,6 +1082,27 @@ export const useSystemCalls = () => {
     }
   };
 
+  const checkRegistrationOnly = async (
+    extensionAddress: string
+  ): Promise<boolean> => {
+    try {
+      if (!provider) return false;
+
+      const result = await provider.callContract({
+        contractAddress: extensionAddress,
+        entrypoint: "registration_only",
+        calldata: [],
+      });
+
+      // Result is a boolean (0 = false, 1 = true)
+      return result[0] === "0x1" || BigInt(result[0]) === 1n;
+    } catch (error) {
+      console.error("Error checking registration_only:", error);
+      // If the function doesn't exist, assume it doesn't require registration
+      return false;
+    }
+  };
+
   const getExtensionEntriesLeft = async (
     extensionAddress: string,
     tournamentId: BigNumberish,
@@ -1043,6 +1122,8 @@ export const useSystemCalls = () => {
         ]),
       });
 
+      console.log(result);
+
       // Result is Option<u8>
       // If Option::Some, result[0] is 0 and result[1] is the value
       // If Option::None, result[0] is 1
@@ -1059,8 +1140,94 @@ export const useSystemCalls = () => {
     }
   };
 
+  const checkShouldBan = async (
+    extensionAddress: string,
+    tournamentId: BigNumberish,
+    gameTokenId: string,
+    playerAddress: string,
+    qualification: string[]
+  ): Promise<boolean> => {
+    try {
+      if (!provider) return false;
+
+      // should_ban signature: (tournament_id: u64, game_token_id: u64, current_owner: ContractAddress, qualification: Span<felt252>)
+      const result = await provider.callContract({
+        contractAddress: extensionAddress,
+        entrypoint: "should_ban",
+        calldata: CallData.compile([
+          tournamentId,
+          gameTokenId, // u64, not u256
+          playerAddress,
+          qualification,
+        ]),
+      });
+
+      return result[0] === "0x1" || BigInt(result[0]) === 1n;
+    } catch (error) {
+      console.error("Error checking should_ban:", error);
+      return false;
+    }
+  };
+
+  const getUserTroveIds = async (
+    userAddress: BigNumberish
+  ): Promise<bigint[]> => {
+    try {
+      if (!provider) return [];
+
+      const ABBOT_ADDRESS =
+        "0x04d0bb0a4c40012384e7c419e6eb3c637b28e8363fb66958b60d90505b9c072f";
+
+      // get_user_trove_ids returns an array of trove IDs
+      const result = await provider.callContract({
+        contractAddress: ABBOT_ADDRESS,
+        entrypoint: "get_user_trove_ids",
+        calldata: CallData.compile([userAddress]),
+      });
+
+      // Result format is array length followed by the trove IDs
+      const arrayLength = Number(result[0] || 0);
+      const troveIds: bigint[] = [];
+
+      for (let i = 1; i <= arrayLength; i++) {
+        troveIds.push(BigInt(result[i] || 0));
+      }
+
+      return troveIds;
+    } catch (error) {
+      console.error("Error getting user trove IDs:", error);
+      return [];
+    }
+  };
+
+  const getTroveHealth = async (
+    troveId: BigNumberish
+  ): Promise<bigint | null> => {
+    try {
+      if (!provider) return null;
+
+      const SHRINE_ADDRESS =
+        "0x0498edfaf50ca5855666a700c25dd629d577eb9afccdf3b5977aec79aee55ada";
+
+      // get_trove_health returns [value, threshold, ltv, debt]
+      // We need the debt (last element, index 3) with 18 decimals
+      const result = await provider.callContract({
+        contractAddress: SHRINE_ADDRESS,
+        entrypoint: "get_trove_health",
+        calldata: CallData.compile([troveId]),
+      });
+
+      // Return debt amount (last element in result)
+      return BigInt(result[3] || 0);
+    } catch (error) {
+      console.error("Error getting trove health:", error);
+      return null;
+    }
+  };
+
   return {
     approveAndEnterTournament,
+    banEntry,
     submitScores,
     submitScoresBatched,
     approveAndAddPrizes,
@@ -1080,5 +1247,9 @@ export const useSystemCalls = () => {
     registerToken,
     checkExtensionValidEntry,
     getExtensionEntriesLeft,
+    checkRegistrationOnly,
+    checkShouldBan,
+    getUserTroveIds,
+    getTroveHealth,
   };
 };

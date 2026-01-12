@@ -11,23 +11,6 @@ import { getModelsMapping } from "@/generated/models.gen";
 import { BigNumberish } from "starknet";
 import { padU64 } from "@/lib/utils";
 
-export const useGetTokensQuery = (namespace: string) => {
-  const query = useMemo(
-    () =>
-      new ToriiQueryBuilder()
-        .withClause(KeysClause([getModelsMapping(namespace).Token], []).build())
-        .withEntityModels([getModelsMapping(namespace).Token])
-        .includeHashedKeys(),
-    [namespace]
-  );
-
-  const { entities, isLoading, refetch } = useSdkGetEntities({
-    query,
-    namespace: namespace,
-  });
-  return { entities, isLoading, refetch };
-};
-
 export const useGetMetricsQuery = (namespace: string) => {
   const query = useMemo(
     () =>
@@ -164,24 +147,6 @@ export const useSubscribeTournamentsQuery = (namespace: string) => {
         ],
         []
       ).build(),
-    [namespace]
-  );
-
-  const { entities, isSubscribed } = useSdkSubscribeEntities({
-    query,
-  });
-  return { entities, isSubscribed };
-};
-
-export const useSubscribeTokensQuery = (namespace: string) => {
-  const query = useMemo(
-    () =>
-      new ToriiQueryBuilder()
-        .withClause(
-          KeysClause([getModelsMapping(namespace).Token], [undefined]).build()
-        )
-        .withEntityModels([getModelsMapping(namespace).Token])
-        .includeHashedKeys(),
     [namespace]
   );
 

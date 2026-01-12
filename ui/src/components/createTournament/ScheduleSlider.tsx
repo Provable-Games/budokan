@@ -23,6 +23,7 @@ interface ScheduleSliderProps {
   minEndTime: Date;
   disablePastStartDates: (date: Date) => boolean;
   disablePastEndDates: (date: Date) => boolean;
+  allowShortSubmissionPeriod?: boolean;
 }
 
 const ScheduleSlider = ({
@@ -33,6 +34,7 @@ const ScheduleSlider = ({
   registrationType,
   registrationStartTime,
   registrationEndTime,
+  allowShortSubmissionPeriod = false,
   onStartTimeChange,
   onEndTimeChange,
   onSubmissionPeriodChange,
@@ -43,6 +45,9 @@ const ScheduleSlider = ({
   disablePastStartDates,
   disablePastEndDates,
 }: ScheduleSliderProps) => {
+  // Minimum submission period: 1 hour for privileged users, 1 day for others
+  const MIN_SUBMISSION_PERIOD = allowShortSubmissionPeriod ? SECONDS_IN_HOUR : SECONDS_IN_DAY;
+
   const sliderRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState<string | null>(null);
   const [dragStartX, setDragStartX] = useState(0);
@@ -211,7 +216,7 @@ const ScheduleSlider = ({
 
       // Calculate submission duration as the difference from tournament end
       const submissionDuration = Math.max(
-        SECONDS_IN_DAY,
+        MIN_SUBMISSION_PERIOD,
         Math.floor((newSubmissionEndTime.getTime() - endTime.getTime()) / 1000)
       );
       onSubmissionPeriodChange(submissionDuration);
@@ -245,7 +250,7 @@ const ScheduleSlider = ({
         ? registrationDuration + tournamentDuration
         : tournamentDuration;
       const submissionDuration = Math.max(
-        SECONDS_IN_DAY,
+        MIN_SUBMISSION_PERIOD,
         newDurationFromStart - submissionStart
       );
       onSubmissionPeriodChange(submissionDuration);
@@ -651,7 +656,7 @@ const ScheduleSlider = ({
                     newDate.setHours(submissionEndDate.getHours());
                     newDate.setMinutes(submissionEndDate.getMinutes());
                     const newSubmissionPeriod = Math.max(
-                      SECONDS_IN_DAY,
+                      MIN_SUBMISSION_PERIOD,
                       Math.floor((newDate.getTime() - endTime.getTime()) / 1000)
                     );
                     onSubmissionPeriodChange(newSubmissionPeriod);
@@ -666,7 +671,7 @@ const ScheduleSlider = ({
                     newDate.setSeconds(0);
                     newDate.setMilliseconds(0);
                     const newSubmissionPeriod = Math.max(
-                      SECONDS_IN_DAY,
+                      MIN_SUBMISSION_PERIOD,
                       Math.floor((newDate.getTime() - endTime.getTime()) / 1000)
                     );
                     onSubmissionPeriodChange(newSubmissionPeriod);

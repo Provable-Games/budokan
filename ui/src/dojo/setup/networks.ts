@@ -6,45 +6,22 @@ import {
 } from "@starknet-react/chains";
 import { stringToFelt } from "@/lib/utils";
 import { supportedConnectorIds } from "@/lib/connectors";
-import {
-  LOCAL_KATANA,
-  LOCAL_RELAY,
-  KATANA_CLASS_HASH,
-  KATANA_ETH_CONTRACT_ADDRESS,
-} from "@dojoengine/core";
 
 export enum ChainId {
-  KATANA_LOCAL = "KATANA_LOCAL",
-  WP_PG_SLOT_2 = "WP_PG_SLOT_2",
   SN_MAIN = "SN_MAIN",
   SN_SEPOLIA = "SN_SEPOLIA",
 }
 
 export enum NetworkId {
-  KATANA_LOCAL = "KATANA_LOCAL",
-  WP_PG_SLOT_2 = "SLOT",
   SN_MAIN = "MAINNET",
   SN_SEPOLIA = "SEPOLIA",
 }
-
-//
-// currencies
-//
-const ETH_KATANA: NativeCurrency = {
-  address: KATANA_ETH_CONTRACT_ADDRESS,
-  name: "Ether",
-  symbol: "ETH",
-  decimals: 18,
-};
 
 //
 // explorers
 //
 type ChainExplorers = {
   [key: string]: string[];
-};
-const WORLD_EXPLORER: ChainExplorers = {
-  worlds: ["https://worlds.dev"],
 };
 
 //
@@ -72,52 +49,7 @@ export type DojoChainConfig = {
   nativeCurrency?: NativeCurrency;
   explorers?: ChainExplorers;
   denshokanAddress?: string;
-};
-
-const localKatanaConfig: DojoChainConfig = {
-  chain: undefined, // derive from this
-  chainId: ChainId.KATANA_LOCAL,
-  name: "Katana Local",
-  rpcUrl: LOCAL_KATANA,
-  toriiUrl: "http://localhost:8080", //LOCAL_TORII,
-  toriiTokensUrl: "http://localhost:8080",
-  relayUrl: LOCAL_RELAY,
-  blastRpc: undefined,
-  blockExplorerUrl: undefined,
-  ekuboPriceAPI: undefined,
-  masterAddress:
-    "0x127fd5f1fe78a71f8bcd1fec63e3fe2f0486b6ecd5c86a0466c3a21fa5cfcec",
-  masterPrivateKey:
-    "0xc5b2fcab997346f3ea1c00b002ecf6f382c5f9c9659a3894eb783c5320f912",
-  accountClassHash: KATANA_CLASS_HASH,
-  ethAddress: KATANA_ETH_CONTRACT_ADDRESS,
-  connectorIds: [supportedConnectorIds.PREDEPLOYED],
-  // starknet Chain
-  nativeCurrency: ETH_KATANA,
-  explorers: WORLD_EXPLORER,
-} as const;
-
-const slotKatanaConfig: DojoChainConfig = {
-  chain: undefined, // derive from this
-  chainId: ChainId.WP_PG_SLOT_2,
-  name: "PG Slot",
-  rpcUrl: "https://api.cartridge.gg/x/pg-slot-2/katana",
-  toriiUrl: "https://api.cartridge.gg/x/pg-slot-2/torii",
-  toriiTokensUrl: "",
-  relayUrl: undefined,
-  blastRpc: undefined,
-  blockExplorerUrl: undefined,
-  ekuboPriceAPI: "https://mainnet-api.ekubo.org/price",
-  masterAddress:
-    "0x127fd5f1fe78a71f8bcd1fec63e3fe2f0486b6ecd5c86a0466c3a21fa5cfcec",
-  masterPrivateKey:
-    "0xc5b2fcab997346f3ea1c00b002ecf6f382c5f9c9659a3894eb783c5320f912",
-  accountClassHash: KATANA_CLASS_HASH,
-  ethAddress: KATANA_ETH_CONTRACT_ADDRESS,
-  connectorIds: [supportedConnectorIds.CONTROLLER],
-  // starknet Chain
-  nativeCurrency: ETH_KATANA,
-  explorers: WORLD_EXPLORER,
+  budokanAddress?: string;
 };
 
 const snSepoliaConfig: DojoChainConfig = {
@@ -140,6 +72,8 @@ const snSepoliaConfig: DojoChainConfig = {
   connectorIds: [supportedConnectorIds.CONTROLLER],
   denshokanAddress:
     "0x02334dc9c950c74c3228e2a343d495ae36f0b4edf06767a679569e9f9de08776",
+  budokanAddress:
+    "0x027649a648ce25712cf90a3b32b9f15f86edb21293227d0b3cc689987c77a02b",
 };
 
 const snMainnetConfig: DojoChainConfig = {
@@ -161,6 +95,8 @@ const snMainnetConfig: DojoChainConfig = {
   connectorIds: [supportedConnectorIds.CONTROLLER],
   denshokanAddress:
     "0x036017e69d21d6d8c13e266eabb73ef1f1d02722d86bdcabe5f168f8e549d3cd",
+  budokanAddress:
+    "0x0309b30321bffbb80f31073132b4f46fa6334469553af0de5e673105dc549bd3",
 } as const;
 
 //--------------------------------
@@ -202,8 +138,6 @@ const makeDojoChainConfig = (config: DojoChainConfig): DojoChainConfig => {
 export const CHAINS: Record<ChainId, DojoChainConfig> = {
   [ChainId.SN_MAIN]: makeDojoChainConfig(snMainnetConfig),
   [ChainId.SN_SEPOLIA]: makeDojoChainConfig(snSepoliaConfig),
-  [ChainId.WP_PG_SLOT_2]: makeDojoChainConfig(slotKatanaConfig),
-  [ChainId.KATANA_LOCAL]: makeDojoChainConfig(localKatanaConfig),
 };
 
 export const getDefaultChainId = (): ChainId => {
@@ -224,7 +158,7 @@ export const getDefaultChainId = (): ChainId => {
     throw new Error(`Unsupported chain ID in environment: ${envChainId}`);
   }
 
-  return envChainId || ChainId.KATANA_LOCAL;
+  return envChainId || ChainId.SN_MAIN;
 };
 
 const isChainIdSupported = (chainId: ChainId): boolean => {

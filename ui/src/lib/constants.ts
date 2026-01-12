@@ -1,7 +1,7 @@
 import { ETH, LORDS } from "@/components/Icons";
 
 export const TOURNAMENT_VERSION_KEY: string =
-  "0x000000000000000000000000000000000000000000000000000000302e302e31";
+  "0x000000000000000000000000000000000000000000000000006275646f6b616e";
 
 export const SECONDS_IN_DAY = 86400;
 export const SECONDS_IN_HOUR = 3600;
@@ -24,7 +24,7 @@ export const TOKEN_ADDRESSES: Record<string, string> = {
 export const ADMIN_ADDRESS =
   "0x077b8ed8356a7c1f0903fc4ba6e15f9b09cf437ce04f21b2cbf32dc2790183d0";
 
-export const STARTING_TOURNAMENT_ID = 13;
+export const STARTING_TOURNAMENT_ID = 0;
 
 // Tournament IDs to exclude from display
 export const EXCLUDED_TOURNAMENT_IDS: number[] = [

@@ -1,4 +1,4 @@
-import { DOLLAR } from "@/components/Icons";
+import { DOLLAR, REFRESH } from "@/components/Icons";
 import { useGameTokens, useGameTokensCount } from "metagame-sdk/sql";
 import { useEffect, useState, useMemo } from "react";
 import { useAccount } from "@starknet-react/core";
@@ -6,6 +6,7 @@ import { useGetMyTournamentEntries } from "@/dojo/hooks/useSqlQueries";
 import { BigNumberish } from "starknet";
 import EntryCard from "@/components/tournament/myEntries/EntryCard";
 import { Tournament } from "@/generated/models.gen";
+import { Button } from "@/components/ui/button";
 import {
   TournamentCard,
   TournamentCardTitle,
@@ -14,7 +15,6 @@ import {
   TournamentCardMetric,
   TournamentCardSwitch,
 } from "./containers/TournamentCard";
-import { useTournamentContracts } from "@/dojo/hooks/useTournamentContracts";
 import { padAddress } from "@/lib/utils";
 import { useDojo } from "@/context/dojo";
 
@@ -23,6 +23,7 @@ interface MyEntriesProps {
   gameAddress: string;
   tournamentModel: Tournament;
   totalEntryCount: number;
+  banRefreshTrigger?: number;
 }
 
 const MyEntries = ({
@@ -30,10 +31,11 @@ const MyEntries = ({
   gameAddress,
   tournamentModel,
   totalEntryCount,
+  banRefreshTrigger,
 }: MyEntriesProps) => {
-  const { namespace } = useDojo();
+  const { namespace, selectedChainConfig } = useDojo();
   const { address } = useAccount();
-  const { tournamentAddress } = useTournamentContracts();
+  const tournamentAddress = selectedChainConfig.budokanAddress!;
   const [showMyEntries, setShowMyEntries] = useState(false);
 
   const { count: myEntriesCount, refetch: refetchMyEntriesCount } =
@@ -45,7 +47,7 @@ const MyEntries = ({
       mintedByAddress: padAddress(tournamentAddress),
     });
 
-  const { games: ownedGames, refetch } = useGameTokens({
+  const { games: ownedGames, refetch, loading } = useGameTokens({
     context: {
       id: Number(tournamentId) ?? 0,
     },
@@ -95,11 +97,46 @@ const MyEntries = ({
     refetch();
   }, [totalEntryCount]);
 
+  // Refetch when a ban operation completes
+  useEffect(() => {
+    if (banRefreshTrigger && banRefreshTrigger > 0) {
+      refetchMyEntriesCount();
+      refetch();
+    }
+  }, [banRefreshTrigger]);
+
+  const handleRefresh = () => {
+    refetchMyEntriesCount();
+    refetch();
+  };
+
   return (
     <TournamentCard showCard={showMyEntries}>
       <TournamentCardHeader>
         <TournamentCardTitle>My Entries</TournamentCardTitle>
         <div className="flex flex-row items-center gap-2">
+          {/* Desktop refresh button */}
+          <Button
+            onClick={handleRefresh}
+            disabled={loading}
+            size="sm"
+            variant="outline"
+            className="hidden sm:flex"
+          >
+            <REFRESH className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          </Button>
+          {/* Mobile refresh button */}
+          {showMyEntries && (
+            <Button
+              onClick={handleRefresh}
+              disabled={loading}
+              size="xs"
+              variant="outline"
+              className="flex sm:hidden"
+            >
+              <REFRESH className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} />
+            </Button>
+          )}
           <TournamentCardSwitch
             checked={showMyEntries}
             onCheckedChange={setShowMyEntries}
@@ -116,15 +153,20 @@ const MyEntries = ({
       <TournamentCardContent showContent={showMyEntries}>
         <div className="p-2 h-full">
           <div className="flex flex-row gap-5 overflow-x-auto pb-2 h-full">
-            {ownedGames?.map((game, index) => (
-              <EntryCard
-                key={index}
-                gameAddress={gameAddress}
-                game={game}
-                tournamentModel={tournamentModel}
-                registration={processedEntries[index]}
-              />
-            ))}
+            {ownedGames?.map((game, index) => {
+              const registration = processedEntries.find(
+                (entry) => entry.game_token_id === Number(game.token_id)
+              );
+              return (
+                <EntryCard
+                  key={index}
+                  gameAddress={gameAddress}
+                  game={game}
+                  tournamentModel={tournamentModel}
+                  registration={registration}
+                />
+              );
+            })}
           </div>
         </div>
       </TournamentCardContent>
