@@ -67,10 +67,6 @@ const PrizesContainer = ({
     endPosition: 5,
   });
 
-  console.log(prizesData);
-
-  console.log(aggregations);
-
   useEffect(() => {
     refetchPrizes();
   }, [subscibedPrizeCount]);
@@ -91,8 +87,6 @@ const PrizesContainer = ({
     const expandedDatabasePrizes = currentPagePrizes.flatMap((prize) =>
       expandDistributedPrize(prize)
     );
-
-    console.log("Expanded DB Prizes:", expandedDatabasePrizes);
 
     const expandedEntryFeePrizes = relevantEntryFeePrizes.flatMap((prize) =>
       expandDistributedPrize(prize)
@@ -175,6 +169,34 @@ const PrizesContainer = ({
     }, {});
   }, [prizesData, entryFeePrizes]);
 
+  // Filter out prizes with 0 value
+  const filteredGroupedPrizes: PositionPrizes = useMemo(() => {
+    const filtered: PositionPrizes = {};
+
+    Object.entries(groupedPrizes).forEach(([position, prizes]) => {
+      const nonZeroPrizes: any = {};
+
+      Object.entries(prizes).forEach(([tokenKey, prize]) => {
+        if (prize.type === "erc20") {
+          // Filter out ERC20 prizes with 0 amount
+          if ((prize.value as bigint) > 0n) {
+            nonZeroPrizes[tokenKey] = prize;
+          }
+        } else {
+          // Keep all NFT prizes
+          nonZeroPrizes[tokenKey] = prize;
+        }
+      });
+
+      // Only include positions that have at least one non-zero prize
+      if (Object.keys(nonZeroPrizes).length > 0) {
+        filtered[position] = nonZeroPrizes;
+      }
+    });
+
+    return filtered;
+  }, [groupedPrizes]);
+
   // Get prize information from aggregations
 
   const totalPrizes = (aggregations?.total_prizes || 0) + entryFeePrizes.length;
@@ -198,8 +220,8 @@ const PrizesContainer = ({
 
   // Get NFT symbol for total display - use the first NFT collection found
   const nftSymbol = useMemo(() => {
-    // Look through groupedPrizes to find the first NFT
-    const firstNftPrize = Object.values(groupedPrizes)
+    // Look through filteredGroupedPrizes to find the first NFT
+    const firstNftPrize = Object.values(filteredGroupedPrizes)
       .flatMap((prizes) => Object.values(prizes))
       .find((prize) => prize.type === "erc721");
 
@@ -211,13 +233,11 @@ const PrizesContainer = ({
       return nftToken?.symbol || "NFT";
     }
     return "NFT";
-  }, [groupedPrizes, tokens]);
+  }, [filteredGroupedPrizes, tokens]);
 
   useEffect(() => {
     setShowPrizes(prizesExist);
   }, [prizesExist]);
-
-  console.log(groupedPrizes);
 
   return (
     <TournamentCard
@@ -327,7 +347,7 @@ const PrizesContainer = ({
                 ))
               ) : (
                 <>
-                  {Object.entries(groupedPrizes)
+                  {Object.entries(filteredGroupedPrizes)
                     .sort((a, b) => Number(a[0]) - Number(b[0]))
                     .map(([position, prizes], index) => (
                       <PrizeDisplay
@@ -349,7 +369,7 @@ const PrizesContainer = ({
       <PrizesTableDialog
         open={showTableDialog}
         onOpenChange={setShowTableDialog}
-        groupedPrizes={groupedPrizes}
+        groupedPrizes={filteredGroupedPrizes}
         prices={prices || {}}
         tokens={tokens}
         tokenDecimals={tokenDecimals}

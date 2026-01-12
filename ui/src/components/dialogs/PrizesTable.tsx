@@ -126,10 +126,6 @@ export const PrizesTableDialog = ({
     totalPositions
   );
 
-  console.log("Total positions:", totalPositions, "Total pages:", totalPages);
-
-  console.log("Prizes Data:", prizesData);
-
   // Extract NFT info for fetching token URIs
   const nftPrizes = useMemo(() => {
     const prizes = open
@@ -197,10 +193,6 @@ export const PrizesTableDialog = ({
       expandDistributedPrize
     );
 
-    console.log("Current page prizes:", currentPagePrizes);
-    console.log("Expanded database prizes:", expandedDatabasePrizes);
-    console.log("Expanded entry fee prizes:", expandedEntryFeePrizes);
-
     // Combine expanded prizes and filter for current page position range
     const combinedPrizes = [
       ...expandedEntryFeePrizes,
@@ -209,14 +201,6 @@ export const PrizesTableDialog = ({
       const pos = Number(p.position ?? p.payout_position ?? 0);
       return pos >= startPosition && pos <= actualEndPosition;
     });
-
-    console.log("Combined prizes after filter:", combinedPrizes);
-    console.log(
-      "Start position:",
-      startPosition,
-      "End position:",
-      actualEndPosition
-    );
 
     return combinedPrizes.reduce((acc: PositionPrizes, prize: any) => {
       const position = prize.position ?? prize.payout_position;
@@ -286,7 +270,33 @@ export const PrizesTableDialog = ({
     actualEndPosition,
   ]);
 
-  console.log("Grouped Prizes:", groupedPrizes);
+  // Filter out prizes with 0 value
+  const filteredGroupedPrizes: PositionPrizes = useMemo(() => {
+    const filtered: PositionPrizes = {};
+
+    Object.entries(groupedPrizes).forEach(([position, prizes]) => {
+      const nonZeroPrizes: any = {};
+
+      Object.entries(prizes).forEach(([tokenKey, prize]) => {
+        if (prize.type === "erc20") {
+          // Filter out ERC20 prizes with 0 amount
+          if ((prize.value as bigint) > 0n) {
+            nonZeroPrizes[tokenKey] = prize;
+          }
+        } else {
+          // Keep all NFT prizes
+          nonZeroPrizes[tokenKey] = prize;
+        }
+      });
+
+      // Only include positions that have at least one non-zero prize
+      if (Object.keys(nonZeroPrizes).length > 0) {
+        filtered[position] = nonZeroPrizes;
+      }
+    });
+
+    return filtered;
+  }, [groupedPrizes]);
 
   return (
     <>
@@ -322,7 +332,7 @@ export const PrizesTableDialog = ({
                   </div>
                 ) : (
                   <div className="space-y-3 p-4">
-                    {Object.entries(groupedPrizes)
+                    {Object.entries(filteredGroupedPrizes)
                       .sort((a, b) => Number(a[0]) - Number(b[0]))
                       .map(([position, prizes]) => {
                         // Calculate total value for this position
@@ -465,7 +475,7 @@ export const PrizesTableDialog = ({
                           </TableCell>
                         </TableRow>
                       ))
-                    : Object.entries(groupedPrizes)
+                    : Object.entries(filteredGroupedPrizes)
                         .sort((a, b) => Number(a[0]) - Number(b[0]))
                         .map(([position, prizes]) => {
                           // Calculate total value for this position

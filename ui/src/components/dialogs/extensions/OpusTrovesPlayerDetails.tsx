@@ -24,7 +24,7 @@ interface OpusTrovesPlayerDetailsProps {
 }
 
 export const OpusTrovesPlayerDetails = ({
-  playerAddress,
+  playerAddress: _playerAddress,
   config,
   troveDebt,
   totalEntriesRegistered,

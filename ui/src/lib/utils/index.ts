@@ -475,14 +475,15 @@ export const calculateDistribution = (
     // Uniform distribution - everyone gets equal share
     rawDistributions = Array(positions).fill(1);
   } else if (distributionType === "linear") {
-    // Linear distribution with weight
-    // Formula: position i gets (n - i + 1)^(weight/10) shares
-    // Weight is scaled by 10 (e.g., 10 = 1.0, 25 = 2.5, 100 = 10.0)
-    // For 0-indexed array position i, the formula becomes (n - i)^(weight/10)
-    // since array[0] represents position 1, so (n - 0) = n, which equals (n - 1 + 1)
+    // Linear distribution with adjustable steepness
+    // Formula: share = 1 + (positionValue - 1) * weight
+    // Weight = 0: Uniform (everyone gets 1)
+    // Weight = 1: Standard linear (1st gets n, 2nd gets n-1, etc.)
+    // Weight > 1: Steeper (1st place gets proportionally more)
+    // Weight < 1: Flatter (more equal distribution)
     for (let i = 0; i < positions; i++) {
       const positionValue = positions - i; // For i=0 (1st place): n, i=1 (2nd): n-1, etc.
-      const share = Math.pow(positionValue, weight / 10);
+      const share = 1 + (positionValue - 1) * (weight / 10);
       rawDistributions.push(share);
     }
   } else {

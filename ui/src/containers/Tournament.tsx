@@ -12,13 +12,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useProvider } from "@starknet-react/core";
 import TournamentTimeline from "@/components/TournamentTimeline";
 import Countdown from "@/components/Countdown";
-import {
-  feltToString,
-  formatTime,
-  indexAddress,
-  padAddress,
-  padU64,
-} from "@/lib/utils";
+import { feltToString, indexAddress, padAddress, padU64 } from "@/lib/utils";
 import { addAddressPadding } from "starknet";
 import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
 import {
@@ -32,6 +26,8 @@ import { useDojo } from "@/context/dojo";
 import {
   extractEntryFeePrizes,
   processTournamentFromSql,
+  expandDistributedPrizes,
+  processPrizeFromSql,
 } from "@/lib/utils/formatting";
 import { EnterTournamentDialog } from "@/components/dialogs/EnterTournament";
 import ScoreTable from "@/components/tournament/table/ScoreTable";
@@ -51,6 +47,7 @@ import {
   useGetTournamentsCount,
   useGetTournamentLeaderboards,
   useGetTournamentRegistrants,
+  useGetAllTournamentPrizes,
 } from "@/dojo/hooks/useSqlQueries";
 import { getTokensByAddresses } from "@/lib/tokenUtils";
 import NotFound from "@/containers/NotFound";
@@ -142,8 +139,6 @@ const Tournament = () => {
       ? subscribedEntryCount
       : Number(entryCountModel?.count) ?? 0;
 
-  console.log(entryCount, subscribedEntryCount, entryCountModel);
-
   const prizeMetricsEntityId = getEntityIdFromKeys([
     BigInt(TOURNAMENT_VERSION_KEY),
   ]);
@@ -152,8 +147,6 @@ const Tournament = () => {
     prizeMetricsEntityId,
     getModelsMapping(namespace).PrizeMetrics
   ) as unknown as PrizeMetrics;
-
-  console.log("subscribed prize metrics", subscribedPrizesMetricsModel);
 
   const subscribedPrizeCount =
     Number(subscribedPrizesMetricsModel?.total_prizes) ?? 0;
@@ -337,6 +330,25 @@ const Tournament = () => {
     active: !!tournamentId,
   });
 
+  // Fetch ALL sponsored prizes from database for accurate paid places calculation
+  const { data: sponsoredPrizesData } = useGetAllTournamentPrizes({
+    namespace,
+    tournamentId: Number(tournamentModel?.id || 0),
+    active: !!tournamentModel?.id,
+  });
+
+  // Process SQL prizes to proper Prize objects with CairoCustomEnum structures
+  const sponsoredPrizes = useMemo(
+    () => (sponsoredPrizesData || []).map(processPrizeFromSql),
+    [sponsoredPrizesData]
+  );
+
+  // Expand distributed sponsored prizes into individual positions
+  const expandedSponsoredPrizes = useMemo(
+    () => expandDistributedPrizes(sponsoredPrizes),
+    [sponsoredPrizes]
+  );
+
   // useEffect(() => {
 
   // Fetch reward claims aggregations to track claimed vs unclaimed prizes
@@ -346,8 +358,6 @@ const Tournament = () => {
       tournamentId: tournamentId ?? 0,
       active: !!tournamentId,
     });
-
-  console.log(claimsAggregations);
 
   // Refetch prize aggregations when subscribedPrizeCount changes
   useEffect(() => {
@@ -372,49 +382,29 @@ const Tournament = () => {
     ? claimsAggregations.total_unclaimed
     : 0;
 
-  // Calculate paid places based on entry fee and prizes
-  // Note: We use aggregations for prize count since we don't have full Prize objects here
-  // This is a simplified calculation - it counts entry fee positions + bonus prizes
+  // Calculate paid places based on actual non-zero prize amounts
+  // This counts unique positions that have at least one non-zero prize
   const paidPlaces = useMemo(() => {
     const positions = new Set<number>();
 
-    // Add entry fee distribution positions
-    if (
-      tournamentModel?.entry_fee?.isSome() &&
-      tournamentModel.entry_fee.Some?.distribution_positions?.isSome()
-    ) {
-      const distributionCount = Number(
-        tournamentModel.entry_fee.Some.distribution_positions.Some
-      );
-      for (let i = 1; i <= distributionCount; i++) {
-        positions.add(i);
+    // Add positions from entry fee distribution prizes (already filtered for non-zero)
+    distributionPrizes.forEach((prize) => {
+      const position = Number(prize.position);
+      if (position > 0) {
+        positions.add(position);
       }
-    }
+    });
 
-    // Add bonus prize positions from aggregations
-    // Check if there's a distributed prize (position 0) that expands into multiple positions
-    const distributedPrizeCount = aggregations?.distributed_prize_count || 0;
-    if (distributedPrizeCount > 0) {
-      // Add positions 1 through distribution_count
-      for (let i = 1; i <= distributedPrizeCount; i++) {
-        positions.add(i);
+    // Add positions from expanded sponsored prizes (already filtered for non-zero by expandDistributedPrizes)
+    expandedSponsoredPrizes.forEach((prize) => {
+      const position = Number(prize.position);
+      if (position > 0) {
+        positions.add(position);
       }
-    } else {
-      // No distributed prize, use lowest_prize_position for regular prizes
-      const lowestPrizePosition = aggregations?.lowest_prize_position || 0;
-      if (lowestPrizePosition > 0) {
-        for (let i = 1; i <= lowestPrizePosition; i++) {
-          positions.add(i);
-        }
-      }
-    }
+    });
 
     return positions.size;
-  }, [
-    tournamentModel?.entry_fee,
-    aggregations?.distributed_prize_count,
-    aggregations?.lowest_prize_position,
-  ]);
+  }, [distributionPrizes, expandedSponsoredPrizes]);
 
   // Extract unique token addresses for fetching token data
   const uniqueTokenAddresses = useMemo(() => {
@@ -455,8 +445,6 @@ const Tournament = () => {
     tokens: uniqueTokenAddresses,
   });
 
-  console.log(ownPrices);
-
   // Use prop prices if provided, otherwise use own prices
   const prices = ownPrices;
   const pricesLoading = ownPricesLoading;
@@ -469,10 +457,6 @@ const Tournament = () => {
     pricesLoading,
     tokenDecimals,
   });
-
-  console.log(distributionPrizes, prices);
-
-  console.log(totalPrizesValueUSD);
 
   // Fetch token decimals only for tokens used in this tournament
   useEffect(() => {
@@ -634,23 +618,14 @@ const Tournament = () => {
   const registrationEndTime = tournamentModel?.schedule.registration?.Some?.end;
   const tournamentStartTime = tournamentModel?.schedule.game.start;
   const now = Number(BigInt(Date.now()) / 1000n);
-  const hasPreparationPeriod = registrationEndTime && registrationEndTime < tournamentStartTime;
+  const hasPreparationPeriod =
+    registrationEndTime &&
+    tournamentStartTime &&
+    registrationEndTime < tournamentStartTime;
   const isInPreparationPeriod =
     hasPreparationPeriod &&
     Number(registrationEndTime) < now &&
     Number(tournamentStartTime) > now;
-
-  const startsIn =
-    Number(tournamentModel?.schedule.game.start) -
-    Number(BigInt(Date.now()) / 1000n);
-  const endsIn =
-    Number(tournamentModel?.schedule.game.end) -
-    Number(BigInt(Date.now()) / 1000n);
-  const submissionEndsIn =
-    Number(
-      BigInt(tournamentModel?.schedule.game.end ?? 0n) +
-        BigInt(tournamentModel?.schedule.submission_duration ?? 0n)
-    ) - Number(BigInt(Date.now()) / 1000n);
 
   const status = useMemo(() => {
     if (isSubmitted) return "finalized";
@@ -771,7 +746,9 @@ const Tournament = () => {
               <span className="hidden sm:block 3xl:text-lg">Add Prizes</span>
             </Button>
           )}
-          {(registrationType === "fixed" && !isStarted && !isInPreparationPeriod) ||
+          {(registrationType === "fixed" &&
+            !isStarted &&
+            !isInPreparationPeriod) ||
           (registrationType === "open" && !isEnded) ? (
             <Button
               className="uppercase [&_svg]:w-6 [&_svg]:h-6"

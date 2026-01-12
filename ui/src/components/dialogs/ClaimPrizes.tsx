@@ -79,7 +79,8 @@ export function ClaimPrizesDialog({
     active: !!tournamentModel?.id && open,
   });
 
-  const claimedRewards: RewardClaim[] = (rewardClaimsData || []) as RewardClaim[];
+  const claimedRewards: RewardClaim[] = (rewardClaimsData ||
+    []) as RewardClaim[];
 
   const leaderboardSize =
     tournamentModel?.entry_fee?.Some?.distribution_positions?.isSome()
@@ -126,14 +127,6 @@ export function ClaimPrizesDialog({
     [allPrizes, claimedRewards]
   );
 
-  // Convert claimable prizes to new RewardType format
-  const claimableRewardTypes = useMemo(
-    () => formatRewardTypes(claimablePrizes),
-    [claimablePrizes]
-  );
-
-  console.log(claimableRewardTypes);
-
   const handleClaimPrizes = async () => {
     setIsProcessing(true);
     setBatchProgress(null);
@@ -162,23 +155,89 @@ export function ClaimPrizesDialog({
     }
   };
 
-  const sortedClaimablePrizes = useMemo(() => {
-    return [...claimablePrizes].sort((a: any, b: any) => {
-      // Sort by position, with 0 (non-distributed sponsored prizes) at the end
-      const posA = Number(a.position) || Number.MAX_SAFE_INTEGER;
-      const posB = Number(b.position) || Number.MAX_SAFE_INTEGER;
-      return posA - posB;
-    });
+  // Helper function to get prize amount
+  const getPrizeAmount = (prize: any): bigint => {
+    const isErc20 =
+      prize.token_type?.variant?.erc20 || prize.token_type === "erc20";
+
+    if (!isErc20) return 1n; // NFTs are considered non-zero
+
+    const amount =
+      prize.token_type?.variant?.erc20?.amount ||
+      prize["token_type.erc20.amount"] ||
+      "0";
+
+    return BigInt(amount);
+  };
+
+  // Filter out prizes with 0 value
+  const nonZeroPrizes = useMemo(() => {
+    return claimablePrizes.filter((prize: any) => getPrizeAmount(prize) > 0n);
   }, [claimablePrizes]);
 
-  console.log(sortedClaimablePrizes);
+  // Convert non-zero claimable prizes to new RewardType format
+  const claimableRewardTypes = useMemo(
+    () => formatRewardTypes(nonZeroPrizes),
+    [nonZeroPrizes]
+  );
+
+  // Group prizes by position for better display
+  const groupedPrizes = useMemo(() => {
+    const groups: Record<
+      string,
+      { position: number; label: string; prizes: any[] }
+    > = {};
+
+    nonZeroPrizes.forEach((prize: any) => {
+      let groupKey: string;
+      let groupLabel: string;
+      let position: number;
+
+      if (prize.type === "entry_fee_game_creator") {
+        groupKey = "game_creator";
+        groupLabel = "Game Creator Share";
+        position = Number.MAX_SAFE_INTEGER - 1;
+      } else if (prize.type === "entry_fee_tournament_creator") {
+        groupKey = "tournament_creator";
+        groupLabel = "Tournament Creator Share";
+        position = Number.MAX_SAFE_INTEGER - 2;
+      } else if (
+        prize.type === "entry_fee" ||
+        prize.type === "sponsored_distributed"
+      ) {
+        groupKey = `position_${prize.position}`;
+        groupLabel = `${prize.position}${getOrdinalSuffix(
+          prize.position
+        )} Place`;
+        position = Number(prize.position);
+      } else {
+        groupKey = "sponsored_other";
+        groupLabel = "Sponsored Prizes";
+        position = Number.MAX_SAFE_INTEGER;
+      }
+
+      if (!groups[groupKey]) {
+        groups[groupKey] = { position, label: groupLabel, prizes: [] };
+      }
+      groups[groupKey].prizes.push(prize);
+    });
+
+    // Sort groups by position
+    return Object.values(groups).sort((a, b) => a.position - b.position);
+  }, [nonZeroPrizes]);
+
+  // Calculate total prize count for dialog title
+  const totalPrizeCount = groupedPrizes.reduce(
+    (sum, group) => sum + group.prizes.length,
+    0
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>
-            Distribute Prizes ({sortedClaimablePrizes.length} unclaimed)
+            Distribute Prizes ({totalPrizeCount} unclaimed)
           </DialogTitle>
         </DialogHeader>
         {batchProgress && (
@@ -195,77 +254,94 @@ export function ClaimPrizesDialog({
             </div>
           </div>
         )}
-        <div className="space-y-2 px-5 py-2 max-h-[500px] overflow-y-auto">
-          {sortedClaimablePrizes.map((prize: any, index: number) => {
-            // Handle both SDK format (variant.erc20) and SQL format (token_type string)
-            const isErc20 =
-              prize.token_type?.variant?.erc20 || prize.token_type === "erc20";
-            const tokenDecimals = getTokenDecimals(
-              chainId,
-              prize.token_address
-            );
-            const prizeAmount = isErc20
-              ? Number(
-                  prize.token_type?.variant?.erc20?.amount ||
-                    prize["token_type.erc20.amount"] ||
-                    0
-                ) /
-                10 ** tokenDecimals
-              : 0;
-            const tokenPrice =
-              prices[getTokenSymbol(chainId, prize.token_address) ?? ""] ?? 0;
-
-            // Determine prize label
-            let prizeLabel = "";
-            if (prize.type === "entry_fee_game_creator") {
-              prizeLabel = "Game Creator Share";
-            } else if (prize.type === "entry_fee_tournament_creator") {
-              prizeLabel = "Tournament Creator Share";
-            } else if (prize.type === "entry_fee") {
-              prizeLabel = `${prize.position}${getOrdinalSuffix(
-                prize.position
-              )} Place`;
-            } else if (prize.type === "sponsored_distributed") {
-              prizeLabel = `${prize.position}${getOrdinalSuffix(
-                prize.position
-              )} Place (Prize #${prize.id})`;
-            } else {
-              prizeLabel = `Sponsored Prize #${prize.id}`;
-            }
-
-            return (
-              <div
-                className="flex flex-row items-center justify-between"
-                key={index}
-              >
-                <span className="text-brand-muted">{prizeLabel}</span>
-                <div className="flex flex-row items-center gap-2">
-                  {isErc20 ? (
-                    <>
-                      <span>{formatNumber(prizeAmount)}</span>
-                      <img
-                        src={getTokenLogoUrl(chainId, prize.token_address)}
-                        className="w-6 h-6"
-                        alt="token"
-                      />
-                      <span className="text-neutral">
-                        ~${(prizeAmount * tokenPrice).toFixed(2)}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <span>NFT</span>
-                      <img
-                        src={getTokenLogoUrl(chainId, prize.token_address)}
-                        className="w-6 h-6"
-                        alt="token"
-                      />
-                    </>
-                  )}
-                </div>
+        <div className="space-y-4 px-5 py-2 max-h-[500px] overflow-y-auto">
+          {groupedPrizes.map((group, groupIndex) => (
+            <div key={groupIndex} className="space-y-2">
+              <div className="font-semibold text-brand border-b border-brand/20 pb-1">
+                {group.label}
               </div>
-            );
-          })}
+              <div className="space-y-1 pl-3">
+                {group.prizes.map((prize: any, prizeIndex: number) => {
+                  // Handle both SDK format (variant.erc20) and SQL format (token_type string)
+                  const isErc20 =
+                    prize.token_type?.variant?.erc20 ||
+                    prize.token_type === "erc20";
+                  const tokenDecimals = getTokenDecimals(
+                    chainId,
+                    prize.token_address
+                  );
+                  const prizeAmount = isErc20
+                    ? Number(
+                        prize.token_type?.variant?.erc20?.amount ||
+                          prize["token_type.erc20.amount"] ||
+                          0
+                      ) /
+                      10 ** tokenDecimals
+                    : 0;
+                  const tokenPrice =
+                    prices[
+                      getTokenSymbol(chainId, prize.token_address) ?? ""
+                    ] ?? 0;
+
+                  // Determine prize source label
+                  let sourceLabel = "";
+                  if (prize.type === "entry_fee") {
+                    sourceLabel = "Entry Fee Pool";
+                  } else if (prize.type === "sponsored_distributed") {
+                    sourceLabel = `Prize Pool #${prizeIndex + 1}`;
+                  } else if (
+                    prize.type === "entry_fee_game_creator" ||
+                    prize.type === "entry_fee_tournament_creator"
+                  ) {
+                    sourceLabel = "Entry Fee Pool";
+                  } else {
+                    sourceLabel = `Prize #${prizeIndex + 1}`;
+                  }
+
+                  return (
+                    <div
+                      className="flex flex-row items-center justify-between text-sm"
+                      key={prizeIndex}
+                    >
+                      <span className="text-muted-foreground">
+                        {sourceLabel}
+                      </span>
+                      <div className="flex flex-row items-center gap-2">
+                        {isErc20 ? (
+                          <>
+                            <span>{formatNumber(prizeAmount)}</span>
+                            <img
+                              src={getTokenLogoUrl(
+                                chainId,
+                                prize.token_address
+                              )}
+                              className="w-5 h-5"
+                              alt="token"
+                            />
+                            <span className="text-neutral text-xs">
+                              ~${(prizeAmount * tokenPrice).toFixed(2)}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span>NFT</span>
+                            <img
+                              src={getTokenLogoUrl(
+                                chainId,
+                                prize.token_address
+                              )}
+                              className="w-5 h-5"
+                              alt="token"
+                            />
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
         <div className="flex justify-end gap-2 mt-6">
           <DialogClose asChild>

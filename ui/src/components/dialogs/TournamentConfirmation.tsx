@@ -834,7 +834,7 @@ const TournamentConfirmation = ({
                                     )}
                                     <span className="font-medium">{asset.symbol}</span>
                                     <span className="text-xs text-neutral font-mono">
-                                      {displayAddress(asset.address)}
+                                      {displayAddress(asset.token_address)}
                                     </span>
                                   </div>
                                 ))}

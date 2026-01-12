@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useFormContext } from "react-hook-form";
 import { Input } from "@/components/ui/input";
 import {
@@ -32,22 +32,9 @@ export const ERC20BalanceConfig = ({
   const [maxEntries, setMaxEntries] = useState("");
 
   // Calculate USD value for display
-  const calculateUSDValue = (weiAmount: string): string => {
-    if (!weiAmount || !erc20Token) return "0";
-    try {
-      const tokens = getTokenByAddress(
-        erc20Token.address,
-        selectedChainConfig?.chainId ?? ""
-      );
-      if (!tokens || !tokens.current_price) return "0";
-
-      const decimals = tokens.decimals || 18;
-      const amount = Number(weiAmount) / 10 ** decimals;
-      const usdValue = amount * tokens.current_price;
-      return usdValue.toFixed(2);
-    } catch {
-      return "0";
-    }
+  // Note: Price data not currently available, returns "0"
+  const calculateUSDValue = (_weiAmount: string): string => {
+    return "0";
   };
 
   // Update form config whenever local state changes
@@ -118,6 +105,7 @@ export const ERC20BalanceConfig = ({
           address: token.token_address,
           name: token.name,
           symbol: token.symbol,
+          token_type: token.token_type,
         });
       }
 

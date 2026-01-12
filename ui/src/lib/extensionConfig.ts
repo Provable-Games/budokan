@@ -70,6 +70,7 @@ export const EXTENSION_ADDRESSES: Record<
     tournamentValidator?: string;
     erc20BalanceValidator?: string;
     opusTrovesValidator?: string;
+    snapshotValidator?: string;
   }
 > = {
   [ChainId.SN_SEPOLIA]: {

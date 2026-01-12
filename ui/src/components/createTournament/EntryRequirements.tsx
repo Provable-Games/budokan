@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -18,9 +18,8 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { StepProps } from "@/containers/CreateTournament";
-import { FormToken } from "@/lib/types";
 import { USER, X, INFO } from "@/components/Icons";
-import { displayAddress, feltToString, indexAddress } from "@/lib/utils";
+import { displayAddress, feltToString } from "@/lib/utils";
 import TokenGameIcon from "@/components/icons/TokenGameIcon";
 import { Search } from "lucide-react";
 import TokenDialog from "@/components/dialogs/Token";
@@ -54,9 +53,6 @@ import {
   getExtensionAddresses,
   getOpusSupportedAssets,
 } from "@/lib/extensionConfig";
-import { getTokenByAddress } from "@/lib/tokenUtils";
-import { useEkuboPrices } from "@/hooks/useEkuboPrices";
-import { getTokenDecimals } from "@/lib/tokensMeta";
 import { SnapshotConfig } from "./extensions/SnapshotConfig";
 import { ERC20BalanceConfig } from "./extensions/ERC20BalanceConfig";
 import { OpusTrovesConfig } from "./extensions/OpusTrovesConfig";

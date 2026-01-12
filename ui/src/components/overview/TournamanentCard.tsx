@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Card } from "@/components/ui/card";
-import { feltToString, formatTime } from "@/lib/utils";
+import { feltToString } from "@/lib/utils";
 import TokenGameIcon from "@/components/icons/TokenGameIcon";
 import { SOLID_CLOCK, USER, CALENDAR } from "@/components/Icons";
 import { useNavigate } from "react-router-dom";
@@ -138,16 +138,11 @@ export const TournamentCard = ({
   }, [groupedPrizes, tokens, selectedChainConfig.chainId]);
 
   const startDate = new Date(Number(tournament.schedule.game.start) * 1000);
-  const endDate = new Date(Number(tournament.schedule.game.end) * 1000);
   const duration =
     Number(tournament.schedule.game.end) -
     Number(tournament.schedule.game.start);
   const currentDate = new Date();
   const currentTimestamp = Math.floor(currentDate.getTime() / 1000);
-  const startsInSeconds = (startDate.getTime() - currentDate.getTime()) / 1000;
-  const startsIn = formatTime(startsInSeconds);
-  const endsInSeconds = (endDate.getTime() - currentDate.getTime()) / 1000;
-  const endsIn = formatTime(endsInSeconds);
 
   // Determine tournament status based on schedule
   const registrationStart = tournament?.schedule?.registration?.isSome()
@@ -274,14 +269,6 @@ export const TournamentCard = ({
     tournament?.entry_requirement.Some?.entry_requirement_type?.activeVariant();
   const tournamentRequirementVariant =
     tournament?.entry_requirement.Some?.entry_requirement_type?.variant?.tournament?.activeVariant();
-
-  const renderTimeClass = (time: number) => {
-    if (time > 3600) {
-      return "text-success";
-    } else {
-      return "text-warning";
-    }
-  };
 
   return (
     <Card

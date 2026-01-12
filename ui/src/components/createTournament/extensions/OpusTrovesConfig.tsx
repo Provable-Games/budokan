@@ -120,7 +120,7 @@ export const OpusTrovesConfig = ({
       // Extract asset addresses
       const assetAddresses = configParts.slice(1, assetCount + 1);
       const assets = assetAddresses
-        .map((addr) => {
+        .map((addr: string) => {
           const token = getTokenByAddress(
             addr,
             selectedChainConfig?.chainId ?? ""
@@ -130,11 +130,12 @@ export const OpusTrovesConfig = ({
               address: token.token_address,
               name: token.name,
               symbol: token.symbol,
+              token_type: token.token_type,
             } as FormToken;
           }
           return null;
         })
-        .filter((t): t is FormToken => t !== null);
+        .filter((t: FormToken | null): t is FormToken => t !== null);
 
       setOpusTroveAssets(assets);
 
@@ -153,13 +154,6 @@ export const OpusTrovesConfig = ({
       setOpusProportionalMode(valPerEntry !== "0" && valPerEntry !== "");
     }
   }, []); // Only on mount to restore from saved config
-
-  // Import getExtensionAddresses
-  const getExtensionAddresses = (chainId: string) => {
-    // This should come from @/lib/extensionConfig but we'll import it at the top
-    const { getExtensionAddresses: getAddresses } = require("@/lib/extensionConfig");
-    return getAddresses(chainId);
-  };
 
   return (
     <div className="space-y-4">

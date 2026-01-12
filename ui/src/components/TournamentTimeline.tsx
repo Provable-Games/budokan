@@ -81,9 +81,9 @@ const TournamentTimeline = ({
           duraton={gapDuration}
           label="Preparation"
           showConnector
-          active={pulse ? isInPreparationPeriod : false}
+          active={pulse ? !!isInPreparationPeriod : false}
           completed={isStarted}
-          highlighted={isInPreparationPeriod}
+          highlighted={!!isInPreparationPeriod}
         />
       )}
       <TimelineCard

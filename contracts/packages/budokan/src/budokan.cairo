@@ -1453,6 +1453,14 @@ pub mod Budokan {
                 };
 
                 let prize_amount = self._calculate_payout(share.into(), total_pool);
+
+                // Prevent 0 token claims to save gas
+                assert!(
+                    prize_amount > 0,
+                    "Budokan: Entry fee reward has 0 tokens to claim for tournament {}",
+                    tournament_id,
+                );
+
                 self.entry_fee.payout(entry_fee.token_address, recipient_address, prize_amount);
             } else {
                 panic!("Budokan: tournament {} has no entry fees", tournament_id);
@@ -1510,6 +1518,15 @@ pub mod Budokan {
             };
 
             let prize_amount = self._calculate_payout(share.into(), total_pool);
+
+            // Prevent 0 token claims to save gas
+            assert!(
+                prize_amount > 0,
+                "Budokan: Position {} has 0 tokens to claim from entry fees for tournament {}",
+                position,
+                tournament_id,
+            );
+
             self.entry_fee.payout(entry_fee.token_address, recipient_address, prize_amount);
         }
 
@@ -1665,6 +1682,14 @@ pub mod Budokan {
 
             // Calculate payout amount
             let payout_amount = (share_bps.into() * erc20_data.amount) / BASIS_POINTS.into();
+
+            // Prevent 0 token claims to save gas
+            assert!(
+                payout_amount > 0,
+                "Budokan: Position {} has 0 tokens to claim for prize {}",
+                payout_index,
+                prize_id,
+            );
 
             // Handle payout or refund based on leaderboard size
             if payout_index <= leaderboard_size {

@@ -129,7 +129,6 @@ export const SponsorsDialog = ({
 
         const decimals = tokenDecimals[tokenAddress] || 18;
         const tokenAmount = Number(amount) / 10 ** decimals;
-        const tokenSymbol = getTokenSymbol(chainId, tokenAddress);
         const tokenPrice = prices[tokenAddress] ?? 0;
         const usdValue = tokenAmount * tokenPrice;
 

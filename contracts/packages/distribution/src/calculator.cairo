@@ -97,50 +97,57 @@ pub fn calculate_share_with_dust(
 
 /// Calculate linear decreasing distribution with weight
 /// First place gets most, decreasing linearly to last payout
-/// Formula: payout index i gets (n - i + 1)^(weight/10) shares
+/// Formula: share = 1 + (positionValue - 1) * (weight / 10)
+/// where positionValue = n - payout_index + 1 (n for 1st, n-1 for 2nd, ... 1 for last)
 /// Weight is scaled by 10 (e.g., 10 = 1.0, 25 = 2.5, 100 = 10.0)
 /// Returns share in basis points
 fn calculate_linear_share(
     payout_index: u32, total_payouts: u32, available_share: u16, weight: u16,
 ) -> u16 {
-    // For weighted linear distribution with fractional exponents:
-    // Payout index i gets (n - i + 1)^(weight/10) shares
-    // Weight = 10 (1.0): standard linear (1st=n, 2nd=n-1, ... last=1)
-    // Weight = 20 (2.0): steeper (1st=n^2, 2nd=(n-1)^2, ... last=1)
-    // Weight = 25 (2.5): fractional (1st=n^2.5, 2nd=(n-1)^2.5, ... last=1)
+    // For linear distribution:
+    // positionValue = total_payouts - payout_index + 1
+    // share = 1 + (positionValue - 1) * (weight / 10)
+    //
+    // Examples with weight = 10 (1.0):
+    // - 1st place (index 1): positionValue = n, share = 1 + (n-1) * 1.0 = n
+    // - 2nd place (index 2): positionValue = n-1, share = 1 + (n-2) * 1.0 = n-1
+    // - Last place (index n): positionValue = 1, share = 1 + 0 * 1.0 = 1
 
     let n: u32 = total_payouts;
 
-    // Convert weight to fixed-point: weight / 10
-    // Cubit uses 32.32 fixed point, so ONE = 2^32 = 4294967296
-    let weight_fp = FixedTrait::new((weight.into() * ONE) / 10, false); // (weight * ONE) / 10
+    // Calculate positionValue = n - payout_index + 1
+    let position_value: u32 = n - payout_index + 1;
 
-    // Calculate payout_value = (n - payout_index + 1)
-    let payout_value: u32 = n - payout_index.into() + 1;
-    let payout_value_fp = FixedTrait::new_unscaled(payout_value.into(), false);
+    // Calculate share = 1 + (position_value - 1) * (weight / 10)
+    // Using fixed-point to handle fractional weights
+    let weight_fp = FixedTrait::new((weight.into() * ONE) / 10, false);
+    let position_minus_one_fp = FixedTrait::new_unscaled((position_value - 1).into(), false);
+    let one_fp = FixedTrait::new_unscaled(1, false);
 
-    // Calculate payout_shares = payout_value^(weight/10) using Cubit's pow
-    let payout_shares_fp = payout_value_fp.pow(weight_fp);
+    // share_value = 1 + (position_value - 1) * (weight / 10)
+    let share_value_fp = one_fp + (position_minus_one_fp * weight_fp);
 
-    // Calculate total_shares = sum of all payout powers
+    // Calculate total shares for all positions
     let mut total_shares_fp = FixedTrait::ZERO();
     let mut pos: u32 = 1;
     loop {
         if pos > n {
             break;
         }
-        let pos_fp = FixedTrait::new_unscaled(pos.into(), false);
-        total_shares_fp = total_shares_fp + pos_fp.pow(weight_fp);
+        let pos_value: u32 = n - pos + 1;
+        let pos_minus_one_fp = FixedTrait::new_unscaled((pos_value - 1).into(), false);
+        let pos_share_fp = one_fp + (pos_minus_one_fp * weight_fp);
+        total_shares_fp = total_shares_fp + pos_share_fp;
         pos += 1;
     }
 
-    // Calculate share: (payout_shares / total_shares) * available_share
-    let ratio_fp = payout_shares_fp / total_shares_fp;
+    // Calculate this position's share: (share_value / total_shares) * available_share
+    let ratio_fp = share_value_fp / total_shares_fp;
     let available_fp = FixedTrait::new_unscaled(available_share.into(), false);
-    let share_fp = ratio_fp * available_fp;
+    let final_share_fp = ratio_fp * available_fp;
 
     // Convert back to u16
-    let share_u64: u64 = share_fp.try_into().unwrap_or(0);
+    let share_u64: u64 = final_share_fp.try_into().unwrap_or(0);
     share_u64.try_into().unwrap_or(0)
 }
 
@@ -591,18 +598,19 @@ mod tests {
 
     #[test]
     fn test_linear_weight_2_steeper() {
-        // Weight 20 = 2.0 makes distribution steeper (squares the values)
+        // Weight 20 = 2.0 makes distribution steeper
         let dist = Distribution::Linear(20);
 
         let share1 = calculate_share(dist, 1, 3, BASIS_POINTS);
         let share2 = calculate_share(dist, 2, 3, BASIS_POINTS);
         let share3 = calculate_share(dist, 3, 3, BASIS_POINTS);
 
-        // With weight=2.0: 1st=9, 2nd=4, 3rd=1, total=14
-        // 1st = 9/14 ≈ 64.3%, 2nd = 4/14 ≈ 28.6%, 3rd = 1/14 ≈ 7.1%
-        assert!(share1 >= 6350 && share1 <= 6500, "Weight 2.0: Payout index 1 gets ~64%");
-        assert!(share2 >= 2800 && share2 <= 2950, "Weight 2.0: Position 2 gets ~29%");
-        assert!(share3 >= 650 && share3 <= 800, "Weight 2.0: Position 3 gets ~7%");
+        // With weight=2.0 and new linear formula:
+        // Position 1: share = 1 + (3-1) * 2.0 = 5, total = 5+3+1 = 9
+        // 1st = 5/9 ≈ 55.56%, 2nd = 3/9 ≈ 33.33%, 3rd = 1/9 ≈ 11.11%
+        assert!(share1 >= 5540 && share1 <= 5580, "Weight 2.0: Payout index 1 gets ~55.56%");
+        assert!(share2 >= 3320 && share2 <= 3350, "Weight 2.0: Position 2 gets ~33.33%");
+        assert!(share3 >= 1100 && share3 <= 1130, "Weight 2.0: Position 3 gets ~11.11%");
 
         // Verify payout index 1 gets much more with weight 2.0 than weight 1.0
         let dist1 = Distribution::Linear(10);
@@ -619,14 +627,15 @@ mod tests {
         let share2 = calculate_share(dist, 2, 3, BASIS_POINTS);
         let share3 = calculate_share(dist, 3, 3, BASIS_POINTS);
 
-        // With weight=5.0: 1st=3^5=243, 2nd=2^5=32, 3rd=1^5=1, total=276
-        // 1st = 243/276 ≈ 88%, 2nd = 32/276 ≈ 11.6%, 3rd = 1/276 ≈ 0.4%
-        assert!(share1 >= 8750 && share1 <= 8900, "Weight 5.0: Position 1 dominates with ~88%");
-        assert!(share2 >= 1100 && share2 <= 1250, "Weight 5.0: Position 2 gets ~12%");
-        assert!(share3 >= 20 && share3 <= 100, "Weight 5.0: Position 3 gets negligible");
+        // With weight=5.0 and new linear formula:
+        // Position 1: share = 1 + (3-1) * 5.0 = 11, total = 11+6+1 = 18
+        // 1st = 11/18 ≈ 61.11%, 2nd = 6/18 ≈ 33.33%, 3rd = 1/18 ≈ 5.56%
+        assert!(share1 >= 6100 && share1 <= 6130, "Weight 5.0: Position 1 gets ~61.11%");
+        assert!(share2 >= 3320 && share2 <= 3350, "Weight 5.0: Position 2 gets ~33.33%");
+        assert!(share3 >= 540 && share3 <= 570, "Weight 5.0: Position 3 gets ~5.56%");
 
-        // Position 1 should get much more than payout index 2
-        assert!(share1 > share2 * 7, "Payout index 1 gets >7x more than payout index 2");
+        // Position 1 should get more than payout index 2
+        assert!(share1 * 10 > share2 * 18, "Payout index 1 gets >1.8x more than payout index 2");
     }
 
     #[test]
@@ -822,25 +831,27 @@ mod tests {
     #[test]
     fn test_gas_comparison_integer_weight() {
         // Compare gas usage for integer weight (2.0) using both methods
-        // Old method: simple integer exponentiation
-        // New method: fixed-point with fractional support
+        // Old method: simple integer exponentiation (power-based)
+        // New method: linear scaling formula
 
         // Old way: Calculate 3^2 directly
         let base_old = 3_u64;
         let exp_old = 2_u64;
         let result_old = pow_int_only(base_old, exp_old);
 
-        // New way: Use fixed-point for same calculation
+        // New way: Use linear scaling formula
         let dist_new = Distribution::Linear(20); // weight 2.0
         let share_new = calculate_share(dist_new, 1, 3, BASIS_POINTS);
 
-        // Both should produce similar results
+        // With new linear formula:
+        // Position 1: share = 1 + (3-1) * 2.0 = 5, total = 5+3+1 = 9
+        // 1st = 5/9 ≈ 55.56%
         assert!(result_old == 9, "Old method: 3^2 = 9");
-        assert!(share_new >= 6350 && share_new <= 6500, "New method produces similar distribution");
+        assert!(share_new >= 5540 && share_new <= 5580, "New method produces linear distribution ~55.56%");
         // NOTE: Check l2_gas in test output to compare:
     // - Old method would use minimal gas (simple multiplication loop)
-    // - New method uses more gas (fixed-point pow with exp/ln)
-    // The tradeoff: New method supports fractional exponents like 1.5, 2.5, etc.
+    // - New method uses fixed-point math for linear scaling
+    // The tradeoff: New method supports fractional weights like 1.5, 2.5, etc.
     }
 
     #[test]
@@ -995,18 +1006,19 @@ mod tests {
 
     #[test]
     fn test_linear_fractional_weight_1_5() {
-        // Weight 15 = 1.5 - fractional exponent between 1.0 and 2.0
+        // Weight 15 = 1.5 - fractional weight between 1.0 and 2.0
         let dist = Distribution::Linear(15);
 
         let share1 = calculate_share(dist, 1, 3, BASIS_POINTS);
         let share2 = calculate_share(dist, 2, 3, BASIS_POINTS);
         let share3 = calculate_share(dist, 3, 3, BASIS_POINTS);
 
-        // With weight=1.5: 1st=3^1.5≈5.2, 2nd=2^1.5≈2.8, 3rd=1^1.5=1, total≈9
-        // 1st ≈ 57.7%, 2nd ≈ 31.1%, 3rd ≈ 11.1%
-        assert!(share1 >= 5650 && share1 <= 5850, "Weight 1.5: Payout index 1 gets ~58%");
-        assert!(share2 >= 3000 && share2 <= 3200, "Weight 1.5: Position 2 gets ~31%");
-        assert!(share3 >= 1050 && share3 <= 1250, "Weight 1.5: Position 3 gets ~11%");
+        // With weight=1.5 and new linear formula:
+        // Position 1: share = 1 + (3-1) * 1.5 = 4, total = 4+2.5+1 = 7.5
+        // 1st = 4/7.5 ≈ 53.33%, 2nd = 2.5/7.5 ≈ 33.33%, 3rd = 1/7.5 ≈ 13.33%
+        assert!(share1 >= 5320 && share1 <= 5350, "Weight 1.5: Payout index 1 gets ~53.33%");
+        assert!(share2 >= 3320 && share2 <= 3350, "Weight 1.5: Position 2 gets ~33.33%");
+        assert!(share3 >= 1320 && share3 <= 1350, "Weight 1.5: Position 3 gets ~13.33%");
 
         // Should be between weight 1.0 and weight 2.0
         let dist_1 = Distribution::Linear(10);
@@ -1020,18 +1032,19 @@ mod tests {
 
     #[test]
     fn test_linear_fractional_weight_2_5() {
-        // Weight 25 = 2.5 - fractional exponent
+        // Weight 25 = 2.5 - fractional weight
         let dist = Distribution::Linear(25);
 
         let share1 = calculate_share(dist, 1, 3, BASIS_POINTS);
         let share2 = calculate_share(dist, 2, 3, BASIS_POINTS);
         let share3 = calculate_share(dist, 3, 3, BASIS_POINTS);
 
-        // With weight=2.5: 1st=3^2.5≈15.6, 2nd=2^2.5≈5.7, 3rd=1^2.5=1, total≈22.3
-        // 1st ≈ 70%, 2nd ≈ 25.4%, 3rd ≈ 4.5%
-        assert!(share1 >= 6900 && share1 <= 7100, "Weight 2.5: Payout index 1 gets ~70%");
-        assert!(share2 >= 2450 && share2 <= 2650, "Weight 2.5: Position 2 gets ~25%");
-        assert!(share3 >= 400 && share3 <= 600, "Weight 2.5: Position 3 gets ~5%");
+        // With weight=2.5 and new linear formula:
+        // Position 1: share = 1 + (3-1) * 2.5 = 6, total = 6+3.5+1 = 10.5
+        // 1st = 6/10.5 ≈ 57.14%, 2nd = 3.5/10.5 ≈ 33.33%, 3rd = 1/10.5 ≈ 9.52%
+        assert!(share1 >= 5700 && share1 <= 5730, "Weight 2.5: Payout index 1 gets ~57.14%");
+        assert!(share2 >= 3320 && share2 <= 3350, "Weight 2.5: Position 2 gets ~33.33%");
+        assert!(share3 >= 940 && share3 <= 970, "Weight 2.5: Position 3 gets ~9.52%");
     }
 
     #[test]
