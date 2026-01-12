@@ -847,7 +847,10 @@ mod tests {
         // Position 1: share = 1 + (3-1) * 2.0 = 5, total = 5+3+1 = 9
         // 1st = 5/9 ≈ 55.56%
         assert!(result_old == 9, "Old method: 3^2 = 9");
-        assert!(share_new >= 5540 && share_new <= 5580, "New method produces linear distribution ~55.56%");
+        assert!(
+            share_new >= 5540 && share_new <= 5580,
+            "New method produces linear distribution ~55.56%",
+        );
         // NOTE: Check l2_gas in test output to compare:
     // - Old method would use minimal gas (simple multiplication loop)
     // - New method uses fixed-point math for linear scaling
