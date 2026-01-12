@@ -29,7 +29,7 @@ pub struct ExtensionConfig {
 pub struct QualificationEntries {
     pub context_id: u64,
     pub qualification_proof: QualificationProof,
-    pub entry_count: u8,
+    pub entry_count: u32,
 }
 
 #[derive(Copy, Drop, Serde, PartialEq)]

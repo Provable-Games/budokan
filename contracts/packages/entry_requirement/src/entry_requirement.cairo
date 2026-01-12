@@ -45,7 +45,7 @@ pub mod EntryRequirementComponent {
         /// TODO: Remove as this will be stored within the extension contract
         EntryRequirement_extension_config: Map<u64, Vec<felt252>>,
         /// Qualification entries tracking keyed by (context_id, qualification_hash)
-        EntryRequirement_qualification_entries: Map<(u64, felt252), u8>,
+        EntryRequirement_qualification_entries: Map<(u64, felt252), u32>,
     }
 
     #[event]

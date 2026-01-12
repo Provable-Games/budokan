@@ -42,7 +42,7 @@ pub trait IBudokanEventRelayer<TState> {
         ref self: TState,
         tournament_id: u64,
         qualification_proof: QualificationProof,
-        entry_count: u8,
+        entry_count: u32,
     );
 
     // ============ Leaderboard Events ============

@@ -51,7 +51,7 @@ pub struct QualificationEntries {
     pub tournament_id: u64,
     #[key]
     pub qualification_proof: QualificationProof,
-    pub entry_count: u8,
+    pub entry_count: u32,
 }
 
 // ============ Leaderboard Events ============

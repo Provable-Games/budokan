@@ -108,7 +108,7 @@ mod BudokanEventRelayer {
             ref self: ContractState,
             tournament_id: u64,
             qualification_proof: QualificationProof,
-            entry_count: u8,
+            entry_count: u32,
         ) {
             self.assert_only_budokan();
             let mut world = self.world(@DEFAULT_NS());
