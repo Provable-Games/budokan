@@ -248,7 +248,9 @@ pub mod Budokan {
             GameContextDetails {
                 name: "Budokan",
                 description: "The onchain tournament system",
-                id: Option::Some(registration.context_id.try_into().unwrap()),
+                id: Option::Some(
+                    registration.context_id.try_into().expect('context_id exceeds u32::MAX'),
+                ),
                 context: context,
             }
         }
@@ -407,8 +409,7 @@ pub mod Budokan {
             let context = self._create_context(tournament_id);
 
             let client_url = if tournament.game_config.play_url.len() == 0 {
-                let _tournament_id = format!("{}", tournament.id);
-                Option::Some("https://budokan.gg/tournament/" + _tournament_id)
+                Option::Some(format!("https://budokan.gg/tournament/{}", tournament.id))
             } else {
                 Option::Some(tournament.game_config.play_url)
             };
@@ -1437,7 +1438,9 @@ pub mod Budokan {
                         let share = if let Option::Some(refund_share) = entry_fee.refund_share {
                             // The refund_share is the total % to be refunded, divided equally
                             // among all participants
-                            refund_share / total_entries.try_into().unwrap_or(1)
+                            // Convert to u32 for division, then back to u16
+                            let share_u32: u32 = refund_share.into() / total_entries;
+                            share_u32.try_into().expect('refund share calculation error')
                         } else {
                             panic!(
                                 "Budokan: tournament {} does not have a refund share",

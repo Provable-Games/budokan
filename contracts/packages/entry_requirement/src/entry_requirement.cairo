@@ -285,8 +285,9 @@ pub mod EntryRequirementComponent {
                         let mut qualification_entries = self
                             ._get_qualification_entries(context_id, qualifier);
 
+                        // Convert entry_count (u8) to u32 for comparison with entry_limit (u32)
                         assert!(
-                            qualification_entries.entry_count < entry_limit.try_into().unwrap(),
+                            qualification_entries.entry_count.into() < entry_limit,
                             "EntryRequirement: Maximum qualified entries reached for context {}",
                             context_id,
                         );

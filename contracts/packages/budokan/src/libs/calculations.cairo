@@ -4,11 +4,14 @@
 //! These functions operate only on inputs without any storage access
 
 use budokan_distribution::models::BASIS_POINTS;
+use core::num::traits::WideMul;
 
 /// Calculate payout amount from basis points and total value
 /// Returns: (basis_points * total_value) / BASIS_POINTS
+/// Uses WideMul to prevent overflow on large values
 pub fn calculate_payout(basis_points: u128, total_value: u128) -> u128 {
-    (basis_points * total_value) / BASIS_POINTS.into()
+    let product: u256 = basis_points.wide_mul(total_value);
+    (product / BASIS_POINTS.into()).try_into().expect('calculate_payout overflow')
 }
 
 /// Calculate the remaining share after subtracting fixed shares

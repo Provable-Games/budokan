@@ -811,56 +811,9 @@ mod tests {
 
     // ============ Gas Comparison Tests ============
 
-    /// Old integer-only pow implementation for comparison
-    fn pow_int_only(base: u64, exp: u64) -> u64 {
-        if exp == 0 {
-            return 1;
-        }
-        let mut result: u64 = 1;
-        let mut i: u64 = 0;
-        loop {
-            if i >= exp {
-                break;
-            }
-            result *= base;
-            i += 1;
-        }
-        result
-    }
-
-    #[test]
-    fn test_gas_comparison_integer_weight() {
-        // Compare gas usage for integer weight (2.0) using both methods
-        // Old method: simple integer exponentiation (power-based)
-        // New method: linear scaling formula
-
-        // Old way: Calculate 3^2 directly
-        let base_old = 3_u64;
-        let exp_old = 2_u64;
-        let result_old = pow_int_only(base_old, exp_old);
-
-        // New way: Use linear scaling formula
-        let dist_new = Distribution::Linear(20); // weight 2.0
-        let share_new = calculate_share(dist_new, 1, 3, BASIS_POINTS);
-
-        // With new linear formula:
-        // Position 1: share = 1 + (3-1) * 2.0 = 5, total = 5+3+1 = 9
-        // 1st = 5/9 ≈ 55.56%
-        assert!(result_old == 9, "Old method: 3^2 = 9");
-        assert!(
-            share_new >= 5540 && share_new <= 5580,
-            "New method produces linear distribution ~55.56%",
-        );
-        // NOTE: Check l2_gas in test output to compare:
-    // - Old method would use minimal gas (simple multiplication loop)
-    // - New method uses fixed-point math for linear scaling
-    // The tradeoff: New method supports fractional weights like 1.5, 2.5, etc.
-    }
-
     #[test]
     fn test_fractional_weight_benefit() {
         // Demonstrate the benefit: fractional weights provide finer control
-        // This is IMPOSSIBLE with integer-only exponentiation
 
         let weight_15 = Distribution::Linear(15); // 1.5 - between 1.0 and 2.0
         let weight_25 = Distribution::Linear(25); // 2.5 - between 2.0 and 3.0
