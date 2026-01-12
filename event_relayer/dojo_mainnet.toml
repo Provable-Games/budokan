@@ -9,14 +9,14 @@ rpc_url = "https://api.cartridge.gg/x/starknet/mainnet/rpc/v0_9"
 world_address = "0x02ef591697f0fd9adc0ba9dbe0ca04dabad80cf95f08ba02e435d9cb6698a28a"
 
 [namespace]
-default = "budokan_relayer_0_0_10"
+default = "budokan_relayer_0_0_11"
 
 [writers]
-"budokan_relayer_0_0_10" = [
-    "budokan_relayer_0_0_10-BudokanEventRelayer",
+"budokan_relayer_0_0_11" = [
+    "budokan_relayer_0_0_11-BudokanEventRelayer",
 ]
 
 [init_call_args]
-"budokan_relayer_0_0_10-BudokanEventRelayer" = [
+"budokan_relayer_0_0_11-BudokanEventRelayer" = [
     "0x1aebeb03d574e1b6c1c6d4e988b3cc3914705de9ec76b62d49967f26e616d4e", # deployer address (owner)
 ]

@@ -627,13 +627,20 @@ const Tournament = () => {
     Number(registrationEndTime) < now &&
     Number(tournamentStartTime) > now;
 
+  // Check if we're in the registration period for fixed registration tournaments
+  const isInRegistrationPeriod =
+    registrationType === "fixed" &&
+    registrationEndTime &&
+    Number(registrationEndTime) > now;
+
   const status = useMemo(() => {
     if (isSubmitted) return "finalized";
     if (isEnded && !isSubmitted) return "submission";
     if (isStarted) return "live";
     if (isInPreparationPeriod) return "preparation";
+    if (isInRegistrationPeriod) return "registration";
     return "upcoming";
-  }, [isStarted, isEnded, isSubmitted, isInPreparationPeriod]);
+  }, [isStarted, isEnded, isSubmitted, isInPreparationPeriod, isInRegistrationPeriod]);
 
   // handle fetching of tournament data if there is a tournament validator extension requirement
 
@@ -891,7 +898,12 @@ const Tournament = () => {
               </div>
             </div>
             <div className="hidden sm:flex flex-row 3xl:text-lg">
-              {isInPreparationPeriod ? (
+              {isInRegistrationPeriod ? (
+                <Countdown
+                  targetTimestamp={Number(registrationEndTime)}
+                  label="Registration Ends In"
+                />
+              ) : isInPreparationPeriod ? (
                 <Countdown
                   targetTimestamp={Number(tournamentModel?.schedule.game.start)}
                   label="Starts In"

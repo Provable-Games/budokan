@@ -68,6 +68,14 @@ export function PrizeManager({
 
   const handleAddPrize = async (prizeData: PrizeSelectorData) => {
     if (prizeData.tokenType === "ERC20" && prizeData.distributions) {
+      // Calculate the total amount to be distributed
+      const totalAmount = prizeData.amount ?? 0;
+
+      // Don't add prizes with 0 or undefined amount
+      if (!totalAmount || totalAmount <= 0) {
+        return;
+      }
+
       // Fetch token decimals for ERC20 tokens
       let tokenDecimals = 18;
       try {
@@ -75,9 +83,6 @@ export function PrizeManager({
       } catch (error) {
         console.error("Failed to fetch token decimals:", error);
       }
-
-      // Calculate the total amount to be distributed
-      const totalAmount = prizeData.amount ?? 0;
 
       // Add a single prize with distribution metadata
       const newPrize: Prize = {

@@ -4,7 +4,7 @@ import { PrizeInput } from "@/components/createTournament/inputs/PrizeInput";
 import { PrizeDistributionVisual } from "@/components/createTournament/PrizeDistributionVisual";
 import { FormToken } from "@/lib/types";
 import { calculateDistribution } from "@/lib/utils";
-import { getTokenSymbol, getTokenLogoUrl } from "@/lib/tokensMeta";
+import { getTokenLogoUrl } from "@/lib/tokensMeta";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
 import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
 
@@ -39,7 +39,10 @@ interface PrizeSelectorProps {
   onAddPrize: (prizeData: PrizeSelectorData) => void;
   checkBalance?: boolean;
   existingPrizes?: any[]; // For price fetching of existing prizes
-  onTokenSelect?: (token: FormToken | undefined, tokenType: "ERC20" | "ERC721" | "") => void;
+  onTokenSelect?: (
+    token: FormToken | undefined,
+    tokenType: "ERC20" | "ERC721" | ""
+  ) => void;
 }
 
 export function PrizeSelector({
@@ -50,7 +53,9 @@ export function PrizeSelector({
   existingPrizes = [],
   onTokenSelect,
 }: PrizeSelectorProps) {
-  const [selectedToken, setSelectedToken] = useState<FormToken | undefined>(undefined);
+  const [selectedToken, setSelectedToken] = useState<FormToken | undefined>(
+    undefined
+  );
   const [tokenEverSelected, setTokenEverSelected] = useState(false);
   const [newPrize, setNewPrize] = useState<NewPrize>({
     token: {
@@ -63,42 +68,57 @@ export function PrizeSelector({
     tokenType: "ERC20", // Default to ERC20
   });
   const [distributionWeight, setDistributionWeight] = useState(1);
-  const [distributionType, setDistributionType] = useState<"exponential" | "linear" | "uniform">("exponential");
+  const [distributionType, setDistributionType] = useState<
+    "exponential" | "linear" | "uniform"
+  >("exponential");
   const [leaderboardSize, setLeaderboardSize] = useState(10);
-  const [prizeDistributions, setPrizeDistributions] = useState<{ position: number; percentage: number }[]>([]);
+  const [prizeDistributions, setPrizeDistributions] = useState<
+    { position: number; percentage: number }[]
+  >([]);
   const [hasInsufficientBalance, setHasInsufficientBalance] = useState(false);
-  const [tokenDecimals, setTokenDecimals] = useState<Record<string, number>>({});
+  const [tokenDecimals, setTokenDecimals] = useState<Record<string, number>>(
+    {}
+  );
 
   const { getBalanceGeneral, getTokenDecimals } = useSystemCalls();
 
   const isERC20 = newPrize.tokenType === "ERC20";
 
-  // Get unique token symbols for price fetching
-  const uniqueTokenSymbols = useMemo(() => {
-    const symbols = existingPrizes
+  // Get unique token addresses for price fetching
+  const uniqueTokenAddresses = useMemo(() => {
+    const addresses = existingPrizes
       .filter((prize) => prize.type === "ERC20" || prize.tokenType === "ERC20")
-      .map((prize) => getTokenSymbol(chainId, prize.token?.address || prize.tokenAddress))
-      .filter((symbol): symbol is string => typeof symbol === "string" && symbol !== "");
+      .map((prize) => prize.token?.address || prize.tokenAddress)
+      .filter(
+        (address): address is string =>
+          typeof address === "string" && address !== ""
+      );
 
-    return [...new Set([
-      ...symbols,
-      ...(newPrize.token?.address ? [getTokenSymbol(chainId, newPrize.token.address) ?? ""] : []),
-    ])];
-  }, [existingPrizes, newPrize.token?.address, chainId]);
+    return [
+      ...new Set([
+        ...addresses,
+        ...(newPrize.token?.address ? [newPrize.token.address] : []),
+      ]),
+    ];
+  }, [existingPrizes, newPrize.token?.address]);
 
   const { prices, isLoading: pricesLoading } = useEkuboPrices({
-    tokens: uniqueTokenSymbols,
+    tokens: uniqueTokenAddresses,
   });
 
   const totalDistributionPercentage = useMemo(() => {
-    return prizeDistributions.reduce((sum, pos) => sum + (pos.percentage || 0), 0) || 0;
+    return (
+      prizeDistributions.reduce((sum, pos) => sum + (pos.percentage || 0), 0) ||
+      0
+    );
   }, [prizeDistributions]);
 
   const isValidPrize = () => {
     if (!newPrize.token?.address) return false;
 
     if (newPrize.tokenType === "ERC20") {
-      const isPercentageValid = Math.abs(totalDistributionPercentage - 100) < 0.01;
+      const isPercentageValid =
+        Math.abs(totalDistributionPercentage - 100) < 0.01;
       return !!newPrize.amount && isPercentageValid;
     }
 
@@ -129,17 +149,20 @@ export function PrizeSelector({
     }
   }, [leaderboardSize, distributionWeight, distributionType, isERC20]);
 
-  // Update amount based on price
+  // Update amount based on USD value when price is available
   useEffect(() => {
-    if (newPrize.tokenType === "ERC20") {
-      setNewPrize((prev) => ({
-        ...prev,
-        amount:
-          (prev.value ?? 0) /
-          (prices?.[getTokenSymbol(chainId, prev.token?.address ?? "") ?? ""] ?? 1),
-      }));
+    if (newPrize.tokenType === "ERC20" && newPrize.value !== undefined && newPrize.value > 0 && newPrize.token?.address) {
+      const price = prices?.[newPrize.token.address] ?? 0;
+
+      if (price > 0) {
+        const calculatedAmount = newPrize.value / price;
+        setNewPrize((prev) => ({
+          ...prev,
+          amount: calculatedAmount,
+        }));
+      }
     }
-  }, [prices, newPrize.value, newPrize.tokenType, chainId]);
+  }, [prices, newPrize.value, newPrize.tokenType, newPrize.token?.address]);
 
   // Track if token was ever selected
   useEffect(() => {
@@ -160,11 +183,16 @@ export function PrizeSelector({
         if (newPrize.tokenType === "ERC20" && newPrize.amount) {
           // Check ERC20 balance
           const balances = await getBalanceGeneral(newPrize.token.address);
-          const decimals = tokenDecimals[newPrize.token.address] || await getTokenDecimals(newPrize.token.address);
+          const decimals =
+            tokenDecimals[newPrize.token.address] ||
+            (await getTokenDecimals(newPrize.token.address));
           const amount = (newPrize.amount ?? 0) * 10 ** decimals;
 
           setHasInsufficientBalance(balances < BigInt(Math.floor(amount)));
-        } else if (newPrize.tokenType === "ERC721" && newPrize.tokenId !== undefined) {
+        } else if (
+          newPrize.tokenType === "ERC721" &&
+          newPrize.tokenId !== undefined
+        ) {
           // Check ERC721 ownership - would need account and contract call
           // For now, we'll skip this check as it requires contract interaction
           // TODO: Implement NFT ownership check using account.callContract
@@ -178,7 +206,14 @@ export function PrizeSelector({
       }
     };
     checkBalances();
-  }, [newPrize.token?.address, newPrize.amount, newPrize.tokenId, newPrize.tokenType, checkBalance, tokenDecimals]);
+  }, [
+    newPrize.token?.address,
+    newPrize.amount,
+    newPrize.tokenId,
+    newPrize.tokenType,
+    checkBalance,
+    tokenDecimals,
+  ]);
 
   const handleAddPrize = () => {
     if (!isValidPrize()) return;
@@ -269,16 +304,20 @@ export function PrizeSelector({
         usdValue={newPrize.value}
         pricesLoading={pricesLoading}
         tokenId={newPrize.tokenId}
-        onTokenIdChange={(tokenId) => setNewPrize((prev) => ({ ...prev, tokenId }))}
+        onTokenIdChange={(tokenId) =>
+          setNewPrize((prev) => ({ ...prev, tokenId }))
+        }
         position={newPrize.position}
-        onPositionChange={(position) => setNewPrize((prev) => ({ ...prev, position }))}
+        onPositionChange={(position) =>
+          setNewPrize((prev) => ({ ...prev, position }))
+        }
         tokenEverSelected={tokenEverSelected}
         isSepolia={isSepolia}
         showTypeSelector={true}
       />
 
       {/* Distribution Visual for ERC20 */}
-      {isERC20 && tokenEverSelected && newPrize.amount && (
+      {isERC20 && tokenEverSelected && newPrize.amount! > 0 && (
         <>
           <div className="w-full h-0.5 bg-brand/25" />
           <PrizeDistributionVisual
@@ -305,10 +344,14 @@ export function PrizeSelector({
           <div className="flex justify-end">
             <Button
               type="button"
-              disabled={!isValidPrize() || (checkBalance && hasInsufficientBalance)}
+              disabled={
+                !isValidPrize() || (checkBalance && hasInsufficientBalance)
+              }
               onClick={handleAddPrize}
             >
-              {checkBalance && hasInsufficientBalance ? "Insufficient Balance" : "Add Prize"}
+              {checkBalance && hasInsufficientBalance
+                ? "Insufficient Balance"
+                : "Add Prize"}
             </Button>
           </div>
         </>

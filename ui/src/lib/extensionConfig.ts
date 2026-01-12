@@ -82,11 +82,11 @@ export const EXTENSION_ADDRESSES: Record<
   },
   [ChainId.SN_MAIN]: {
     tournamentValidator:
-      "0x04afc81a9392abfee4e70b6238a6ceaa30322010aaf09cb55894164935abb555",
+      "0x0771b57c0709fc4407ff8b63d573f302b96fb03638364032fad734e3c310b9e0",
     erc20BalanceValidator:
       "0x051fc2681f65ee18e99dab3cc2ca2eca1b4532c735e752f575ace91ed30f17b7",
     opusTrovesValidator:
-      "0x05c6d4a9cef65f7b96b790d8754d5c0b0793093db228f8652c15872da5563e41",
+      "0x0604bc0d54727f439786c65d7dc6f7d46de1aba7e129ef9caf65fef111a1644e",
   },
 };
 
