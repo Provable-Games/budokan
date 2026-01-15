@@ -197,9 +197,14 @@ const PrizesContainer = ({
     return filtered;
   }, [groupedPrizes]);
 
-  // Get prize information from aggregations
+  // Get prize information - count actual non-zero prizes after filtering
+  // This ensures the count matches what users can actually claim
+  const totalPrizes = useMemo(() => {
+    return Object.values(filteredGroupedPrizes).reduce((total, prizes) => {
+      return total + Object.keys(prizes).length;
+    }, 0);
+  }, [filteredGroupedPrizes]);
 
-  const totalPrizes = (aggregations?.total_prizes || 0) + entryFeePrizes.length;
   const prizesExist = totalPrizes > 0;
 
   // Calculate total NFTs from aggregated data + entry fee NFTs

@@ -1,22 +1,30 @@
 import { displayAddress } from "@/lib/utils";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { VERIFIED, QUESTION } from "@/components/Icons";
-import { Ban } from "lucide-react";
+import { Ban, Eye, RotateCcw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { getWatchLink, getReplayLink } from "@/assets/games";
 
 export const PlayerDetails = ({
   playerName,
   username,
   metadata,
+  isStarted,
   isEnded,
   hasSubmitted,
   isBanned,
+  gameAddress,
+  tokenId,
 }: {
   playerName: string;
   username: string;
   metadata: string;
+  isStarted?: boolean;
   isEnded: boolean;
   hasSubmitted: boolean;
   isBanned?: boolean;
+  gameAddress?: string;
+  tokenId?: string;
 }) => {
   return (
     <div className="flex flex-col gap-4">
@@ -56,6 +64,43 @@ export const PlayerDetails = ({
           <span>{hasSubmitted ? "Submitted" : "Not submitted"}</span>
         </div>
       )}
+      {isStarted && gameAddress && tokenId && (
+        <>
+          {hasSubmitted ? (
+            // Game is over, show replay link if available
+            (() => {
+              const replayLink = getReplayLink(gameAddress);
+              return replayLink ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mx-4"
+                  onClick={() => window.open(`${replayLink}${tokenId}`, "_blank")}
+                >
+                  <RotateCcw className="w-4 h-4 mr-2" />
+                  Watch Replay
+                </Button>
+              ) : null;
+            })()
+          ) : (
+            // Game is not over, show watch link if available
+            (() => {
+              const watchLink = getWatchLink(gameAddress);
+              return watchLink ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mx-4"
+                  onClick={() => window.open(`${watchLink}${tokenId}`, "_blank")}
+                >
+                  <Eye className="w-4 h-4 mr-2" />
+                  Watch Live
+                </Button>
+              ) : null;
+            })()
+          )}
+        </>
+      )}
     </div>
   );
 };
@@ -66,14 +111,18 @@ export const MobilePlayerCard = ({
   selectedPlayer,
   usernames,
   ownerAddress,
+  isStarted,
   isEnded,
+  gameAddress,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   selectedPlayer: any;
   usernames: Map<string, string> | undefined;
   ownerAddress: string;
+  isStarted?: boolean;
   isEnded: boolean;
+  gameAddress?: string;
 }) => {
   const username =
     usernames?.get(ownerAddress ?? "0x0") ||
@@ -91,9 +140,12 @@ export const MobilePlayerCard = ({
             playerName={selectedPlayer.game?.player_name}
             username={username}
             metadata={selectedPlayer.game?.metadata}
+            isStarted={isStarted}
             isEnded={isEnded}
             hasSubmitted={selectedPlayer.game?.has_submitted}
             isBanned={isBanned}
+            gameAddress={gameAddress}
+            tokenId={selectedPlayer.game?.token_id?.toString()}
           />
         )}
       </DialogContent>

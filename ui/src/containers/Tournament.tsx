@@ -28,6 +28,7 @@ import {
   processTournamentFromSql,
   expandDistributedPrizes,
   processPrizeFromSql,
+  getClaimablePrizes,
 } from "@/lib/utils/formatting";
 import { EnterTournamentDialog } from "@/components/dialogs/EnterTournament";
 import ScoreTable from "@/components/tournament/table/ScoreTable";
@@ -42,12 +43,12 @@ import { ClaimPrizesDialog } from "@/components/dialogs/ClaimPrizes";
 import { SubmitScoresDialog } from "@/components/dialogs/SubmitScores";
 import {
   useGetTournamentPrizesAggregations,
-  useGetTournamentRewardClaimsAggregations,
   useGetTournaments,
   useGetTournamentsCount,
   useGetTournamentLeaderboards,
   useGetTournamentRegistrants,
   useGetAllTournamentPrizes,
+  useGetTournamentRewardClaims,
 } from "@/dojo/hooks/useSqlQueries";
 import { getTokensByAddresses } from "@/lib/tokenUtils";
 import NotFound from "@/containers/NotFound";
@@ -349,21 +350,73 @@ const Tournament = () => {
     [sponsoredPrizes]
   );
 
+  // Fetch claimed rewards using SQL query
+  const { data: rewardClaimsData } = useGetTournamentRewardClaims({
+    namespace,
+    tournamentId: Number(tournamentModel?.id || 0),
+    active: !!tournamentModel?.id,
+  });
+
+  // Process reward claims
+  const claimedRewards = useMemo(() => {
+    if (!rewardClaimsData) return [];
+    return rewardClaimsData.map((claim: any) => ({
+      tournament_id: claim.tournament_id,
+      reward_hash: claim.reward_hash,
+      reward_type: claim.reward_type,
+      claimed: claim.claimed,
+    }));
+  }, [rewardClaimsData]);
+
+  // Calculate actual claimable prizes (filtering out 0-amount prizes)
+  const actualClaimablePrizesCount = useMemo(() => {
+    if (!tournamentModel) return 0;
+
+    // Combine all prizes
+    const allPrizes = [
+      ...distributionPrizes,
+      ...tournamentCreatorShare,
+      ...gameCreatorShare,
+      ...expandedSponsoredPrizes,
+    ];
+
+    // Get claimable prizes (not yet claimed)
+    const { claimablePrizes } = getClaimablePrizes(allPrizes, claimedRewards);
+
+    // Filter out prizes with 0 amount (matching UI calculation logic)
+    const nonZeroPrizes = claimablePrizes.filter((prize: any) => {
+      const isErc20 =
+        prize.token_type?.variant?.erc20 || prize.token_type === "erc20";
+
+      if (!isErc20) return true; // NFTs are always claimable
+
+      const amount =
+        prize.token_type?.variant?.erc20?.amount ||
+        prize["token_type.erc20.amount"] ||
+        "0";
+
+      return BigInt(amount) > 0n;
+    });
+
+    return nonZeroPrizes.length;
+  }, [
+    tournamentModel,
+    distributionPrizes,
+    tournamentCreatorShare,
+    gameCreatorShare,
+    expandedSponsoredPrizes,
+    claimedRewards,
+  ]);
+
   // useEffect(() => {
 
-  // Fetch reward claims aggregations to track claimed vs unclaimed prizes
-  const { data: claimsAggregations, refetch: refetchClaimsAggregations } =
-    useGetTournamentRewardClaimsAggregations({
-      namespace,
-      tournamentId: tournamentId ?? 0,
-      active: !!tournamentId,
-    });
+  // Note: We no longer use reward claims aggregations since we calculate
+  // actual claimable count directly from filtered prizes
 
   // Refetch prize aggregations when subscribedPrizeCount changes
   useEffect(() => {
     if (subscribedPrizeCount > 0) {
       refetchAggregations();
-      refetchClaimsAggregations();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subscribedPrizeCount]);
@@ -372,15 +425,11 @@ const Tournament = () => {
   const totalPotentialPrizes =
     entryFeePrizesCount + (aggregations?.total_prizes || 0);
 
-  // Determine if all prizes have been claimed using aggregations
-  const allClaimed = claimsAggregations
-    ? claimsAggregations.total_unclaimed === 0 && totalPotentialPrizes > 0
-    : false;
+  // Determine if all prizes have been claimed using actual claimable count
+  const allClaimed = actualClaimablePrizesCount === 0 && totalPotentialPrizes > 0;
 
-  // Calculate number of claimable prizes for display
-  const claimablePrizesCount = claimsAggregations
-    ? claimsAggregations.total_unclaimed
-    : 0;
+  // Use the actual claimable count (after filtering 0-amount prizes)
+  const claimablePrizesCount = actualClaimablePrizesCount;
 
   // Calculate paid places based on actual non-zero prize amounts
   // This counts unique positions that have at least one non-zero prize
