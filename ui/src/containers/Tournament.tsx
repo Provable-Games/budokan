@@ -357,15 +357,26 @@ const Tournament = () => {
     active: !!tournamentModel?.id,
   });
 
-  // Process reward claims
+  // Process reward claims - filter to only include actually claimed rewards
+  // Note: claimed field is stored as 1/0 (integer) in database, not boolean
+  // Pass through all nested reward_type fields needed for matching in getClaimablePrizes()
   const claimedRewards = useMemo(() => {
     if (!rewardClaimsData) return [];
-    return rewardClaimsData.map((claim: any) => ({
-      tournament_id: claim.tournament_id,
-      reward_hash: claim.reward_hash,
-      reward_type: claim.reward_type,
-      claimed: claim.claimed,
-    }));
+    return rewardClaimsData
+      .filter((claim: any) => claim.claimed === 1)
+      .map((claim: any) => ({
+        tournament_id: claim.tournament_id,
+        reward_type: claim.reward_type,
+        claimed: true,
+        // Pass through all nested SQL fields for proper matching
+        "reward_type.EntryFee": claim["reward_type.EntryFee"],
+        "reward_type.EntryFee.Position": claim["reward_type.EntryFee.Position"],
+        "reward_type.EntryFee.Refund": claim["reward_type.EntryFee.Refund"],
+        "reward_type.Prize": claim["reward_type.Prize"],
+        "reward_type.Prize.Distributed.0": claim["reward_type.Prize.Distributed.0"],
+        "reward_type.Prize.Distributed.1": claim["reward_type.Prize.Distributed.1"],
+        "reward_type.Prize.Single": claim["reward_type.Prize.Single"],
+      }));
   }, [rewardClaimsData]);
 
   // Calculate actual claimable prizes (filtering out 0-amount prizes)
@@ -426,7 +437,8 @@ const Tournament = () => {
     entryFeePrizesCount + (aggregations?.total_prizes || 0);
 
   // Determine if all prizes have been claimed using actual claimable count
-  const allClaimed = actualClaimablePrizesCount === 0 && totalPotentialPrizes > 0;
+  const allClaimed =
+    actualClaimablePrizesCount === 0 && totalPotentialPrizes > 0;
 
   // Use the actual claimable count (after filtering 0-amount prizes)
   const claimablePrizesCount = actualClaimablePrizesCount;
@@ -689,7 +701,13 @@ const Tournament = () => {
     if (isInPreparationPeriod) return "preparation";
     if (isInRegistrationPeriod) return "registration";
     return "upcoming";
-  }, [isStarted, isEnded, isSubmitted, isInPreparationPeriod, isInRegistrationPeriod]);
+  }, [
+    isStarted,
+    isEnded,
+    isSubmitted,
+    isInPreparationPeriod,
+    isInRegistrationPeriod,
+  ]);
 
   // handle fetching of tournament data if there is a tournament validator extension requirement
 

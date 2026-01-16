@@ -125,8 +125,6 @@ export const useSdkSubscribeEntities = ({
     return query;
   }, [query]);
 
-  console.log(memoizedQuery);
-
   useEffect(() => {
     let _unsubscribe: (() => void) | undefined;
 

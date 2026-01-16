@@ -64,8 +64,6 @@ export const SponsorsDialog = ({
   const { selectedChainConfig, namespace } = useDojo();
   const chainId = selectedChainConfig?.chainId ?? "";
 
-  console.log("Token Prices", prices);
-
   // Fetch all prizes to get sponsored ones
   const { data: prizesData, loading: prizesLoading } =
     useGetAllTournamentPrizes({
@@ -190,8 +188,6 @@ export const SponsorsDialog = ({
   }, [sponsorContributions]);
 
   const { tokenUris, loading: nftUrisLoading } = useNftTokenUris(allNfts);
-
-  console.log("Sponsor tokens", sponsorContributions);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

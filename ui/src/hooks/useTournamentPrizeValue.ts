@@ -37,18 +37,12 @@ export const useTournamentPrizeValue = ({
   tokenDecimals,
 }: UseTournamentPrizeValueParams): number => {
   return useMemo(() => {
-    console.log("useTournamentPrizeValue:", {
-      pricesLoading,
-      hasPrices: !!tokenPrices,
-      priceCount: Object.keys(tokenPrices || {}).length,
-      hasAggregations: !!aggregations?.token_totals,
-      distributionPrizesCount: distributionPrizes.length,
-      tokenDecimals,
-    });
-
     // Return 0 if prices are loading OR if prices object is empty
-    if (pricesLoading || !tokenPrices || Object.keys(tokenPrices).length === 0) {
-      console.log("Returning 0: prices loading or empty");
+    if (
+      pricesLoading ||
+      !tokenPrices ||
+      Object.keys(tokenPrices).length === 0
+    ) {
       return 0;
     }
 
@@ -99,11 +93,9 @@ export const useTournamentPrizeValue = ({
 
     // If we don't have all prices yet, return 0 to avoid showing partial totals
     if (!hasAllPrices) {
-      console.log("Returning 0: missing prices for", missingPrices);
       return 0;
     }
 
-    console.log("Calculated total prize value:", total);
     return total;
   }, [
     aggregations?.token_totals,

@@ -438,7 +438,9 @@ const CreateTournament = () => {
     try {
       const formData = form.getValues();
       // Get extension addresses for the current chain
-      const extensionAddresses = getExtensionAddresses(selectedChainConfig?.chainId ?? "");
+      const extensionAddresses = getExtensionAddresses(
+        selectedChainConfig?.chainId ?? ""
+      );
       // Process the tournament data
       const processedTournament = processTournamentData(
         formData,
@@ -446,9 +448,6 @@ const CreateTournament = () => {
         Number(tournamentCount),
         extensionAddresses.tournamentValidator
       );
-      console.log("Processed tournament:", JSON.stringify(processedTournament, (_key, value) =>
-        typeof value === 'bigint' ? value.toString() : value
-      , 2));
       // Process the prizes if they exist
       const processedPrizes = processPrizes(
         formData,

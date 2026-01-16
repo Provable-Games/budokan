@@ -146,8 +146,6 @@ export const useExtensionQualification = (
                 proof
               );
 
-              console.log(proof, entriesLeft);
-
               // Only include qualifications with entries left
               if (entriesLeft! > 0) {
                 return {

@@ -222,10 +222,8 @@ export function EnterTournamentDialog({
     setIsLookingUpUsername(true);
     const timeoutId = setTimeout(async () => {
       try {
-        console.log("Looking up username:", controllerUsername.trim());
         const usernameMap = await lookupUsernames([controllerUsername.trim()]);
         const foundAddress = usernameMap.get(controllerUsername.trim());
-        console.log("Lookup result:", foundAddress);
         setPlayerAddress(foundAddress);
         setIsLookingUpUsername(false);
       } catch (error) {
@@ -408,8 +406,6 @@ export function EnterTournamentDialog({
     };
   }, [isOpusTrovesValidatorExtension, extensionConfig?.config]);
 
-  console.log(tournamentsData);
-
   // Get tournament data for validator extensions
   const validatorTournaments = useMemo(() => {
     if (!tournamentValidatorConfig) return [];
@@ -549,8 +545,6 @@ export function EnterTournamentDialog({
       requiredTokenAddress !== undefined &&
       address !== undefined,
   });
-
-  console.log(nfts);
 
   const ownedTokenIds = useMemo(() => {
     // Use Voyager NFT data - tokenId is already a string
@@ -775,10 +769,6 @@ export function EnterTournamentDialog({
     tournamentValidatorQualificationInputs,
     isTournamentValidatorExtension && open
   );
-
-  console.log("Extension Qualifications:", extensionQualifications);
-  console.log("Extension Total Entries Left:", extensionTotalEntriesLeft);
-  console.log("Extension Best Qualification:", extensionBestQualification);
 
   const qualificationMethods = useMemo(() => {
     const methods = [];
@@ -1163,8 +1153,6 @@ export function EnterTournamentDialog({
     requiredTokenAddresses,
   ]);
 
-  console.log(entriesLeftByTournament);
-
   // display the entry fee distribution
   // Shares are now in basis points (10000 = 100%) to allow 2 decimal precision
 
@@ -1198,12 +1186,6 @@ export function EnterTournamentDialog({
     (Number(BigInt(tournamentModel?.entry_fee.Some?.amount ?? 0)) *
       (prizePoolShare / 10000)) /
     10 ** entryTokenDecimals;
-
-  console.log(
-    isTournamentValidatorExtension,
-    tournamentValidatorConfig,
-    validatorTournaments
-  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

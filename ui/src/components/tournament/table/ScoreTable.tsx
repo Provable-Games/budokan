@@ -95,8 +95,6 @@ const ScoreTable = ({
     includeMetadata: true,
   });
 
-  console.log(games);
-
   const gameIds = useMemo(
     () => games?.map((game) => Number(game.token_id)) || [],
     [games]

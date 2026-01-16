@@ -87,11 +87,8 @@ export function AddPrizesDialog({
   const { address, account: _account } = useAccount();
   const { namespace, selectedChainConfig } = useDojo();
   const { connect } = useConnectToSelectedChain();
-  const {
-    approveAndAddPrizes,
-    approveAndAddPrizesBatched,
-    getTokenDecimals,
-  } = useSystemCalls();
+  const { approveAndAddPrizes, approveAndAddPrizesBatched, getTokenDecimals } =
+    useSystemCalls();
 
   // Get prizes from form
   const currentPrizes = form.watch("prizes");
@@ -119,8 +116,6 @@ export function AddPrizesDialog({
   });
 
   const prizeCount = Number(prizeMetricsModel?.total_prizes ?? 0);
-
-  console.log("currentPrizes", prizeMetricsModel);
 
   useEffect(() => {
     if (!open) {

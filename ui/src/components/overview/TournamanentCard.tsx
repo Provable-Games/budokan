@@ -99,17 +99,6 @@ export const TournamentCard = ({
 
   const totalPrizeNFTs = countTotalNFTs(groupedPrizes);
 
-  console.log(
-    totalPrizesValueUSD,
-    allPrizes,
-    groupedPrizes,
-    aggregations,
-    distributionPrizes,
-    tokenPrices,
-    pricesLoading,
-    tokenDecimals
-  );
-
   // Get unique ERC20 tokens from prizes for display
   const uniqueErc20Tokens = useMemo(() => {
     const tokenMap = new Map<

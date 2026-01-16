@@ -169,8 +169,6 @@ const EntryRequirements = ({ form }: StepProps) => {
     selectedChainConfig?.chainId,
   ]);
 
-  console.log(form.getValues());
-
   return (
     <FormField
       control={form.control}

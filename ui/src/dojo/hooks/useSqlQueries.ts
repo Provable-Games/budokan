@@ -137,7 +137,6 @@ export const useGetUpcomingTournamentsCount = ({
   `,
     [namespace, currentTime, fromTournamentId, excludedIdsKey]
   );
-  console.log(query);
   const { data, loading, error, refetch } = useSqlExecute(query);
   return { data: data?.[0]?.count, loading, error, refetch };
 };
@@ -511,7 +510,11 @@ export const useGetTournaments = ({
 
     return data.map((tournament: any) => {
       // Check if aggregations exist and are valid (not null, 0, or empty string)
-      if (!tournament.aggregations || tournament.aggregations === 0 || tournament.aggregations === "0") {
+      if (
+        !tournament.aggregations ||
+        tournament.aggregations === 0 ||
+        tournament.aggregations === "0"
+      ) {
         return tournament;
       }
 
@@ -547,9 +550,12 @@ export const useGetTournaments = ({
 
       return {
         ...tournament,
-        aggregations: tokenTotals.length > 0 ? {
-          token_totals: tokenTotals,
-        } : undefined,
+        aggregations:
+          tokenTotals.length > 0
+            ? {
+                token_totals: tokenTotals,
+              }
+            : undefined,
       };
     });
   }, [data]);
@@ -709,7 +715,11 @@ export const useGetMyTournaments = ({
 
     return data.map((tournament: any) => {
       // Check if aggregations exist and are valid (not null, 0, or empty string)
-      if (!tournament.aggregations || tournament.aggregations === 0 || tournament.aggregations === "0") {
+      if (
+        !tournament.aggregations ||
+        tournament.aggregations === 0 ||
+        tournament.aggregations === "0"
+      ) {
         return tournament;
       }
 
@@ -745,9 +755,12 @@ export const useGetMyTournaments = ({
 
       return {
         ...tournament,
-        aggregations: tokenTotals.length > 0 ? {
-          token_totals: tokenTotals,
-        } : undefined,
+        aggregations:
+          tokenTotals.length > 0
+            ? {
+                token_totals: tokenTotals,
+              }
+            : undefined,
       };
     });
   }, [data]);
@@ -1296,8 +1309,6 @@ export const useGetTournamentRewardClaimsAggregations = ({
         : null,
     [namespace, tournamentId, active]
   );
-
-  console.log(query);
 
   const { data, loading, error, refetch } = useSqlExecute(query);
 

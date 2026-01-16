@@ -44,8 +44,6 @@ const EntryCard = ({
   const entryNumber = registration?.entry_number;
   const isBanned = registration?.is_banned === 1;
 
-  console.log("ENTRY CARD:", registration);
-
   if (!entryNumber) {
     return null;
   }

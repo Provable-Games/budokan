@@ -152,8 +152,6 @@ const Overview = () => {
     fromTournamentId: fromTournamentId,
   });
 
-  console.log(upcomingTournamentsCount);
-
   const { data: liveTournamentsCount } = useGetLiveTournamentsCount({
     namespace: namespace,
     currentTime: currentTime,
@@ -463,8 +461,6 @@ const Overview = () => {
     setIsLoading,
     processTournamentsFromRaw,
   ]);
-
-  console.log("TOURNAMENTS", tournaments);
 
   // Infinite scroll implementation with debounce to prevent multiple triggers
   useEffect(() => {

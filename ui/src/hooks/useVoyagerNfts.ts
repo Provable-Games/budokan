@@ -38,7 +38,6 @@ interface VoyagerApiResponse {
   pagination?: VoyagerPagination;
 }
 
-
 interface UseVoyagerNftsProps {
   contractAddress: string;
   owner?: string;
@@ -140,8 +139,6 @@ export const useVoyagerNfts = ({
           headers["x-api-key"] = VOYAGER_API_KEY;
         }
 
-        console.log(currentUrl);
-
         const response = await fetch(currentUrl, {
           method: "GET",
           headers,
@@ -166,8 +163,6 @@ export const useVoyagerNfts = ({
             metadata: item,
           })
         );
-
-        console.log(mappedItems);
 
         allNfts.push(...mappedItems);
         pageCount++;

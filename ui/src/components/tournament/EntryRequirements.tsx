@@ -141,7 +141,6 @@ const EntryRequirements = ({
   );
   const entryLimit = entryRequirement?.entry_limit;
   const hasEntryLimit = Number(entryLimit) > 0;
-  console.log(hasEntryLimit);
   const activeVariant = useMemo(
     () => entryRequirement?.entry_requirement_type.activeVariant(),
     [entryRequirement]

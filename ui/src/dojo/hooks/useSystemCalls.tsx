@@ -79,7 +79,6 @@ export const useSystemCalls = () => {
     const startsIn =
       Number(tournamentModel.schedule.game.start) - Date.now() / 1000;
     const game = getGameName(tournamentModel.game_config.address);
-    console.log("Entry Qualification:", qualification);
 
     const budokanContract = initializeBudokanContract();
 
@@ -333,8 +332,6 @@ export const useSystemCalls = () => {
         calls.push(addPrizesCall);
       }
 
-      console.log(calls);
-
       const tx = await account?.execute(calls);
 
       await waitForAddPrizes(totalCurrentPrizes + prizes.length);
@@ -500,14 +497,6 @@ export const useSystemCalls = () => {
   ) => {
     const budokanContract = initializeBudokanContract();
     const game = getGameName(tournament.game_config.address);
-    console.log([
-      address!,
-      tournament.metadata,
-      tournament.schedule,
-      tournament.game_config,
-      tournament.entry_fee,
-      tournament.entry_requirement,
-    ]);
     try {
       const call = budokanContract.populate("create_tournament", [
         address!,
@@ -596,8 +585,6 @@ export const useSystemCalls = () => {
         };
         calls.push(addPrizesCall);
       }
-
-      console.log(calls);
 
       const tx = await account?.execute(calls);
 
@@ -797,7 +784,6 @@ export const useSystemCalls = () => {
     tournamentName: string,
     rewardTypes: Array<CairoCustomEnum>
   ) => {
-    console.log(rewardTypes);
     try {
       let calls = [];
       for (const rewardType of rewardTypes) {
@@ -807,8 +793,6 @@ export const useSystemCalls = () => {
           calldata: CallData.compile([tournamentId, rewardType]),
         });
       }
-
-      console.log(calls);
 
       const tx = await account?.execute(calls);
 
