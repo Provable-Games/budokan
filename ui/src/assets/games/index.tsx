@@ -8,6 +8,8 @@ export interface Game {
   url?: string;
   controllerOnly?: boolean;
   playUrl?: string;
+  watchLink?: string;
+  replayLink?: string;
 }
 
 export const getGameUrl = (gameAddress: string): string => {
@@ -32,6 +34,18 @@ export const isControllerOnly = (gameAddress: string): boolean => {
   const games = getGames();
   const game = games.find((game) => game.contract_address === gameAddress);
   return game?.controllerOnly || false;
+};
+
+export const getWatchLink = (gameAddress: string): string | undefined => {
+  const games = getGames();
+  const game = games.find((game) => game.contract_address === gameAddress);
+  return game?.watchLink;
+};
+
+export const getReplayLink = (gameAddress: string): string | undefined => {
+  const games = getGames();
+  const game = games.find((game) => game.contract_address === gameAddress);
+  return game?.replayLink;
 };
 
 export const getGames = (): Game[] => {
@@ -94,6 +108,8 @@ export const getGames = (): Game[] => {
         url: "https://tournaments.lootsurvivor.io/",
         playUrl: "https://tournaments.lootsurvivor.io/survivor/play?id=",
         controllerOnly: true,
+        watchLink: "https://lootsurvivor.io/survivor/watch?id=",
+        replayLink: "https://lootsurvivor.io/survivor/watch?id=",
       },
       {
         contract_address:

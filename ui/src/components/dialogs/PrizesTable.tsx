@@ -93,7 +93,7 @@ export const PrizesTableDialog = ({
     endPosition,
   });
 
-  // Calculate total positions including both DB prizes and entry fee prizes
+  // Calculate total positions for pagination (from aggregations)
   const totalPositions = useMemo(() => {
     // Get the lowest position from aggregations
     let dbLowestPosition = aggregations?.lowest_prize_position || 0;
@@ -598,16 +598,9 @@ export const PrizesTableDialog = ({
                   <span className="sm:hidden">Prev</span>
                 </Button>
 
-                <div className="flex flex-col items-center gap-1">
-                  <span className="text-sm text-muted-foreground">
-                    Page {currentPage + 1} of {totalPages}
-                  </span>
-                  {totalPositions > 0 && (
-                    <span className="text-xs text-muted-foreground">
-                      {totalPositions} prizes total
-                    </span>
-                  )}
-                </div>
+                <span className="text-sm text-muted-foreground">
+                  Page {currentPage + 1} of {totalPages}
+                </span>
 
                 <Button
                   variant="outline"

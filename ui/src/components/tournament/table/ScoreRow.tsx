@@ -15,7 +15,9 @@ interface ScoreRowProps {
   game: GameTokenData; // Assuming game is an object with relevant properties
   registration?: any;
   usernames: Map<string, string> | undefined;
+  isStarted: boolean;
   isEnded: boolean;
+  gameAddress?: string;
   setSelectedPlayer: (player: any) => void;
   setIsMobileDialogOpen: (open: boolean) => void;
 }
@@ -27,7 +29,9 @@ const ScoreRow = ({
   game,
   registration,
   usernames,
+  isStarted,
   isEnded,
+  gameAddress,
   setSelectedPlayer,
   setIsMobileDialogOpen,
 }: ScoreRowProps) => {
@@ -94,9 +98,12 @@ const ScoreRow = ({
               playerName={game.player_name ?? "Unknown Player"}
               username={username}
               metadata={game.metadata}
+              isStarted={isStarted}
               isEnded={isEnded}
               hasSubmitted={hasSubmitted}
               isBanned={isBanned}
+              gameAddress={gameAddress}
+              tokenId={game.token_id?.toString()}
             />
           </HoverCardContent>
         </HoverCard>

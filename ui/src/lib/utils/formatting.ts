@@ -526,7 +526,7 @@ export const extractEntryFeePrizes = (
         // percentage is 0-100 (e.g., 50 = 50%), convert to basis points by multiplying by 100
         const amount = (prizePoolAmount * BigInt(Math.floor(percentage * 100))) / 10000n;
 
-        // Skip prizes with 0 amount
+        // Skip prizes with 0 amount (now accurately reflects contract calculation)
         if (amount === 0n) return null;
 
         return {
@@ -1627,7 +1627,7 @@ export const expandDistributedPrizes = (
 
           const amount = (totalAmount * BigInt(Math.floor(percentage * 100))) / 10000n;
 
-          // Skip prizes with 0 amount
+          // Skip prizes with 0 amount (now accurately reflects contract calculation)
           if (amount === 0n) return;
 
           expanded.push({

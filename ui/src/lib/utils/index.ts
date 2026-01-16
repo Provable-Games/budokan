@@ -502,25 +502,24 @@ export const calculateDistribution = (
     return Array(positions).fill(0);
   }
 
-  // Calculate each position's percentage of the prize pool (not total entry fee)
-  // Each position gets (its raw share / total raw shares) * 100% of prize pool
-  const normalizedDistributions = rawDistributions.map(
-    (d) => (d / total) * 100
-  );
+  // Calculate each position's share in basis points (matching contract behavior)
+  // Contract uses: (raw_share / total_raw) * 10000 and truncates to u16
+  // We must match this exactly to avoid showing unclaimable prizes
+  const basisPointShares = rawDistributions.map((d) => {
+    const ratio = d / total;
+    const basisPoints = ratio * 10000; // 10000 basis points = 100%
+    return Math.floor(basisPoints); // Truncate like contract (not round!)
+  });
 
-  // Round to 2 decimal places
-  const roundedDistributions = normalizedDistributions.map((d) =>
-    Math.round(d * 100) / 100
-  );
+  // Calculate remaining dust (like contract does)
+  const totalBasisPoints = basisPointShares.reduce((a, b) => a + b, 0);
+  const remainingBasisPoints = 10000 - totalBasisPoints;
 
-  // Calculate the remaining due to rounding
-  const totalRounded = roundedDistributions.reduce((a, b) => a + b, 0);
-  const remaining = 100 - totalRounded;
-
-  // Add remaining to the first position to ensure it sums to exactly 100%
-  if (remaining !== 0 && positions > 0) {
-    roundedDistributions[0] = Math.round((roundedDistributions[0] + remaining) * 100) / 100;
+  // Add dust to position 1 (winner) to match contract behavior
+  if (remainingBasisPoints !== 0 && positions > 0) {
+    basisPointShares[0] = basisPointShares[0] + remainingBasisPoints;
   }
 
-  return roundedDistributions;
+  // Convert back to percentages for display
+  return basisPointShares.map(bp => bp / 100);
 };

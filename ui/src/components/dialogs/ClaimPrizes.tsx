@@ -171,6 +171,7 @@ export function ClaimPrizesDialog({
   };
 
   // Filter out prizes with 0 value
+  // UI now matches contract's basis point truncation, so 0 amount means truly unclaimable
   const nonZeroPrizes = useMemo(() => {
     return claimablePrizes.filter((prize: any) => getPrizeAmount(prize) > 0n);
   }, [claimablePrizes]);
