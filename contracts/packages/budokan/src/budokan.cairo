@@ -685,6 +685,23 @@ pub mod Budokan {
 
             tournament.schedule.game.assert_is_active(get_block_timestamp());
 
+            // Validate that position and distribution are mutually exclusive
+            // - Single prizes: position is Some, distribution must be None
+            // - Distributed prizes: position is None, distribution must be Some
+            if position.is_some() {
+                match @token_type {
+                    TokenTypeData::erc20(erc20_data) => {
+                        assert!(
+                            erc20_data.distribution.is_none(),
+                            "Budokan: Cannot set position for distributed prize (position and distribution are mutually exclusive)",
+                        );
+                    },
+                    TokenTypeData::erc721(_) => {
+                        // ERC721 prizes don't have distribution, so position is always valid
+                    },
+                }
+            }
+
             // Add prize (deposits tokens, increments count, stores prize with packed payout config)
             let prize = self.prize.add_prize(tournament_id, token_address, token_type);
             let prize_id = prize.id;

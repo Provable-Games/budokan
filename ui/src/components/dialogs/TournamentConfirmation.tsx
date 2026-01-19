@@ -19,7 +19,6 @@ import {
   formatTime,
   getOrdinalSuffix,
   displayAddress,
-  calculateDistribution,
 } from "@/lib/utils";
 import { calculatePaidPlaces } from "@/lib/utils/formatting";
 import { getTokenLogoUrl, getTokenDecimals } from "@/lib/tokensMeta";
@@ -69,12 +68,8 @@ const TournamentConfirmation = ({
 
   const hasSettings = !!settings[0];
 
-  const hasBonusPrizes =
-    formData.bonusPrizes && formData.bonusPrizes.length > 0;
-
   const { prices, isLoading: _pricesLoading } = useEkuboPrices({
     tokens: [
-      ...(formData.bonusPrizes?.map((prize) => prize.token.address) ?? []),
       ...(formData.entryFees?.token?.address
         ? [formData.entryFees.token.address]
         : []),
@@ -140,82 +135,8 @@ const TournamentConfirmation = ({
     formData.entryFees?.token?.address,
   ]);
 
-  // Expand distributed bonus prizes into individual position entries
-  const expandedBonusPrizes = useMemo(() => {
-    if (!formData.bonusPrizes) return [];
-
-    const expanded: any[] = [];
-
-    formData.bonusPrizes.forEach((prize) => {
-      // For ERC20 prizes with distribution, expand into individual positions
-      if (
-        prize.type === "ERC20" &&
-        prize.distribution &&
-        prize.distributionCount &&
-        prize.distributionCount > 1
-      ) {
-        // Calculate distribution percentages
-        let distributionPercentages: number[] = [];
-        const weight = 1; // Default weight for uniform distribution
-
-        if (prize.distribution === "linear") {
-          distributionPercentages = calculateDistribution(
-            prize.distributionCount,
-            weight,
-            0,
-            0,
-            0,
-            "linear"
-          );
-        } else if (prize.distribution === "exponential") {
-          distributionPercentages = calculateDistribution(
-            prize.distributionCount,
-            weight,
-            0,
-            0,
-            0,
-            "exponential"
-          );
-        } else {
-          // Uniform distribution
-          distributionPercentages = calculateDistribution(
-            prize.distributionCount,
-            weight,
-            0,
-            0,
-            0,
-            "uniform"
-          );
-        }
-
-        // Create individual position entries
-        distributionPercentages.forEach((percentage, index) => {
-          const tokenPrice =
-            prices?.[prize.token.address] ?? 0;
-          expanded.push({
-            type: "ERC20",
-            token: prize.token,
-            position: prize.position + index,
-            amount: (percentage * prize.amount) / 100,
-            value: (percentage * prize.amount * tokenPrice) / 100,
-            isDistributed: true,
-          });
-        });
-      } else {
-        // For NFTs or non-distributed ERC20 prizes, keep as-is
-        const tokenPrice =
-          prize.type === "ERC20" ? prices?.[prize.token.address] ?? 0 : 0;
-        expanded.push({
-          ...prize,
-          value:
-            prize.type === "ERC20" ? prize.amount * tokenPrice : undefined,
-          isDistributed: false,
-        });
-      }
-    });
-
-    return expanded;
-  }, [formData.bonusPrizes, prices]);
+  // Bonus prizes feature has been removed
+  // const expandedBonusPrizes: any[] = [];
 
   // Parse ERC20 balance validator config if present
   const erc20BalanceConfig = useMemo(() => {
@@ -1079,57 +1000,7 @@ const TournamentConfirmation = ({
               </>
             )}
 
-            {/* Bonus Prizes */}
-            {formData.enableBonusPrizes && hasBonusPrizes && (
-              <>
-                <div className="w-full h-0.5 bg-brand/25 mt-2" />
-                <div className="space-y-2">
-                  <div className="flex flex-row justify-between items-center">
-                    <h3 className="font-bold text-lg">Bonus Prizes</h3>
-                    <span className="text-muted-foreground">
-                      {expandedBonusPrizes.length} position{expandedBonusPrizes.length !== 1 ? 's' : ''}
-                    </span>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    {expandedBonusPrizes.map((prize, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center justify-between p-3 border border-brand-muted rounded-md"
-                      >
-                        <span className="font-brand w-10">
-                          {`${prize.position}${getOrdinalSuffix(
-                            prize.position
-                          )}`}
-                          :
-                        </span>
-                        {prize.type === "ERC20" ? (
-                          <div className="flex flex-row gap-2 items-center">
-                            <span>{formatNumber(prize.amount)}</span>
-                            <img
-                              src={prize.token.image ?? ""}
-                              alt={prize.token.address}
-                              className="w-6 h-6 rounded-full"
-                            />
-                            <span className="text-neutral">
-                              ~${(prize.value ?? 0).toFixed(2)}
-                            </span>
-                          </div>
-                        ) : (
-                          <div className="flex flex-row gap-2 items-center">
-                            <img
-                              src={prize.token.image ?? ""}
-                              alt={prize.token.address}
-                              className="w-6 h-6 rounded-full"
-                            />
-                            <span>#{prize.tokenId}</span>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
+            {/* Bonus Prizes section removed */}
           </div>
         </div>
 

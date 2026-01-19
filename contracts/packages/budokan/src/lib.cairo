@@ -38,5 +38,7 @@ mod tests {
     pub mod setup_denshokan;
     #[cfg(test)]
     mod test_budokan;
+    #[cfg(test)]
+    mod test_distributed_prizes;
     pub mod utils;
 }

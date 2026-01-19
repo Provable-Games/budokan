@@ -13,7 +13,6 @@ import Details from "@/components/createTournament/Details";
 import Schedule from "@/components/createTournament/Schedule";
 import EntryRequirements from "@/components/createTournament/EntryRequirements";
 import EntryFees from "@/components/createTournament/EntryFees";
-import BonusPrizes from "@/components/createTournament/BonusPrizes";
 import TournamentConfirmation from "@/components/dialogs/TournamentConfirmation";
 import { processPrizes, processTournamentData } from "@/lib/utils/formatting";
 import { useAccount } from "@starknet-react/core";
@@ -57,7 +56,6 @@ const formSchema = z.object({
   // Other steps
   enableGating: z.boolean().default(false),
   enableEntryFees: z.boolean().default(false),
-  enableBonusPrizes: z.boolean().default(false),
   enableEntryLimit: z.boolean().default(false),
   gatingOptions: z
     .object({
@@ -105,28 +103,6 @@ const formSchema = z.object({
       distributionWeight: z.number().min(0).max(50).optional(), // Weight for linear/exponential distributions (scaled by 10 for contract)
     })
     .optional(),
-  bonusPrizes: z
-    .array(
-      z.discriminatedUnion("type", [
-        z.object({
-          type: z.literal("ERC20"),
-          token: z.custom<FormToken>(),
-          amount: z.number().min(0),
-          position: z.number().min(1),
-          tokenDecimals: z.number().min(0).max(18).optional(),
-          // Distribution metadata - if present, this is a distributed prize
-          distribution: z.enum(["linear", "exponential", "uniform"]).optional(),
-          distributionCount: z.number().min(1).optional(),
-        }),
-        z.object({
-          type: z.literal("ERC721"),
-          token: z.custom<FormToken>(),
-          tokenId: z.number().min(1),
-          position: z.number().min(1),
-        }),
-      ])
-    )
-    .optional(),
 });
 
 const CreateTournament = () => {
@@ -161,7 +137,6 @@ const CreateTournament = () => {
       // Other steps
       enableGating: false,
       enableEntryFees: false,
-      enableBonusPrizes: false,
       enableEntryLimit: true,
       gatingOptions: {
         entry_limit: 1,
@@ -185,7 +160,6 @@ const CreateTournament = () => {
         distributionType: "exponential",
         distributionWeight: 1,
       },
-      bonusPrizes: [],
     },
   });
 
@@ -204,7 +178,7 @@ const CreateTournament = () => {
 
   // Add state for current step
   const [currentStep, setCurrentStep] = useState<
-    "details" | "schedule" | "gating" | "fees" | "prizes"
+    "details" | "schedule" | "gating" | "fees"
   >("details");
 
   // Add state to track visited sections
@@ -227,8 +201,6 @@ const CreateTournament = () => {
         return status.gating.complete;
       case "fees":
         return status.fees.complete;
-      case "prizes":
-        return status.prizes.complete;
     }
   };
 
@@ -248,10 +220,6 @@ const CreateTournament = () => {
         setCurrentStep("fees");
         break;
       case "fees":
-        setVisitedSections((prev) => new Set([...prev, "prizes"]));
-        setCurrentStep("prizes");
-        break;
-      case "prizes":
         setShowConfirmation(true);
         break;
     }
@@ -259,7 +227,7 @@ const CreateTournament = () => {
 
   // Modify the section click handler to prevent skipping ahead
   const handleSectionClick = (section: string) => {
-    const sectionOrder = ["details", "schedule", "gating", "fees", "prizes"];
+    const sectionOrder = ["details", "schedule", "gating", "fees"];
     const currentIndex = sectionOrder.indexOf(currentStep);
     const clickedIndex = sectionOrder.indexOf(section);
 
@@ -270,13 +238,13 @@ const CreateTournament = () => {
   };
 
   const getStepIndex = (step: string): number => {
-    const steps = ["details", "schedule", "gating", "fees", "prizes"];
+    const steps = ["details", "schedule", "gating", "fees"];
     return steps.indexOf(step);
   };
 
   // Render the current step's content
   const renderStep = () => {
-    const steps = ["details", "schedule", "gating", "fees", "prizes"];
+    const steps = ["details", "schedule", "gating", "fees"];
     const currentIndex = getStepIndex(currentStep);
 
     // Only render current step and adjacent steps (previous and next)
@@ -309,7 +277,6 @@ const CreateTournament = () => {
                 {step === "schedule" && <Schedule form={form} />}
                 {step === "gating" && <EntryRequirements form={form} />}
                 {step === "fees" && <EntryFees form={form} />}
-                {step === "prizes" && <BonusPrizes form={form} />}
               </Card>
             </div>
           );
@@ -387,22 +354,12 @@ const CreateTournament = () => {
             : true,
         enabled: getValue("enableEntryFees") === true,
       },
-      prizes: {
-        complete:
-          getValue("enableBonusPrizes") === true
-            ? !!(
-                Array.isArray(getValue("bonusPrizes")) &&
-                getValue("bonusPrizes").length > 0
-              )
-            : true,
-        enabled: getValue("enableBonusPrizes") === true,
-      },
     };
   };
 
   // Update the StatusIndicator component
   const StatusIndicator = ({ section }: { section: string }) => {
-    const sectionOrder = ["details", "schedule", "gating", "fees", "prizes"];
+    const sectionOrder = ["details", "schedule", "gating", "fees"];
     const sectionIndex = sectionOrder.indexOf(section);
     const currentIndex = sectionOrder.indexOf(currentStep);
 
@@ -427,9 +384,6 @@ const CreateTournament = () => {
         break;
       case "fees":
         setCurrentStep("gating");
-        break;
-      case "prizes":
-        setCurrentStep("fees");
         break;
     }
   };
@@ -491,7 +445,7 @@ const CreateTournament = () => {
                 nextStep();
               }}
             >
-              {currentStep === "prizes" ? "Create" : "Next"}
+              {currentStep === "fees" ? "Create" : "Next"}
             </Button>
             <TournamentConfirmation
               formData={form.getValues()}

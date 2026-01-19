@@ -269,14 +269,14 @@ export const processTournamentData = (
 };
 
 export const processPrizes = (
-  formData: TournamentFormData,
-  tournamentCount: number,
-  prizeCount: number
+  _formData: TournamentFormData,
+  _tournamentCount: number,
+  _prizeCount: number
 ): DisplayPrize[] => {
-  if (!formData.enableBonusPrizes || !formData.bonusPrizes?.length) {
-    return [];
-  }
+  // Bonus prizes feature has been removed
+  return [];
 
+  /*
   return formData.bonusPrizes.map((prize, index) => {
     let token_type;
 
@@ -352,6 +352,7 @@ export const processPrizes = (
       position: prize.position, // Position for display/sorting
     };
   });
+  */
 };
 
 export const getSubmittableScores = (

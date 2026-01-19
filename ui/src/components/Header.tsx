@@ -5,7 +5,7 @@ import {
   LOGOUT,
   PLAY,
   SPACE_INVADER_SOLID,
-  TROPHY_LINE,
+  // TROPHY_LINE,
   STARKNET,
   DISCORD,
 } from "@/components/Icons";
@@ -231,7 +231,7 @@ const Header = () => {
                 </span>
               </Button>
             )}
-            {location.pathname !== "/create-tournament" && (
+            {/* {location.pathname !== "/create-tournament" && (
               // && isAdmin
               <Button
                 onClick={() => {
@@ -243,7 +243,7 @@ const Header = () => {
                   Create Tournament
                 </span>
               </Button>
-            )}
+            )} */}
           </div>
 
           {/* Connect button - visible on all screen sizes */}

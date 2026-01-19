@@ -1,6 +1,6 @@
-import { TROPHY, TROPHY_LINE } from "@/components/Icons";
-import { Button } from "@/components/ui/button";
-import { useNavigate } from "react-router-dom";
+import { TROPHY } from "@/components/Icons";
+// import { Button } from "@/components/ui/button";
+// import { useNavigate } from "react-router-dom";
 import useUIStore from "@/hooks/useUIStore";
 
 interface EmptyResultsProps {
@@ -8,7 +8,7 @@ interface EmptyResultsProps {
 }
 
 const EmptyResults = ({ gameFilters }: EmptyResultsProps) => {
-  const navigate = useNavigate();
+  // const navigate = useNavigate();
   const { getGameName } = useUIStore();
   return (
     <div className="col-span-3 flex flex-col items-center justify-center gap-6 py-20">
@@ -28,13 +28,13 @@ const EmptyResults = ({ gameFilters }: EmptyResultsProps) => {
         </p>
       </div>
 
-      <Button
+      {/* <Button
         onClick={() => navigate("/create-tournament")}
         className="flex items-center gap-2"
       >
         <TROPHY_LINE />
         Create Tournament
-      </Button>
+      </Button> */}
     </div>
   );
 };
