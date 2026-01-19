@@ -30,5 +30,5 @@ export const STARTING_TOURNAMENT_ID = 0;
 export const EXCLUDED_TOURNAMENT_IDS: number[] = [
   // Add tournament IDs here that you want to hide
   // Example: 1, 2, 3
-  24, 25, 26,
+  2,
 ];
