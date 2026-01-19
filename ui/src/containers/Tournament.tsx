@@ -70,7 +70,7 @@ import remarkGfm from "remark-gfm";
 import { useSettings } from "metagame-sdk/sql";
 import { getEntityIdFromKeys } from "@dojoengine/utils";
 import useModel from "@/dojo/hooks/useModel";
-import { TOURNAMENT_VERSION_KEY } from "@/lib/constants";
+import { TOURNAMENT_VERSION_KEY, EXCLUDED_TOURNAMENT_IDS } from "@/lib/constants";
 
 const Tournament = () => {
   const { id } = useParams<{ id: string }>();
@@ -174,6 +174,13 @@ const Tournament = () => {
 
     const checkTournament = async () => {
       const tournamentId = Number(id || 0);
+
+      // Check if tournament is excluded
+      if (EXCLUDED_TOURNAMENT_IDS.includes(tournamentId)) {
+        setTournamentExists(false);
+        setLoading(false);
+        return;
+      }
 
       // If we have the tournament count, we can check immediately
       if (tournamentsCount !== undefined) {
