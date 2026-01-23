@@ -439,7 +439,7 @@ export const TournamentCard = ({
             </Tooltip>
           </div>
         </div>
-        <div className="flex flex-row items-center justify-center gap-5 w-full mx-auto">
+        <div className="flex flex-row items-center justify-center gap-2 w-full mx-auto">
           {/* Time Status */}
           {status === "upcoming" ? (
             <Countdown
@@ -467,12 +467,12 @@ export const TournamentCard = ({
           ) : (
             <></>
           )}
-          <div className="flex flex-row items-center gap-2">
-            <span className="text-brand-muted">Fee:</span>
+          <div className="flex flex-row items-center gap-1">
+            <span className="text-brand-muted text-sm">Fee:</span>
             {pricesLoading ? (
               <Skeleton className="h-6 w-16 bg-brand/20" />
             ) : hasEntryFee ? (
-              <div className="flex flex-col items-center gap-1">
+              <div className="flex flex-col items-center gap-0.5">
                 {entryFeeTokenSymbol && (
                   <Tooltip delayDuration={50}>
                     <TooltipTrigger asChild>
@@ -486,10 +486,10 @@ export const TournamentCard = ({
                             <img
                               src={entryFeeTokenLogo}
                               alt={entryFeeTokenSymbol}
-                              className="w-5 h-5 rounded-full"
+                              className="w-4 h-4 rounded-full"
                             />
                           ) : (
-                            <div className="w-5 h-5 rounded-full bg-brand/20 flex items-center justify-center text-xs">
+                            <div className="w-4 h-4 rounded-full bg-brand/20 flex items-center justify-center text-xs">
                               {entryFeeTokenSymbol.slice(0, 1)}
                             </div>
                           );
@@ -501,20 +501,20 @@ export const TournamentCard = ({
                     </TooltipContent>
                   </Tooltip>
                 )}
-                <span>${entryFee}</span>
+                <span className="text-sm">${entryFee}</span>
               </div>
             ) : (
-              <span>FREE</span>
+              <span className="text-sm">FREE</span>
             )}
           </div>
-          <div className="flex flex-row items-center gap-2">
-            <span className="text-brand-muted">Pot:</span>
+          <div className="flex flex-row items-center gap-1">
+            <span className="text-brand-muted text-sm">Pot:</span>
             {pricesLoading ? (
               <Skeleton className="h-6 w-16 bg-brand/20" />
             ) : totalPrizesValueUSD > 0 || totalPrizeNFTs > 0 ? (
-              <div className="flex flex-col items-center gap-1">
+              <div className="flex flex-col items-center gap-0.5">
                 {uniqueErc20Tokens.length > 0 && (
-                  <div className="hidden sm:flex flex-row gap-1 items-center">
+                  <div className="hidden sm:flex flex-row gap-0.5 items-center">
                     {uniqueErc20Tokens.slice(0, 3).map((token, idx) => (
                       <Tooltip key={idx} delayDuration={50}>
                         <TooltipTrigger asChild>
@@ -523,10 +523,10 @@ export const TournamentCard = ({
                               <img
                                 src={token.logo}
                                 alt={token.symbol}
-                                className="w-5 h-5 rounded-full"
+                                className="w-4 h-4 rounded-full"
                               />
                             ) : (
-                              <div className="w-5 h-5 rounded-full bg-brand/20 flex items-center justify-center text-xs">
+                              <div className="w-4 h-4 rounded-full bg-brand/20 flex items-center justify-center text-[10px]">
                                 {token.symbol.slice(0, 1)}
                               </div>
                             )}
@@ -538,25 +538,25 @@ export const TournamentCard = ({
                       </Tooltip>
                     ))}
                     {uniqueErc20Tokens.length > 3 && (
-                      <span className="text-xs text-brand-muted">
+                      <span className="text-[10px] text-brand-muted">
                         +{uniqueErc20Tokens.length - 3}
                       </span>
                     )}
                   </div>
                 )}
-                <div className="flex flex-row items-center gap-2">
+                <div className="flex flex-row items-center gap-1.5">
                   {totalPrizesValueUSD > 0 && (
-                    <span>${totalPrizesValueUSD.toFixed(2)}</span>
+                    <span className="text-sm">${totalPrizesValueUSD.toFixed(2)}</span>
                   )}
                   {totalPrizeNFTs > 0 && (
-                    <span>
+                    <span className="text-sm">
                       {totalPrizeNFTs} NFT{totalPrizeNFTs === 1 ? "" : "s"}
                     </span>
                   )}
                 </div>
               </div>
             ) : (
-              <span>No Prizes</span>
+              <span className="text-sm">No Prizes</span>
             )}
           </div>
         </div>

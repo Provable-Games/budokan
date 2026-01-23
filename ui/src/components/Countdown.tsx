@@ -62,51 +62,51 @@ const Countdown = ({
   const showMinutes = showHours || minutes > 0;
 
   const countdownDisplay = (
-    <div className="flex flex-row gap-2 items-center">
+    <div className="flex flex-row gap-1.5 items-center">
       {showDays && (
         <>
-          <div className="flex flex-col items-center bg-brand/10 px-2 py-1 rounded min-w-[44px]">
-            <span className="text-brand font-brand text-xl leading-none">
+          <div className="flex flex-col items-center bg-brand/10 px-1.5 py-0.5 rounded min-w-[36px]">
+            <span className="text-brand font-brand text-base leading-none">
               {days.toString().padStart(2, "0")}
             </span>
-            <span className="text-brand-muted text-[10px] leading-none mt-0.5">
+            <span className="text-brand-muted text-[9px] leading-none mt-0.5">
               DAYS
             </span>
           </div>
-          <span className="text-brand font-brand text-lg">:</span>
+          <span className="text-brand font-brand text-base">:</span>
         </>
       )}
       {showHours && (
         <>
-          <div className="flex flex-col items-center bg-brand/10 px-2 py-1 rounded min-w-[44px]">
-            <span className="text-brand font-brand text-xl leading-none">
+          <div className="flex flex-col items-center bg-brand/10 px-1.5 py-0.5 rounded min-w-[36px]">
+            <span className="text-brand font-brand text-base leading-none">
               {hours.toString().padStart(2, "0")}
             </span>
-            <span className="text-brand-muted text-[10px] leading-none mt-0.5">
+            <span className="text-brand-muted text-[9px] leading-none mt-0.5">
               HRS
             </span>
           </div>
-          <span className="text-brand font-brand text-lg">:</span>
+          <span className="text-brand font-brand text-base">:</span>
         </>
       )}
       {showMinutes && (
         <>
-          <div className="flex flex-col items-center bg-brand/10 px-2 py-1 rounded min-w-[44px]">
-            <span className="text-brand font-brand text-xl leading-none">
+          <div className="flex flex-col items-center bg-brand/10 px-1.5 py-0.5 rounded min-w-[36px]">
+            <span className="text-brand font-brand text-base leading-none">
               {minutes.toString().padStart(2, "0")}
             </span>
-            <span className="text-brand-muted text-[10px] leading-none mt-0.5">
+            <span className="text-brand-muted text-[9px] leading-none mt-0.5">
               MIN
             </span>
           </div>
-          <span className="text-brand font-brand text-lg">:</span>
+          <span className="text-brand font-brand text-base">:</span>
         </>
       )}
-      <div className="flex flex-col items-center bg-brand/10 px-2 py-1 rounded min-w-[44px]">
-        <span className="text-brand font-brand text-xl leading-none">
+      <div className="flex flex-col items-center bg-brand/10 px-1.5 py-0.5 rounded min-w-[36px]">
+        <span className="text-brand font-brand text-base leading-none">
           {seconds.toString().padStart(2, "0")}
         </span>
-        <span className="text-brand-muted text-[10px] leading-none mt-0.5">
+        <span className="text-brand-muted text-[9px] leading-none mt-0.5">
           SEC
         </span>
       </div>
