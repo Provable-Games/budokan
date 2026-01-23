@@ -33,13 +33,13 @@
   },
   "contracts": [
     {
-      "address": "0x6bb79fdd8cf36ff97e1202bb28bd9794f2d0d794bf7a48a6a83ce504c374610",
-      "class_hash": "0x515c0885308133e177bca038357830bff46a9b4a0c33b2ba2d10729a0cc0d7e",
+      "address": "0x201ff11a37212e95f41b1aed6966c22dcbc1651b27cbe48b0c242f2cea48d49",
+      "class_hash": "0x2772bb915f42d8b221aae0ce43c152973b7ca5df6783fbff156350fc5600d32",
       "init_calldata": [
         "0x1aebeb03d574e1b6c1c6d4e988b3cc3914705de9ec76b62d49967f26e616d4e"
       ],
-      "tag": "budokan_relayer_0_0_11-BudokanEventRelayer",
-      "selector": "0x8baa04d10848eaa85a8bdbf22dad8fd8aee0fdd4ca0e8903e31dd00a1e436f",
+      "tag": "budokan_relayer_0_0_12-BudokanEventRelayer",
+      "selector": "0x181e90a97be94ab5a67258531a550f6a4f4ef7ba580f16211de838eb0e2e9b4",
       "systems": [
         "dojo_init",
         "emit_tournament",
@@ -77,8 +77,8 @@
         }
       ],
       "class_hash": "0x39f246767305418f79a9ca228d94fc52a3fd5af18bc23ad549d3b852d3fffe7",
-      "tag": "budokan_relayer_0_0_11-EntryCount",
-      "selector": "0xc110452e345d0b7ca7cb219b1eae7c5a0e10055e153846d86659390e0cc20"
+      "tag": "budokan_relayer_0_0_12-EntryCount",
+      "selector": "0x777a9791e4a44f3cf0d7a2379dfe665550c2137c20f0918bccd08cacd1b50ee"
     },
     {
       "members": [
@@ -94,8 +94,8 @@
         }
       ],
       "class_hash": "0x6283b3cdffa2ec20a6ff18996dfd6cbc2178a23749ca256f9b226bb01529db3",
-      "tag": "budokan_relayer_0_0_11-Leaderboard",
-      "selector": "0x29fbb958bb3c7a705186b31a42631782b041ebefe2cf7e31de2da109d8e7a9a"
+      "tag": "budokan_relayer_0_0_12-Leaderboard",
+      "selector": "0x2fdc0fcaf44b84669539015261ea9d9e526d9dcff28e7885200717a527b59c9"
     },
     {
       "members": [
@@ -111,8 +111,8 @@
         }
       ],
       "class_hash": "0x10d0751f5951d918f2ca05de018794cd693688fc72629bee6758999d7cab7bf",
-      "tag": "budokan_relayer_0_0_11-PlatformMetrics",
-      "selector": "0x119956a662c2d1d1998c06a6e9086c41d350fa22bfb4690f505e4078a47e77c"
+      "tag": "budokan_relayer_0_0_12-PlatformMetrics",
+      "selector": "0x69cfe71f75ae578d185de08ab8117c3d4ac726accb7ccce13ff2a80eb7759f3"
     },
     {
       "members": [
@@ -148,8 +148,8 @@
         }
       ],
       "class_hash": "0x3659512da91b5dca8b61c652b3c34f3424478af690fa80a7cd2100b1a6aeb48",
-      "tag": "budokan_relayer_0_0_11-Prize",
-      "selector": "0x30b14091c50ce17a3c169d48d9128339254c328cdabea8083f90ac0dd309a62"
+      "tag": "budokan_relayer_0_0_12-Prize",
+      "selector": "0x75bf13aa7c9b480b1f690bfad79c803254fe6f8fbfa4e91f39955975c0bd79"
     },
     {
       "members": [
@@ -165,8 +165,8 @@
         }
       ],
       "class_hash": "0x78ad6e6d81ba636c58cd253fd9b286c9d40b9e1b92e5ce6ba189753db7e5e98",
-      "tag": "budokan_relayer_0_0_11-PrizeMetrics",
-      "selector": "0x56d88318c25b4a6b655c5f0145ef90a4bb88a1a8b82f4f2d72e3fc2107fedc0"
+      "tag": "budokan_relayer_0_0_12-PrizeMetrics",
+      "selector": "0x5d9e6b05cfaa916a5815955016fa326013cdb295792148fdfa0f15afa649e1c"
     },
     {
       "members": [
@@ -187,8 +187,8 @@
         }
       ],
       "class_hash": "0x6ba7a38ed9aeca705bd47fb57903ac57834b575f2f47a81c9a29c9a939694d1",
-      "tag": "budokan_relayer_0_0_11-QualificationEntries",
-      "selector": "0x2a26508c14ee3156a6cf67ca6e69b7bb7b4a630999d9c9adf6fe4c9d98501f6"
+      "tag": "budokan_relayer_0_0_12-QualificationEntries",
+      "selector": "0x2df5dda0860a5842679d44c9b5f7de5ae813f4645926c78abaa6588a7ff491c"
     },
     {
       "members": [
@@ -224,8 +224,8 @@
         }
       ],
       "class_hash": "0xa61df4d995e10eb4d121b6f13edf71d38a757390461dba9ba3c9633548288",
-      "tag": "budokan_relayer_0_0_11-Registration",
-      "selector": "0x4af82d56b560026528b1109ea62b99135f044c8f153463b56cce06ba385f42c"
+      "tag": "budokan_relayer_0_0_12-Registration",
+      "selector": "0x4d0431279e7a633fd71d917be3ba95b7af876b58947e178006a56c2d2ca1710"
     },
     {
       "members": [
@@ -246,8 +246,8 @@
         }
       ],
       "class_hash": "0x7e7681ae3eac99dac5c2b81655b0b050f1d6175b620e3c4389d9fb3d2d95a5e",
-      "tag": "budokan_relayer_0_0_11-RewardClaim",
-      "selector": "0xff4076cd3616cd86e728e83ad1d37962f8ed048eb874e5c549259e3317ce06"
+      "tag": "budokan_relayer_0_0_12-RewardClaim",
+      "selector": "0x59d969c5c3b2f38b5d1b05b8dd49fecf3b1ee1adaec485abb38c501c79b9c66"
     },
     {
       "members": [
@@ -298,8 +298,8 @@
         }
       ],
       "class_hash": "0x65689e34fdfa5cfda1cca3d1e7e9af320979689a92b14ebef05899c0d8bb36f",
-      "tag": "budokan_relayer_0_0_11-Tournament",
-      "selector": "0x3da0f6c4715a56482352677ff41f57ad06696277f9648297e910a5e406348a5"
+      "tag": "budokan_relayer_0_0_12-Tournament",
+      "selector": "0x3abd657ada5c65e73efd9d0373cc0acdde31ef793fb07493c1115d6b2d35d10"
     }
   ],
   "external_contracts": [],

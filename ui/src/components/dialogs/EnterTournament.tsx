@@ -27,7 +27,7 @@ import { Label } from "@/components/ui/label";
 import { useConnectToSelectedChain } from "@/dojo/hooks/useChain";
 import { useGetUsernames, isControllerAccount } from "@/hooks/useController";
 import { lookupUsernames } from "@cartridge/controller";
-import { CHECK, X, COIN, USER, FAT_ARROW_RIGHT } from "@/components/Icons";
+import { CHECK, X, COIN, USER, SPACE_INVADER_SOLID, TROPHY } from "@/components/Icons";
 import {
   useGetTournamentRegistrants,
   useGetTournamentLeaderboards,
@@ -1167,178 +1167,91 @@ export function EnterTournamentDialog({
   );
   const prizePoolShare = 10000 - creatorShare - gameShare - refundShare;
 
-  const creatorAmount =
-    (Number(BigInt(tournamentModel?.entry_fee.Some?.amount ?? 0)) *
-      (creatorShare / 10000)) /
-    10 ** entryTokenDecimals;
-
-  const gameAmount =
-    (Number(BigInt(tournamentModel?.entry_fee.Some?.amount ?? 0)) *
-      (gameShare / 10000)) /
-    10 ** entryTokenDecimals;
-
-  const refundAmount =
-    (Number(BigInt(tournamentModel?.entry_fee.Some?.amount ?? 0)) *
-      (refundShare / 10000)) /
-    10 ** entryTokenDecimals;
-
-  const prizePoolAmount =
-    (Number(BigInt(tournamentModel?.entry_fee.Some?.amount ?? 0)) *
-      (prizePoolShare / 10000)) /
-    10 ** entryTokenDecimals;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="text-xl">Enter Tournament</DialogTitle>
         </DialogHeader>
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3">
           {hasEntryFee && (
-            <div className="flex flex-col gap-2">
-              <span className="text-lg font-brand">Entry Fee</span>
-              <div className="flex flex-col items-center">
-                <div className="flex flex-row items-center justify-center gap-2 border border-brand-muted rounded-md p-2 px-4">
-                  <div className="flex flex-row items-center gap-2">
-                    <div className="flex flex-row items-center gap-2">
-                      <span>
-                        {formatNumber(
-                          Number(entryAmount) /
-                            10 ** getTokenDecimals(chainId, entryToken ?? "")
-                        )}
-                      </span>
-                      <img
-                        src={getTokenLogoUrl(chainId, entryToken ?? "")}
-                        alt={entryToken ?? ""}
-                        className="w-6 h-6"
-                      />
-
-                      <span>
-                        {
-                          tokens.find(
-                            (token) => token.token_address === entryToken
-                          )?.symbol
-                        }
-                      </span>
-                    </div>
-                    <span className="text-neutral">
-                      ~${entryFeeUsdCost.toFixed(2)}
-                    </span>
-                  </div>
-                  {address &&
-                    (hasBalance ? (
-                      <div className="flex flex-row items-center gap-2">
-                        <span className="w-6 h-6">
-                          <CHECK />
-                        </span>
-                        <span className="text-sm">Enough Balance</span>
-                      </div>
-                    ) : (
-                      <div className="flex flex-row items-center gap-2">
-                        <span className="w-6 h-6">
-                          <X />
-                        </span>
-                        <span className="text-sm">Not Enough Balance</span>
-                      </div>
-                    ))}
+            <div className="flex flex-col gap-2 p-3 border border-brand/25 rounded-lg bg-neutral/5">
+              <span className="text-sm font-medium text-brand-muted">Entry Fee</span>
+              <div className="flex flex-row items-center justify-between">
+                <div className="flex flex-row items-center gap-2">
+                  <span className="text-lg font-bold">
+                    {formatNumber(
+                      Number(entryAmount) /
+                        10 ** getTokenDecimals(chainId, entryToken ?? "")
+                    )}
+                  </span>
+                  <img
+                    src={getTokenLogoUrl(chainId, entryToken ?? "")}
+                    alt={entryToken ?? ""}
+                    className="w-5 h-5"
+                  />
+                  <span className="text-sm">
+                    {
+                      tokens.find(
+                        (token) => token.token_address === entryToken
+                      )?.symbol
+                    }
+                  </span>
+                  <span className="text-neutral text-sm">
+                    ~${entryFeeUsdCost.toFixed(2)}
+                  </span>
                 </div>
-                <span className="w-10 rotate-90">
-                  <FAT_ARROW_RIGHT />
-                </span>
-                <div className="flex flex-row items-center gap-2 w-full">
-                  {creatorShare > 0 && (
-                    <div className="flex flex-col items-center gap-1 border border-brand-muted rounded-md p-2 flex-1">
-                      <span className="text-sm sm:text-base">
-                        {(creatorShare / 100).toFixed(2)}%
+                {address &&
+                  (hasBalance ? (
+                    <div className="flex flex-row items-center gap-1.5">
+                      <span className="w-4 h-4">
+                        <CHECK />
                       </span>
-                      <span className="text-xs sm:text-sm">Creator Fee</span>
-                      <div className="flex flex-row items-center gap-1">
-                        <span className="text-xs sm:text-sm">
-                          +{formatNumber(creatorAmount)}
-                        </span>
-                        <img
-                          src={getTokenLogoUrl(chainId, entryToken ?? "")}
-                          alt={entryToken ?? ""}
-                          className="w-5"
-                        />
-                        <span className="hidden sm:block text-xs sm:text-sm text-neutral">
-                          ~${formatNumber(creatorAmount * (entryFeePrice ?? 0))}
-                        </span>
-                      </div>
+                      <span className="text-xs">Balance OK</span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-row items-center gap-1.5 text-destructive">
+                      <span className="w-4 h-4">
+                        <X />
+                      </span>
+                      <span className="text-xs">Insufficient</span>
+                    </div>
+                  ))}
+              </div>
+              {(creatorShare > 0 || gameShare > 0 || prizePoolShare > 0) && (
+                <div className="flex flex-row items-center gap-3 text-xs text-muted-foreground pt-2 border-t border-brand/10">
+                  {creatorShare > 0 && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-5 h-5">
+                        <USER />
+                      </span>
+                      <span>Creator: {(creatorShare / 100).toFixed(1)}%</span>
                     </div>
                   )}
                   {gameShare > 0 && (
-                    <div className="flex flex-col items-center gap-1 border border-brand-muted rounded-md p-2 flex-1">
-                      <span className="text-sm sm:text-base">
-                        {(gameShare / 100).toFixed(2)}%
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-5 h-5">
+                        <SPACE_INVADER_SOLID />
                       </span>
-                      <span className="text-xs sm:text-sm">Game Fee</span>
-                      <div className="flex flex-row items-center gap-1">
-                        <span className="text-xs sm:text-sm">
-                          +{formatNumber(gameAmount)}
-                        </span>
-                        <img
-                          src={getTokenLogoUrl(chainId, entryToken ?? "")}
-                          alt={entryToken ?? ""}
-                          className="w-5"
-                        />
-                        <span className="hidden sm:block text-xs sm:text-sm text-neutral">
-                          ~${formatNumber(gameAmount * (entryFeePrice ?? 0))}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                  {refundShare > 0 && (
-                    <div className="flex flex-col items-center gap-1 border border-brand-muted rounded-md p-2 flex-1">
-                      <span className="text-sm sm:text-base">
-                        {(refundShare / 100).toFixed(2)}%
-                      </span>
-                      <span className="text-xs sm:text-sm">Refund</span>
-                      <div className="flex flex-row items-center gap-1">
-                        <span className="text-xs sm:text-sm">
-                          +{formatNumber(refundAmount)}
-                        </span>
-                        <img
-                          src={getTokenLogoUrl(chainId, entryToken ?? "")}
-                          alt={entryToken ?? ""}
-                          className="w-5"
-                        />
-                        <span className="hidden sm:block text-xs sm:text-sm text-neutral">
-                          ~${formatNumber(refundAmount * (entryFeePrice ?? 0))}
-                        </span>
-                      </div>
+                      <span>Game: {(gameShare / 100).toFixed(1)}%</span>
                     </div>
                   )}
                   {prizePoolShare > 0 && (
-                    <div className="flex flex-col items-center gap-1 border border-brand-muted rounded-md p-2 flex-1">
-                      <span className="text-sm sm:text-base">
-                        {(prizePoolShare / 100).toFixed(2)}%
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-5 h-5">
+                        <TROPHY />
                       </span>
-                      <span className="text-xs sm:text-sm">Prize Pool</span>
-                      <div className="flex flex-row items-center gap-1">
-                        <span className="text-xs sm:text-sm">
-                          +{formatNumber(prizePoolAmount)}
-                        </span>
-                        <img
-                          src={getTokenLogoUrl(chainId, entryToken ?? "")}
-                          alt={entryToken ?? ""}
-                          className="w-5"
-                        />
-                        <span className="hidden sm:block text-xs sm:text-sm text-neutral">
-                          ~$
-                          {formatNumber(prizePoolAmount * (entryFeePrice ?? 0))}
-                        </span>
-                      </div>
+                      <span>Prize Pool: {(prizePoolShare / 100).toFixed(1)}%</span>
                     </div>
                   )}
                 </div>
-              </div>
+              )}
             </div>
           )}
 
           {hasEntryRequirement && (
-            <div className="flex flex-col gap-2">
-              <span className="text-lg font-brand">Entry Requirements</span>
+            <div className="flex flex-col gap-2 p-3 border border-brand/25 rounded-lg bg-neutral/5">
+              <span className="text-sm font-medium text-brand-muted">Entry Requirements</span>
               <span className="px-2">
                 {requirementVariant === "token" ? (
                   "You must hold the NFT"
@@ -1879,8 +1792,8 @@ export function EnterTournamentDialog({
           )}
           {isController ? (
             // Controller wallet - single player name field
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="playerName" className="text-lg font-brand">
+            <div className="flex flex-col gap-2 p-3 border border-brand/25 rounded-lg bg-neutral/5">
+              <Label htmlFor="playerName" className="text-sm font-medium text-brand-muted">
                 Player Name
               </Label>
               <div className="flex flex-col gap-4">
@@ -1902,11 +1815,11 @@ export function EnterTournamentDialog({
           ) : (
             // Non-controller wallet - controller username (required) + player name (optional)
             <>
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2 p-3 border border-brand/25 rounded-lg bg-neutral/5">
                 <div className="flex flex-row items-center justify-between">
                   <Label
                     htmlFor="controllerUsername"
-                    className="text-lg font-brand"
+                    className="text-sm font-medium text-brand-muted"
                   >
                     Controller Username
                   </Label>
@@ -1963,8 +1876,8 @@ export function EnterTournamentDialog({
                   Note: The game will be assigned to this controller username.
                 </div>
               </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="playerName" className="text-lg font-brand">
+              <div className="flex flex-col gap-2 p-3 border border-brand/25 rounded-lg bg-neutral/5">
+                <Label htmlFor="playerName" className="text-sm font-medium text-brand-muted">
                   Player Name (Optional)
                 </Label>
                 <Input

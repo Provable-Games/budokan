@@ -269,25 +269,24 @@ export const processTournamentData = (
 };
 
 export const processPrizes = (
-  _formData: TournamentFormData,
-  _tournamentCount: number,
-  _prizeCount: number
+  formData: TournamentFormData,
+  tournamentCount: number,
+  prizeCount: number
 ): DisplayPrize[] => {
-  // Bonus prizes feature has been removed
-  return [];
-
-  /*
-  return formData.bonusPrizes.map((prize, index) => {
+  return formData.prizes.map((prize, index) => {
     let token_type;
 
     if (prize.type === "ERC20") {
       // Map distribution string to CairoCustomEnum
+      // Weight is scaled by 10 for the contract (e.g., 1.0 in UI = 10 in contract)
+      const scaledWeight = Math.round((prize.distributionWeight ?? 1) * 10);
+
       let distribution: CairoOption<CairoCustomEnum>;
       if (prize.distribution === "linear") {
         distribution = new CairoOption(
           CairoOptionVariant.Some,
           new CairoCustomEnum({
-            Linear: 100,
+            Linear: scaledWeight,
             Exponential: undefined,
             Uniform: undefined,
             Custom: undefined,
@@ -298,7 +297,7 @@ export const processPrizes = (
           CairoOptionVariant.Some,
           new CairoCustomEnum({
             Linear: undefined,
-            Exponential: 100,
+            Exponential: scaledWeight,
             Uniform: undefined,
             Custom: undefined,
           })
@@ -352,7 +351,6 @@ export const processPrizes = (
       position: prize.position, // Position for display/sorting
     };
   });
-  */
 };
 
 export const getSubmittableScores = (

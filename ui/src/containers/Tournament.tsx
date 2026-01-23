@@ -909,12 +909,15 @@ const Tournament = () => {
             prices={prices}
             entryCount={entryCount}
           />
-          <AddPrizesDialog
-            open={addPrizesDialogOpen}
-            onOpenChange={setAddPrizesDialogOpen}
-            tournamentId={tournamentModel?.id}
-            tournamentName={feltToString(tournamentModel?.metadata?.name ?? "")}
-          />
+          {tournamentModel && (
+            <AddPrizesDialog
+              open={addPrizesDialogOpen}
+              onOpenChange={setAddPrizesDialogOpen}
+              tournamentId={tournamentModel.id}
+              tournamentName={feltToString(tournamentModel.metadata?.name ?? "")}
+              tournament={tournamentModel}
+            />
+          )}
           <SettingsDialog
             open={settingsDialogOpen}
             onOpenChange={setSettingsDialogOpen}

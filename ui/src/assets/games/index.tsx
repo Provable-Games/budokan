@@ -10,6 +10,7 @@ export interface Game {
   playUrl?: string;
   watchLink?: string;
   replayLink?: string;
+  disabled?: boolean;
 }
 
 export const getGameUrl = (gameAddress: string): string => {
@@ -53,8 +54,10 @@ export const getGames = (): Game[] => {
   const isSepolia = selectedChainConfig.chainId === ChainId.SN_SEPOLIA;
   const isMainnet = selectedChainConfig.chainId === ChainId.SN_MAIN;
 
+  let games: Game[] = [];
+
   if (isSepolia) {
-    return [
+    games = [
       {
         contract_address:
           "0x04359aee29873cd9603207d29b4140468bac3e042aa10daab2e1a8b2dd60ef7b",
@@ -90,7 +93,7 @@ export const getGames = (): Game[] => {
       },
     ];
   } else if (isMainnet) {
-    return [
+    games = [
       {
         contract_address:
           "0x03451230bc1bbec7bb1f337f22c9f6699d238429638ac357dba53af193674c70",
@@ -99,17 +102,18 @@ export const getGames = (): Game[] => {
         url: "https://darkshuffle.io",
         playUrl: "https://darkshuffle.io/play/",
         controllerOnly: true,
+        disabled: true, // Temporarily disabled
       },
       {
         contract_address:
           "0x05e2dfbdc3c193de629e5beb116083b06bd944c1608c9c793351d5792ba29863",
         name: "Loot Survivor",
         image: "https://lootsurvivor.io/favicon-32x32.png",
-        url: "https://tournaments.lootsurvivor.io/",
-        playUrl: "https://tournaments.lootsurvivor.io/survivor/play?id=",
+        url: "https://lootsurvivor.io/budokan",
+        playUrl: "https://lootsurvivor.io/budokan/play?id=",
         controllerOnly: true,
-        watchLink: "https://lootsurvivor.io/survivor/watch?id=",
-        replayLink: "https://lootsurvivor.io/survivor/watch?id=",
+        watchLink: "https://lootsurvivor.io/budokan/watch?id=",
+        replayLink: "https://lootsurvivor.io/budokan/replay?id=",
       },
       {
         contract_address:
@@ -118,6 +122,7 @@ export const getGames = (): Game[] => {
         url: "https://dopewars-kappa.vercel.app/",
         playUrl: "https://dopewars-kappa.vercel.app/",
         controllerOnly: true,
+        disabled: true, // Temporarily disabled
       },
       {
         contract_address:
@@ -127,6 +132,7 @@ export const getGames = (): Game[] => {
         url: "https://app.zkube.xyz",
         playUrl: "https://app.zkube.xyz/play/",
         controllerOnly: true,
+        disabled: true, // Temporarily disabled
       },
       {
         contract_address:
@@ -135,10 +141,11 @@ export const getGames = (): Game[] => {
         url: "https://nums.gg/",
         playUrl: "https://nums.gg/",
         controllerOnly: true,
+        disabled: true, // Temporarily disabled
       },
     ];
   } else {
-    return [
+    games = [
       {
         contract_address:
           "0x0035389eec883a077ca4cc036cbe17fc802d297a08e8d7e930781de9ed492d05",
@@ -176,4 +183,12 @@ export const getGames = (): Game[] => {
       },
     ];
   }
+
+  // Sort games so non-disabled ones appear first
+  return games.sort((a, b) => {
+    const aDisabled = a.disabled ?? false;
+    const bDisabled = b.disabled ?? false;
+    if (aDisabled === bDisabled) return 0;
+    return aDisabled ? 1 : -1;
+  });
 };

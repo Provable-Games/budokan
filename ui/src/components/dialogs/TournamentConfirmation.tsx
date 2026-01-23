@@ -16,6 +16,7 @@ import useUIStore from "@/hooks/useUIStore";
 import {
   feltToString,
   formatNumber,
+  formatPrizeAmount,
   formatTime,
   getOrdinalSuffix,
   displayAddress,
@@ -32,6 +33,11 @@ import { getExtensionAddresses } from "@/lib/extensionConfig";
 import { getTokenByAddress } from "@/lib/tokenUtils";
 import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
 import { OPUS } from "@/components/Icons";
+import {
+  validateTournamentCreation,
+  calculateEntryFeePrizePoolValue,
+  formatValidationMessage,
+} from "@/lib/utils/tournamentValidation";
 
 interface TournamentConfirmationProps {
   formData: TournamentFormData;
@@ -111,6 +117,23 @@ const TournamentConfirmation = ({
   // Check if there's a conflict between extension requirement and tournament type
   const hasRegistrationConflict =
     extensionRequiresRegistration && formData.type === "open";
+
+  // Validate tournament entry barriers for prize pools
+  const totalPrizeValueUSD = useMemo(() => {
+    return calculateEntryFeePrizePoolValue(formData);
+  }, [
+    formData.enableEntryFees,
+    formData.entryFees?.value,
+    formData.entryFees?.creatorFeePercentage,
+    formData.entryFees?.gameFeePercentage,
+    formData.entryFees?.refundSharePercentage,
+  ]);
+
+  const entryBarrierValidation = useMemo(() => {
+    return validateTournamentCreation(formData, totalPrizeValueUSD);
+  }, [formData, totalPrizeValueUSD]);
+
+  const hasEntryBarrierError = !entryBarrierValidation.isValid;
 
   // Then convert the full prize distribution to JSON
   const prizeDistributionString = useMemo(
@@ -409,6 +432,27 @@ const TournamentConfirmation = ({
                         <span className="text-sm">
                           This extension requires a Fixed tournament with registration period
                         </span>
+                      </div>
+                    )}
+                    {hasEntryBarrierError && (
+                      <div className="flex flex-col gap-2 p-3 bg-destructive/10 border border-destructive rounded-md">
+                        <div className="flex flex-row gap-2 items-start text-destructive">
+                          <span className="w-6 flex-shrink-0 mt-0.5">
+                            <ALERT />
+                          </span>
+                          <div className="flex flex-col gap-1">
+                            <span className="text-sm font-semibold">
+                              Entry Barrier Required
+                            </span>
+                            <span className="text-sm">
+                              {formatValidationMessage(entryBarrierValidation)}
+                            </span>
+                            <span className="text-sm text-muted-foreground mt-1">
+                              Tournaments with significant prize pools must have entry fees or
+                              entry requirements to prevent farming, bot abuse, and cover gas costs.
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -905,8 +949,11 @@ const TournamentConfirmation = ({
                           {formatNumber(formData.entryFees.amount ?? 0)}
                         </span>
                         <img
-                          src={formData.entryFees.token?.image ?? ""}
-                          alt={formData.entryFees.token?.address ?? ""}
+                          src={getTokenLogoUrl(
+                            selectedChainConfig?.chainId ?? "",
+                            formData.entryFees.token?.address ?? ""
+                          )}
+                          alt={formData.entryFees.token?.symbol ?? ""}
                           className="w-6 h-6 rounded-full"
                         />
                         <span className="text-neutral">
@@ -927,8 +974,11 @@ const TournamentConfirmation = ({
                         )}
                       </span>
                       <img
-                        src={formData.entryFees.token?.image ?? ""}
-                        alt={formData.entryFees.token?.address ?? ""}
+                        src={getTokenLogoUrl(
+                          selectedChainConfig?.chainId ?? "",
+                          formData.entryFees.token?.address ?? ""
+                        )}
+                        alt={formData.entryFees.token?.symbol ?? ""}
                         className="w-6 h-6 rounded-full"
                       />
                       <span className="text-neutral">
@@ -951,8 +1001,11 @@ const TournamentConfirmation = ({
                         )}
                       </span>
                       <img
-                        src={formData.entryFees.token?.image ?? ""}
-                        alt={formData.entryFees.token?.address ?? ""}
+                        src={getTokenLogoUrl(
+                          selectedChainConfig?.chainId ?? "",
+                          formData.entryFees.token?.address ?? ""
+                        )}
+                        alt={formData.entryFees.token?.symbol ?? ""}
                         className="w-6 h-6 rounded-full"
                       />
                       <span className="text-neutral">
@@ -964,37 +1017,50 @@ const TournamentConfirmation = ({
                         )?.toFixed(2) ?? "0.00"}
                       </span>
                     </div>
-                    <span>Payouts:</span>
-                    <div className="flex flex-col col-span-2 gap-2">
-                      {convertedEntryFees?.map((prize, index) => (
-                        <div
-                          key={index}
-                          className="flex items-center justify-between p-3 border border-brand-muted rounded-md"
-                        >
-                          <span className="font-brand w-10">
-                            {`${prize.position}${getOrdinalSuffix(
-                              prize.position
-                            )}`}
-                            :
-                          </span>
-                          <div className="flex flex-row gap-2 items-center">
-                            <span>{formatNumber(prize.amount)}</span>
-                            <img
-                              src={getTokenLogoUrl(
-                                selectedChainConfig.chainId ?? "",
-                                prize.tokenAddress
-                              )}
-                              alt={prize.tokenAddress}
-                              className="w-6 h-6 rounded-full"
-                            />
-                            <span className="text-neutral">
-                              ~$
-                              {(prize.value ?? 0)?.toFixed(2) ?? "0.00"}
-                            </span>
+                    {(() => {
+                      const prizePoolPercentage = Math.max(
+                        0,
+                        100 -
+                          (formData.entryFees.creatorFeePercentage ?? 0) -
+                          (formData.entryFees.gameFeePercentage ?? 0) -
+                          (formData.entryFees.refundSharePercentage ?? 0)
+                      );
+                      return prizePoolPercentage > 0 ? (
+                        <>
+                          <span>Payouts:</span>
+                          <div className="flex flex-col col-span-2 gap-2">
+                            {convertedEntryFees?.map((prize, index) => (
+                              <div
+                                key={index}
+                                className="flex items-center justify-between p-3 border border-brand-muted rounded-md"
+                              >
+                                <span className="font-brand w-10">
+                                  {`${prize.position}${getOrdinalSuffix(
+                                    prize.position
+                                  )}`}
+                                  :
+                                </span>
+                                <div className="flex flex-row gap-2 items-center">
+                                  <span>{formatPrizeAmount(prize.amount)}</span>
+                                  <img
+                                    src={getTokenLogoUrl(
+                                      selectedChainConfig.chainId ?? "",
+                                      prize.tokenAddress
+                                    )}
+                                    alt={prize.tokenAddress}
+                                    className="w-6 h-6 rounded-full"
+                                  />
+                                  <span className="text-neutral">
+                                    ~$
+                                    {(prize.value ?? 0)?.toFixed(2) ?? "0.00"}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                        </div>
-                      ))}
-                    </div>
+                        </>
+                      ) : null;
+                    })()}
                   </div>
                 </div>
               </>
@@ -1015,6 +1081,7 @@ const TournamentConfirmation = ({
                 !isStartTimeValid ||
                 !isDurationValid ||
                 hasRegistrationConflict ||
+                hasEntryBarrierError ||
                 isCreating
               }
             >

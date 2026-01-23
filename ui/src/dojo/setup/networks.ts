@@ -96,7 +96,7 @@ const snMainnetConfig: DojoChainConfig = {
   denshokanAddress:
     "0x036017e69d21d6d8c13e266eabb73ef1f1d02722d86bdcabe5f168f8e549d3cd",
   budokanAddress:
-    "0x0309b30321bffbb80f31073132b4f46fa6334469553af0de5e673105dc549bd3",
+    "0x051f5fc1ddcffcb0bf548378e0166a5e5328fb4894efbab170e3fb1a4c0cdfdf",
 } as const;
 
 //--------------------------------

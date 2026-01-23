@@ -214,8 +214,10 @@ const EntryFees = ({ form }: StepProps) => {
                         form.watch("entryFees.token")?.address ?? ""
                       )}
                     />
-                    <div className="w-full h-0.5 bg-brand/25" />
-                    <PrizeDistributionVisual
+                    {prizePoolPercentage > 0 && (
+                      <>
+                        <div className="w-full h-0.5 bg-brand/25" />
+                        <PrizeDistributionVisual
                       distributions={
                         form.watch("entryFees.prizeDistribution") ?? []
                       }
@@ -242,6 +244,8 @@ const EntryFees = ({ form }: StepProps) => {
                         form.watch("entryFees.prizePoolPayoutCount") ?? 10
                       }
                     />
+                      </>
+                    )}
                   </>
                 )}
               </div>

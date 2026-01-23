@@ -21,6 +21,7 @@ type Prize =
       position: number;
       tokenDecimals?: number;
       distribution?: "exponential" | "linear" | "uniform";
+      distributionWeight?: number;
       distributionCount?: number;
     }
   | {
@@ -85,13 +86,16 @@ export function PrizeManager({
       }
 
       // Add a single prize with distribution metadata
+      // For distributed prizes, position must be 0 (None) since the contract
+      // will distribute across multiple positions based on distribution settings
       const newPrize: Prize = {
         type: "ERC20" as const,
         token: prizeData.token,
         amount: totalAmount,
-        position: 1, // Starting position
+        position: 0, // 0 = None for distributed prizes
         tokenDecimals,
         distribution: prizeData.distribution,
+        distributionWeight: prizeData.distribution_weight,
         distributionCount: prizeData.distribution_count,
       };
 

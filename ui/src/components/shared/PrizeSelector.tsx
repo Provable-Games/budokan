@@ -25,6 +25,7 @@ export interface PrizeSelectorData {
   amount?: number;
   value?: number;
   distribution?: "exponential" | "linear" | "uniform";
+  distribution_weight?: number;
   distribution_count?: number;
   distributions?: { position: number; percentage: number }[];
 
@@ -225,6 +226,7 @@ export function PrizeSelector({
         amount: newPrize.amount,
         value: newPrize.value,
         distribution: distributionType,
+        distribution_weight: distributionWeight,
         distribution_count: leaderboardSize,
         distributions: prizeDistributions,
       });

@@ -73,6 +73,37 @@ export function formatNumber(num: number): string {
   }
 }
 
+/**
+ * Format prize amounts with smart decimal precision to show meaningful differences
+ * Shows more decimals for values >= 1 to distinguish between similar amounts
+ */
+export function formatPrizeAmount(num: number): string {
+  if (Math.abs(num) >= 1000000) {
+    return parseFloat((num / 1000000).toFixed(2)) + "m";
+  } else if (Math.abs(num) >= 1000) {
+    return parseFloat((num / 1000).toFixed(2)) + "k";
+  } else if (Math.abs(num) >= 100) {
+    // For 100+, show 1 decimal to distinguish (e.g., 150.5 vs 149.2)
+    return num.toFixed(1);
+  } else if (Math.abs(num) >= 10) {
+    // For 10-99, show 2 decimals (e.g., 15.42 vs 14.78)
+    return num.toFixed(2);
+  } else if (Math.abs(num) >= 1) {
+    // For 1-9, show 2 decimals (e.g., 1.50 vs 0.85)
+    return num.toFixed(2);
+  } else if (Math.abs(num) >= 0.1) {
+    return num.toFixed(2);
+  } else if (Math.abs(num) >= 0.01) {
+    return num.toFixed(3);
+  } else if (Math.abs(num) >= 0.001) {
+    return num.toFixed(4);
+  } else if (num === 0) {
+    return "0";
+  } else {
+    return num.toFixed(5);
+  }
+}
+
 export function formatScore(num: number): string {
   if (Math.abs(num) >= 1000000) {
     return parseFloat((num / 1000000).toFixed(2)) + "m";

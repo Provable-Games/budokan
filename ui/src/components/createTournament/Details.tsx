@@ -87,7 +87,7 @@ const Details = ({ form }: StepProps) => {
                             "bg-brand-muted"
                           }`}
                           onClick={() => field.onChange(game.contract_address)}
-                          disabled={!game.existsInMetadata}
+                          disabled={!game.existsInMetadata || game.disabled}
                         >
                           <TokenGameIcon size="md" image={game.image} />
                           <Tooltip delayDuration={50}>

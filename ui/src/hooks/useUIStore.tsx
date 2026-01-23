@@ -5,6 +5,7 @@ import { TabType } from "@/components/overview/TournamentTabs";
 export interface GameData extends GameMetadata {
   isWhitelisted: boolean;
   existsInMetadata: boolean;
+  disabled?: boolean;
 }
 
 type State = {

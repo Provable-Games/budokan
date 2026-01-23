@@ -14,7 +14,7 @@ export const GameButton = ({
   gameFilters,
   setGameFilters,
 }: GameButtonProps) => {
-  const isDisabled = !game.existsInMetadata;
+  const isDisabled = !game.existsInMetadata || game.disabled;
   const comingSoon = game.isWhitelisted && !game.existsInMetadata;
   const whitelisted = game.isWhitelisted && game.existsInMetadata;
   return (

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useForm, FormProvider } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { FormToken } from "@/lib/types";
-import { Prize, ERC20Data, ERC721Data } from "@/generated/models.gen";
+import { Prize, ERC20Data, ERC721Data, Tournament } from "@/generated/models.gen";
 import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
 import { BigNumberish } from "starknet";
 import { CairoCustomEnum, CairoOption, CairoOptionVariant } from "starknet";
@@ -22,6 +22,12 @@ import { LoadingSpinner } from "@/components/ui/spinner";
 import { useGetPrizeMetrics } from "@/dojo/hooks/useSqlQueries";
 import { PrizeManager } from "@/components/shared/PrizeManager";
 import { ChainId } from "@/dojo/setup/networks";
+import { useEkuboPrices } from "@/hooks/useEkuboPrices";
+import { ALERT } from "@/components/Icons";
+import {
+  validatePrizeAddition,
+  formatValidationMessage,
+} from "@/lib/utils/tournamentValidation";
 
 type BonusPrize =
   | {
@@ -31,6 +37,7 @@ type BonusPrize =
       position: number;
       tokenDecimals?: number;
       distribution?: "exponential" | "linear" | "uniform";
+      distributionWeight?: number;
       distributionCount?: number;
     }
   | {
@@ -51,6 +58,7 @@ const addPrizesSchema = z.object({
         position: z.number(),
         tokenDecimals: z.number().optional(),
         distribution: z.enum(["exponential", "linear", "uniform"]).optional(),
+        distributionWeight: z.number().optional(),
         distributionCount: z.number().optional(),
       }),
       z.object({
@@ -70,11 +78,13 @@ export function AddPrizesDialog({
   onOpenChange,
   tournamentId,
   tournamentName,
+  tournament,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   tournamentId: BigNumberish;
   tournamentName: string;
+  tournament: Tournament;
 }) {
   // Initialize form
   const form = useForm<AddPrizesFormData>({
@@ -116,6 +126,47 @@ export function AddPrizesDialog({
   });
 
   const prizeCount = Number(prizeMetricsModel?.total_prizes ?? 0);
+
+  // Get unique token addresses for price fetching
+  const uniqueTokenAddresses = useMemo(() => {
+    return Array.from(
+      new Set(
+        currentPrizes
+          .filter((prize) => prize.type === "ERC20")
+          .map((prize) => prize.token.address)
+      )
+    );
+  }, [currentPrizes]);
+
+  const { prices } = useEkuboPrices({
+    tokens: uniqueTokenAddresses,
+  });
+
+  // Calculate total value of prizes being added
+  const additionalPrizeValueUSD = useMemo(() => {
+    return currentPrizes.reduce((total, prize) => {
+      if (prize.type === "ERC20") {
+        const price = prices?.[prize.token.address] ?? 0;
+        return total + (prize.amount ?? 0) * price;
+      }
+      return total;
+    }, 0);
+  }, [currentPrizes, prices]);
+
+  // Validate prize addition
+  const prizeValidation = useMemo(() => {
+    // For now, assume existing prize value is 0 (could be fetched from backend)
+    // This is a conservative estimate - if we don't know existing prizes, we validate based on new ones
+    const existingPrizeValueUSD = 0;
+
+    return validatePrizeAddition(
+      tournament,
+      additionalPrizeValueUSD,
+      existingPrizeValueUSD
+    );
+  }, [tournament, additionalPrizeValueUSD]);
+
+  const hasPrizeValidationError = !prizeValidation.isValid;
 
   useEffect(() => {
     if (!open) {
@@ -172,12 +223,15 @@ export function AddPrizesDialog({
 
         if (prize.type === "ERC20") {
           // Map distribution string to CairoCustomEnum
+          // Weight is scaled by 10 for the contract (e.g., 1.0 in UI = 10 in contract)
+          const scaledWeight = Math.round((prize.distributionWeight ?? 1) * 10);
+
           let distribution: CairoOption<CairoCustomEnum>;
           if (prize.distribution === "linear") {
             distribution = new CairoOption(
               CairoOptionVariant.Some,
               new CairoCustomEnum({
-                Linear: 100,
+                Linear: scaledWeight,
                 Exponential: undefined,
                 Uniform: undefined,
                 Custom: undefined,
@@ -188,7 +242,7 @@ export function AddPrizesDialog({
               CairoOptionVariant.Some,
               new CairoCustomEnum({
                 Linear: undefined,
-                Exponential: 100,
+                Exponential: scaledWeight,
                 Uniform: undefined,
                 Custom: undefined,
               })
@@ -252,7 +306,7 @@ export function AddPrizesDialog({
           sponsor_address: address || "0x0",
           token_address: prize.token.address,
           token_type,
-          payout_position: prize.position,
+          position: prize.position, // useSystemCalls expects .position, not .payout_position
           claimed: false,
         };
       });
@@ -311,6 +365,27 @@ export function AddPrizesDialog({
               </div>
             )}
 
+            {hasPrizeValidationError && currentPrizes.length > 0 && (
+              <div className="flex flex-col gap-2 p-3 bg-destructive/10 border border-destructive rounded-md mb-4">
+                <div className="flex flex-row gap-2 items-start text-destructive">
+                  <span className="w-6 flex-shrink-0 mt-0.5">
+                    <ALERT />
+                  </span>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-sm font-semibold">
+                      Entry Barrier Required
+                    </span>
+                    <span className="text-sm">
+                      {formatValidationMessage(prizeValidation)}
+                    </span>
+                    <span className="text-sm text-muted-foreground mt-1">
+                      This tournament doesn't have entry fees or requirements. Adding significant prizes without entry barriers enables farming, bot abuse, and increases gas costs.
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <PrizeManager
               prizes={currentPrizes}
               onPrizesChange={setCurrentPrizes}
@@ -326,7 +401,7 @@ export function AddPrizesDialog({
                   type="button"
                   variant="outline"
                   onClick={submitPrizes}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || hasPrizeValidationError}
                 >
                   {isSubmitting
                     ? "Submitting..."
