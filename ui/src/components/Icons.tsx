@@ -207,6 +207,15 @@ export const ARROW_LEFT: React.FC = () => (
   </svg>
 );
 
+export const ARROW_RIGHT: React.FC = () => (
+  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M14 6.99683H11.3267V8.33683H12.66V9.67016H13.9933V10.9968H6V12.9968H13.9933V14.3302H12.66V15.6635H11.3267V17.0035H14V15.6702H15.3333V14.3368H16.6667V12.9968H18V10.9968H16.6667V9.66349H15.3333V8.33016H14V6.99683Z"
+      fill="currentColor"
+    />
+  </svg>
+);
+
 export const CLOCK: React.FC = () => (
   <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path

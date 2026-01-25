@@ -50,6 +50,7 @@ import {
   TournamentValidatorInput,
 } from "@/dojo/hooks/useExtensionQualification";
 import { CrossChainPaymentDialog } from "@/components/dialogs/CrossChainPaymentDialog";
+import { SwapTokensDialog } from "@/components/dialogs/SwapTokensDialog";
 
 interface EnterTournamentDialogProps {
   open: boolean;
@@ -127,6 +128,7 @@ export function EnterTournamentDialog({
   const [troveDebt, setTroveDebt] = useState<bigint | null>(null);
   const [loadingTroveDebt, setLoadingTroveDebt] = useState(false);
   const [crossChainDialogOpen, setCrossChainDialogOpen] = useState(false);
+  const [swapDialogOpen, setSwapDialogOpen] = useState(false);
 
   const chainId = selectedChainConfig?.chainId ?? "";
   const isController = connector ? isControllerAccount(connector) : false;
@@ -1251,9 +1253,17 @@ export function EnterTournamentDialog({
                   )}
                 </div>
               )}
-              {/* Cross-chain payment option - works for any entry fee token */}
+              {/* Alternative payment options */}
               {address && entryToken && (
-                <div className="pt-3 border-t border-brand/10">
+                <div className="pt-3 border-t border-brand/10 flex flex-col gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSwapDialogOpen(true)}
+                    className="w-full"
+                  >
+                    Swap Tokens on Starknet
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"
@@ -1960,6 +1970,20 @@ export function EnterTournamentDialog({
         onPaymentSuccess={async () => {
           await getBalance();
           setCrossChainDialogOpen(false);
+        }}
+      />
+
+      {/* Swap tokens dialog */}
+      <SwapTokensDialog
+        open={swapDialogOpen}
+        onOpenChange={setSwapDialogOpen}
+        entryFeeAmount={BigInt(entryAmount ?? 0)}
+        entryFeeToken={entryToken ?? ""}
+        entryFeeDecimals={entryTokenDecimals}
+        entryFeeSymbol={entryTokenSymbol}
+        onSwapSuccess={async () => {
+          await getBalance();
+          setSwapDialogOpen(false);
         }}
       />
     </Dialog>

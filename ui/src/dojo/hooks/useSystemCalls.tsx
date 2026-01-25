@@ -1209,6 +1209,30 @@ export const useSystemCalls = () => {
     }
   };
 
+  /**
+   * Execute a token swap via Ekubo DEX
+   */
+  const executeSwap = async (
+    calls: Array<{
+      contractAddress: string;
+      entrypoint: string;
+      calldata: string[];
+    }>
+  ) => {
+    if (!account) {
+      throw new Error("No account connected");
+    }
+
+    try {
+      const result = await account.execute(calls);
+      await provider?.waitForTransaction(result.transaction_hash);
+      return result;
+    } catch (error) {
+      console.error("Error executing swap:", error);
+      throw error;
+    }
+  };
+
   return {
     approveAndEnterTournament,
     banEntry,
@@ -1235,5 +1259,6 @@ export const useSystemCalls = () => {
     checkShouldBan,
     getUserTroveIds,
     getTroveHealth,
+    executeSwap,
   };
 };
