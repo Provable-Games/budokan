@@ -1253,7 +1253,7 @@ export function EnterTournamentDialog({
                 </div>
               )}
               {/* Cross-chain payment option - only for STRK tokens */}
-              {address && entryToken && isStrkToken(entryToken) && !hasBalance && (
+              {address && entryToken && isStrkToken(entryToken) && (
                 <div className="pt-3 border-t border-brand/10">
                   <Button
                     variant="outline"
