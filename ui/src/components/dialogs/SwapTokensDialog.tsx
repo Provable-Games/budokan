@@ -2,7 +2,7 @@
  * Dialog for swapping Starknet tokens to entry fee token using Ekubo DEX
  */
 
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -15,6 +15,7 @@ import { LoadingSpinner } from "@/components/ui/spinner";
 import { CHECK, ARROW_RIGHT } from "@/components/Icons";
 import { useAccount } from "@starknet-react/core";
 import { useEkuboSwap } from "@/hooks/useEkuboSwap";
+import { useVoyagerTokenBalances } from "@/hooks/useVoyagerTokenBalances";
 import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
 import { formatTokenAmount } from "@/lib/ekuboSwap";
 import { useDojo } from "@/context/dojo";
@@ -81,16 +82,14 @@ export function SwapTokensDialog({
   entryFeeSymbol,
   onSwapSuccess,
 }: SwapTokensDialogProps) {
-  const { account } = useAccount();
+  const { address } = useAccount();
   const { selectedChainConfig } = useDojo();
-  const { getBalanceGeneral, executeSwap } = useSystemCalls();
+  const { executeSwap } = useSystemCalls();
   const chainId = selectedChainConfig?.chainId ?? "";
 
   const [step, setStep] = useState<Step>("select-token");
   const [selectedToken, setSelectedToken] = useState<typeof SWAP_TOKENS[0] | null>(null);
   const [inputAmount, setInputAmount] = useState("");
-  const [tokenBalances, setTokenBalances] = useState<Record<string, bigint>>({});
-  const [loadingBalances, setLoadingBalances] = useState(false);
   const [swapError, setSwapError] = useState<string | null>(null);
 
   const {
@@ -102,12 +101,14 @@ export function SwapTokensDialog({
     reset: resetSwap,
   } = useEkuboSwap();
 
-  // Use ref to store getBalanceGeneral to avoid infinite re-renders
-  const getBalanceRef = useRef(getBalanceGeneral);
-  getBalanceRef.current = getBalanceGeneral;
-
-  // Track if balances have been fetched for current dialog session
-  const balancesFetchedRef = useRef(false);
+  // Fetch all token balances via Voyager API (single request)
+  const {
+    loading: loadingBalances,
+    getBalance,
+  } = useVoyagerTokenBalances({
+    walletAddress: address ?? "",
+    active: open && !!address,
+  });
 
   // Filter out the entry fee token from swap options
   const availableTokens = useMemo(() => {
@@ -116,38 +117,6 @@ export function SwapTokensDialog({
       (token) => token.address.toLowerCase() !== normalizedEntryToken
     );
   }, [entryFeeToken]);
-
-  // Fetch token balances only once when dialog opens
-  useEffect(() => {
-    if (!open || !account) {
-      balancesFetchedRef.current = false;
-      return;
-    }
-
-    // Skip if already fetched for this session
-    if (balancesFetchedRef.current) return;
-    balancesFetchedRef.current = true;
-
-    const fetchBalances = async () => {
-      setLoadingBalances(true);
-      const balances: Record<string, bigint> = {};
-
-      for (const token of availableTokens) {
-        try {
-          const balance = await getBalanceRef.current(token.address);
-          balances[token.address] = BigInt(balance.toString());
-        } catch (err) {
-          console.error(`Failed to fetch balance for ${token.symbol}:`, err);
-          balances[token.address] = 0n;
-        }
-      }
-
-      setTokenBalances(balances);
-      setLoadingBalances(false);
-    };
-
-    fetchBalances();
-  }, [open, account, availableTokens]);
 
   // Reset state when dialog closes
   useEffect(() => {
@@ -202,16 +171,16 @@ export function SwapTokensDialog({
   }, [quoteResult, selectedToken, generateCalls, executeSwap]);
 
   // Format display amounts
-  const formatBalance = (address: string, decimals: number) => {
-    const balance = tokenBalances[address] ?? 0n;
+  const formatBalance = (tokenAddress: string, decimals: number) => {
+    const balance = getBalance(tokenAddress);
     return formatTokenAmount(balance.toString(), decimals);
   };
 
   const hasEnoughBalance = useMemo(() => {
     if (!selectedToken || !quoteResult) return false;
-    const balance = tokenBalances[selectedToken.address] ?? 0n;
+    const balance = getBalance(selectedToken.address);
     return balance >= BigInt(quoteResult.inputAmount);
-  }, [selectedToken, quoteResult, tokenBalances]);
+  }, [selectedToken, quoteResult, getBalance]);
 
   const renderStep = () => {
     switch (step) {
@@ -230,7 +199,7 @@ export function SwapTokensDialog({
             ) : (
               <div className="flex flex-col gap-2">
                 {availableTokens.map((token) => {
-                  const balance = tokenBalances[token.address] ?? 0n;
+                  const balance = getBalance(token.address);
                   const hasBalance = balance > 0n;
 
                   return (
