@@ -2,7 +2,7 @@
  * Dialog for swapping Starknet tokens to entry fee token using Ekubo DEX
  */
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -90,6 +90,13 @@ export function SwapTokensDialog({
     reset: resetSwap,
   } = useEkuboSwap();
 
+  // Use ref to store getBalanceGeneral to avoid infinite re-renders
+  const getBalanceRef = useRef(getBalanceGeneral);
+  getBalanceRef.current = getBalanceGeneral;
+
+  // Track if balances have been fetched for current dialog session
+  const balancesFetchedRef = useRef(false);
+
   // Filter out the entry fee token from swap options
   const availableTokens = useMemo(() => {
     const normalizedEntryToken = entryFeeToken.toLowerCase();
@@ -98,9 +105,16 @@ export function SwapTokensDialog({
     );
   }, [entryFeeToken]);
 
-  // Fetch token balances
+  // Fetch token balances only once when dialog opens
   useEffect(() => {
-    if (!open || !account) return;
+    if (!open || !account) {
+      balancesFetchedRef.current = false;
+      return;
+    }
+
+    // Skip if already fetched for this session
+    if (balancesFetchedRef.current) return;
+    balancesFetchedRef.current = true;
 
     const fetchBalances = async () => {
       setLoadingBalances(true);
@@ -108,7 +122,7 @@ export function SwapTokensDialog({
 
       for (const token of availableTokens) {
         try {
-          const balance = await getBalanceGeneral(token.address);
+          const balance = await getBalanceRef.current(token.address);
           balances[token.address] = BigInt(balance.toString());
         } catch (err) {
           console.error(`Failed to fetch balance for ${token.symbol}:`, err);
@@ -121,7 +135,7 @@ export function SwapTokensDialog({
     };
 
     fetchBalances();
-  }, [open, account, availableTokens, getBalanceGeneral]);
+  }, [open, account, availableTokens]);
 
   // Reset state when dialog closes
   useEffect(() => {
