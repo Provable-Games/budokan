@@ -26,37 +26,43 @@ const SWAP_TOKENS = [
   {
     symbol: "ETH",
     name: "Ethereum",
-    address: "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
+    address:
+      "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
     decimals: 18,
   },
   {
     symbol: "STRK",
     name: "Starknet Token",
-    address: "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+    address:
+      "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
     decimals: 18,
   },
   {
     symbol: "LORDS",
     name: "LORDS",
-    address: "0x0124aeb495b947201f5fac96fd1138e326ad86195b98df6dec9009158a533b49",
+    address:
+      "0x0124aeb495b947201f5fac96fd1138e326ad86195b98df6dec9009158a533b49",
     decimals: 18,
   },
   {
     symbol: "SURVIVOR",
     name: "Survivor",
-    address: "0x042dd777885ad2c116be96d4d634abc90a26a790ffb5871e037dd5ae7d2ec86b",
+    address:
+      "0x042dd777885ad2c116be96d4d634abc90a26a790ffb5871e037dd5ae7d2ec86b",
     decimals: 18,
   },
   {
     symbol: "USDC",
     name: "USD Coin",
-    address: "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
+    address:
+      "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
     decimals: 6,
   },
   {
     symbol: "USDT",
     name: "Tether USD",
-    address: "0x068f5c6a61780768455de69077e07e89787839bf8166decfbf92b645209c0fb8",
+    address:
+      "0x068f5c6a61780768455de69077e07e89787839bf8166decfbf92b645209c0fb8",
     decimals: 6,
   },
 ];
@@ -88,7 +94,9 @@ export function SwapTokensDialog({
   const chainId = selectedChainConfig?.chainId ?? "";
 
   const [step, setStep] = useState<Step>("select-token");
-  const [selectedToken, setSelectedToken] = useState<typeof SWAP_TOKENS[0] | null>(null);
+  const [selectedToken, setSelectedToken] = useState<
+    (typeof SWAP_TOKENS)[0] | null
+  >(null);
   const [inputAmount, setInputAmount] = useState("");
   const [swapError, setSwapError] = useState<string | null>(null);
 
@@ -102,10 +110,7 @@ export function SwapTokensDialog({
   } = useEkuboSwap();
 
   // Fetch all token balances via Voyager API (single request)
-  const {
-    loading: loadingBalances,
-    getBalance,
-  } = useVoyagerTokenBalances({
+  const { loading: loadingBalances, getBalance } = useVoyagerTokenBalances({
     walletAddress: address ?? "",
     active: open && !!address,
   });
@@ -114,7 +119,7 @@ export function SwapTokensDialog({
   const availableTokens = useMemo(() => {
     const normalizedEntryToken = entryFeeToken.toLowerCase();
     return SWAP_TOKENS.filter(
-      (token) => token.address.toLowerCase() !== normalizedEntryToken
+      (token) => token.address.toLowerCase() !== normalizedEntryToken,
     );
   }, [entryFeeToken]);
 
@@ -139,13 +144,19 @@ export function SwapTokensDialog({
     const result = await getQuoteForExactOutput(
       entryFeeAmount.toString(),
       selectedToken.address,
-      entryFeeToken
+      entryFeeToken,
     );
 
     if (result) {
       setStep("review");
     }
-  }, [selectedToken, inputAmount, entryFeeAmount, entryFeeToken, getQuoteForExactOutput]);
+  }, [
+    selectedToken,
+    inputAmount,
+    entryFeeAmount,
+    entryFeeToken,
+    getQuoteForExactOutput,
+  ]);
 
   // Handle swap execution
   const handleSwap = useCallback(async () => {
@@ -265,7 +276,11 @@ export function SwapTokensDialog({
               <div>
                 <div className="font-medium">{selectedToken?.symbol}</div>
                 <div className="text-xs text-muted-foreground">
-                  Balance: {formatBalance(selectedToken?.address ?? "", selectedToken?.decimals ?? 18)}
+                  Balance:{" "}
+                  {formatBalance(
+                    selectedToken?.address ?? "",
+                    selectedToken?.decimals ?? 18,
+                  )}
                 </div>
               </div>
             </div>
@@ -279,7 +294,10 @@ export function SwapTokensDialog({
                   className="w-6 h-6 rounded-full"
                 />
                 <span className="font-mono">
-                  {formatTokenAmount(entryFeeAmount.toString(), entryFeeDecimals)}
+                  {formatTokenAmount(
+                    entryFeeAmount.toString(),
+                    entryFeeDecimals,
+                  )}
                 </span>
                 <span className="text-muted-foreground">{entryFeeSymbol}</span>
               </div>
@@ -332,7 +350,11 @@ export function SwapTokensDialog({
                 />
                 <div className="text-center">
                   <div className="font-mono font-bold">
-                    {quoteResult && formatTokenAmount(quoteResult.inputAmount, selectedToken?.decimals ?? 18)}
+                    {quoteResult &&
+                      formatTokenAmount(
+                        quoteResult.inputAmount,
+                        selectedToken?.decimals ?? 18,
+                      )}
                   </div>
                   <div className="text-sm text-muted-foreground">
                     {selectedToken?.symbol}
@@ -352,7 +374,10 @@ export function SwapTokensDialog({
                 />
                 <div className="text-center">
                   <div className="font-mono font-bold">
-                    {formatTokenAmount(entryFeeAmount.toString(), entryFeeDecimals)}
+                    {formatTokenAmount(
+                      entryFeeAmount.toString(),
+                      entryFeeDecimals,
+                    )}
                   </div>
                   <div className="text-sm text-muted-foreground">
                     {entryFeeSymbol}
@@ -365,12 +390,18 @@ export function SwapTokensDialog({
               <div className="p-3 bg-neutral/5 rounded-lg text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Price Impact</span>
-                  <span className={quoteResult.priceImpact > 3 ? "text-warning" : ""}>
+                  <span
+                    className={
+                      quoteResult.priceImpact > 3 ? "text-warning" : ""
+                    }
+                  >
                     {quoteResult.priceImpact.toFixed(2)}%
                   </span>
                 </div>
                 <div className="flex justify-between mt-1">
-                  <span className="text-muted-foreground">Slippage Tolerance</span>
+                  <span className="text-muted-foreground">
+                    Slippage Tolerance
+                  </span>
                   <span>1%</span>
                 </div>
               </div>
@@ -429,7 +460,9 @@ export function SwapTokensDialog({
             <div className="text-center">
               <p className="font-medium text-lg">Swap Complete!</p>
               <p className="text-sm text-muted-foreground mt-1">
-                You now have {formatTokenAmount(entryFeeAmount.toString(), entryFeeDecimals)} {entryFeeSymbol}
+                You now have{" "}
+                {formatTokenAmount(entryFeeAmount.toString(), entryFeeDecimals)}{" "}
+                {entryFeeSymbol}
               </p>
             </div>
             <Button
