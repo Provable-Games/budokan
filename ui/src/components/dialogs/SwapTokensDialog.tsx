@@ -35,6 +35,18 @@ const SWAP_TOKENS = [
     decimals: 18,
   },
   {
+    symbol: "LORDS",
+    name: "LORDS",
+    address: "0x0124aeb495b947201f5fac96fd1138e326ad86195b98df6dec9009158a533b49",
+    decimals: 18,
+  },
+  {
+    symbol: "SURVIVOR",
+    name: "Survivor",
+    address: "0x042dd777885ad2c116be96d4d634abc90a26a790ffb5871e037dd5ae7d2ec86b",
+    decimals: 18,
+  },
+  {
     symbol: "USDC",
     name: "USD Coin",
     address: "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
