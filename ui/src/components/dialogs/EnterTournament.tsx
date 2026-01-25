@@ -49,7 +49,7 @@ import {
   useExtensionQualification,
   TournamentValidatorInput,
 } from "@/dojo/hooks/useExtensionQualification";
-import { NearIntentsPayment } from "@/components/NearIntentsPayment";
+import { CrossChainPaymentDialog } from "@/components/dialogs/CrossChainPaymentDialog";
 import { isStrkToken } from "@/lib/nearIntents";
 
 interface EnterTournamentDialogProps {
@@ -127,9 +127,7 @@ export function EnterTournamentDialog({
   const [showManualTokenInput, setShowManualTokenInput] = useState(false);
   const [troveDebt, setTroveDebt] = useState<bigint | null>(null);
   const [loadingTroveDebt, setLoadingTroveDebt] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<"starknet" | "crosschain">(
-    "starknet"
-  );
+  const [crossChainDialogOpen, setCrossChainDialogOpen] = useState(false);
 
   const chainId = selectedChainConfig?.chainId ?? "";
   const isController = connector ? isControllerAccount(connector) : false;
@@ -248,6 +246,9 @@ export function EnterTournamentDialog({
   const entryTokenDecimals = entryToken
     ? getTokenDecimals(chainId, entryToken)
     : 18;
+  const entryTokenSymbol = useMemo(() => {
+    return tokens.find((t) => t.token_address === entryToken)?.symbol ?? "STRK";
+  }, [tokens, entryToken]);
   const entryFeeUsdCost = entryToken
     ? (Number(tournamentModel?.entry_fee.Some?.amount ?? 0) /
         10 ** entryTokenDecimals) *
@@ -1252,41 +1253,16 @@ export function EnterTournamentDialog({
                 </div>
               )}
               {/* Cross-chain payment option - only for STRK tokens */}
-              {address && entryToken && isStrkToken(entryToken) && (
-                <div className="flex flex-col gap-3 pt-3 border-t border-brand/10">
-                  <div className="flex gap-2">
-                    <Button
-                      variant={paymentMethod === "starknet" ? "default" : "outline"}
-                      onClick={() => setPaymentMethod("starknet")}
-                      size="sm"
-                      className="flex-1"
-                    >
-                      Pay with Starknet
-                    </Button>
-                    <Button
-                      variant={paymentMethod === "crosschain" ? "default" : "outline"}
-                      onClick={() => setPaymentMethod("crosschain")}
-                      size="sm"
-                      className="flex-1"
-                    >
-                      Pay from Another Chain
-                    </Button>
-                  </div>
-                  {paymentMethod === "crosschain" && (
-                    <NearIntentsPayment
-                      entryFeeAmount={BigInt(entryAmount ?? 0)}
-                      entryFeeToken={entryToken ?? ""}
-                      entryFeeDecimals={entryTokenDecimals}
-                      recipientAddress={address ?? ""}
-                      onPaymentSuccess={async () => {
-                        // Tokens now in wallet, refresh balance
-                        await getBalance();
-                        // Switch back to starknet payment method since we now have balance
-                        setPaymentMethod("starknet");
-                      }}
-                      onCancel={() => setPaymentMethod("starknet")}
-                    />
-                  )}
+              {address && entryToken && isStrkToken(entryToken) && !hasBalance && (
+                <div className="pt-3 border-t border-brand/10">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCrossChainDialogOpen(true)}
+                    className="w-full"
+                  >
+                    Pay from Another Chain (ETH, SOL, etc.)
+                  </Button>
                 </div>
               )}
             </div>
@@ -1972,6 +1948,21 @@ export function EnterTournamentDialog({
           )}
         </div>
       </DialogContent>
+
+      {/* Cross-chain payment dialog */}
+      <CrossChainPaymentDialog
+        open={crossChainDialogOpen}
+        onOpenChange={setCrossChainDialogOpen}
+        entryFeeAmount={BigInt(entryAmount ?? 0)}
+        entryFeeToken={entryToken ?? ""}
+        entryFeeDecimals={entryTokenDecimals}
+        entryFeeSymbol={entryTokenSymbol}
+        recipientAddress={address ?? ""}
+        onPaymentSuccess={async () => {
+          await getBalance();
+          setCrossChainDialogOpen(false);
+        }}
+      />
     </Dialog>
   );
 }
