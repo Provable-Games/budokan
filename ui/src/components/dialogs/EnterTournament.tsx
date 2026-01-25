@@ -50,7 +50,6 @@ import {
   TournamentValidatorInput,
 } from "@/dojo/hooks/useExtensionQualification";
 import { CrossChainPaymentDialog } from "@/components/dialogs/CrossChainPaymentDialog";
-import { isStrkToken } from "@/lib/nearIntents";
 
 interface EnterTournamentDialogProps {
   open: boolean;
@@ -1252,8 +1251,8 @@ export function EnterTournamentDialog({
                   )}
                 </div>
               )}
-              {/* Cross-chain payment option - only for STRK tokens */}
-              {address && entryToken && isStrkToken(entryToken) && (
+              {/* Cross-chain payment option - works for any entry fee token */}
+              {address && entryToken && (
                 <div className="pt-3 border-t border-brand/10">
                   <Button
                     variant="outline"

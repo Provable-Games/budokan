@@ -22,6 +22,9 @@ import {
   SUPPORTED_CHAINS,
 } from "@/hooks/useNearIntentsPayment";
 import { useCrossChainWallet, type ChainType } from "@/context/crossChainWallet";
+import { useEkuboSwap } from "@/hooks/useEkuboSwap";
+import { useAccount } from "@starknet-react/core";
+import { isStrkToken, STARKNET_STRK_ADDRESS } from "@/lib/nearIntents";
 import { cn } from "@/lib/utils";
 
 // =============================================================================
@@ -39,7 +42,15 @@ interface CrossChainPaymentDialogProps {
   onPaymentSuccess: () => void;
 }
 
-type Step = "select-chain" | "connect-wallet" | "get-quote" | "deposit" | "processing" | "success";
+type Step =
+  | "select-chain"
+  | "connect-wallet"
+  | "get-quote"
+  | "deposit"
+  | "bridging"
+  | "swap-quote"
+  | "swapping"
+  | "success";
 
 // =============================================================================
 // Helper Components
@@ -86,11 +97,11 @@ function StatusBadge({ status }: { status: string | null }) {
       className: "bg-yellow-500/20 text-yellow-400 border-yellow-500/50",
     },
     PROCESSING: {
-      label: "Processing",
+      label: "Bridging",
       className: "bg-blue-500/20 text-blue-400 border-blue-500/50",
     },
     SUCCESS: {
-      label: "Success",
+      label: "Bridge Complete",
       className: "bg-green-500/20 text-green-400 border-green-500/50",
     },
     INCOMPLETE_DEPOSIT: {
@@ -121,12 +132,12 @@ function StatusBadge({ status }: { status: string | null }) {
 
 function StepIndicator({ currentStep, steps }: { currentStep: number; steps: string[] }) {
   return (
-    <div className="flex items-center justify-center gap-2 mb-4">
+    <div className="flex items-center justify-center gap-1 mb-4">
       {steps.map((step, index) => (
-        <div key={step} className="flex items-center gap-2">
+        <div key={step} className="flex items-center gap-1">
           <div
             className={cn(
-              "w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium",
+              "w-5 h-5 rounded-full flex items-center justify-center text-xs font-medium",
               index < currentStep
                 ? "bg-success text-white"
                 : index === currentStep
@@ -137,7 +148,7 @@ function StepIndicator({ currentStep, steps }: { currentStep: number; steps: str
             {index < currentStep ? <CHECK /> : index + 1}
           </div>
           {index < steps.length - 1 && (
-            <div className={cn("w-8 h-0.5", index < currentStep ? "bg-success" : "bg-neutral/20")} />
+            <div className={cn("w-4 h-0.5", index < currentStep ? "bg-success" : "bg-neutral/20")} />
           )}
         </div>
       ))}
@@ -153,6 +164,7 @@ export function CrossChainPaymentDialog({
   open,
   onOpenChange,
   entryFeeAmount,
+  entryFeeToken,
   entryFeeDecimals,
   entryFeeSymbol,
   recipientAddress,
@@ -164,6 +176,12 @@ export function CrossChainPaymentDialog({
   const [manualRefundAddress, setManualRefundAddress] = useState<string>("");
   const [useManualAddress, setUseManualAddress] = useState(false);
   const [step, setStep] = useState<Step>("select-chain");
+
+  // Starknet account for swap transactions
+  const { account } = useAccount();
+
+  // Check if entry fee is STRK (no swap needed after bridge)
+  const needsSwapAfterBridge = !isStrkToken(entryFeeToken);
 
   // Cross-chain wallet
   const {
@@ -182,6 +200,16 @@ export function CrossChainPaymentDialog({
     disconnectNEAR,
     isNEARConnecting,
   } = useCrossChainWallet();
+
+  // Ekubo swap hook
+  const {
+    swapState,
+    error: swapError,
+    quoteResult: swapQuote,
+    getQuoteForExactOutput,
+    generateCalls: generateSwapCalls,
+    reset: resetSwap,
+  } = useEkuboSwap();
 
   // Get the selected chain and token
   const selectedChainData = useMemo(() => {
@@ -210,14 +238,14 @@ export function CrossChainPaymentDialog({
   // Payment hook
   const {
     paymentState,
-    error,
+    error: bridgeError,
     quote,
     depositAddress,
     swapStatus,
     requestQuote,
     notifyDeposit,
     startPolling,
-    reset,
+    reset: resetBridge,
   } = useNearIntentsPayment({
     recipientAddress,
     enabled: open,
@@ -241,7 +269,7 @@ export function CrossChainPaymentDialog({
     }
   }, [chainType, isEVMConnecting, isSolanaConnecting, isNEARConnecting]);
 
-  // Format the entry fee
+  // Format amounts
   const formattedEntryFee = useMemo(() => {
     const amount = Number(entryFeeAmount) / 10 ** entryFeeDecimals;
     return amount.toLocaleString(undefined, {
@@ -250,25 +278,24 @@ export function CrossChainPaymentDialog({
     });
   }, [entryFeeAmount, entryFeeDecimals]);
 
-  // Step number for indicator
+  // Step indicators
+  const steps = needsSwapAfterBridge
+    ? ["Chain", "Wallet", "Quote", "Deposit", "Bridge", "Swap", "Done"]
+    : ["Chain", "Wallet", "Quote", "Deposit", "Bridge", "Done"];
+
   const stepNumber = useMemo(() => {
-    switch (step) {
-      case "select-chain":
-        return 0;
-      case "connect-wallet":
-        return 1;
-      case "get-quote":
-        return 2;
-      case "deposit":
-        return 3;
-      case "processing":
-        return 4;
-      case "success":
-        return 5;
-      default:
-        return 0;
-    }
-  }, [step]);
+    const stepMap: Record<Step, number> = {
+      "select-chain": 0,
+      "connect-wallet": 1,
+      "get-quote": 2,
+      "deposit": 3,
+      "bridging": 4,
+      "swap-quote": needsSwapAfterBridge ? 5 : 4,
+      "swapping": needsSwapAfterBridge ? 5 : 4,
+      "success": needsSwapAfterBridge ? 6 : 5,
+    };
+    return stepMap[step] ?? 0;
+  }, [step, needsSwapAfterBridge]);
 
   // Reset on close
   useEffect(() => {
@@ -278,28 +305,33 @@ export function CrossChainPaymentDialog({
       setSelectedTokenSymbol("");
       setManualRefundAddress("");
       setUseManualAddress(false);
-      reset();
+      resetBridge();
+      resetSwap();
     }
-  }, [open, reset]);
+  }, [open, resetBridge, resetSwap]);
 
-  // Watch for payment success
+  // Watch for bridge success → move to swap or complete
   useEffect(() => {
-    if (paymentState === "success") {
-      setStep("success");
-      const timer = setTimeout(() => {
-        onPaymentSuccess();
-        onOpenChange(false);
-      }, 2000);
-      return () => clearTimeout(timer);
+    if (paymentState === "success" && step === "bridging") {
+      if (needsSwapAfterBridge) {
+        setStep("swap-quote");
+      } else {
+        setStep("success");
+        const timer = setTimeout(() => {
+          onPaymentSuccess();
+          onOpenChange(false);
+        }, 2000);
+        return () => clearTimeout(timer);
+      }
     }
-  }, [paymentState, onPaymentSuccess, onOpenChange]);
+  }, [paymentState, step, needsSwapAfterBridge, onPaymentSuccess, onOpenChange]);
 
   // Watch for EVM transaction confirmation
   useEffect(() => {
     if (evmTxHash && isEVMTxConfirmed && step === "deposit") {
       notifyDeposit(evmTxHash);
       startPolling();
-      setStep("processing");
+      setStep("bridging");
     }
   }, [evmTxHash, isEVMTxConfirmed, step, notifyDeposit, startPolling]);
 
@@ -308,7 +340,7 @@ export function CrossChainPaymentDialog({
     if (paymentState === "awaiting_deposit" && step === "get-quote") {
       setStep("deposit");
     } else if (paymentState === "polling_status" && step === "deposit") {
-      setStep("processing");
+      setStep("bridging");
     }
   }, [paymentState, step]);
 
@@ -386,8 +418,47 @@ export function CrossChainPaymentDialog({
 
   const handleManualDeposit = useCallback(() => {
     startPolling();
-    setStep("processing");
+    setStep("bridging");
   }, [startPolling]);
+
+  // Get swap quote for STRK → entry fee token
+  const handleGetSwapQuote = useCallback(async () => {
+    if (!needsSwapAfterBridge) return;
+
+    await getQuoteForExactOutput(
+      entryFeeAmount.toString(),
+      STARKNET_STRK_ADDRESS,
+      entryFeeToken
+    );
+  }, [needsSwapAfterBridge, entryFeeAmount, entryFeeToken, getQuoteForExactOutput]);
+
+  // Execute the swap
+  const handleExecuteSwap = useCallback(async () => {
+    if (!account || !swapQuote) return;
+
+    setStep("swapping");
+
+    try {
+      const calls = generateSwapCalls(100); // 1% slippage
+
+      if (calls.length === 0) {
+        throw new Error("Failed to generate swap calls");
+      }
+
+      // Execute the multicall
+      await account.execute(calls);
+
+      setStep("success");
+      setTimeout(() => {
+        onPaymentSuccess();
+        onOpenChange(false);
+      }, 2000);
+    } catch (err) {
+      console.error("Swap failed:", err);
+      // Stay on swap-quote step to retry
+      setStep("swap-quote");
+    }
+  }, [account, swapQuote, generateSwapCalls, onPaymentSuccess, onOpenChange]);
 
   const handleBack = useCallback(() => {
     switch (step) {
@@ -398,11 +469,16 @@ export function CrossChainPaymentDialog({
         setStep("connect-wallet");
         break;
       case "deposit":
-        reset();
+        resetBridge();
         setStep("get-quote");
         break;
+      case "swap-quote":
+        // Can't go back from here - bridge is done
+        break;
     }
-  }, [step, reset]);
+  }, [step, resetBridge]);
+
+  const error = bridgeError || swapError;
 
   // ==========================================================================
   // Render
@@ -413,7 +489,7 @@ export function CrossChainPaymentDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            {step !== "select-chain" && step !== "success" && (
+            {step !== "select-chain" && step !== "success" && step !== "swap-quote" && step !== "swapping" && step !== "bridging" && (
               <button onClick={handleBack} className="p-1 hover:bg-brand/10 rounded">
                 <span className="w-4 h-4">
                   <ARROW_LEFT />
@@ -424,10 +500,7 @@ export function CrossChainPaymentDialog({
           </DialogTitle>
         </DialogHeader>
 
-        <StepIndicator
-          currentStep={stepNumber}
-          steps={["Chain", "Wallet", "Quote", "Deposit", "Done"]}
-        />
+        <StepIndicator currentStep={stepNumber} steps={steps} />
 
         {/* Error Display */}
         {error && (
@@ -484,6 +557,12 @@ export function CrossChainPaymentDialog({
               </div>
             )}
 
+            {needsSwapAfterBridge && selectedTokenSymbol && (
+              <div className="p-2 bg-blue-500/10 border border-blue-500/30 rounded text-xs text-blue-400">
+                Tokens will bridge to STRK, then swap to {entryFeeSymbol} via Ekubo
+              </div>
+            )}
+
             <Button
               onClick={handleContinueToWallet}
               disabled={!selectedChain || !selectedTokenSymbol}
@@ -499,9 +578,7 @@ export function CrossChainPaymentDialog({
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-3 p-3 border border-brand/25 rounded-lg">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">
-                  {selectedChainData?.name} Wallet
-                </span>
+                <span className="text-sm font-medium">{selectedChainData?.name} Wallet</span>
                 <button
                   onClick={() => setUseManualAddress(!useManualAddress)}
                   className="text-xs text-brand-muted hover:text-brand underline"
@@ -517,9 +594,7 @@ export function CrossChainPaymentDialog({
                     value={manualRefundAddress}
                     onChange={(e) => setManualRefundAddress(e.target.value)}
                   />
-                  <span className="text-xs text-neutral">
-                    This address will receive refunds if the transaction fails
-                  </span>
+                  <span className="text-xs text-neutral">For refunds if the bridge fails</span>
                 </div>
               ) : isWalletConnectedForChain ? (
                 <div className="flex flex-col gap-2">
@@ -566,21 +641,21 @@ export function CrossChainPaymentDialog({
         {/* Step: Get Quote */}
         {step === "get-quote" && (
           <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-2 p-3 border border-brand/25 rounded-lg">
-              <div className="flex justify-between text-sm">
+            <div className="flex flex-col gap-2 p-3 border border-brand/25 rounded-lg text-sm">
+              <div className="flex justify-between">
                 <span className="text-brand-muted">From:</span>
-                <span>
-                  {selectedToken?.symbol} on {selectedChainData?.name}
-                </span>
+                <span>{selectedToken?.symbol} on {selectedChainData?.name}</span>
               </div>
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between">
                 <span className="text-brand-muted">To:</span>
                 <span>STRK on Starknet</span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-brand-muted">Refund Address:</span>
-                <span className="font-mono text-xs truncate max-w-[150px]">{refundAddress}</span>
-              </div>
+              {needsSwapAfterBridge && (
+                <div className="flex justify-between text-blue-400">
+                  <span>Then swap to:</span>
+                  <span>{entryFeeSymbol}</span>
+                </div>
+              )}
             </div>
 
             <Button
@@ -605,7 +680,7 @@ export function CrossChainPaymentDialog({
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-3 p-3 border border-brand/25 rounded-lg">
               <div className="flex flex-col gap-1">
-                <span className="text-xs text-brand-muted">Amount to Deposit</span>
+                <span className="text-xs text-brand-muted">Deposit Amount</span>
                 <div className="flex items-center gap-2">
                   <span className="text-xl font-bold font-mono">
                     {(Number(quote.depositAmount) / 10 ** (selectedToken?.decimals || 18)).toFixed(6)}
@@ -623,7 +698,7 @@ export function CrossChainPaymentDialog({
               </div>
 
               <div className="flex flex-col gap-1">
-                <span className="text-xs text-brand-muted">You Will Receive</span>
+                <span className="text-xs text-brand-muted">You Will Receive (STRK)</span>
                 <span className="text-sm font-mono">
                   ~{(Number(quote.destinationAmount) / 10 ** 18).toFixed(6)} STRK
                 </span>
@@ -644,7 +719,7 @@ export function CrossChainPaymentDialog({
             ) : (
               <div className="flex flex-col gap-2">
                 <span className="text-xs text-brand-muted text-center">
-                  Send the exact amount to the address above, then click below
+                  Send the exact amount to the address above
                 </span>
                 <Button onClick={handleManualDeposit} className="w-full">
                   I've Sent the Deposit
@@ -654,19 +729,18 @@ export function CrossChainPaymentDialog({
           </div>
         )}
 
-        {/* Step: Processing */}
-        {step === "processing" && (
+        {/* Step: Bridging */}
+        {step === "bridging" && (
           <div className="flex flex-col items-center justify-center gap-4 py-8">
             <LoadingSpinner />
             <div className="flex flex-col items-center gap-2">
-              <span className="text-sm text-brand-muted">Processing your payment...</span>
+              <span className="text-sm text-brand-muted">Bridging your tokens...</span>
               <StatusBadge status={swapStatus} />
             </div>
-
             {evmTxHash && (
               <div className="w-full p-2 bg-neutral/5 rounded border border-brand/10">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-brand-muted">TX Hash:</span>
+                  <span className="text-xs text-brand-muted">TX:</span>
                   <div className="flex items-center gap-1">
                     <span className="text-xs font-mono truncate max-w-[120px]">{evmTxHash}</span>
                     <CopyButton text={evmTxHash} />
@@ -677,6 +751,63 @@ export function CrossChainPaymentDialog({
           </div>
         )}
 
+        {/* Step: Swap Quote (after bridge) */}
+        {step === "swap-quote" && (
+          <div className="flex flex-col gap-4">
+            <div className="p-3 bg-success/10 border border-success/30 rounded">
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-4 text-success">
+                  <CHECK />
+                </span>
+                <span className="text-sm">Bridge complete! STRK received.</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 p-3 border border-brand/25 rounded-lg text-sm">
+              <span className="font-medium">Final Step: Swap to {entryFeeSymbol}</span>
+              <div className="flex justify-between">
+                <span className="text-brand-muted">From:</span>
+                <span>STRK</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-brand-muted">To:</span>
+                <span>{formattedEntryFee} {entryFeeSymbol}</span>
+              </div>
+              {swapQuote && (
+                <div className="flex justify-between text-xs text-brand-muted pt-2 border-t border-brand/10">
+                  <span>STRK needed:</span>
+                  <span>{(Number(swapQuote.inputAmount) / 1e18).toFixed(6)} STRK</span>
+                </div>
+              )}
+            </div>
+
+            {!swapQuote ? (
+              <Button onClick={handleGetSwapQuote} disabled={swapState === "quoting"} className="w-full">
+                {swapState === "quoting" ? (
+                  <>
+                    <LoadingSpinner />
+                    <span className="ml-2">Getting Swap Quote...</span>
+                  </>
+                ) : (
+                  "Get Swap Quote"
+                )}
+              </Button>
+            ) : (
+              <Button onClick={handleExecuteSwap} className="w-full">
+                Swap STRK → {entryFeeSymbol}
+              </Button>
+            )}
+          </div>
+        )}
+
+        {/* Step: Swapping */}
+        {step === "swapping" && (
+          <div className="flex flex-col items-center justify-center gap-4 py-8">
+            <LoadingSpinner />
+            <span className="text-sm text-brand-muted">Executing swap via Ekubo...</span>
+          </div>
+        )}
+
         {/* Step: Success */}
         {step === "success" && (
           <div className="flex flex-col items-center justify-center gap-4 py-8">
@@ -684,8 +815,10 @@ export function CrossChainPaymentDialog({
               <CHECK />
             </span>
             <div className="flex flex-col items-center gap-2">
-              <span className="text-lg font-medium">Payment Successful!</span>
-              <span className="text-sm text-brand-muted">Returning to tournament entry...</span>
+              <span className="text-lg font-medium">Payment Ready!</span>
+              <span className="text-sm text-brand-muted">
+                You now have {entryFeeSymbol} to pay the entry fee
+              </span>
             </div>
           </div>
         )}
