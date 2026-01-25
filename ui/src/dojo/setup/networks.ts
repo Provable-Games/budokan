@@ -38,6 +38,7 @@ export type DojoChainConfig = {
   blastRpc?: string;
   blockExplorerUrl?: string;
   ekuboPriceAPI?: string;
+  nearIntentsApiUrl?: string;
   masterAddress?: string;
   masterPrivateKey?: string;
   accountClassHash?: string;
@@ -88,6 +89,7 @@ const snMainnetConfig: DojoChainConfig = {
     "https://starknet-mainnet.blastapi.io/5ef61753-e7c1-4593-bc62-97fdf96f8de5",
   blockExplorerUrl: "https://voyager.online",
   ekuboPriceAPI: "https://prod-api-quoter.ekubo.org",
+  nearIntentsApiUrl: "https://1click.chaindefuser.com",
   masterAddress: undefined,
   masterPrivateKey: undefined,
   accountClassHash: undefined,

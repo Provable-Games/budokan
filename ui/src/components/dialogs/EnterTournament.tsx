@@ -49,6 +49,8 @@ import {
   useExtensionQualification,
   TournamentValidatorInput,
 } from "@/dojo/hooks/useExtensionQualification";
+import { NearIntentsPayment } from "@/components/NearIntentsPayment";
+import { isStrkToken } from "@/lib/nearIntents";
 
 interface EnterTournamentDialogProps {
   open: boolean;
@@ -125,6 +127,9 @@ export function EnterTournamentDialog({
   const [showManualTokenInput, setShowManualTokenInput] = useState(false);
   const [troveDebt, setTroveDebt] = useState<bigint | null>(null);
   const [loadingTroveDebt, setLoadingTroveDebt] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<"starknet" | "crosschain">(
+    "starknet"
+  );
 
   const chainId = selectedChainConfig?.chainId ?? "";
   const isController = connector ? isControllerAccount(connector) : false;
@@ -1243,6 +1248,44 @@ export function EnterTournamentDialog({
                       </span>
                       <span>Prize Pool: {(prizePoolShare / 100).toFixed(1)}%</span>
                     </div>
+                  )}
+                </div>
+              )}
+              {/* Cross-chain payment option - only for STRK tokens */}
+              {address && entryToken && isStrkToken(entryToken) && (
+                <div className="flex flex-col gap-3 pt-3 border-t border-brand/10">
+                  <div className="flex gap-2">
+                    <Button
+                      variant={paymentMethod === "starknet" ? "default" : "outline"}
+                      onClick={() => setPaymentMethod("starknet")}
+                      size="sm"
+                      className="flex-1"
+                    >
+                      Pay with Starknet
+                    </Button>
+                    <Button
+                      variant={paymentMethod === "crosschain" ? "default" : "outline"}
+                      onClick={() => setPaymentMethod("crosschain")}
+                      size="sm"
+                      className="flex-1"
+                    >
+                      Pay from Another Chain
+                    </Button>
+                  </div>
+                  {paymentMethod === "crosschain" && (
+                    <NearIntentsPayment
+                      entryFeeAmount={BigInt(entryAmount ?? 0)}
+                      entryFeeToken={entryToken ?? ""}
+                      entryFeeDecimals={entryTokenDecimals}
+                      recipientAddress={address ?? ""}
+                      onPaymentSuccess={async () => {
+                        // Tokens now in wallet, refresh balance
+                        await getBalance();
+                        // Switch back to starknet payment method since we now have balance
+                        setPaymentMethod("starknet");
+                      }}
+                      onCancel={() => setPaymentMethod("starknet")}
+                    />
                   )}
                 </div>
               )}
