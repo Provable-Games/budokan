@@ -6,19 +6,22 @@ import { StarknetProvider } from "@/context/starknet";
 import { MetagameProvider } from "@/context/metagame";
 import { BrowserRouter as Router } from "react-router-dom";
 import { DojoContextProvider } from "@/context/dojo";
+import { CrossChainWalletProvider } from "@/context/crossChainWallet";
 
 async function main() {
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
-      <StarknetProvider>
-        <DojoContextProvider>
-          <MetagameProvider>
-            <Router>
-              <App />
-            </Router>
-          </MetagameProvider>
-        </DojoContextProvider>
-      </StarknetProvider>
+      <CrossChainWalletProvider>
+        <StarknetProvider>
+          <DojoContextProvider>
+            <MetagameProvider>
+              <Router>
+                <App />
+              </Router>
+            </MetagameProvider>
+          </DojoContextProvider>
+        </StarknetProvider>
+      </CrossChainWalletProvider>
     </StrictMode>
   );
 }

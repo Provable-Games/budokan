@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +15,7 @@ import {
   useNearIntentsPayment,
   SUPPORTED_CHAINS,
 } from "@/hooks/useNearIntentsPayment";
+import { useCrossChainWallet, type ChainType } from "@/context/crossChainWallet";
 import { cn } from "@/lib/utils";
 
 // =============================================================================
@@ -116,6 +117,63 @@ function StatusBadge({ status }: { status: string | null }) {
   );
 }
 
+function WalletButton({
+  isConnected,
+  address,
+  isConnecting,
+  onConnect,
+  onDisconnect,
+  chainName,
+}: {
+  isConnected: boolean;
+  address: string | null;
+  isConnecting: boolean;
+  onConnect: () => void;
+  onDisconnect: () => void;
+  chainName: string;
+}) {
+  if (isConnecting) {
+    return (
+      <Button variant="outline" size="sm" disabled className="w-full">
+        <LoadingSpinner />
+        <span className="ml-2">Connecting...</span>
+      </Button>
+    );
+  }
+
+  if (isConnected && address) {
+    return (
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between p-2 bg-success/10 border border-success/30 rounded">
+          <div className="flex items-center gap-2">
+            <span className="w-4 h-4 text-success">
+              <CHECK />
+            </span>
+            <span className="text-xs font-mono truncate max-w-[200px]">
+              {address}
+            </span>
+          </div>
+          <CopyButton text={address} />
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onDisconnect}
+          className="text-xs text-muted-foreground"
+        >
+          Disconnect
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <Button variant="outline" size="sm" onClick={onConnect} className="w-full">
+      Connect {chainName} Wallet
+    </Button>
+  );
+}
+
 // =============================================================================
 // Main Component
 // =============================================================================
@@ -130,8 +188,26 @@ export function NearIntentsPayment({
   // Form state
   const [selectedChain, setSelectedChain] = useState<string>("");
   const [selectedTokenSymbol, setSelectedTokenSymbol] = useState<string>("");
-  const [refundAddress, setRefundAddress] = useState<string>("");
-  const [depositTxHash, setDepositTxHash] = useState<string>("");
+  const [manualRefundAddress, setManualRefundAddress] = useState<string>("");
+  const [useManualAddress, setUseManualAddress] = useState(false);
+
+  // Cross-chain wallet
+  const {
+    walletState,
+    connectEVM,
+    disconnectEVM,
+    isEVMConnecting,
+    sendEVMTransaction,
+    evmTxHash,
+    isEVMTxPending,
+    isEVMTxConfirmed,
+    connectSolana,
+    disconnectSolana,
+    isSolanaConnecting,
+    connectNEAR,
+    disconnectNEAR,
+    isNEARConnecting,
+  } = useCrossChainWallet();
 
   // Get the selected chain and token
   const selectedChainData = useMemo(() => {
@@ -143,6 +219,21 @@ export function NearIntentsPayment({
       (t) => t.symbol === selectedTokenSymbol
     );
   }, [selectedChainData, selectedTokenSymbol]);
+
+  // Determine chain type
+  const chainType = useMemo<ChainType | null>(() => {
+    if (!selectedChainData) return null;
+    return selectedChainData.chainType as ChainType;
+  }, [selectedChainData]);
+
+  // Get refund address (from wallet or manual input)
+  const refundAddress = useMemo(() => {
+    if (useManualAddress) return manualRefundAddress;
+    if (walletState.isConnected && walletState.chainType === chainType) {
+      return walletState.address || "";
+    }
+    return "";
+  }, [useManualAddress, manualRefundAddress, walletState, chainType]);
 
   // Payment hook
   const {
@@ -166,10 +257,20 @@ export function NearIntentsPayment({
   }, [onPaymentSuccess]);
 
   // Watch for success state
-  if (paymentState === "success") {
-    // Trigger the success callback
-    setTimeout(handleSuccess, 100);
-  }
+  useEffect(() => {
+    if (paymentState === "success") {
+      const timer = setTimeout(handleSuccess, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [paymentState, handleSuccess]);
+
+  // Watch for EVM transaction confirmation and notify deposit
+  useEffect(() => {
+    if (evmTxHash && isEVMTxConfirmed) {
+      notifyDeposit(evmTxHash);
+      startPolling();
+    }
+  }, [evmTxHash, isEVMTxConfirmed, notifyDeposit, startPolling]);
 
   // Format the entry fee for display
   const formattedEntryFee = useMemo(() => {
@@ -185,6 +286,59 @@ export function NearIntentsPayment({
     setSelectedChain(value);
     setSelectedTokenSymbol(""); // Reset token when chain changes
   }, []);
+
+  // Handle wallet connection based on chain type
+  const handleConnectWallet = useCallback(async () => {
+    if (!chainType || !selectedChain) return;
+
+    switch (chainType) {
+      case "evm":
+        await connectEVM(selectedChain);
+        break;
+      case "solana":
+        await connectSolana();
+        break;
+      case "near":
+        await connectNEAR();
+        break;
+    }
+  }, [chainType, selectedChain, connectEVM, connectSolana, connectNEAR]);
+
+  // Handle wallet disconnection
+  const handleDisconnectWallet = useCallback(() => {
+    if (!chainType) return;
+
+    switch (chainType) {
+      case "evm":
+        disconnectEVM();
+        break;
+      case "solana":
+        disconnectSolana();
+        break;
+      case "near":
+        disconnectNEAR();
+        break;
+    }
+  }, [chainType, disconnectEVM, disconnectSolana, disconnectNEAR]);
+
+  // Check if wallet is connected for selected chain
+  const isWalletConnectedForChain = useMemo(() => {
+    return walletState.isConnected && walletState.chainType === chainType;
+  }, [walletState, chainType]);
+
+  // Check if connecting
+  const isConnecting = useMemo(() => {
+    switch (chainType) {
+      case "evm":
+        return isEVMConnecting;
+      case "solana":
+        return isSolanaConnecting;
+      case "near":
+        return isNEARConnecting;
+      default:
+        return false;
+    }
+  }, [chainType, isEVMConnecting, isSolanaConnecting, isNEARConnecting]);
 
   // Handle get quote
   const handleGetQuote = useCallback(async () => {
@@ -206,18 +360,34 @@ export function NearIntentsPayment({
     );
   }, [selectedChain, selectedToken, refundAddress, requestQuote]);
 
-  // Handle deposit confirmation
-  const handleDepositConfirmed = useCallback(async () => {
-    if (depositTxHash) {
-      await notifyDeposit(depositTxHash);
+  // Handle sending deposit via connected wallet
+  const handleSendDeposit = useCallback(async () => {
+    if (!depositAddress || !quote || !selectedToken) return;
+
+    try {
+      if (chainType === "evm") {
+        // Convert deposit amount to proper units
+        const amountInEth = (
+          Number(quote.depositAmount) / 10 ** selectedToken.decimals
+        ).toString();
+        await sendEVMTransaction(depositAddress, amountInEth);
+      } else {
+        // For Solana/NEAR, show manual instructions for now
+        startPolling();
+      }
+    } catch (err) {
+      console.error("Failed to send deposit:", err);
     }
+  }, [depositAddress, quote, selectedToken, chainType, sendEVMTransaction, startPolling]);
+
+  // Handle manual deposit confirmation
+  const handleManualDepositConfirmed = useCallback(async () => {
     startPolling();
-  }, [depositTxHash, notifyDeposit, startPolling]);
+  }, [startPolling]);
 
   // Handle reset/try again
   const handleReset = useCallback(() => {
     reset();
-    setDepositTxHash("");
   }, [reset]);
 
   // ==========================================================================
@@ -293,21 +463,40 @@ export function NearIntentsPayment({
             </div>
           )}
 
-          {/* Refund Address */}
+          {/* Wallet Connection */}
           {selectedToken && (
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="refund-address">
-                Refund Address ({selectedChainData?.name})
-              </Label>
-              <Input
-                id="refund-address"
-                placeholder={`Enter your ${selectedChainData?.name} address`}
-                value={refundAddress}
-                onChange={(e) => setRefundAddress(e.target.value)}
-              />
-              <span className="text-xs text-neutral">
-                In case of issues, funds will be refunded to this address
-              </span>
+            <div className="flex flex-col gap-3 p-3 border border-brand/25 rounded-lg bg-neutral/5">
+              <div className="flex items-center justify-between">
+                <Label>Source Wallet (for refunds)</Label>
+                <button
+                  onClick={() => setUseManualAddress(!useManualAddress)}
+                  className="text-xs text-brand-muted hover:text-brand underline"
+                >
+                  {useManualAddress ? "Connect wallet instead" : "Enter address manually"}
+                </button>
+              </div>
+
+              {useManualAddress ? (
+                <div className="flex flex-col gap-2">
+                  <Input
+                    placeholder={`Enter your ${selectedChainData?.name} address`}
+                    value={manualRefundAddress}
+                    onChange={(e) => setManualRefundAddress(e.target.value)}
+                  />
+                  <span className="text-xs text-neutral">
+                    In case of issues, funds will be refunded to this address
+                  </span>
+                </div>
+              ) : (
+                <WalletButton
+                  isConnected={isWalletConnectedForChain}
+                  address={walletState.address}
+                  isConnecting={isConnecting}
+                  onConnect={handleConnectWallet}
+                  onDisconnect={handleDisconnectWallet}
+                  chainName={selectedChainData?.name || ""}
+                />
+              )}
             </div>
           )}
 
@@ -346,7 +535,7 @@ export function NearIntentsPayment({
               <span className="text-xs text-brand-muted">Amount to Deposit</span>
               <div className="flex items-center gap-2">
                 <span className="text-lg font-bold font-mono">
-                  {quote.depositAmount}
+                  {(Number(quote.depositAmount) / 10 ** (selectedToken?.decimals || 18)).toFixed(6)}
                 </span>
                 <span className="text-sm text-neutral">
                   {selectedToken?.symbol}
@@ -370,7 +559,7 @@ export function NearIntentsPayment({
               <span className="text-xs text-brand-muted">You Will Receive</span>
               <div className="flex items-center gap-2">
                 <span className="text-sm font-mono">
-                  ~{quote.destinationAmount}
+                  ~{(Number(quote.destinationAmount) / 10 ** 18).toFixed(6)}
                 </span>
                 <span className="text-xs text-neutral">STRK</span>
               </div>
@@ -383,29 +572,40 @@ export function NearIntentsPayment({
             </div>
           </div>
 
-          {/* Optional: Transaction Hash Input */}
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="tx-hash">
-              Transaction Hash (Optional)
-            </Label>
-            <Input
-              id="tx-hash"
-              placeholder="Enter deposit transaction hash"
-              value={depositTxHash}
-              onChange={(e) => setDepositTxHash(e.target.value)}
-            />
-            <span className="text-xs text-neutral">
-              Providing the transaction hash speeds up processing
-            </span>
-          </div>
-
           {/* Action Buttons */}
-          <div className="flex gap-2 justify-end">
-            <Button variant="outline" onClick={handleReset}>
+          <div className="flex flex-col gap-3">
+            {/* Send via connected wallet (EVM only for now) */}
+            {isWalletConnectedForChain && chainType === "evm" && (
+              <Button
+                onClick={handleSendDeposit}
+                disabled={isEVMTxPending}
+                className="w-full"
+              >
+                {isEVMTxPending ? (
+                  <>
+                    <LoadingSpinner />
+                    <span className="ml-2">Sending Transaction...</span>
+                  </>
+                ) : (
+                  <>Send Deposit via Wallet</>
+                )}
+              </Button>
+            )}
+
+            {/* Manual deposit option */}
+            {(!isWalletConnectedForChain || chainType !== "evm") && (
+              <div className="flex flex-col gap-2">
+                <span className="text-xs text-brand-muted text-center">
+                  Send the deposit from your wallet, then click below
+                </span>
+                <Button onClick={handleManualDepositConfirmed} className="w-full">
+                  I've Made the Deposit
+                </Button>
+              </div>
+            )}
+
+            <Button variant="outline" onClick={handleReset} className="w-full">
               Cancel
-            </Button>
-            <Button onClick={handleDepositConfirmed}>
-              I've Made the Deposit
             </Button>
           </div>
         </div>
@@ -423,6 +623,19 @@ export function NearIntentsPayment({
               <StatusBadge status={swapStatus} />
             </div>
           </div>
+
+          {/* Transaction Hash (if sent via wallet) */}
+          {evmTxHash && (
+            <div className="flex flex-col gap-1 p-3 border border-brand/10 rounded-lg bg-neutral/5">
+              <span className="text-xs text-brand-muted">Transaction Hash</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono break-all flex-1">
+                  {evmTxHash}
+                </span>
+                <CopyButton text={evmTxHash} />
+              </div>
+            </div>
+          )}
 
           {/* Deposit Address Reference */}
           {depositAddress && (
