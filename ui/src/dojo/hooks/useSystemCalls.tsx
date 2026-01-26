@@ -128,6 +128,85 @@ export const useSystemCalls = () => {
     }
   };
 
+  /**
+   * Execute swap via Ekubo DEX and enter tournament in a single transaction
+   */
+  const swapAndEnterTournament = async (
+    swapCalls: Array<{
+      contractAddress: string;
+      entrypoint: string;
+      calldata: string[];
+    }>,
+    entryFeeToken: CairoOption<EntryFee>,
+    tournamentId: BigNumberish,
+    tournamentName: string,
+    tournamentModel: Tournament,
+    player_name: BigNumberish,
+    player_address: BigNumberish,
+    qualification: CairoOption<QualificationProofEnum>,
+    duration: number,
+    entryFeeUsdCost: number,
+    entryCount: number,
+    prizeTotalUsd: number
+  ) => {
+    const startsIn =
+      Number(tournamentModel.schedule.game.start) - Date.now() / 1000;
+    const game = getGameName(tournamentModel.game_config.address);
+
+    const budokanContract = initializeBudokanContract();
+
+    try {
+      const call = budokanContract.populate("enter_tournament", [
+        tournamentId,
+        player_name,
+        player_address,
+        qualification,
+      ]);
+
+      // Start with swap calls
+      let calls = [...swapCalls];
+
+      // Add approve call if entry fee exists
+      if (entryFeeToken.isSome()) {
+        calls.push({
+          contractAddress: entryFeeToken.Some?.token_address!,
+          entrypoint: "approve",
+          calldata: CallData.compile([
+            tournamentAddress,
+            entryFeeToken.Some?.amount!,
+            "0",
+          ]),
+        });
+      }
+
+      // Add enter tournament call
+      calls.push({
+        contractAddress: tournamentAddress,
+        entrypoint: "enter_tournament",
+        calldata: call.calldata as string[],
+      });
+
+      const tx = await account?.execute(calls);
+
+      await waitForTournamentEntry(tournamentId, entryCount);
+
+      if (tx) {
+        showTournamentEntry({
+          tournamentName,
+          game,
+          entryFeeUsdCost,
+          hasEntryFee: entryFeeToken.isSome(),
+          startsIn,
+          duration,
+          prizeTotalUsd,
+        });
+      }
+    } catch (error) {
+      console.error("Error executing swap and enter tournament:", error);
+      throw error;
+    }
+  };
+
   const banEntry = async (
     tournamentId: BigNumberish,
     gameTokenId: BigNumberish,
@@ -1235,6 +1314,7 @@ export const useSystemCalls = () => {
 
   return {
     approveAndEnterTournament,
+    swapAndEnterTournament,
     banEntry,
     submitScores,
     submitScoresBatched,
