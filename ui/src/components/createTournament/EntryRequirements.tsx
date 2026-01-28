@@ -19,7 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { StepProps } from "@/containers/CreateTournament";
 import { USER, X, INFO } from "@/components/Icons";
-import { displayAddress, feltToString } from "@/lib/utils";
+import { displayAddress, feltToString, indexAddress } from "@/lib/utils";
 import TokenGameIcon from "@/components/icons/TokenGameIcon";
 import { Search } from "lucide-react";
 import TokenDialog from "@/components/dialogs/Token";
@@ -1034,8 +1034,8 @@ const EntryRequirements = ({ form }: StepProps) => {
                                               if (
                                                 field.value.some(
                                                   (existingAddr) =>
-                                                    existingAddr.toLowerCase() ===
-                                                    addr.toLowerCase()
+                                                    indexAddress(existingAddr).toLowerCase() ===
+                                                    indexAddress(addr).toLowerCase()
                                                 )
                                               ) {
                                                 duplicateAddresses.push(
@@ -1061,8 +1061,8 @@ const EntryRequirements = ({ form }: StepProps) => {
                                             if (
                                               uniqueValidAddresses.some(
                                                 (existingAddr) =>
-                                                  existingAddr.toLowerCase() ===
-                                                  addr.toLowerCase()
+                                                  indexAddress(existingAddr).toLowerCase() ===
+                                                  indexAddress(addr).toLowerCase()
                                               )
                                             ) {
                                               internalDuplicates.push(

@@ -5,6 +5,8 @@ import { TokenPrices } from "@/hooks/useEkuboPrices";
 import { PositionPrizes, DisplayPrize, TokenMetadata } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { indexAddress } from "@/lib/utils";
+import { useNftTokenUris } from "@/hooks/useNftTokenUris";
+import NftPreview from "@/components/tournament/prizes/NftPreview";
 import { expandDistributedPrize } from "@/lib/utils/prizeDistribution";
 import {
   TournamentCard,
@@ -80,16 +82,16 @@ const PrizesContainer = ({
 
     // Filter entry fee prizes for top 5 positions
     const relevantEntryFeePrizes = entryFeePrizes.filter(
-      (p) => Number(p.position ?? 0) >= 1 && Number(p.position ?? 0) <= 5
+      (p) => Number(p.position ?? 0) >= 1 && Number(p.position ?? 0) <= 5,
     );
 
     // Expand distributed prizes (payout_position = 0) into individual position prizes
     const expandedDatabasePrizes = currentPagePrizes.flatMap((prize) =>
-      expandDistributedPrize(prize)
+      expandDistributedPrize(prize),
     );
 
     const expandedEntryFeePrizes = relevantEntryFeePrizes.flatMap((prize) =>
-      expandDistributedPrize(prize)
+      expandDistributedPrize(prize),
     );
 
     // Combine expanded prizes and filter for top 5 positions
@@ -121,7 +123,7 @@ const PrizesContainer = ({
         const amount = BigInt(
           prize.token_type?.variant?.erc20?.amount ||
             prize["token_type.erc20.amount"] ||
-            0
+            0,
         );
 
         if (acc[positionKey][tokenKey]) {
@@ -140,7 +142,7 @@ const PrizesContainer = ({
         const tokenId = BigInt(
           prize.token_type?.variant?.erc721?.token_id ||
             prize["token_type.erc721.id"] ||
-            0
+            0,
         );
 
         if (acc[positionKey][tokenKey]) {
@@ -219,7 +221,7 @@ const PrizesContainer = ({
     }, 0) || 0;
 
   const entryFeeNFTs = entryFeePrizes.filter(
-    (p) => p.token_type?.variant?.erc721
+    (p) => p.token_type?.variant?.erc721,
   ).length;
   const totalPrizeNFTs = dbNFTs + entryFeeNFTs;
 
@@ -233,12 +235,33 @@ const PrizesContainer = ({
     if (firstNftPrize) {
       const nftToken = tokens.find(
         (t) =>
-          indexAddress(t.token_address) === indexAddress(firstNftPrize.address)
+          indexAddress(t.token_address) === indexAddress(firstNftPrize.address),
       );
       return nftToken?.symbol || "NFT";
     }
     return "NFT";
   }, [filteredGroupedPrizes, tokens]);
+
+  // Collect all NFT prizes for token URI fetching (used in header display)
+  const allNftPrizes = useMemo(() => {
+    const nfts: { address: string; tokenId: bigint }[] = [];
+    Object.values(filteredGroupedPrizes).forEach((prizes) => {
+      Object.values(prizes).forEach((prize) => {
+        if (prize.type === "erc721") {
+          if (Array.isArray(prize.value)) {
+            prize.value.forEach((tokenId) => {
+              nfts.push({ address: prize.address, tokenId });
+            });
+          } else {
+            nfts.push({ address: prize.address, tokenId: prize.value });
+          }
+        }
+      });
+    });
+    return nfts;
+  }, [filteredGroupedPrizes]);
+
+  const { tokenUris, loading: nftUrisLoading } = useNftTokenUris(allNftPrizes);
 
   useEffect(() => {
     setShowPrizes(prizesExist);
@@ -265,13 +288,32 @@ const PrizesContainer = ({
                   </span>
                 )}
                 {totalPrizesValueUSD > 0 && totalPrizeNFTs > 0 && (
-                  <span className="text-brand/25">+</span>
+                  <span className="text-brand/25 hidden sm:inline">|</span>
                 )}
                 {totalPrizeNFTs > 0 && (
-                  <span className="font-brand text-md xl:text-lg 2xl:text-xl 3xl:text-2xl text-brand-muted">
-                    {totalPrizeNFTs} {nftSymbol}
-                    {totalPrizeNFTs === 1 ? "" : "s"}
-                  </span>
+                  <div className="hidden sm:flex items-center gap-1.5">
+                    <div className="flex -space-x-2">
+                      {allNftPrizes.slice(0, 3).map((nft, idx) => (
+                        <NftPreview
+                          key={idx}
+                          tokenUri={tokenUris[`${nft.address}_${nft.tokenId}`]}
+                          tokenId={nft.tokenId}
+                          symbol={nftSymbol}
+                          size="sm"
+                          loading={nftUrisLoading}
+                          showTooltip={true}
+                        />
+                      ))}
+                    </div>
+                    {totalPrizeNFTs > 3 && (
+                      <div
+                        className="w-6 h-6 rounded-full bg-brand/20 flex items-center justify-center text-[10px] border border-background"
+                        style={{ marginLeft: "-4px", zIndex: 0 }}
+                      >
+                        +{totalPrizeNFTs - 3}
+                      </div>
+                    )}
+                  </div>
                 )}
               </>
             )}
@@ -362,6 +404,8 @@ const PrizesContainer = ({
                         prices={prices || {}}
                         tokens={tokens}
                         tokenDecimals={tokenDecimals}
+                        tokenUris={tokenUris}
+                        nftUrisLoading={nftUrisLoading}
                       />
                     ))}
                 </>

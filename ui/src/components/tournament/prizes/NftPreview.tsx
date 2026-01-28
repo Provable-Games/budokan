@@ -31,7 +31,7 @@ const NftPreview = ({
     lg: "w-12 h-12",
   };
 
-  const imageClass = `${sizeClasses[size]} rounded-md object-cover border border-brand/20`;
+  const imageClass = `${sizeClasses[size]} rounded-md object-cover border border-brand/20 flex-shrink-0`;
 
   if (loading) {
     return <Skeleton className={imageClass} />;

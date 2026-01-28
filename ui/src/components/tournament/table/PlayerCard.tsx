@@ -1,4 +1,4 @@
-import { displayAddress } from "@/lib/utils";
+import { displayAddress, indexAddress } from "@/lib/utils";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { VERIFIED, QUESTION } from "@/components/Icons";
 import { Ban, Eye, RotateCcw } from "lucide-react";
@@ -125,7 +125,7 @@ export const MobilePlayerCard = ({
   gameAddress?: string;
 }) => {
   const username =
-    usernames?.get(ownerAddress ?? "0x0") ||
+    usernames?.get(indexAddress(ownerAddress ?? "0x0")) ||
     displayAddress(ownerAddress ?? "0x0");
   const isBanned = selectedPlayer?.registration?.is_banned === 1;
   return (

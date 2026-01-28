@@ -1,260 +1,250 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useDojo } from "@/context/dojo";
 import { ChainId } from "@/dojo/setup/networks";
+import { indexAddress } from "@/lib/utils";
 
 export interface TokenPrices {
   [address: string]: number | undefined;
 }
 
-interface TokenLoadingStates {
-  [address: string]: boolean;
-}
-
-interface TokenErrorStates {
-  [address: string]: boolean;
-}
-
-interface PriceResult {
-  tokenAddress: string;
-  price: number | undefined;
-  timedOut: boolean;
-  error: boolean;
-}
-
 interface EkuboPriceProps {
-  tokens: string[]; // Array of token addresses
-  timeoutMs?: number; // Optional timeout parameter
+  tokens: string[];
+  timeoutMs?: number;
+  maxRetries?: number;
+  retryDelayMs?: number;
+}
+
+const USDC_ADDRESSES = new Set([
+  "0x33068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb",
+  "0x53c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
+]);
+
+const CHAIN_ID_DECIMAL = "23448594291968334";
+const STANDARD_AMOUNT = "1000000000000000000";
+const USDC_QUOTE =
+  "0x33068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb";
+
+async function fetchTokenPrice(
+  apiBase: string,
+  tokenAddress: string,
+  timeoutMs: number,
+  signal: AbortSignal
+): Promise<{ address: string; price: number | undefined; error: boolean }> {
+  // USDC always returns 1
+  if (USDC_ADDRESSES.has(tokenAddress)) {
+    return { address: tokenAddress, price: 1, error: false };
+  }
+
+  try {
+    const apiUrl = `${apiBase}/${CHAIN_ID_DECIMAL}/${STANDARD_AMOUNT}/${tokenAddress}/${USDC_QUOTE}`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    // Combine caller's abort signal with timeout
+    const onAbort = () => controller.abort();
+    signal.addEventListener("abort", onAbort);
+
+    try {
+      const result = await fetch(apiUrl, { signal: controller.signal });
+      clearTimeout(timeout);
+
+      if (!result.ok) throw new Error(`HTTP ${result.status}`);
+
+      const contentType = result.headers.get("content-type");
+      if (!contentType?.includes("application/json")) {
+        throw new Error("Non-JSON response");
+      }
+
+      const data = await result.json();
+      if (!data.total_calculated) throw new Error("No quote data");
+
+      return {
+        address: tokenAddress,
+        price: Number(data.total_calculated) / 1e6,
+        error: false,
+      };
+    } finally {
+      clearTimeout(timeout);
+      signal.removeEventListener("abort", onAbort);
+    }
+  } catch (err) {
+    if (signal.aborted) throw err; // Let caller handle abort
+    console.error(`Price fetch failed for ${tokenAddress}:`, err);
+    return { address: tokenAddress, price: undefined, error: true };
+  }
 }
 
 export const useEkuboPrices = ({
   tokens,
   timeoutMs = 10000,
+  maxRetries = 5,
+  retryDelayMs = 5000,
 }: EkuboPriceProps) => {
   const { selectedChainConfig } = useDojo();
   const [prices, setPrices] = useState<TokenPrices>({});
   const [isLoading, setIsLoading] = useState(true);
-
-  // Initialize loading states to true for all tokens
-  const [tokenLoadingStates, setTokenLoadingStates] =
-    useState<TokenLoadingStates>(() =>
-      tokens.reduce((acc, address) => ({ ...acc, [address]: true }), {})
-    );
-
-  const [tokenErrorStates, setTokenErrorStates] = useState<TokenErrorStates>(
-    () => tokens.reduce((acc, address) => ({ ...acc, [address]: false }), {})
-  );
+  const [errorTokens, setErrorTokens] = useState<Set<string>>(new Set());
+  const [fetchTrigger, setFetchTrigger] = useState(0);
+  const retryCountRef = useRef(0);
 
   const isMainnet = selectedChainConfig.chainId === ChainId.SN_MAIN;
-  // Convert chainId to decimal format for API request
-  const chainIdDecimal = "23448594291968334";
-  // Standard amount: 1 token with 18 decimals (10^18)
-  const standardAmount = "1000000000000000000";
-  // Sort token addresses to ensure consistent key regardless of order
-  const tokensKey = JSON.stringify([...tokens].sort());
+  const apiBase = selectedChainConfig.ekuboPriceAPI;
 
-  // Safe check if a token is available (has price, not loading, no error)
-  const isTokenAvailable = useCallback(
-    (tokenAddress: string): boolean => {
-      // If the token isn't in our list, it's not available
-      if (!tokens.includes(tokenAddress)) return false;
-
-      // If it's loading, it's not available yet
-      if (tokenLoadingStates[tokenAddress] === true) return false;
-
-      // If it has an error, it's not available
-      if (tokenErrorStates[tokenAddress] === true) return false;
-
-      // If it doesn't have a price, it's not available
-      if (prices[tokenAddress] === undefined) return false;
-
-      // Otherwise, it's available
-      return true;
-    },
-    [tokens, tokenLoadingStates, tokenErrorStates, prices]
+  // Normalize and dedupe upfront
+  const normalizedTokens = useMemo(
+    () => [...new Set(tokens.map(indexAddress))],
+    [tokens]
+  );
+  const tokensKey = useMemo(
+    () => JSON.stringify([...normalizedTokens].sort()),
+    [normalizedTokens]
   );
 
-  // Helper function that considers a token loading if it's marked as loading
-  const isTokenLoading = useCallback(
-    (tokenAddress: string): boolean => {
-      // If the token isn't in our list, consider it loading
-      if (!tokens.includes(tokenAddress)) return true;
-
-      return tokenLoadingStates[tokenAddress] === true;
-    },
-    [tokens, tokenLoadingStates]
-  );
-
-  // Helper function to check if a token has an error
-  const hasTokenError = useCallback(
-    (tokenAddress: string): boolean => {
-      // If the token isn't in our list, it doesn't have an error yet
-      if (!tokens.includes(tokenAddress)) return false;
-
-      return tokenErrorStates[tokenAddress] === true;
-    },
-    [tokens, tokenErrorStates]
-  );
-
-  // Safe getter that only returns a price if the token is available
-  const getPrice = useCallback(
-    (tokenAddress: string): number | undefined => {
-      if (!isTokenAvailable(tokenAddress)) {
-        return undefined;
-      }
-
-      return prices[tokenAddress];
-    },
-    [isTokenAvailable, prices]
-  );
-
+  // Main effect: fetches all tokens, then retries failures
   useEffect(() => {
-    // Skip if no tokens
-    if (!tokens || tokens.length === 0) {
-      setIsLoading(false);
+    if (normalizedTokens.length === 0) {
       setPrices({});
-      setTokenLoadingStates({});
-      setTokenErrorStates({});
+      setErrorTokens(new Set());
+      setIsLoading(false);
       return;
     }
 
-    console.log("useEkuboPrices: Fetching prices for token addresses:", tokens);
+    const abortController = new AbortController();
+    retryCountRef.current = 0;
 
-    // Reset all states when tokens change
-    setIsLoading(true);
+    async function run() {
+      setIsLoading(true);
 
-    // Initialize all tokens as loading and not in error state
-    setTokenLoadingStates(
-      tokens.reduce((acc, address) => ({ ...acc, [address]: true }), {})
-    );
+      // Non-mainnet: mock all prices to 1
+      if (!isMainnet) {
+        const mock: TokenPrices = {};
+        normalizedTokens.forEach((addr) => {
+          mock[addr] = 1;
+        });
+        setPrices(mock);
+        setErrorTokens(new Set());
+        setIsLoading(false);
+        return;
+      }
 
-    setTokenErrorStates(
-      tokens.reduce((acc, address) => ({ ...acc, [address]: false }), {})
-    );
+      // Initial fetch: all tokens
+      let tokensToFetch = [...normalizedTokens];
+      const allPrices: TokenPrices = {};
 
-    const fetchPrices = async () => {
-      try {
-        if (!isMainnet) {
-          // For non-mainnet, set all token prices to 1
-          const mockPrices = tokens.reduce(
-            (acc, address) => ({ ...acc, [address]: 1 }),
-            {}
+      while (tokensToFetch.length > 0) {
+        if (abortController.signal.aborted) return;
+
+        const isRetry = retryCountRef.current > 0;
+        if (isRetry) {
+          console.log(
+            `useEkuboPrices: Retry ${retryCountRef.current}/${maxRetries} for:`,
+            tokensToFetch
           );
-          setPrices(mockPrices);
+        } else {
+          console.log("useEkuboPrices: Fetching prices for:", tokensToFetch);
+        }
 
-          // Set all tokens as loaded and not in error
-          setTokenLoadingStates(
-            tokens.reduce((acc, address) => ({ ...acc, [address]: false }), {})
+        let results: Awaited<ReturnType<typeof fetchTokenPrice>>[];
+        try {
+          results = await Promise.all(
+            tokensToFetch.map((addr) =>
+              fetchTokenPrice(apiBase!, addr, timeoutMs, abortController.signal)
+            )
           );
-          setIsLoading(false);
+        } catch {
+          // Aborted — component unmounted or tokens changed
           return;
         }
 
-        const pricePromises = tokens.map(async (tokenAddress) => {
-          // Manual override for USDC - always return price of 1
-          if (
-            tokenAddress ===
-              "0x033068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb" ||
-            tokenAddress ===
-              "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8"
-          ) {
-            return { tokenAddress, price: 1, timedOut: false, error: false };
+        if (abortController.signal.aborted) return;
+
+        // Merge results
+        const failed: string[] = [];
+        results.forEach(({ address, price, error }) => {
+          if (price !== undefined) {
+            allPrices[address] = price;
+          } else if (error) {
+            failed.push(address);
           }
-
-          // Create a timeout promise
-          const timeoutPromise = new Promise<PriceResult>((resolve) => {
-            setTimeout(() => {
-              resolve({
-                tokenAddress,
-                price: undefined,
-                timedOut: true,
-                error: true,
-              });
-            }, timeoutMs);
-          });
-
-          // Create the fetch promise
-          const fetchPromise = (async () => {
-            try {
-              if (!chainIdDecimal) {
-                throw new Error("Chain ID not available");
-              }
-
-              // Quoter API format: /{chainId}/{amount}/{tokenAddress}/{quoteToken}
-              const apiUrl = `${selectedChainConfig.ekuboPriceAPI!}/${chainIdDecimal}/${standardAmount}/${tokenAddress}/0x33068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb`;
-
-              console.log(`Fetching price from quoter API: ${apiUrl}`);
-
-              const result = await fetch(apiUrl);
-
-              if (!result.ok) {
-                throw new Error(`HTTP error! status: ${result.status}`);
-              }
-
-              const contentType = result.headers.get("content-type");
-              if (!contentType || !contentType.includes("application/json")) {
-                throw new Error("API did not return JSON");
-              }
-
-              const quoteResponse = await result.json();
-
-              console.log(`Fetched quote for ${tokenAddress}:`, quoteResponse);
-
-              // The quoter returns the amount of USDC we'd get for the input amount
-              // USDC has 6 decimals, so divide by 10^6 to get the dollar price
-              if (!quoteResponse.total_calculated) {
-                throw new Error("No quote data available");
-              }
-
-              // Convert the quote amount (in USDC smallest unit) to dollar price
-              const price = Number(quoteResponse.total_calculated) / 1e6;
-              return { tokenAddress, price, timedOut: false, error: false };
-            } catch (error) {
-              console.error(`Error fetching ${tokenAddress} price:`, error);
-              return {
-                tokenAddress,
-                price: undefined,
-                timedOut: false,
-                error: true,
-              };
-            }
-          })();
-
-          // Race between the timeout and the fetch
-          return Promise.race([fetchPromise, timeoutPromise]);
         });
 
-        const results = await Promise.all(pricePromises);
-        const newPrices: TokenPrices = {};
-        const newLoadingStates: TokenLoadingStates = {};
-        const newErrorStates: TokenErrorStates = {};
-
-        // Process all results at once to avoid multiple re-renders
-        results.forEach(({ tokenAddress, price, error }) => {
-          newPrices[tokenAddress] = price;
-          newLoadingStates[tokenAddress] = false;
-          newErrorStates[tokenAddress] = error;
-        });
-
-        console.log("useEkuboPrices: Fetched prices:", newPrices);
-
-        setPrices(newPrices); // Replace entirely instead of merging
-        setTokenLoadingStates(newLoadingStates);
-        setTokenErrorStates(newErrorStates);
-      } catch (error) {
-        console.error("Error fetching prices:", error);
-      } finally {
+        // Update state with what we have so far
+        setPrices({ ...allPrices });
+        setErrorTokens(new Set(failed));
         setIsLoading(false);
-      }
-    };
 
-    fetchPrices();
-  }, [
-    tokensKey,
-    selectedChainConfig.ekuboPriceAPI,
-    isMainnet,
-    timeoutMs,
-    selectedChainConfig.chainId,
-  ]); // Added chainId to dependencies
+        // Decide whether to retry
+        if (failed.length === 0) break; // All done
+        if (retryCountRef.current >= maxRetries) {
+          console.log(
+            `useEkuboPrices: Max retries (${maxRetries}) reached for:`,
+            failed
+          );
+          break;
+        }
+
+        // Wait before retrying
+        await new Promise<void>((resolve) => {
+          const timer = setTimeout(resolve, retryDelayMs);
+          // If aborted during wait, resolve immediately
+          const onAbort = () => {
+            clearTimeout(timer);
+            resolve();
+          };
+          abortController.signal.addEventListener("abort", onAbort, {
+            once: true,
+          });
+        });
+
+        if (abortController.signal.aborted) return;
+
+        retryCountRef.current += 1;
+        tokensToFetch = failed;
+      }
+    }
+
+    run();
+
+    return () => {
+      abortController.abort();
+    };
+  }, [tokensKey, apiBase, isMainnet, timeoutMs, maxRetries, retryDelayMs, fetchTrigger]);
+
+  // Helpers for consumers
+  const isTokenLoading = useCallback(
+    (tokenAddress: string): boolean => {
+      const n = indexAddress(tokenAddress);
+      if (!normalizedTokens.includes(n)) return true;
+      return isLoading && prices[n] === undefined;
+    },
+    [normalizedTokens, isLoading, prices]
+  );
+
+  const hasTokenError = useCallback(
+    (tokenAddress: string): boolean => {
+      return errorTokens.has(indexAddress(tokenAddress));
+    },
+    [errorTokens]
+  );
+
+  const isTokenAvailable = useCallback(
+    (tokenAddress: string): boolean => {
+      const n = indexAddress(tokenAddress);
+      return prices[n] !== undefined && !errorTokens.has(n);
+    },
+    [prices, errorTokens]
+  );
+
+  const getPrice = useCallback(
+    (tokenAddress: string): number | undefined => {
+      return prices[indexAddress(tokenAddress)];
+    },
+    [prices]
+  );
+
+  const refetch = useCallback(() => {
+    setFetchTrigger((prev) => prev + 1);
+  }, []);
 
   return {
     prices,
@@ -263,5 +253,6 @@ export const useEkuboPrices = ({
     hasTokenError,
     isTokenAvailable,
     getPrice,
+    refetch,
   };
 };

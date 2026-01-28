@@ -362,8 +362,6 @@ const Overview = () => {
     tokens: allUniqueTokens,
   });
 
-  console.log("Token Prices:", tokenPrices, allUniqueTokens);
-
   // Extract unique ERC20 token addresses for decimal fetching
   const allUniqueTokenAddresses = useMemo(() => {
     const uniqueAddresses = new Set<string>();

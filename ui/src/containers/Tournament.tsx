@@ -12,7 +12,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useProvider } from "@starknet-react/core";
 import TournamentTimeline from "@/components/TournamentTimeline";
 import Countdown from "@/components/Countdown";
-import { feltToString, indexAddress, padAddress, padU64 } from "@/lib/utils";
+import { feltToString, indexAddress, padAddress, padU64, formatNumber } from "@/lib/utils";
 import { addAddressPadding } from "starknet";
 import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
 import {
@@ -51,6 +51,8 @@ import {
   useGetTournamentRewardClaims,
 } from "@/dojo/hooks/useSqlQueries";
 import { getTokensByAddresses } from "@/lib/tokenUtils";
+import { getTokenLogoUrl } from "@/lib/tokensMeta";
+import { ChainId } from "@/dojo/setup/networks";
 import NotFound from "@/containers/NotFound";
 import {
   Tooltip,
@@ -60,7 +62,6 @@ import {
 import useUIStore from "@/hooks/useUIStore";
 import { useGetUsernames } from "@/hooks/useController";
 import { AddPrizesDialog } from "@/components/dialogs/AddPrizes";
-import { Skeleton } from "@/components/ui/skeleton";
 import LoadingPage from "@/containers/LoadingPage";
 import { Badge } from "@/components/ui/badge";
 import { SettingsDialog } from "@/components/dialogs/Settings";
@@ -70,7 +71,10 @@ import remarkGfm from "remark-gfm";
 import { useSettings } from "metagame-sdk/sql";
 import { getEntityIdFromKeys } from "@dojoengine/utils";
 import useModel from "@/dojo/hooks/useModel";
-import { TOURNAMENT_VERSION_KEY, EXCLUDED_TOURNAMENT_IDS } from "@/lib/constants";
+import {
+  TOURNAMENT_VERSION_KEY,
+  EXCLUDED_TOURNAMENT_IDS,
+} from "@/lib/constants";
 
 const Tournament = () => {
   const { id } = useParams<{ id: string }>();
@@ -88,7 +92,7 @@ const Tournament = () => {
   const [loading, setLoading] = useState(true);
   const [tournamentExists, setTournamentExists] = useState(false);
   const [tokenDecimals, setTokenDecimals] = useState<Record<string, number>>(
-    {}
+    {},
   );
   const [tokenDecimalsLoading, setTokenDecimalsLoading] = useState(false);
   const [creatorAddress, setCreatorAddress] = useState<string | null>(null);
@@ -125,12 +129,12 @@ const Tournament = () => {
 
   const tournamentEntityId = useMemo(
     () => getEntityIdFromKeys([BigInt(id!)]),
-    [id]
+    [id],
   );
 
   const subscribedEntryCountModel = useModel(
     tournamentEntityId,
-    getModelsMapping(namespace).EntryCount
+    getModelsMapping(namespace).EntryCount,
   ) as unknown as EntryCount;
 
   const subscribedEntryCount = Number(subscribedEntryCountModel?.count) ?? 0;
@@ -138,7 +142,7 @@ const Tournament = () => {
   const entryCount =
     subscribedEntryCount > 0
       ? subscribedEntryCount
-      : Number(entryCountModel?.count) ?? 0;
+      : (Number(entryCountModel?.count) ?? 0);
 
   const prizeMetricsEntityId = getEntityIdFromKeys([
     BigInt(TOURNAMENT_VERSION_KEY),
@@ -146,7 +150,7 @@ const Tournament = () => {
 
   const subscribedPrizesMetricsModel = useModel(
     prizeMetricsEntityId,
-    getModelsMapping(namespace).PrizeMetrics
+    getModelsMapping(namespace).PrizeMetrics,
   ) as unknown as PrizeMetrics;
 
   const subscribedPrizeCount =
@@ -227,7 +231,7 @@ const Tournament = () => {
   // Get game IDs for registration check
   const allGameIds = useMemo(
     () => allTournamentGames?.map((game) => Number(game.token_id)) || [],
-    [allTournamentGames]
+    [allTournamentGames],
   );
 
   // Fetch registrations to check banned status
@@ -243,7 +247,7 @@ const Tournament = () => {
     if (!allRegistrants || allRegistrants.length === 0) return entryCount;
 
     const bannedCount = allRegistrants.filter(
-      (reg) => reg.is_banned === 1
+      (reg) => reg.is_banned === 1,
     ).length;
 
     return entryCount - bannedCount;
@@ -261,7 +265,7 @@ const Tournament = () => {
       tournamentModel?.id ?? 0,
       tournamentModel?.entry_fee!,
       entryCount,
-      leaderboardSize
+      leaderboardSize,
     );
 
   const entryFeePrizesCount =
@@ -271,7 +275,7 @@ const Tournament = () => {
 
   const gameAddress = tournamentModel?.game_config?.address;
   const gameName = gameData.find(
-    (game) => game.contract_address === gameAddress
+    (game) => game.contract_address === gameAddress,
   )?.name;
 
   const [isOverflowing, setIsOverflowing] = useState(false);
@@ -314,7 +318,7 @@ const Tournament = () => {
 
   const durationSeconds = Number(
     BigInt(tournamentModel?.schedule?.game?.end ?? 0n) -
-      BigInt(tournamentModel?.schedule?.game?.start ?? 0n)
+      BigInt(tournamentModel?.schedule?.game?.start ?? 0n),
   );
 
   const registrationType = tournamentModel?.schedule.registration.isNone()
@@ -338,6 +342,8 @@ const Tournament = () => {
     active: !!tournamentId,
   });
 
+  console.log("Aggregations:", aggregations);
+
   // Fetch ALL sponsored prizes from database for accurate paid places calculation
   const { data: sponsoredPrizesData } = useGetAllTournamentPrizes({
     namespace,
@@ -348,13 +354,13 @@ const Tournament = () => {
   // Process SQL prizes to proper Prize objects with CairoCustomEnum structures
   const sponsoredPrizes = useMemo(
     () => (sponsoredPrizesData || []).map(processPrizeFromSql),
-    [sponsoredPrizesData]
+    [sponsoredPrizesData],
   );
 
   // Expand distributed sponsored prizes into individual positions
   const expandedSponsoredPrizes = useMemo(
     () => expandDistributedPrizes(sponsoredPrizes),
-    [sponsoredPrizes]
+    [sponsoredPrizes],
   );
 
   // Fetch claimed rewards using SQL query
@@ -380,8 +386,10 @@ const Tournament = () => {
         "reward_type.EntryFee.Position": claim["reward_type.EntryFee.Position"],
         "reward_type.EntryFee.Refund": claim["reward_type.EntryFee.Refund"],
         "reward_type.Prize": claim["reward_type.Prize"],
-        "reward_type.Prize.Distributed.0": claim["reward_type.Prize.Distributed.0"],
-        "reward_type.Prize.Distributed.1": claim["reward_type.Prize.Distributed.1"],
+        "reward_type.Prize.Distributed.0":
+          claim["reward_type.Prize.Distributed.0"],
+        "reward_type.Prize.Distributed.1":
+          claim["reward_type.Prize.Distributed.1"],
         "reward_type.Prize.Single": claim["reward_type.Prize.Single"],
       }));
   }, [rewardClaimsData]);
@@ -474,7 +482,7 @@ const Tournament = () => {
     return positions.size;
   }, [distributionPrizes, expandedSponsoredPrizes]);
 
-  // Extract unique token addresses for fetching token data
+  // Extract unique token addresses for fetching token data (normalized)
   const uniqueTokenAddresses = useMemo(() => {
     const addresses = new Set<string>();
 
@@ -482,14 +490,14 @@ const Tournament = () => {
     if (aggregations?.token_totals) {
       aggregations.token_totals.forEach((tokenTotal: any) => {
         if (tokenTotal.tokenAddress) {
-          addresses.add(tokenTotal.tokenAddress);
+          addresses.add(indexAddress(tokenTotal.tokenAddress));
         }
       });
     }
 
     // Add entry fee token
     if (entryFeeToken) {
-      addresses.add(entryFeeToken);
+      addresses.add(indexAddress(entryFeeToken));
     }
 
     return Array.from(addresses);
@@ -500,7 +508,7 @@ const Tournament = () => {
     if (uniqueTokenAddresses.length === 0) return [];
     return getTokensByAddresses(
       uniqueTokenAddresses,
-      selectedChainConfig?.chainId ?? ""
+      selectedChainConfig?.chainId ?? "",
     );
   }, [uniqueTokenAddresses, selectedChainConfig]);
 
@@ -508,7 +516,6 @@ const Tournament = () => {
   const {
     prices: ownPrices,
     isLoading: ownPricesLoading,
-    isTokenLoading,
   } = useEkuboPrices({
     tokens: uniqueTokenAddresses,
   });
@@ -526,24 +533,24 @@ const Tournament = () => {
     tokenDecimals,
   });
 
-  // Fetch token decimals only for tokens used in this tournament
+  // Fetch token decimals only for tokens used in this tournament (normalized addresses)
   useEffect(() => {
     const fetchTokenDecimals = async () => {
       if (tokenDecimalsLoading || !aggregations?.token_totals) return;
 
-      // Collect unique token addresses from tournament prizes
+      // Collect unique normalized token addresses from tournament prizes
       const tournamentTokenAddresses = new Set<string>();
 
       // Add tokens from aggregated prize data
       aggregations.token_totals.forEach((tokenTotal: any) => {
         if (tokenTotal.tokenAddress && tokenTotal.tokenType === "erc20") {
-          tournamentTokenAddresses.add(tokenTotal.tokenAddress);
+          tournamentTokenAddresses.add(indexAddress(tokenTotal.tokenAddress));
         }
       });
 
       // Add entry fee token if exists
       if (entryFeeToken) {
-        tournamentTokenAddresses.add(entryFeeToken);
+        tournamentTokenAddresses.add(indexAddress(entryFeeToken));
       }
 
       // Add tokens from entry fee prizes
@@ -553,13 +560,13 @@ const Tournament = () => {
         ...gameCreatorShare,
       ].forEach((prize) => {
         if (prize.token_type?.variant?.erc20 && prize.token_address) {
-          tournamentTokenAddresses.add(prize.token_address);
+          tournamentTokenAddresses.add(indexAddress(prize.token_address));
         }
       });
 
       // Filter to only include addresses we don't already have decimals for
       const missingAddresses = Array.from(tournamentTokenAddresses).filter(
-        (addr) => !(addr in tokenDecimals)
+        (addr) => !(addr in tokenDecimals),
       );
 
       if (missingAddresses.length === 0) return;
@@ -567,17 +574,17 @@ const Tournament = () => {
       setTokenDecimalsLoading(true);
       const decimalsMap: Record<string, number> = { ...tokenDecimals };
 
-      // Fetch decimals in parallel
-      const decimalsPromises = missingAddresses.map(async (address) => {
+      // Fetch decimals in parallel (use original address for RPC call, normalized for storage)
+      const decimalsPromises = missingAddresses.map(async (normalizedAddress) => {
         try {
-          const decimals = await getTokenDecimals(address);
-          return { address, decimals };
+          const decimals = await getTokenDecimals(normalizedAddress);
+          return { address: normalizedAddress, decimals };
         } catch (error) {
           console.error(
-            `Failed to fetch decimals for token ${address}:`,
-            error
+            `Failed to fetch decimals for token ${normalizedAddress}:`,
+            error,
           );
-          return { address, decimals: 18 }; // Default to 18
+          return { address: normalizedAddress, decimals: 18 }; // Default to 18
         }
       });
 
@@ -650,23 +657,37 @@ const Tournament = () => {
 
   const { usernames: creatorUsernames } = useGetUsernames(creatorAddresses);
 
-  const entryFeePrice = entryFeeToken ? prices[entryFeeToken] : undefined;
-  const entryFeeLoading = entryFeeToken ? isTokenLoading(entryFeeToken) : false;
+  const normalizedEntryFeeToken = entryFeeToken
+    ? indexAddress(entryFeeToken)
+    : "";
+  const entryFeePrice = normalizedEntryFeeToken
+    ? prices[normalizedEntryFeeToken]
+    : undefined;
 
-  const entryFee = hasEntryFee
+  const entryFeeTokenSymbol = tournamentTokens.find(
+    (t) => indexAddress(t.token_address) === normalizedEntryFeeToken,
+  )?.symbol;
+
+  const entryFeeInfo = hasEntryFee
     ? (() => {
-        const entryFeeDecimals = tokenDecimals[entryFeeToken ?? ""] || 18;
+        const entryFeeDecimals = tokenDecimals[normalizedEntryFeeToken] || 18;
         const amount = Number(tournamentModel?.entry_fee.Some?.amount!);
         const humanAmount = amount / 10 ** entryFeeDecimals;
 
-        // Return "0.00" if price is not available yet
         if (!entryFeePrice || isNaN(entryFeePrice)) {
-          return "0.00";
+          return { type: "token" as const, display: formatNumber(humanAmount) };
         }
 
-        return (humanAmount * entryFeePrice).toFixed(2);
+        return { type: "usd" as const, display: `$${(humanAmount * entryFeePrice).toFixed(2)}` };
       })()
-    : "Free";
+    : { type: "free" as const, display: "Free" };
+
+  const entryFeeTokenLogo = entryFeeToken
+    ? getTokenLogoUrl(
+        selectedChainConfig?.chainId ?? ChainId.SN_MAIN,
+        entryFeeToken,
+      )
+    : undefined;
 
   const isStarted =
     Number(tournamentModel?.schedule.game.start) <
@@ -679,7 +700,7 @@ const Tournament = () => {
   const isSubmitted =
     Number(
       BigInt(tournamentModel?.schedule.game.end ?? 0n) +
-        BigInt(tournamentModel?.schedule.submission_duration ?? 0n)
+        BigInt(tournamentModel?.schedule.submission_duration ?? 0n),
     ) < Number(BigInt(Date.now()) / 1000n);
 
   // Detect preparation period (break between registration end and tournament start)
@@ -832,25 +853,24 @@ const Tournament = () => {
             !isInPreparationPeriod) ||
           (registrationType === "open" && !isEnded) ? (
             <Button
-              className="uppercase [&_svg]:w-6 [&_svg]:h-6"
+              className="uppercase [&_svg]:w-6 [&_svg]:h-6 overflow-visible whitespace-nowrap"
               onClick={() => setEnterDialogOpen(true)}
             >
-              <span className="hidden sm:block">
+              <span className="hidden sm:block flex-shrink-0">
                 <SPACE_INVADER_SOLID />
               </span>
 
-              <span>Enter</span>
-              <span className="hidden sm:block">|</span>
-              <span className="hidden sm:block font-bold text-xs sm:text-base 3xl:text-lg">
-                {hasEntryFee ? (
-                  entryFeeLoading ? (
-                    <Skeleton className="bg-neutral w-10 h-6" />
-                  ) : (
-                    `$${entryFee}`
-                  )
-                ) : (
-                  "Free"
+              <span className="flex-shrink-0">Enter</span>
+              <span className="hidden sm:block flex-shrink-0 px-1">|</span>
+              <span className="hidden sm:flex items-center gap-2 font-bold text-xs sm:text-base 3xl:text-lg flex-shrink-0">
+                {entryFeeInfo.type === "token" && entryFeeTokenLogo && (
+                  <img
+                    src={entryFeeTokenLogo}
+                    alt={entryFeeTokenSymbol ?? ""}
+                    className="w-5 h-5 sm:w-6 sm:h-6 rounded-full flex-shrink-0"
+                  />
                 )}
+                <span className="flex-shrink-0">{entryFeeInfo.display}</span>
               </span>
             </Button>
           ) : isEnded && !isSubmitted ? (
@@ -914,7 +934,9 @@ const Tournament = () => {
               open={addPrizesDialogOpen}
               onOpenChange={setAddPrizesDialogOpen}
               tournamentId={tournamentModel.id}
-              tournamentName={feltToString(tournamentModel.metadata?.name ?? "")}
+              tournamentName={feltToString(
+                tournamentModel.metadata?.name ?? "",
+              )}
               tournament={tournamentModel}
             />
           )}
@@ -1000,8 +1022,8 @@ const Tournament = () => {
                   targetTimestamp={Number(
                     BigInt(tournamentModel?.schedule.game.end ?? 0n) +
                       BigInt(
-                        tournamentModel?.schedule.submission_duration ?? 0n
-                      )
+                        tournamentModel?.schedule.submission_duration ?? 0n,
+                      ),
                   )}
                   label="Submission Ends In"
                 />
@@ -1092,13 +1114,13 @@ const Tournament = () => {
                 startTime={Number(tournamentModel?.schedule.game.start ?? 0)}
                 duration={durationSeconds ?? 0}
                 submissionPeriod={Number(
-                  tournamentModel?.schedule.submission_duration ?? 0
+                  tournamentModel?.schedule.submission_duration ?? 0,
                 )}
                 registrationStartTime={Number(
-                  tournamentModel?.schedule.registration.Some?.start ?? 0
+                  tournamentModel?.schedule.registration.Some?.start ?? 0,
                 )}
                 registrationEndTime={Number(
-                  tournamentModel?.schedule.registration.Some?.end ?? 0
+                  tournamentModel?.schedule.registration.Some?.end ?? 0,
                 )}
                 pulse={true}
               />
