@@ -8,6 +8,7 @@ import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
 import { mainnetTokens } from "@/lib/mainnetTokens";
 import { sepoliaTokens } from "@/lib/sepoliaTokens";
 import { ChainId } from "@/dojo/setup/networks";
+import { indexAddress } from "@/lib/utils";
 
 interface QuickSelectToken {
   address: string;
@@ -49,9 +50,10 @@ export const TokenSelector = ({
   const quickSelectTokens: QuickSelectToken[] = quickSelectAddresses
     ? quickSelectAddresses
         .map((address) => {
+          const normalizedAddr = indexAddress(address);
           const token = isMainnet
-            ? mainnetTokens.find((t) => t.l2_token_address === address)
-            : sepoliaTokens.find((t) => t.l2_token_address === address);
+            ? mainnetTokens.find((t) => indexAddress(t.address) === normalizedAddr)
+            : sepoliaTokens.find((t) => indexAddress(t.address) === normalizedAddr);
           return {
             address,
             symbol: token?.symbol || "",
@@ -145,7 +147,7 @@ export const TokenSelector = ({
                   key={token.address}
                   type="button"
                   variant={
-                    selectedToken?.address === token.address
+                    indexAddress(selectedToken?.address ?? "") === indexAddress(token.address)
                       ? "default"
                       : "outline"
                   }
@@ -172,7 +174,9 @@ export const TokenSelector = ({
           <TokenDialog
             selectedToken={
               // Only show as selected if it's NOT one of the quick select tokens
-              quickSelectAddresses?.includes(selectedToken?.address ?? "")
+              quickSelectAddresses?.some(
+                (addr) => indexAddress(addr) === indexAddress(selectedToken?.address ?? "")
+              )
                 ? undefined
                 : selectedToken
             }

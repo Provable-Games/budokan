@@ -125,9 +125,9 @@ export const SponsorsDialog = ({
 
         tokenContribution.totalAmount += amount;
 
-        const decimals = tokenDecimals[tokenAddress] || 18;
+        const decimals = tokenDecimals[indexAddress(tokenAddress)] || 18;
         const tokenAmount = Number(amount) / 10 ** decimals;
-        const tokenPrice = prices[tokenAddress] ?? 0;
+        const tokenPrice = prices[indexAddress(tokenAddress)] ?? 0;
         const usdValue = tokenAmount * tokenPrice;
 
         tokenContribution.usdValue += usdValue;
@@ -264,7 +264,7 @@ export const SponsorsDialog = ({
                   {/* ERC20 Tokens */}
                   {Array.from(sponsor.tokens.values()).map((tokenContrib) => {
                     const decimals =
-                      tokenDecimals[tokenContrib.tokenAddress] || 18;
+                      tokenDecimals[indexAddress(tokenContrib.tokenAddress)] || 18;
                     const tokenAmount =
                       Number(tokenContrib.totalAmount) / 10 ** decimals;
 
@@ -376,7 +376,7 @@ export const SponsorsDialog = ({
                       {Array.from(sponsor.tokens.values()).map(
                         (tokenContrib) => {
                           const decimals =
-                            tokenDecimals[tokenContrib.tokenAddress] || 18;
+                            tokenDecimals[indexAddress(tokenContrib.tokenAddress)] || 18;
                           const tokenAmount =
                             Number(tokenContrib.totalAmount) / 10 ** decimals;
 

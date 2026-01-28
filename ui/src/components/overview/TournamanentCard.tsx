@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import { Card } from "@/components/ui/card";
-import { feltToString } from "@/lib/utils";
+import { feltToString, formatNumber, indexAddress } from "@/lib/utils";
 import TokenGameIcon from "@/components/icons/TokenGameIcon";
-import { SOLID_CLOCK, USER, CALENDAR } from "@/components/Icons";
+import { CALENDAR } from "@/components/Icons";
 import { useNavigate } from "react-router-dom";
 import Countdown from "@/components/Countdown";
 import { Tournament, Prize } from "@/generated/models.gen";
@@ -10,11 +10,9 @@ import { TokenMetadata } from "@/lib/types";
 import { useDojo } from "@/context/dojo";
 import {
   groupPrizesByTokens,
-  countTotalNFTs,
   extractEntryFeePrizes,
 } from "@/lib/utils/formatting";
 import { TabType } from "@/components/overview/TournamentTabs";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Tooltip,
   TooltipContent,
@@ -68,7 +66,7 @@ export const TournamentCard = ({
 
   const entryFeeToken = tournament?.entry_fee.Some?.token_address;
   const entryFeeTokenSymbol = tokens.find(
-    (t) => t.token_address === entryFeeToken
+    (t) => indexAddress(t.token_address) === indexAddress(entryFeeToken ?? ""),
   )?.symbol;
 
   // Use distribution_positions from entry fee if available, otherwise use entry count
@@ -81,7 +79,7 @@ export const TournamentCard = ({
     tournament?.id,
     tournament?.entry_fee,
     entryCount,
-    leaderboardSize
+    leaderboardSize,
   );
 
   const allPrizes = [...distributionPrizes, ...(prizes ?? [])];
@@ -97,29 +95,28 @@ export const TournamentCard = ({
     tokenDecimals,
   });
 
-  const totalPrizeNFTs = countTotalNFTs(groupedPrizes);
-
-  // Get unique ERC20 tokens from prizes for display
-  const uniqueErc20Tokens = useMemo(() => {
+  // Get unique tokens from all prizes (ERC20 + ERC721) for logo display
+  const uniquePrizeTokens = useMemo(() => {
     const tokenMap = new Map<
       string,
-      { address: string; symbol: string; logo?: string }
+      { address: string; symbol: string; logo?: string; type: string }
     >();
 
     Object.entries(groupedPrizes).forEach(([, prize]) => {
-      if (prize.type === "erc20") {
-        const token = tokens.find((t) => t.token_address === prize.address);
-        if (token && !tokenMap.has(token.token_address)) {
-          const logo = getTokenLogoUrl(
-            selectedChainConfig.chainId ?? ChainId.SN_MAIN,
-            token.token_address
-          );
-          tokenMap.set(token.token_address, {
-            address: token.token_address,
-            symbol: token.symbol,
-            logo,
-          });
-        }
+      const token = tokens.find(
+        (t) => indexAddress(t.token_address) === indexAddress(prize.address),
+      );
+      if (token && !tokenMap.has(token.token_address)) {
+        const logo = getTokenLogoUrl(
+          selectedChainConfig.chainId ?? ChainId.SN_MAIN,
+          token.token_address,
+        );
+        tokenMap.set(token.token_address, {
+          address: token.token_address,
+          symbol: token.symbol,
+          logo,
+          type: prize.type,
+        });
       }
     });
 
@@ -190,64 +187,71 @@ export const TournamentCard = ({
 
   const gameAddress = tournament.game_config.address;
   const gameName = gameData.find(
-    (game) => game.contract_address === gameAddress
+    (game) => game.contract_address === gameAddress,
   )?.name;
   const gameImage = getGameImage(gameAddress);
 
   const hasEntryFee = tournament?.entry_fee.isSome();
 
-  const entryFee = tournament?.entry_fee.isSome()
-    ? (() => {
-        const entryFeeDecimals = tokenDecimals[entryFeeToken ?? ""] || 18;
-        const entryFeePrice = entryFeeToken
-          ? tokenPrices[entryFeeToken]
-          : undefined;
+  const entryFeeInfo = useMemo(() => {
+    if (!tournament?.entry_fee.isSome()) {
+      return { type: "free" as const };
+    }
 
-        // Return "0.00" if price is not available
-        if (!entryFeePrice || isNaN(entryFeePrice)) {
-          return "0.00";
-        }
+    const normalizedEntryFeeToken = indexAddress(entryFeeToken ?? "");
+    const entryFeeDecimals = tokenDecimals[normalizedEntryFeeToken] || 18;
+    const entryFeePrice = entryFeeToken
+      ? tokenPrices[normalizedEntryFeeToken]
+      : undefined;
 
-        const amount = Number(tournament?.entry_fee.Some?.amount!);
-        const humanAmount = amount / 10 ** entryFeeDecimals;
-        return (humanAmount * entryFeePrice).toFixed(2);
-      })()
-    : "Free";
+    const amount = Number(tournament?.entry_fee.Some?.amount!);
+    const humanAmount = amount / 10 ** entryFeeDecimals;
+
+    // Return token amount if price is not available
+    if (!entryFeePrice || isNaN(entryFeePrice)) {
+      return {
+        type: "token" as const,
+        tokenAmount: formatNumber(humanAmount),
+        symbol: entryFeeTokenSymbol ?? "",
+      };
+    }
+
+    return {
+      type: "usd" as const,
+      usdAmount: (humanAmount * entryFeePrice).toFixed(2),
+    };
+  }, [
+    tournament?.entry_fee,
+    entryFeeToken,
+    entryFeeTokenSymbol,
+    tokenDecimals,
+    tokenPrices,
+  ]);
 
   const renderDuration = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
     const days = Math.floor(hours / 24);
+    const weeks = Math.floor(days / 7);
 
-    if (days > 0) {
-      return (
-        <div className="flex flex-row items-center gap-0.5">
-          <span>{days}</span>
-          <span>D</span>
-        </div>
-      );
+    let label: string;
+    if (weeks > 0 && days % 7 === 0) {
+      label = `${weeks} Week${weeks > 1 ? "s" : ""}`;
+    } else if (days > 0) {
+      label = `${days} Day${days > 1 ? "s" : ""}`;
     } else if (hours > 0) {
-      return (
-        <div className="flex flex-row items-center gap-0.5">
-          <span>{hours}</span>
-          <span>H</span>
-        </div>
-      );
+      label = `${hours} Hour${hours > 1 ? "s" : ""}`;
     } else if (minutes > 0) {
-      return (
-        <div className="flex flex-row items-center gap-0.5">
-          <span>{minutes}</span>
-          <span>min{minutes > 1 ? "s" : ""}</span>
-        </div>
-      );
+      label = `${minutes} Minute${minutes > 1 ? "s" : ""}`;
     } else {
-      return (
-        <div className="flex flex-row items-center gap-0.5">
-          <span>{seconds}</span>
-          <span>sec{seconds > 1 ? "s" : ""}</span>
-        </div>
-      );
+      label = `${seconds} Second${seconds !== 1 ? "s" : ""}`;
     }
+
+    return (
+      <div className="flex flex-row items-center gap-0.5">
+        <span>{label}</span>
+      </div>
+    );
   };
 
   const isRestricted = tournament?.entry_requirement.isSome();
@@ -259,6 +263,26 @@ export const TournamentCard = ({
   const tournamentRequirementVariant =
     tournament?.entry_requirement.Some?.entry_requirement_type?.variant?.tournament?.activeVariant();
 
+  // Compute countdown info once for reuse
+  // Use timestamps directly so it works for all tabs including "my"
+  const countdownInfo = useMemo(() => {
+    const isSubmissionPhase =
+      submissionEnd &&
+      currentTimestamp >= gameEnd &&
+      currentTimestamp < submissionEnd;
+
+    if (isSubmissionPhase) {
+      return { targetTimestamp: submissionEnd!, label: "Submit" };
+    }
+    if (currentTimestamp >= gameStart && currentTimestamp < gameEnd) {
+      return { targetTimestamp: gameEnd, label: "Ends" };
+    }
+    if (currentTimestamp < gameStart) {
+      return { targetTimestamp: gameStart, label: "Starts" };
+    }
+    return null;
+  }, [submissionEnd, currentTimestamp, gameEnd, gameStart]);
+
   return (
     <Card
       variant="outline"
@@ -266,259 +290,95 @@ export const TournamentCard = ({
       onClick={() => {
         navigate(`/tournament/${Number(tournament.id).toString()}`);
       }}
-      className="h-32 sm:h-48 animate-in fade-in zoom-in duration-300 ease-out"
+      className="h-36 sm:h-44 w-full whitespace-normal animate-in fade-in zoom-in duration-300 ease-out overflow-hidden"
     >
-      <div className="flex flex-col justify-between h-full">
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-row justify-between text-lg 2xl:text-xl h-6">
-            <p className="truncate w-2/3 font-brand">
-              {feltToString(tournament?.metadata?.name!)}
-            </p>
-            <div className="flex flex-row gap-2 w-1/3 justify-end">
-              <Tooltip delayDuration={50}>
-                <TooltipTrigger asChild>
-                  <div className="flex flex-row items-center">
-                    <span className="w-6">
-                      <SOLID_CLOCK />
-                    </span>
-                    <span className="text-sm tracking-tight">
-                      {renderDuration(duration)}
-                    </span>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent side="top" align="center">
-                  <p>Duration</p>
-                </TooltipContent>
-              </Tooltip>
-              <Tooltip delayDuration={50}>
-                <TooltipTrigger asChild>
-                  <div className="flex flex-row items-center">
-                    <span className="w-7">
-                      <USER />
-                    </span>
-                    <span>{entryCount}</span>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent side="top" align="center">
-                  <p>Entries</p>
-                </TooltipContent>
-              </Tooltip>
+      <div className="flex flex-col h-full justify-between">
+        {/* Row 1: Name + Countdown */}
+        <div className="flex flex-row justify-between items-center gap-2">
+          <p className="truncate flex-1 min-w-0 font-brand text-sm sm:text-base 2xl:text-lg">
+            {feltToString(tournament?.metadata?.name!)}
+          </p>
+          {countdownInfo && (
+            <div className="flex-shrink-0">
+              <Countdown
+                targetTimestamp={countdownInfo.targetTimestamp}
+                label={countdownInfo.label}
+                labelPosition="horizontal"
+                size="sm"
+              />
             </div>
-          </div>
-          <div className="hidden sm:block w-full h-0.5 bg-brand/25" />
-        </div>
-        <div className="flex flex-row items-center">
-          <div className="relative w-3/4">
-            <div className="flex flex-row sm:flex-wrap items-center gap-2 overflow-x-auto sm:overflow-visible [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-              {/* Tournament Status */}
-              <Tooltip delayDuration={50}>
-                <TooltipTrigger asChild>
-                  <div className="flex-shrink-0">
-                    <Badge
-                      variant={tournamentStatus.variant}
-                      className="text-xs p-1 rounded-md"
-                    >
-                      {tournamentStatus.text}
-                    </Badge>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent side="top" align="center">
-                  <p>Tournament Status: {tournamentStatus.text}</p>
-                </TooltipContent>
-              </Tooltip>
-
-              {/* Restricte Access */}
-              {isRestricted && (
-                <Tooltip delayDuration={50}>
-                  <TooltipTrigger asChild>
-                    <div className="flex-shrink-0">
-                      <Badge
-                        variant="outline"
-                        className="text-xs p-1 rounded-md"
-                      >
-                        Restricted
-                      </Badge>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" align="center">
-                    <span>
-                      {requirementVariant === "allowlist" ? (
-                        "Allowlist"
-                      ) : requirementVariant === "token" ? (
-                        "Token"
-                      ) : requirementVariant === "tournament" ? (
-                        <span>
-                          Tournament{" "}
-                          <span className="capitalize">
-                            {tournamentRequirementVariant}
-                          </span>
-                        </span>
-                      ) : (
-                        "Unknown"
-                      )}
-                    </span>
-                  </TooltipContent>
-                </Tooltip>
-              )}
-
-              {/* Limited Entry */}
-              {hasEntryLimit && (
-                <Tooltip delayDuration={50}>
-                  <TooltipTrigger asChild>
-                    <div className="flex-shrink-0">
-                      <Badge
-                        variant="outline"
-                        className="text-xs p-1 rounded-md"
-                      >
-                        {Number(entryLimit) === 1
-                          ? `${Number(entryLimit)} entry`
-                          : `${Number(entryLimit)} entries`}
-                      </Badge>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" align="center">
-                    <p>
-                      {Number(entryLimit) === 1
-                        ? `${Number(entryLimit)} entry`
-                        : `${Number(entryLimit)} entries`}{" "}
-                      per qualification
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              )}
-
-              {/* Start Date - for ended tournaments */}
-              {status === "ended" && (
-                <Tooltip delayDuration={50}>
-                  <TooltipTrigger asChild>
-                    <div className="flex-shrink-0">
-                      <Badge
-                        variant="outline"
-                        className="text-xs p-1 rounded-md flex items-center gap-1"
-                      >
-                        <span className="w-4 h-4">
-                          <CALENDAR />
-                        </span>
-                        {startDate.toLocaleDateString(undefined, {
-                          month: "numeric",
-                          day: "numeric",
-                        })}
-                        /{startDate.getFullYear().toString().slice(-2)}
-                      </Badge>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" align="center">
-                    <p>
-                      Started:{" "}
-                      {startDate.toLocaleDateString(undefined, {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })}{" "}
-                      {startDate.toLocaleTimeString(undefined, {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              )}
-            </div>
-          </div>
-
-          <div className="flex flex-row w-1/4 justify-end sm:px-2">
-            <Tooltip delayDuration={50}>
-              <TooltipTrigger asChild>
-                <div className="flex items-center justify-center">
-                  <TokenGameIcon key={index} image={gameImage} size={"md"} />
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="top" align="center" sideOffset={-10}>
-                {gameName ? gameName : "Unknown"}
-              </TooltipContent>
-            </Tooltip>
-          </div>
-        </div>
-        <div className="flex flex-row items-center justify-center gap-2 w-full mx-auto">
-          {/* Time Status */}
-          {status === "upcoming" ? (
-            <Countdown
-              targetTimestamp={gameStart}
-              label="Starts In"
-              labelPosition="vertical"
-              className="scale-75 origin-center"
-            />
-          ) : status === "live" ? (
-            <Countdown
-              targetTimestamp={gameEnd}
-              label="Ends In"
-              labelPosition="vertical"
-              className="scale-75 origin-center"
-            />
-          ) : submissionEnd &&
-            currentTimestamp >= gameEnd &&
-            currentTimestamp < submissionEnd ? (
-            <Countdown
-              targetTimestamp={submissionEnd}
-              label="Submission Ends In"
-              labelPosition="vertical"
-              className="scale-75 origin-center"
-            />
-          ) : (
-            <></>
           )}
-          <div className="flex flex-row items-center gap-1">
-            <span className="text-brand-muted text-sm">Fee:</span>
-            {pricesLoading ? (
-              <Skeleton className="h-6 w-16 bg-brand/20" />
-            ) : hasEntryFee ? (
-              <div className="flex flex-col items-center gap-0.5">
-                {entryFeeTokenSymbol && (
-                  <Tooltip delayDuration={50}>
-                    <TooltipTrigger asChild>
-                      <div className="relative hidden sm:block">
-                        {(() => {
-                          const entryFeeTokenLogo = getTokenLogoUrl(
-                            selectedChainConfig.chainId ?? ChainId.SN_MAIN,
-                            entryFeeToken ?? ""
-                          );
-                          return entryFeeTokenLogo ? (
-                            <img
-                              src={entryFeeTokenLogo}
-                              alt={entryFeeTokenSymbol}
-                              className="w-4 h-4 rounded-full"
-                            />
-                          ) : (
-                            <div className="w-4 h-4 rounded-full bg-brand/20 flex items-center justify-center text-xs">
-                              {entryFeeTokenSymbol.slice(0, 1)}
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" align="center">
-                      <p>{entryFeeTokenSymbol}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-                <span className="text-sm">${entryFee}</span>
+        </div>
+
+        {/* Divider */}
+        <div className="w-full h-0.5 bg-brand/25" />
+
+        {/* Row 2: Fee + Pot */}
+        <div className="flex flex-row items-center gap-4 sm:gap-6">
+          {/* Entry Fee */}
+          <div className="flex flex-row items-center gap-1.5">
+            <span className="text-brand-muted text-xs sm:text-sm">Entry Fee:</span>
+            {hasEntryFee ? (
+              <div className="flex flex-row items-center gap-1">
+                {entryFeeInfo.type === "token" && (() => {
+                  const entryFeeTokenLogo = getTokenLogoUrl(
+                    selectedChainConfig.chainId ?? ChainId.SN_MAIN,
+                    entryFeeToken ?? "",
+                  );
+                  return entryFeeTokenLogo ? (
+                    <Tooltip delayDuration={50}>
+                      <TooltipTrigger asChild>
+                        <img
+                          src={entryFeeTokenLogo}
+                          alt={entryFeeTokenSymbol ?? ""}
+                          className="w-4 h-4 rounded-full"
+                        />
+                      </TooltipTrigger>
+                      <TooltipContent side="top" align="center">
+                        <p>{entryFeeTokenSymbol}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : entryFeeTokenSymbol ? (
+                    <Tooltip delayDuration={50}>
+                      <TooltipTrigger asChild>
+                        <div className="w-4 h-4 rounded-full bg-brand/20 flex items-center justify-center text-[10px]">
+                          {entryFeeTokenSymbol.slice(0, 1)}
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" align="center">
+                        <p>{entryFeeTokenSymbol}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : null;
+                })()}
+                <span className="text-xs sm:text-sm font-medium">
+                  {entryFeeInfo.type === "usd"
+                    ? `$${entryFeeInfo.usdAmount}`
+                    : entryFeeInfo.tokenAmount}
+                </span>
               </div>
             ) : (
-              <span className="text-sm">FREE</span>
+              <span className="text-xs sm:text-sm font-medium text-success">FREE</span>
             )}
           </div>
-          <div className="flex flex-row items-center gap-1">
-            <span className="text-brand-muted text-sm">Pot:</span>
-            {pricesLoading ? (
-              <Skeleton className="h-6 w-16 bg-brand/20" />
-            ) : totalPrizesValueUSD > 0 || totalPrizeNFTs > 0 ? (
-              <div className="flex flex-col items-center gap-0.5">
-                {uniqueErc20Tokens.length > 0 && (
-                  <div className="hidden sm:flex flex-row gap-0.5 items-center">
-                    {uniqueErc20Tokens.slice(0, 3).map((token, idx) => (
+
+          {/* Prize Pot */}
+          <div className="flex flex-row items-center gap-1.5">
+            <span className="text-brand-muted text-xs sm:text-sm">Pot:</span>
+            {totalPrizesValueUSD > 0 || uniquePrizeTokens.length > 0 ? (
+              <div className="flex flex-row items-center gap-1">
+                {uniquePrizeTokens.length > 0 && (
+                  <div className="flex flex-row items-center">
+                    {uniquePrizeTokens.slice(0, 3).map((token, idx) => (
                       <Tooltip key={idx} delayDuration={50}>
                         <TooltipTrigger asChild>
-                          <div className="relative">
+                          <div
+                            className="relative rounded-full border border-background"
+                            style={{
+                              marginLeft: idx > 0 ? "-4px" : 0,
+                              zIndex: 3 - idx,
+                            }}
+                          >
                             {token.logo ? (
                               <img
                                 src={token.logo}
@@ -526,8 +386,8 @@ export const TournamentCard = ({
                                 className="w-4 h-4 rounded-full"
                               />
                             ) : (
-                              <div className="w-4 h-4 rounded-full bg-brand/20 flex items-center justify-center text-[10px]">
-                                {token.symbol.slice(0, 1)}
+                              <div className="w-4 h-4 rounded-full bg-brand/20 flex items-center justify-center text-[8px]">
+                                {token.symbol.slice(0, 2)}
                               </div>
                             )}
                           </div>
@@ -537,27 +397,147 @@ export const TournamentCard = ({
                         </TooltipContent>
                       </Tooltip>
                     ))}
-                    {uniqueErc20Tokens.length > 3 && (
-                      <span className="text-[10px] text-brand-muted">
-                        +{uniqueErc20Tokens.length - 3}
-                      </span>
+                    {uniquePrizeTokens.length > 3 && (
+                      <div
+                        className="w-4 h-4 rounded-full bg-brand/20 flex items-center justify-center text-[8px] border border-background"
+                        style={{ marginLeft: "-4px", zIndex: 0 }}
+                      >
+                        +{uniquePrizeTokens.length - 3}
+                      </div>
                     )}
                   </div>
                 )}
-                <div className="flex flex-row items-center gap-1.5">
-                  {totalPrizesValueUSD > 0 && (
-                    <span className="text-sm">${totalPrizesValueUSD.toFixed(2)}</span>
-                  )}
-                  {totalPrizeNFTs > 0 && (
-                    <span className="text-sm">
-                      {totalPrizeNFTs} NFT{totalPrizeNFTs === 1 ? "" : "s"}
-                    </span>
-                  )}
-                </div>
+                {totalPrizesValueUSD > 0 && (
+                  <span className="text-xs sm:text-sm font-medium">
+                    ${formatNumber(totalPrizesValueUSD)}
+                  </span>
+                )}
               </div>
             ) : (
-              <span className="text-sm">No Prizes</span>
+              <span className="text-xs sm:text-sm text-brand-muted">-</span>
             )}
+          </div>
+        </div>
+
+        {/* Row 3: Duration + Entries */}
+        <div className="flex flex-row items-center gap-4 sm:gap-6">
+          {/* Duration */}
+          <div className="flex flex-row items-center gap-1.5">
+            <span className="text-brand-muted text-xs sm:text-sm">Duration:</span>
+            <span className="text-xs sm:text-sm">
+              {renderDuration(duration)}
+            </span>
+          </div>
+
+          {/* Entries Count */}
+          <div className="flex flex-row items-center gap-1.5">
+            <span className="text-brand-muted text-xs sm:text-sm">Entries:</span>
+            <span className="text-xs sm:text-sm">{entryCount}</span>
+          </div>
+        </div>
+
+        {/* Row 4: Badges + Game Icon */}
+        <div className="flex flex-row items-center justify-between">
+          <div className="flex flex-row items-center gap-1.5 sm:gap-2 flex-wrap flex-1 min-w-0">
+            {/* Tournament Status Badge - only show in My Tournaments tab */}
+            {status === "my" && (
+              <Badge
+                variant={tournamentStatus.variant}
+                className="text-[10px] sm:text-xs px-1.5 py-0 sm:py-0.5 rounded-md h-5"
+              >
+                {tournamentStatus.text}
+              </Badge>
+            )}
+
+            {/* Restricted Access Badge */}
+            {isRestricted && (
+              <Tooltip delayDuration={50}>
+                <TooltipTrigger asChild>
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] sm:text-xs px-1.5 py-0 sm:py-0.5 rounded-md h-5"
+                  >
+                    Restricted
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="center">
+                  <span>
+                    {requirementVariant === "allowlist" ? (
+                      "Allowlist"
+                    ) : requirementVariant === "token" ? (
+                      "Token"
+                    ) : requirementVariant === "tournament" ? (
+                      <span>
+                        Tournament{" "}
+                        <span className="capitalize">
+                          {tournamentRequirementVariant}
+                        </span>
+                      </span>
+                    ) : (
+                      "Unknown"
+                    )}
+                  </span>
+                </TooltipContent>
+              </Tooltip>
+            )}
+
+            {/* Entry Limit Badge */}
+            {hasEntryLimit && (
+              <Badge
+                variant="outline"
+                className="text-[10px] sm:text-xs px-1.5 py-0 sm:py-0.5 rounded-md h-5"
+              >
+                Max Entries {Number(entryLimit)}
+              </Badge>
+            )}
+
+            {/* Start Date - for ended tournaments */}
+            {status === "ended" && (
+              <Tooltip delayDuration={50}>
+                <TooltipTrigger asChild>
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] sm:text-xs px-1.5 py-0 sm:py-0.5 rounded-md h-5 flex items-center gap-0.5"
+                  >
+                    <span className="w-3 h-3">
+                      <CALENDAR />
+                    </span>
+                    {startDate.toLocaleDateString(undefined, {
+                      month: "numeric",
+                      day: "numeric",
+                    })}
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="center">
+                  <p>
+                    Started:{" "}
+                    {startDate.toLocaleDateString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })}{" "}
+                    {startDate.toLocaleTimeString(undefined, {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+
+          {/* Game Icon */}
+          <div className="flex-shrink-0">
+            <Tooltip delayDuration={50}>
+              <TooltipTrigger asChild>
+                <div className="flex items-center justify-center">
+                  <TokenGameIcon key={index} image={gameImage} size={"sm"} />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="top" align="center" sideOffset={-10}>
+                {gameName ? gameName : "Unknown"}
+              </TooltipContent>
+            </Tooltip>
           </div>
         </div>
       </div>

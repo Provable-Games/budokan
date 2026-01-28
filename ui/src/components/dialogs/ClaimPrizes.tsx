@@ -10,7 +10,7 @@ import {
 import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
 import { useAccount } from "@starknet-react/core";
 import { Tournament, RewardClaim } from "@/generated/models.gen";
-import { feltToString, formatNumber, getOrdinalSuffix } from "@/lib/utils";
+import { feltToString, formatNumber, getOrdinalSuffix, indexAddress } from "@/lib/utils";
 import {
   extractEntryFeePrizes,
   getClaimablePrizes,
@@ -22,7 +22,6 @@ import { useConnectToSelectedChain } from "@/dojo/hooks/useChain";
 import { TokenPrices } from "@/hooks/useEkuboPrices";
 import {
   getTokenLogoUrl,
-  getTokenSymbol,
   getTokenDecimals,
 } from "@/lib/tokensMeta";
 import { useDojo } from "@/context/dojo";
@@ -280,9 +279,7 @@ export function ClaimPrizesDialog({
                       10 ** tokenDecimals
                     : 0;
                   const tokenPrice =
-                    prices[
-                      getTokenSymbol(chainId, prize.token_address) ?? ""
-                    ] ?? 0;
+                    prices[indexAddress(prize.token_address ?? "")] ?? 0;
 
                   // Determine prize source label
                   let sourceLabel = "";

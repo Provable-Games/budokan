@@ -115,7 +115,7 @@ const Overview = () => {
   }, [chain]);
 
   const subscribedTournaments = useDojoStore((state) =>
-    state.getEntitiesByModel(namespace, "Tournament")
+    state.getEntitiesByModel(namespace, "Tournament"),
   );
 
   const subscribedTournamentsKey = useMemo(() => {
@@ -130,7 +130,7 @@ const Overview = () => {
   >(null);
 
   const [tokenDecimals, setTokenDecimals] = useState<Record<string, number>>(
-    {}
+    {},
   );
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -219,7 +219,7 @@ const Overview = () => {
   // Get current tab's data
   const currentPage = getCurrentTabPage(selectedTab as TournamentTab);
   const currentTournaments = getCurrentTabTournaments(
-    selectedTab as TournamentTab
+    selectedTab as TournamentTab,
   );
   const currentSortBy = sortByTab[selectedTab as TournamentTab];
   const isCurrentTabLoading = isLoadingByTab[selectedTab as TournamentTab];
@@ -346,7 +346,7 @@ const Overview = () => {
   const tokensArray = useMemo(() => {
     return getTokensByAddresses(
       uniqueTokenAddresses,
-      selectedChainConfig?.chainId ?? ""
+      selectedChainConfig?.chainId ?? "",
     );
   }, [uniqueTokenAddresses, selectedChainConfig?.chainId]);
 
@@ -361,6 +361,8 @@ const Overview = () => {
   const { prices: tokenPrices, isLoading: pricesLoading } = useEkuboPrices({
     tokens: allUniqueTokens,
   });
+
+  console.log("Token Prices:", tokenPrices, allUniqueTokens);
 
   // Extract unique ERC20 token addresses for decimal fetching
   const allUniqueTokenAddresses = useMemo(() => {
@@ -380,7 +382,7 @@ const Overview = () => {
     const fetchDecimals = async () => {
       // Filter to only fetch decimals we don't have yet
       const missingAddresses = allUniqueTokenAddresses.filter(
-        (addr) => !(addr in tokenDecimals)
+        (addr) => !(addr in tokenDecimals),
       );
 
       try {
@@ -392,7 +394,7 @@ const Overview = () => {
           } catch (error) {
             console.error(
               `Failed to fetch decimals for token ${address}:`,
-              error
+              error,
             );
             return { address, decimals: 18 }; // Default to 18
           }
@@ -422,7 +424,7 @@ const Overview = () => {
     // Set loading state based on current tab's loading status
     setIsLoading(
       selectedTab as TournamentTab,
-      tournamentsLoading || myTournamentsLoading
+      tournamentsLoading || myTournamentsLoading,
     );
 
     // Only process data if we're not loading
@@ -492,7 +494,7 @@ const Overview = () => {
           }, 300);
         }
       },
-      { threshold: 0.1 }
+      { threshold: 0.1 },
     );
 
     // Only observe if we meet all conditions
@@ -646,7 +648,7 @@ const Overview = () => {
                 <div className="flex flex-row items-center justify-between capitalize text-sm 2xl:text-base w-full sm:gap-2">
                   {
                     SORT_OPTIONS[selectedTab].find(
-                      (option) => option.value === currentSortBy
+                      (option) => option.value === currentSortBy,
                     )?.label
                   }
                   <span className="w-6">
@@ -692,7 +694,7 @@ const Overview = () => {
                     <span className="text-lg 2xl:text-2xl font-brand">
                       {
                         gameData.find(
-                          (game) => game.contract_address === filter
+                          (game) => game.contract_address === filter,
                         )?.name!
                       }
                     </span>

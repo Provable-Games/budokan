@@ -4,7 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { getTokenLogoUrl } from "@/lib/tokensMeta";
 import { X } from "@/components/Icons";
-import { getOrdinalSuffix, formatNumber } from "@/lib/utils";
+import { getOrdinalSuffix, formatNumber, indexAddress } from "@/lib/utils";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
 import {
   PrizeSelector,
@@ -336,10 +336,10 @@ Examples:
                         <span className="text-sm text-neutral">
                           {pricesLoading
                             ? "Loading..."
-                            : prices?.[prize.token.address ?? ""] &&
+                            : prices?.[indexAddress(prize.token.address ?? "")] &&
                               `~$${(
                                 (prize.amount ?? 0) *
-                                (prices?.[prize.token.address ?? ""] ?? 0)
+                                (prices?.[indexAddress(prize.token.address ?? "")] ?? 0)
                               ).toFixed(2)}`}
                         </span>
                       </div>
@@ -373,10 +373,10 @@ Examples:
                             <span className="text-sm text-neutral">
                               {pricesLoading
                                 ? "Loading..."
-                                : prices?.[prize.token.address ?? ""] &&
+                                : prices?.[indexAddress(prize.token.address ?? "")] &&
                                   `~$${(
                                     (prize.amount ?? 0) *
-                                    (prices?.[prize.token.address ?? ""] ?? 0)
+                                    (prices?.[indexAddress(prize.token.address ?? "")] ?? 0)
                                   ).toFixed(2)}`}
                             </span>
                           </div>
