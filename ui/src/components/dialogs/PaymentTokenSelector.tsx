@@ -142,8 +142,8 @@ export function PaymentTokenSelector({
       const isEntryToken =
         indexAddress(b.tokenAddress).toLowerCase() === entryFeeNormalized;
       const hasBalance = BigInt(b.balance) > 0n;
-      // Exclude tokens without sufficient value (> $0.10 worth)
-      const hasValue = (b.usdBalance ?? 0) > 0.1;
+      // Exclude tokens without sufficient value (> $0.01 worth)
+      const hasValue = (b.usdBalance ?? 0) > 0.01;
       return !isEntryToken && hasBalance && hasValue;
     });
 
@@ -166,6 +166,8 @@ export function PaymentTokenSelector({
       indexAddress(entryFeeToken).toLowerCase();
 
     if (isEntryToken) {
+      // For direct payment, check if balance covers the entry fee
+      const hasEnoughBalance = BigInt(token.balance) >= BigInt(entryFeeAmount);
       return {
         amount: formatPrizeAmount(
           Number(entryFeeAmount) / Math.pow(10, entryFeeDecimals)
@@ -173,11 +175,15 @@ export function PaymentTokenSelector({
         isDirect: true,
         loading: false,
         insufficientLiquidity: false,
+        insufficientBalance: !hasEnoughBalance,
       };
     }
 
     const tokenQuote = quotes[token.tokenAddress];
     if (tokenQuote?.quote) {
+      // Check if user's balance covers the quote total
+      const quoteTotal = BigInt(tokenQuote.quote.total);
+      const hasEnoughBalance = BigInt(token.balance) >= quoteTotal;
       return {
         amount: formatPrizeAmount(
           Number(tokenQuote.quote.total) / Math.pow(10, token.decimals)
@@ -185,15 +191,16 @@ export function PaymentTokenSelector({
         isDirect: false,
         loading: false,
         insufficientLiquidity: false,
+        insufficientBalance: !hasEnoughBalance,
       };
     }
     if (tokenQuote?.loading) {
-      return { amount: "", isDirect: false, loading: true, insufficientLiquidity: false };
+      return { amount: "", isDirect: false, loading: true, insufficientLiquidity: false, insufficientBalance: false };
     }
     if (tokenQuote?.insufficientLiquidity) {
-      return { amount: "", isDirect: false, loading: false, insufficientLiquidity: true };
+      return { amount: "", isDirect: false, loading: false, insufficientLiquidity: true, insufficientBalance: false };
     }
-    return { amount: "", isDirect: false, loading: quotesLoading, insufficientLiquidity: false };
+    return { amount: "", isDirect: false, loading: quotesLoading, insufficientLiquidity: false, insufficientBalance: false };
   };
 
   const handleSelect = (tokenAddress: string) => {
@@ -273,14 +280,17 @@ export function PaymentTokenSelector({
               selectedToken &&
               indexAddress(token.tokenAddress).toLowerCase() ===
                 indexAddress(selectedToken).toLowerCase();
+            const isDisabled = paymentInfo.insufficientBalance || paymentInfo.insufficientLiquidity;
 
             return (
               <div
                 key={token.tokenAddress}
-                className={`w-full flex flex-row items-center justify-between hover:bg-brand/20 hover:cursor-pointer px-4 py-3 ${
-                  isSelected ? "bg-brand/30 border-l-2 border-brand" : ""
-                }`}
-                onClick={() => handleSelect(token.tokenAddress)}
+                className={`w-full flex flex-row items-center justify-between px-4 py-3 ${
+                  isDisabled
+                    ? "opacity-50 cursor-not-allowed"
+                    : "hover:bg-brand/20 hover:cursor-pointer"
+                } ${isSelected && !isDisabled ? "bg-brand/30 border-l-2 border-brand" : ""}`}
+                onClick={() => !isDisabled && handleSelect(token.tokenAddress)}
               >
                 <div className="flex flex-row gap-3 items-center">
                   {token.logo ? (
@@ -317,6 +327,8 @@ export function PaymentTokenSelector({
                     <LoadingSpinner />
                   ) : paymentInfo.insufficientLiquidity ? (
                     <span className="text-destructive text-sm">No liquidity</span>
+                  ) : paymentInfo.insufficientBalance ? (
+                    <span className="text-destructive text-sm">Insufficient balance</span>
                   ) : (
                     <>
                       <span className="font-medium">

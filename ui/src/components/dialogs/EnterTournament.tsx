@@ -335,7 +335,7 @@ export function EnterTournamentDialog({
         (b) =>
           indexAddress(b.tokenAddress).toLowerCase() !== entryFeeNormalized &&
           BigInt(b.balance) > 0n &&
-          (b.usdBalance ?? 0) > 0.1,
+          (b.usdBalance ?? 0) > 0.01,
       )
       .map((b) => b.tokenAddress)
       .sort();
@@ -350,12 +350,12 @@ export function EnterTournamentDialog({
   }, [open, balancesLoading, sellTokensForQuotes.length, entryToken]);
 
   // Fetch Ekubo quotes for swap payments - only when dialog is open and we have tokens
+  // No polling needed since we fetch a fresh quote on enter
   const { quotes: ekuboQuotes, isLoading: quotesLoading } = useEkuboQuotes({
     sellTokens: sellTokensForQuotes,
     buyToken: entryToken ?? null,
     amount: quoteAmount,
     enabled: quotesEnabled,
-    pollingInterval: 30000,
   });
 
   // Auto-select payment token when balances load
