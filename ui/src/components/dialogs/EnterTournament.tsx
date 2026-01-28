@@ -363,17 +363,6 @@ export function EnterTournamentDialog({
     return open && !balancesLoading && sellTokensForQuotes.length > 0 && !!entryToken;
   }, [open, balancesLoading, sellTokensForQuotes.length, entryToken]);
 
-  // Debug: log when quote inputs change
-  useEffect(() => {
-    console.log('[Quotes Debug]', {
-      sellTokensForQuotes,
-      buyToken: entryToken,
-      amount: quoteAmount?.toString(),
-      enabled: quotesEnabled,
-      timestamp: new Date().toISOString(),
-    });
-  }, [sellTokensForQuotes, entryToken, quoteAmount, quotesEnabled]);
-
   // Fetch Ekubo quotes for swap payments - only when dialog is open and we have tokens
   const { quotes: ekuboQuotes, isLoading: quotesLoading } = useEkuboQuotes({
     sellTokens: sellTokensForQuotes,
