@@ -7,8 +7,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { LoadingSpinner } from "@/components/ui/spinner";
-import { COIN } from "@/components/Icons";
+import { Skeleton } from "@/components/ui/skeleton";
+import { COIN, REFRESH } from "@/components/Icons";
 import { indexAddress, formatPrizeAmount } from "@/lib/utils";
 import type { VoyagerTokenBalance } from "@/hooks/useVoyagerTokenBalances";
 import type { QuotesMap } from "@provable-games/ekubo-sdk/react";
@@ -37,6 +37,8 @@ interface PaymentTokenSelectorProps {
   quotes: QuotesMap;
   /** Whether quotes are loading */
   quotesLoading: boolean;
+  /** Callback to refetch quotes */
+  onRefetch?: () => void;
   /** Creator share in basis points */
   creatorShare?: number;
   /** Game share in basis points */
@@ -57,6 +59,7 @@ export function PaymentTokenSelector({
   onTokenSelect,
   quotes,
   quotesLoading,
+  onRefetch,
 }: PaymentTokenSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -203,6 +206,18 @@ export function PaymentTokenSelector({
     return { amount: "", isDirect: false, loading: quotesLoading, insufficientLiquidity: false, insufficientBalance: false };
   };
 
+  // Check if any quotes have errors (failed to fetch)
+  const hasFailedQuotes = useMemo(() => {
+    return Object.values(quotes).some(
+      (q) => q.error && !q.insufficientLiquidity && !q.loading
+    );
+  }, [quotes]);
+
+  // Check if any quotes are currently loading (more reliable than parent's quotesLoading)
+  const isRefreshing = useMemo(() => {
+    return Object.values(quotes).some((q) => q.loading);
+  }, [quotes]);
+
   const handleSelect = (tokenAddress: string) => {
     onTokenSelect(tokenAddress);
     setIsOpen(false);
@@ -246,10 +261,7 @@ export function PaymentTokenSelector({
             <div className="flex flex-col items-start">
               <span className="text-sm text-brand-muted">Pay with</span>
               {selectedPaymentAmount?.loading ? (
-                <div className="flex items-center gap-2">
-                  <LoadingSpinner />
-                  <span className="text-sm">Loading...</span>
-                </div>
+                <Skeleton className="h-5 w-24" />
               ) : selectedPaymentAmount?.insufficientLiquidity ? (
                 <span className="text-destructive text-sm">No liquidity</span>
               ) : selectedPaymentAmount ? (
@@ -266,10 +278,28 @@ export function PaymentTokenSelector({
       </DialogTrigger>
 
       <DialogContent className="max-h-[500px] flex flex-col p-0 overflow-hidden">
-        <DialogHeader className="flex-shrink-0 p-4 border-b border-brand/20">
-          <DialogTitle>Select Payment Token</DialogTitle>
+        <DialogHeader className="flex-shrink-0 p-4 pr-12 border-b border-brand/20">
+          <div className="flex items-center justify-between">
+            <DialogTitle>Select Payment Token</DialogTitle>
+            {onRefetch && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onRefetch}
+                disabled={isRefreshing}
+                className="h-8 px-2 border-none bg-transparent hover:bg-brand/10"
+              >
+                <REFRESH className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
+              </Button>
+            )}
+          </div>
           <p className="text-sm text-brand-muted mt-1">
             Choose which token to pay with
+            {hasFailedQuotes && !isRefreshing && (
+              <span className="text-warning ml-1">
+                (some quotes failed to load)
+              </span>
+            )}
           </p>
         </DialogHeader>
 
@@ -324,7 +354,10 @@ export function PaymentTokenSelector({
 
                 <div className="flex flex-col items-end">
                   {paymentInfo.loading ? (
-                    <LoadingSpinner />
+                    <div className="flex flex-col items-end gap-1">
+                      <Skeleton className="h-5 w-16" />
+                      <Skeleton className="h-3 w-10" />
+                    </div>
                   ) : paymentInfo.insufficientLiquidity ? (
                     <span className="text-destructive text-sm">No liquidity</span>
                   ) : paymentInfo.insufficientBalance ? (

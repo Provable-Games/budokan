@@ -364,11 +364,16 @@ export function EnterTournamentDialog({
   }, [open, balancesLoading, sellTokensForQuotes.length, entryToken]);
 
   // Fetch Ekubo quotes for swap payments - only when dialog is open and we have tokens
-  const { quotes: ekuboQuotes, isLoading: quotesLoading } = useEkuboQuotes({
+  const { quotes: ekuboQuotes, isLoading: quotesLoading, refetch: refetchQuotes } = useEkuboQuotes({
     sellTokens: sellTokensForQuotes,
     buyToken: entryToken ?? null,
     amount: quoteAmount,
     enabled: quotesEnabled,
+    config: {
+      fetch: {
+        timeout: 30000, // Increase timeout to 30s for multiple concurrent quote requests
+      },
+    },
   });
 
   // Auto-select payment token when balances load
@@ -1495,6 +1500,7 @@ export function EnterTournamentDialog({
               onTokenSelect={setSelectedPaymentToken}
               quotes={ekuboQuotes}
               quotesLoading={quotesLoading || balancesLoading}
+              onRefetch={refetchQuotes}
               creatorShare={creatorShare}
               gameShare={gameShare}
               prizePoolShare={prizePoolShare}
