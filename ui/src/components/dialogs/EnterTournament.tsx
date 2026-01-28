@@ -14,7 +14,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
-import { useAccount, useConnect } from "@starknet-react/core";
+import { useAccount, useConnect, useProvider } from "@starknet-react/core";
 import { Tournament } from "@/generated/models.gen";
 import { TokenMetadata } from "@/lib/types";
 import { OPUS } from "@/components/Icons";
@@ -26,8 +26,9 @@ import {
   stringToFelt,
   padU64,
   formatPrizeAmount,
+  formatUsdValue,
 } from "@/lib/utils";
-import { addAddressPadding, BigNumberish } from "starknet";
+import { addAddressPadding } from "starknet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useConnectToSelectedChain } from "@/dojo/hooks/useChain";
@@ -114,13 +115,13 @@ export function EnterTournamentDialog({
 }: EnterTournamentDialogProps) {
   const { namespace, selectedChainConfig } = useDojo();
   const { address } = useAccount();
+  const { provider } = useProvider();
   const { connect } = useConnectToSelectedChain();
   const { connector } = useConnect();
   const {
     approveAndEnterTournament,
     checkExtensionValidEntry,
     getExtensionEntriesLeft,
-    getBalanceGeneral,
     getUserTroveIds,
     getTroveHealth,
   } = useSystemCalls();
@@ -130,7 +131,7 @@ export function EnterTournamentDialog({
     undefined,
   );
   const [isLookingUpUsername, setIsLookingUpUsername] = useState(false);
-  const [balance, setBalance] = useState<BigNumberish>(0);
+  const [balance, setBalance] = useState<string>("0");
   const [isEntering, setIsEntering] = useState(false);
   const [extensionValidEntry, setExtensionValidEntry] =
     useState<boolean>(false);
@@ -385,7 +386,7 @@ export function EnterTournamentDialog({
     const entryFeeNormalized = indexAddress(entryToken).toLowerCase();
     const entryFeeAmountBigInt = BigInt(entryAmount);
 
-    // First, check if user has enough of the entry fee token directly
+    // First, check if user has enough of the entry fee token directly (from Voyager)
     const entryFeeBalance = tokenBalances.find(
       (b) => indexAddress(b.tokenAddress).toLowerCase() === entryFeeNormalized,
     );
@@ -395,6 +396,13 @@ export function EnterTournamentDialog({
       BigInt(entryFeeBalance.balance) >= entryFeeAmountBigInt
     ) {
       setSelectedPaymentToken(entryFeeBalance.tokenAddress);
+      return;
+    }
+
+    // Also check on-chain balance (fallback for tokens not in Voyager)
+    const onChainBalance = BigInt(balance);
+    if (onChainBalance >= entryFeeAmountBigInt) {
+      setSelectedPaymentToken(entryToken);
       return;
     }
 
@@ -413,6 +421,7 @@ export function EnterTournamentDialog({
     entryToken,
     entryAmount,
     selectedPaymentToken,
+    balance,
   ]);
 
   // Reset state when dialog closes
@@ -424,18 +433,62 @@ export function EnterTournamentDialog({
     }
   }, [open]);
 
-  const getBalance = async () => {
-    const balance = await getBalanceGeneral(entryToken ?? "");
-    setBalance(balance);
-  };
-
+  // Fetch raw balance of entry fee token (without normalization)
   useEffect(() => {
-    if (entryToken && address) {
-      getBalance();
-    }
-  }, [entryToken, address, getBalance]);
+    const fetchRawBalance = async () => {
+      if (!entryToken || !address || !provider) return;
+      try {
+        const result = await provider.callContract({
+          contractAddress: entryToken,
+          entrypoint: "balance_of",
+          calldata: [address],
+        });
+        // result[0] is the low part of u256, result[1] is the high part
+        // For most balances, the low part is sufficient
+        const rawBalance = BigInt(result[0]);
+        setBalance(rawBalance.toString());
+      } catch (err) {
+        console.error("Failed to fetch entry token balance:", err);
+        setBalance("0");
+      }
+    };
+    fetchRawBalance();
+  }, [entryToken, address, provider]);
 
   const hasBalance = BigInt(balance) >= BigInt(entryAmount ?? 0n);
+
+  // Check if user can pay (either directly or via swap)
+  const canPay = useMemo(() => {
+    if (!selectedPaymentToken || !entryToken) return false;
+
+    const isDirectPayment =
+      indexAddress(selectedPaymentToken).toLowerCase() ===
+      indexAddress(entryToken).toLowerCase();
+
+    if (isDirectPayment) {
+      // For direct payment, check entry fee token balance
+      return hasBalance;
+    } else {
+      // For swap payment, check if user has enough of the selected token
+      const quote = ekuboQuotes[selectedPaymentToken];
+      if (!quote?.quote) return false;
+
+      const selectedTokenBalance = tokenBalances.find(
+        (b) =>
+          indexAddress(b.tokenAddress).toLowerCase() ===
+          indexAddress(selectedPaymentToken).toLowerCase()
+      );
+      if (!selectedTokenBalance) return false;
+
+      return BigInt(selectedTokenBalance.balance) >= BigInt(quote.quote.total);
+    }
+  }, [
+    selectedPaymentToken,
+    entryToken,
+    hasBalance,
+    ekuboQuotes,
+    tokenBalances,
+  ]);
 
   const hasEntryRequirement = tournamentModel?.entry_requirement.isSome();
 
@@ -1416,10 +1469,9 @@ export function EnterTournamentDialog({
                             </span>
                             <span>
                               $
-                              {(
-                                (entryFeeUsdCost * creatorShare) /
-                                10000
-                              ).toFixed(2)}
+                              {formatUsdValue(
+                                (entryFeeUsdCost * creatorShare) / 10000
+                              )}
                             </span>
                           </div>
                         </TooltipTrigger>
@@ -1440,8 +1492,8 @@ export function EnterTournamentDialog({
                             </span>
                             <span>
                               $
-                              {((entryFeeUsdCost * gameShare) / 10000).toFixed(
-                                2,
+                              {formatUsdValue(
+                                (entryFeeUsdCost * gameShare) / 10000
                               )}
                             </span>
                           </div>
@@ -1462,10 +1514,9 @@ export function EnterTournamentDialog({
                             </span>
                             <span>
                               $
-                              {(
-                                (entryFeeUsdCost * refundShare) /
-                                10000
-                              ).toFixed(2)}
+                              {formatUsdValue(
+                                (entryFeeUsdCost * refundShare) / 10000
+                              )}
                             </span>
                           </div>
                         </TooltipTrigger>
@@ -1495,6 +1546,7 @@ export function EnterTournamentDialog({
                   ?.symbol
               }
               entryFeeLogo={getTokenLogoUrl(chainId, entryToken ?? "")}
+              entryFeeUserBalance={balance}
               balances={tokenBalances}
               selectedToken={selectedPaymentToken}
               onTokenSelect={setSelectedPaymentToken}
@@ -2213,7 +2265,7 @@ export function EnterTournamentDialog({
             {address ? (
               <Button
                 disabled={
-                  !hasBalance ||
+                  !canPay ||
                   !meetsEntryRequirements ||
                   (isController && playerName.length === 0) ||
                   (!isController &&

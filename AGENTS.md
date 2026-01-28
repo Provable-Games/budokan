@@ -105,7 +105,7 @@ External games integrate via standardized Cairo interfaces:
 Copy `ui/.env.example` to `ui/.env`:
 
 - `VITE_CHAIN_ID`: KATANA_LOCAL, MAINNET, SEPOLIA, or SLOT
-- `VITE_VOYAGER_API_KEY`: For blockchain explorer API
+- `VITE_VOYAGER_PROXY_URL`: Voyager API proxy (key hidden server-side)
 
 ## Key Dependencies
 

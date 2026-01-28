@@ -27,6 +27,8 @@ interface PaymentTokenSelectorProps {
   entryFeeSymbol?: string;
   /** Entry fee token logo URL */
   entryFeeLogo?: string;
+  /** User's on-chain balance of the entry fee token (fallback if not in Voyager balances) */
+  entryFeeUserBalance?: string;
   /** User's token balances */
   balances: VoyagerTokenBalance[];
   /** Currently selected payment token */
@@ -54,6 +56,7 @@ export function PaymentTokenSelector({
   entryFeeDecimals,
   entryFeeSymbol,
   entryFeeLogo,
+  entryFeeUserBalance,
   balances,
   selectedToken,
   onTokenSelect,
@@ -78,7 +81,7 @@ export function PaymentTokenSelector({
     return balances.find(
       (b) =>
         indexAddress(b.tokenAddress).toLowerCase() ===
-        indexAddress(selectedToken).toLowerCase()
+        indexAddress(selectedToken).toLowerCase(),
     );
   }, [selectedToken, balances]);
 
@@ -93,7 +96,7 @@ export function PaymentTokenSelector({
     if (isDirectPayment) {
       return {
         amount: formatPrizeAmount(
-          Number(entryFeeAmount) / Math.pow(10, entryFeeDecimals)
+          Number(entryFeeAmount) / Math.pow(10, entryFeeDecimals),
         ),
         symbol: entryFeeSymbol || "tokens",
         loading: false,
@@ -104,7 +107,7 @@ export function PaymentTokenSelector({
       const decimals = selectedTokenInfo.decimals;
       return {
         amount: formatPrizeAmount(
-          Number(selectedQuote.quote.total) / Math.pow(10, decimals)
+          Number(selectedQuote.quote.total) / Math.pow(10, decimals),
         ),
         symbol: selectedTokenInfo.symbol || "tokens",
         loading: false,
@@ -112,10 +115,20 @@ export function PaymentTokenSelector({
       };
     }
     if (selectedQuote?.loading) {
-      return { amount: "", symbol: "", loading: true, insufficientLiquidity: false };
+      return {
+        amount: "",
+        symbol: "",
+        loading: true,
+        insufficientLiquidity: false,
+      };
     }
     if (selectedQuote?.insufficientLiquidity) {
-      return { amount: "", symbol: "", loading: false, insufficientLiquidity: true };
+      return {
+        amount: "",
+        symbol: "",
+        loading: false,
+        insufficientLiquidity: true,
+      };
     }
     return null;
   }, [
@@ -129,38 +142,78 @@ export function PaymentTokenSelector({
 
   // Filter tokens that have enough balance or could theoretically swap
   const availableTokens = useMemo(() => {
-    const entryFeeAmountBigInt = BigInt(entryFeeAmount);
     const entryFeeNormalized = indexAddress(entryFeeToken).toLowerCase();
+    const entryFeeAmountBigInt = BigInt(entryFeeAmount);
 
-    // Check if user has entry fee token with sufficient balance
+    // Check if user has entry fee token in Voyager balances
     const entryFeeBalance = balances.find(
-      (b) => indexAddress(b.tokenAddress).toLowerCase() === entryFeeNormalized
+      (b) => indexAddress(b.tokenAddress).toLowerCase() === entryFeeNormalized,
     );
-    const hasDirectBalance =
-      entryFeeBalance &&
-      BigInt(entryFeeBalance.balance) >= entryFeeAmountBigInt;
+
+    // Check if user has sufficient balance (from Voyager or on-chain fallback)
+    const voyagerBalance = entryFeeBalance
+      ? BigInt(entryFeeBalance.balance)
+      : 0n;
+    const onChainBalance = entryFeeUserBalance
+      ? BigInt(entryFeeUserBalance)
+      : 0n;
+    const effectiveBalance =
+      voyagerBalance > 0n ? voyagerBalance : onChainBalance;
+    const hasSufficientBalance = effectiveBalance >= entryFeeAmountBigInt;
+    const hasAnyBalance = effectiveBalance > 0n;
 
     // Filter other tokens (those with some balance that aren't the entry fee token)
-    const otherTokens = balances.filter((b) => {
-      const isEntryToken =
-        indexAddress(b.tokenAddress).toLowerCase() === entryFeeNormalized;
-      const hasBalance = BigInt(b.balance) > 0n;
-      // Exclude tokens without sufficient value (> $0.01 worth)
-      const hasValue = (b.usdBalance ?? 0) > 0.01;
-      return !isEntryToken && hasBalance && hasValue;
-    });
+    // Sort by USD value descending
+    const otherTokens = balances
+      .filter((b) => {
+        const isEntryToken =
+          indexAddress(b.tokenAddress).toLowerCase() === entryFeeNormalized;
+        const hasBalance = BigInt(b.balance) > 0n;
+        // Exclude tokens without sufficient value (> $0.01 worth)
+        const hasValue = (b.usdBalance ?? 0) > 0.01;
+        return !isEntryToken && hasBalance && hasValue;
+      })
+      .sort((a, b) => (b.usdBalance ?? 0) - (a.usdBalance ?? 0));
 
-    // Build result with entry fee token first if available
+    // Build entry fee token entry if user has any balance
+    const entryFeeEntry: VoyagerTokenBalance | null = hasAnyBalance
+      ? entryFeeBalance ?? {
+          tokenAddress: entryFeeToken,
+          balance: entryFeeUserBalance || "0",
+          symbol: entryFeeSymbol,
+          decimals: entryFeeDecimals,
+          logo: entryFeeLogo,
+          usdBalance: entryFeeUsd,
+        }
+      : null;
+
+    // If sufficient balance, put entry fee token first
+    // Otherwise, include it in the sorted list by USD value
     const result: VoyagerTokenBalance[] = [];
 
-    if (hasDirectBalance && entryFeeBalance) {
-      result.push(entryFeeBalance);
+    if (entryFeeEntry && hasSufficientBalance) {
+      result.push(entryFeeEntry);
+      result.push(...otherTokens);
+    } else {
+      // Combine other tokens with insufficient entry fee token and sort by USD value
+      const allTokens = entryFeeEntry
+        ? [...otherTokens, entryFeeEntry]
+        : otherTokens;
+      allTokens.sort((a, b) => (b.usdBalance ?? 0) - (a.usdBalance ?? 0));
+      result.push(...allTokens);
     }
 
-    result.push(...otherTokens);
-
     return result;
-  }, [balances, entryFeeToken, entryFeeAmount]);
+  }, [
+    balances,
+    entryFeeToken,
+    entryFeeAmount,
+    entryFeeUserBalance,
+    entryFeeSymbol,
+    entryFeeDecimals,
+    entryFeeLogo,
+    entryFeeUsd,
+  ]);
 
   // Get payment info for a token (for the list display)
   const getTokenPaymentInfo = (token: VoyagerTokenBalance) => {
@@ -173,7 +226,7 @@ export function PaymentTokenSelector({
       const hasEnoughBalance = BigInt(token.balance) >= BigInt(entryFeeAmount);
       return {
         amount: formatPrizeAmount(
-          Number(entryFeeAmount) / Math.pow(10, entryFeeDecimals)
+          Number(entryFeeAmount) / Math.pow(10, entryFeeDecimals),
         ),
         isDirect: true,
         loading: false,
@@ -189,7 +242,7 @@ export function PaymentTokenSelector({
       const hasEnoughBalance = BigInt(token.balance) >= quoteTotal;
       return {
         amount: formatPrizeAmount(
-          Number(tokenQuote.quote.total) / Math.pow(10, token.decimals)
+          Number(tokenQuote.quote.total) / Math.pow(10, token.decimals),
         ),
         isDirect: false,
         loading: false,
@@ -198,18 +251,36 @@ export function PaymentTokenSelector({
       };
     }
     if (tokenQuote?.loading) {
-      return { amount: "", isDirect: false, loading: true, insufficientLiquidity: false, insufficientBalance: false };
+      return {
+        amount: "",
+        isDirect: false,
+        loading: true,
+        insufficientLiquidity: false,
+        insufficientBalance: false,
+      };
     }
     if (tokenQuote?.insufficientLiquidity) {
-      return { amount: "", isDirect: false, loading: false, insufficientLiquidity: true, insufficientBalance: false };
+      return {
+        amount: "",
+        isDirect: false,
+        loading: false,
+        insufficientLiquidity: true,
+        insufficientBalance: false,
+      };
     }
-    return { amount: "", isDirect: false, loading: quotesLoading, insufficientLiquidity: false, insufficientBalance: false };
+    return {
+      amount: "",
+      isDirect: false,
+      loading: quotesLoading,
+      insufficientLiquidity: false,
+      insufficientBalance: false,
+    };
   };
 
   // Check if any quotes have errors (failed to fetch)
   const hasFailedQuotes = useMemo(() => {
     return Object.values(quotes).some(
-      (q) => q.error && !q.insufficientLiquidity && !q.loading
+      (q) => q.error && !q.insufficientLiquidity && !q.loading,
     );
   }, [quotes]);
 
@@ -248,11 +319,7 @@ export function PaymentTokenSelector({
                 className="w-8 h-8 rounded-full"
               />
             ) : isDirectPayment && entryFeeLogo ? (
-              <img
-                src={entryFeeLogo}
-                alt=""
-                className="w-8 h-8 rounded-full"
-              />
+              <img src={entryFeeLogo} alt="" className="w-8 h-8 rounded-full" />
             ) : (
               <div className="w-8 h-8">
                 <COIN />
@@ -289,7 +356,9 @@ export function PaymentTokenSelector({
                 disabled={isRefreshing}
                 className="h-8 px-2 border-none bg-transparent hover:bg-brand/10"
               >
-                <REFRESH className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
+                <REFRESH
+                  className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`}
+                />
               </Button>
             )}
           </div>
@@ -310,7 +379,9 @@ export function PaymentTokenSelector({
               selectedToken &&
               indexAddress(token.tokenAddress).toLowerCase() ===
                 indexAddress(selectedToken).toLowerCase();
-            const isDisabled = paymentInfo.insufficientBalance || paymentInfo.insufficientLiquidity;
+            const isDisabled =
+              paymentInfo.insufficientBalance ||
+              paymentInfo.insufficientLiquidity;
 
             return (
               <div
@@ -336,7 +407,9 @@ export function PaymentTokenSelector({
                   )}
                   <div className="flex flex-col">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium">{token.symbol || "Token"}</span>
+                      <span className="font-medium">
+                        {token.symbol || "Token"}
+                      </span>
                       {paymentInfo.isDirect && (
                         <span className="text-xs px-1.5 py-0.5 bg-brand/20 rounded text-brand-muted">
                           Direct
@@ -344,9 +417,14 @@ export function PaymentTokenSelector({
                       )}
                     </div>
                     <span className="text-sm text-neutral">
-                      Balance: {formatPrizeAmount(Number(token.balance) / Math.pow(10, token.decimals))}
+                      Balance:{" "}
+                      {formatPrizeAmount(
+                        Number(token.balance) / Math.pow(10, token.decimals),
+                      )}
                       {token.usdBalance !== undefined && (
-                        <span className="text-brand-muted ml-1">(${token.usdBalance.toFixed(2)})</span>
+                        <span className="text-brand-muted ml-1">
+                          (${token.usdBalance.toFixed(2)})
+                        </span>
                       )}
                     </span>
                   </div>
@@ -359,14 +437,16 @@ export function PaymentTokenSelector({
                       <Skeleton className="h-3 w-10" />
                     </div>
                   ) : paymentInfo.insufficientLiquidity ? (
-                    <span className="text-destructive text-sm">No liquidity</span>
+                    <span className="text-destructive text-sm">
+                      No liquidity
+                    </span>
                   ) : paymentInfo.insufficientBalance ? (
-                    <span className="text-destructive text-sm">Insufficient balance</span>
+                    <span className="text-destructive text-sm">
+                      Insufficient balance
+                    </span>
                   ) : (
                     <>
-                      <span className="font-medium">
-                        ~{paymentInfo.amount}
-                      </span>
+                      <span className="font-medium">~{paymentInfo.amount}</span>
                       <span className="text-xs text-brand-muted">
                         ${entryFeeUsd.toFixed(2)}
                       </span>

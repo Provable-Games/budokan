@@ -43,12 +43,8 @@ interface UseVoyagerTokenBalancesResult {
   refetch: () => void;
 }
 
-// Use proxy URL if configured, otherwise fall back to direct API access
+// Use proxy URL where API key is hidden server-side
 const VOYAGER_PROXY_URL = import.meta.env.VITE_VOYAGER_PROXY_URL;
-const VOYAGER_API_KEY = import.meta.env.VITE_VOYAGER_API_KEY;
-const VOYAGER_API_BASE_URL =
-  import.meta.env.VITE_VOYAGER_API_BASE_URL ||
-  "https://api.voyager.online/beta";
 
 export const useVoyagerTokenBalances = ({
   ownerAddress,
@@ -64,11 +60,9 @@ export const useVoyagerTokenBalances = ({
       return;
     }
 
-    // When using proxy, API key is not needed in frontend
-    if (!VOYAGER_PROXY_URL && !VOYAGER_API_KEY) {
-      setError(
-        new Error("Either Voyager proxy URL or API key must be configured"),
-      );
+    // Proxy URL is required (API key is hidden server-side)
+    if (!VOYAGER_PROXY_URL) {
+      setError(new Error("Voyager proxy URL must be configured"));
       return;
     }
 
@@ -79,21 +73,12 @@ export const useVoyagerTokenBalances = ({
       // Normalize address
       const normalizedOwner = addAddressPadding(ownerAddress).toLowerCase();
 
-      // Use proxy URL if configured, otherwise use direct API
-      let url: string;
-      if (VOYAGER_PROXY_URL) {
-        url = `${VOYAGER_PROXY_URL}/api/voyager/contracts/${normalizedOwner}/token-balances`;
-      } else {
-        url = `${VOYAGER_API_BASE_URL}/contracts/${normalizedOwner}/token-balances`;
-      }
+      // Use proxy URL (API key is hidden server-side)
+      const url = `${VOYAGER_PROXY_URL}/api/voyager/contracts/${normalizedOwner}/token-balances`;
 
-      // Build headers - only include API key if not using proxy
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
       };
-      if (!VOYAGER_PROXY_URL && VOYAGER_API_KEY) {
-        headers["x-api-key"] = VOYAGER_API_KEY;
-      }
 
       const response = await fetch(url, {
         method: "GET",
