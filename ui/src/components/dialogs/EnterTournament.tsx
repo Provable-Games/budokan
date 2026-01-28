@@ -326,7 +326,7 @@ export function EnterTournamentDialog({
 
   // Build sell tokens array for Ekubo quotes (exclude the entry fee token)
   // Only include tokens with meaningful USD value to avoid fetching quotes for dust
-  const sellTokensForQuotes = useMemo(() => {
+  const sellTokensForQuotesRaw = useMemo(() => {
     if (!entryToken || balancesLoading || tokenBalances.length === 0) return [];
     const entryFeeNormalized = indexAddress(entryToken).toLowerCase();
 
@@ -341,6 +341,20 @@ export function EnterTournamentDialog({
       .sort();
   }, [tokenBalances, entryToken, balancesLoading]);
 
+  // Debounce sell tokens to prevent multiple quote fetches as balances load
+  const [sellTokensForQuotes, setSellTokensForQuotes] = useState<string[]>([]);
+  const sellTokensKeyRaw = useMemo(
+    () => JSON.stringify(sellTokensForQuotesRaw),
+    [sellTokensForQuotesRaw]
+  );
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setSellTokensForQuotes(sellTokensForQuotesRaw);
+    }, 300); // 300ms debounce
+    return () => clearTimeout(timeoutId);
+  }, [sellTokensKeyRaw, sellTokensForQuotesRaw]);
+
   // Memoize the amount to prevent new BigInt on every render
   const quoteAmount = useMemo(() => BigInt(entryAmount ?? 0), [entryAmount]);
 
@@ -349,8 +363,18 @@ export function EnterTournamentDialog({
     return open && !balancesLoading && sellTokensForQuotes.length > 0 && !!entryToken;
   }, [open, balancesLoading, sellTokensForQuotes.length, entryToken]);
 
+  // Debug: log when quote inputs change
+  useEffect(() => {
+    console.log('[Quotes Debug]', {
+      sellTokensForQuotes,
+      buyToken: entryToken,
+      amount: quoteAmount?.toString(),
+      enabled: quotesEnabled,
+      timestamp: new Date().toISOString(),
+    });
+  }, [sellTokensForQuotes, entryToken, quoteAmount, quotesEnabled]);
+
   // Fetch Ekubo quotes for swap payments - only when dialog is open and we have tokens
-  // No polling needed since we fetch a fresh quote on enter
   const { quotes: ekuboQuotes, isLoading: quotesLoading } = useEkuboQuotes({
     sellTokens: sellTokensForQuotes,
     buyToken: entryToken ?? null,
