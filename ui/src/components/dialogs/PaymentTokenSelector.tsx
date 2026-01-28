@@ -1,0 +1,338 @@
+import { useMemo, useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { LoadingSpinner } from "@/components/ui/spinner";
+import { COIN } from "@/components/Icons";
+import { indexAddress, formatPrizeAmount } from "@/lib/utils";
+import type { VoyagerTokenBalance } from "@/hooks/useVoyagerTokenBalances";
+import type { QuotesMap } from "@provable-games/ekubo-sdk/react";
+import { ChevronDown } from "lucide-react";
+
+interface PaymentTokenSelectorProps {
+  /** Entry fee token address */
+  entryFeeToken: string;
+  /** Entry fee amount in smallest units */
+  entryFeeAmount: string;
+  /** Entry fee in USD */
+  entryFeeUsd: number;
+  /** Entry fee token decimals */
+  entryFeeDecimals: number;
+  /** Entry fee token symbol */
+  entryFeeSymbol?: string;
+  /** Entry fee token logo URL */
+  entryFeeLogo?: string;
+  /** User's token balances */
+  balances: VoyagerTokenBalance[];
+  /** Currently selected payment token */
+  selectedToken: string | null;
+  /** Callback when user selects a different token */
+  onTokenSelect: (tokenAddress: string) => void;
+  /** Map of token address to quote result */
+  quotes: QuotesMap;
+  /** Whether quotes are loading */
+  quotesLoading: boolean;
+  /** Creator share in basis points */
+  creatorShare?: number;
+  /** Game share in basis points */
+  gameShare?: number;
+  /** Prize pool share in basis points */
+  prizePoolShare?: number;
+}
+
+export function PaymentTokenSelector({
+  entryFeeToken,
+  entryFeeAmount,
+  entryFeeUsd,
+  entryFeeDecimals,
+  entryFeeSymbol,
+  entryFeeLogo,
+  balances,
+  selectedToken,
+  onTokenSelect,
+  quotes,
+  quotesLoading,
+}: PaymentTokenSelectorProps) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  // Check if selected token is the entry fee token (direct payment)
+  const isDirectPayment = useMemo(() => {
+    if (!selectedToken || !entryFeeToken) return false;
+    return (
+      indexAddress(selectedToken).toLowerCase() ===
+      indexAddress(entryFeeToken).toLowerCase()
+    );
+  }, [selectedToken, entryFeeToken]);
+
+  // Get selected token info
+  const selectedTokenInfo = useMemo(() => {
+    if (!selectedToken) return null;
+    return balances.find(
+      (b) =>
+        indexAddress(b.tokenAddress).toLowerCase() ===
+        indexAddress(selectedToken).toLowerCase()
+    );
+  }, [selectedToken, balances]);
+
+  // Get quote for selected token
+  const selectedQuote = useMemo(() => {
+    if (!selectedToken || isDirectPayment) return null;
+    return quotes[selectedToken] ?? null;
+  }, [selectedToken, isDirectPayment, quotes]);
+
+  // Calculate the payment amount for the selected token
+  const selectedPaymentAmount = useMemo(() => {
+    if (isDirectPayment) {
+      return {
+        amount: formatPrizeAmount(
+          Number(entryFeeAmount) / Math.pow(10, entryFeeDecimals)
+        ),
+        symbol: entryFeeSymbol || "tokens",
+        loading: false,
+        insufficientLiquidity: false,
+      };
+    }
+    if (selectedQuote?.quote && selectedTokenInfo) {
+      const decimals = selectedTokenInfo.decimals;
+      return {
+        amount: formatPrizeAmount(
+          Number(selectedQuote.quote.total) / Math.pow(10, decimals)
+        ),
+        symbol: selectedTokenInfo.symbol || "tokens",
+        loading: false,
+        insufficientLiquidity: false,
+      };
+    }
+    if (selectedQuote?.loading) {
+      return { amount: "", symbol: "", loading: true, insufficientLiquidity: false };
+    }
+    if (selectedQuote?.insufficientLiquidity) {
+      return { amount: "", symbol: "", loading: false, insufficientLiquidity: true };
+    }
+    return null;
+  }, [
+    isDirectPayment,
+    entryFeeAmount,
+    entryFeeDecimals,
+    entryFeeSymbol,
+    selectedQuote,
+    selectedTokenInfo,
+  ]);
+
+  // Filter tokens that have enough balance or could theoretically swap
+  const availableTokens = useMemo(() => {
+    const entryFeeAmountBigInt = BigInt(entryFeeAmount);
+    const entryFeeNormalized = indexAddress(entryFeeToken).toLowerCase();
+
+    // Check if user has entry fee token with sufficient balance
+    const entryFeeBalance = balances.find(
+      (b) => indexAddress(b.tokenAddress).toLowerCase() === entryFeeNormalized
+    );
+    const hasDirectBalance =
+      entryFeeBalance &&
+      BigInt(entryFeeBalance.balance) >= entryFeeAmountBigInt;
+
+    // Filter other tokens (those with some balance that aren't the entry fee token)
+    const otherTokens = balances.filter((b) => {
+      const isEntryToken =
+        indexAddress(b.tokenAddress).toLowerCase() === entryFeeNormalized;
+      const hasBalance = BigInt(b.balance) > 0n;
+      // Exclude tokens without sufficient value (> $0.10 worth)
+      const hasValue = (b.usdBalance ?? 0) > 0.1;
+      return !isEntryToken && hasBalance && hasValue;
+    });
+
+    // Build result with entry fee token first if available
+    const result: VoyagerTokenBalance[] = [];
+
+    if (hasDirectBalance && entryFeeBalance) {
+      result.push(entryFeeBalance);
+    }
+
+    result.push(...otherTokens);
+
+    return result;
+  }, [balances, entryFeeToken, entryFeeAmount]);
+
+  // Get payment info for a token (for the list display)
+  const getTokenPaymentInfo = (token: VoyagerTokenBalance) => {
+    const isEntryToken =
+      indexAddress(token.tokenAddress).toLowerCase() ===
+      indexAddress(entryFeeToken).toLowerCase();
+
+    if (isEntryToken) {
+      return {
+        amount: formatPrizeAmount(
+          Number(entryFeeAmount) / Math.pow(10, entryFeeDecimals)
+        ),
+        isDirect: true,
+        loading: false,
+        insufficientLiquidity: false,
+      };
+    }
+
+    const tokenQuote = quotes[token.tokenAddress];
+    if (tokenQuote?.quote) {
+      return {
+        amount: formatPrizeAmount(
+          Number(tokenQuote.quote.total) / Math.pow(10, token.decimals)
+        ),
+        isDirect: false,
+        loading: false,
+        insufficientLiquidity: false,
+      };
+    }
+    if (tokenQuote?.loading) {
+      return { amount: "", isDirect: false, loading: true, insufficientLiquidity: false };
+    }
+    if (tokenQuote?.insufficientLiquidity) {
+      return { amount: "", isDirect: false, loading: false, insufficientLiquidity: true };
+    }
+    return { amount: "", isDirect: false, loading: quotesLoading, insufficientLiquidity: false };
+  };
+
+  const handleSelect = (tokenAddress: string) => {
+    onTokenSelect(tokenAddress);
+    setIsOpen(false);
+  };
+
+  if (availableTokens.length === 0) {
+    return (
+      <div className="flex flex-col gap-2 p-3 border border-brand/25 rounded-lg bg-neutral/5">
+        <span className="text-sm text-warning">
+          No tokens available for payment
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        <Button
+          variant="outline"
+          className="w-full h-auto p-3 flex flex-row items-center justify-between"
+        >
+          <div className="flex flex-row items-center gap-3">
+            {selectedTokenInfo?.logo ? (
+              <img
+                src={selectedTokenInfo.logo}
+                alt=""
+                className="w-8 h-8 rounded-full"
+              />
+            ) : isDirectPayment && entryFeeLogo ? (
+              <img
+                src={entryFeeLogo}
+                alt=""
+                className="w-8 h-8 rounded-full"
+              />
+            ) : (
+              <div className="w-8 h-8">
+                <COIN />
+              </div>
+            )}
+            <div className="flex flex-col items-start">
+              <span className="text-sm text-brand-muted">Pay with</span>
+              {selectedPaymentAmount?.loading ? (
+                <div className="flex items-center gap-2">
+                  <LoadingSpinner />
+                  <span className="text-sm">Loading...</span>
+                </div>
+              ) : selectedPaymentAmount?.insufficientLiquidity ? (
+                <span className="text-destructive text-sm">No liquidity</span>
+              ) : selectedPaymentAmount ? (
+                <span className="font-medium">
+                  ~{selectedPaymentAmount.amount} {selectedPaymentAmount.symbol}
+                </span>
+              ) : (
+                <span className="text-brand-muted">Select token</span>
+              )}
+            </div>
+          </div>
+          <ChevronDown className="w-5 h-5 text-brand-muted" />
+        </Button>
+      </DialogTrigger>
+
+      <DialogContent className="max-h-[500px] flex flex-col p-0 overflow-hidden">
+        <DialogHeader className="flex-shrink-0 p-4 border-b border-brand/20">
+          <DialogTitle>Select Payment Token</DialogTitle>
+          <p className="text-sm text-brand-muted mt-1">
+            Choose which token to pay with
+          </p>
+        </DialogHeader>
+
+        <div className="flex-1 overflow-y-auto">
+          {availableTokens.map((token) => {
+            const paymentInfo = getTokenPaymentInfo(token);
+            const isSelected =
+              selectedToken &&
+              indexAddress(token.tokenAddress).toLowerCase() ===
+                indexAddress(selectedToken).toLowerCase();
+
+            return (
+              <div
+                key={token.tokenAddress}
+                className={`w-full flex flex-row items-center justify-between hover:bg-brand/20 hover:cursor-pointer px-4 py-3 ${
+                  isSelected ? "bg-brand/30 border-l-2 border-brand" : ""
+                }`}
+                onClick={() => handleSelect(token.tokenAddress)}
+              >
+                <div className="flex flex-row gap-3 items-center">
+                  {token.logo ? (
+                    <img
+                      src={token.logo}
+                      alt=""
+                      className="w-8 h-8 rounded-full"
+                    />
+                  ) : (
+                    <div className="w-8 h-8">
+                      <COIN />
+                    </div>
+                  )}
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{token.symbol || "Token"}</span>
+                      {paymentInfo.isDirect && (
+                        <span className="text-xs px-1.5 py-0.5 bg-brand/20 rounded text-brand-muted">
+                          Direct
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-sm text-neutral">
+                      Balance: {formatPrizeAmount(Number(token.balance) / Math.pow(10, token.decimals))}
+                      {token.usdBalance !== undefined && (
+                        <span className="text-brand-muted ml-1">(${token.usdBalance.toFixed(2)})</span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col items-end">
+                  {paymentInfo.loading ? (
+                    <LoadingSpinner />
+                  ) : paymentInfo.insufficientLiquidity ? (
+                    <span className="text-destructive text-sm">No liquidity</span>
+                  ) : (
+                    <>
+                      <span className="font-medium">
+                        ~{paymentInfo.amount}
+                      </span>
+                      <span className="text-xs text-brand-muted">
+                        ${entryFeeUsd.toFixed(2)}
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
