@@ -18,6 +18,17 @@ export function displayPrice(num: number): string {
   }
 }
 
+/**
+ * Format a USD value, handling small amounts appropriately
+ * - Values >= $0.01: show 2 decimal places
+ * - Values < $0.01 but > 0: show "<$0.01"
+ */
+export function formatUsdValue(value: number): string {
+  if (value === 0) return "0.00";
+  if (value < 0.01 && value > 0) return "<0.01";
+  return value.toFixed(2);
+}
+
 export function roundUSDPrice(price: number): string {
   // Handle negative numbers by applying the same logic to the absolute value
   const isNegative = price < 0;

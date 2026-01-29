@@ -74,7 +74,8 @@ export const useSystemCalls = () => {
     duration: number,
     entryFeeUsdCost: number,
     entryCount: number,
-    prizeTotalUsd: number
+    prizeTotalUsd: number,
+    prependCalls?: { contractAddress: string; entrypoint: string; calldata: string[] }[]
   ) => {
     const startsIn =
       Number(tournamentModel.schedule.game.start) - Date.now() / 1000;
@@ -89,7 +90,14 @@ export const useSystemCalls = () => {
         player_address,
         qualification,
       ]);
-      let calls = [];
+      let calls: { contractAddress: string; entrypoint: string; calldata: any }[] = [];
+
+      // Add any prepended calls (e.g., swap calls for Ekubo)
+      if (prependCalls && prependCalls.length > 0) {
+        calls.push(...prependCalls);
+      }
+
+      // Always add approve call for entry fee token (after swap or directly)
       if (entryFeeToken.isSome()) {
         calls.push({
           contractAddress: entryFeeToken.Some?.token_address!,
