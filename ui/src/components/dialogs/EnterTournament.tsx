@@ -406,7 +406,7 @@ export function EnterTournamentDialog({
 
     // Otherwise, find the token with highest USD value that has a balance
     const tokensWithBalance = tokenBalances
-      .filter((b) => BigInt(b.balance) > 0n && (b.usdBalance ?? 0) > 1)
+      .filter((b) => BigInt(b.balance) > 0n && (b.usdBalance ?? 0) > 0.01)
       .sort((a, b) => (b.usdBalance ?? 0) - (a.usdBalance ?? 0));
 
     if (tokensWithBalance.length > 0) {
