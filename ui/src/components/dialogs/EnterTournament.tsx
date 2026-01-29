@@ -168,7 +168,7 @@ export function EnterTournamentDialog({
         qualificationProof,
         // gameCount
         duration,
-        entryFeeUsdCost,
+        entryFeeUsdCost ?? 0,
         entryCount,
         totalPrizesValueUSD
       );
@@ -243,11 +243,18 @@ export function EnterTournamentDialog({
   const entryTokenDecimals = entryToken
     ? getTokenDecimals(chainId, entryToken)
     : 18;
-  const entryFeeUsdCost = entryToken
-    ? (Number(tournamentModel?.entry_fee.Some?.amount ?? 0) /
-        10 ** entryTokenDecimals) *
-      Number(entryFeePrice)
+  const entryFeeTokenAmount = entryToken
+    ? Number(tournamentModel?.entry_fee.Some?.amount ?? 0) /
+      10 ** entryTokenDecimals
     : 0;
+  const entryFeeUsdCost =
+    entryToken && entryFeePrice
+      ? entryFeeTokenAmount * Number(entryFeePrice)
+      : undefined;
+  const entryFeeTokenSymbol = tokens.find(
+    (token) =>
+      indexAddress(token.token_address) === indexAddress(entryToken ?? "")
+  )?.symbol;
 
   const getBalance = async () => {
     const balance = await getBalanceGeneral(entryToken ?? "");
@@ -987,7 +994,8 @@ export function EnterTournamentDialog({
       // Check if the user's address is in the allowlist
       const isInAllowlist = allowlistAddresses?.some(
         (allowedAddress: string) =>
-          allowedAddress.toLowerCase() === address.toLowerCase()
+          indexAddress(allowedAddress).toLowerCase() ===
+          indexAddress(address).toLowerCase()
       );
 
       if (!isInAllowlist) {
@@ -1191,15 +1199,13 @@ export function EnterTournamentDialog({
                     className="w-5 h-5"
                   />
                   <span className="text-sm">
-                    {
-                      tokens.find(
-                        (token) => token.token_address === entryToken
-                      )?.symbol
-                    }
+                    {entryFeeTokenSymbol}
                   </span>
-                  <span className="text-neutral text-sm">
-                    ~${entryFeeUsdCost.toFixed(2)}
-                  </span>
+                  {entryFeeUsdCost !== undefined && (
+                    <span className="text-neutral text-sm">
+                      ~${entryFeeUsdCost.toFixed(2)}
+                    </span>
+                  )}
                 </div>
                 {address &&
                   (hasBalance ? (

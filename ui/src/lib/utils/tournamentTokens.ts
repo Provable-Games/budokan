@@ -1,6 +1,7 @@
 import { Tournament, Prize } from "@/generated/models.gen";
 import { TokenMetadata } from "@/lib/types";
 import { extractEntryFeePrizes, groupPrizesByTokens } from "./formatting";
+import { indexAddress } from "@/lib/utils";
 
 export interface TournamentWithPrizes {
   tournament: Tournament;
@@ -22,7 +23,7 @@ export function extractUniqueTokenSymbols(
     const entryFeeToken = tournament?.entry_fee.Some?.token_address;
     if (entryFeeToken) {
       const entryFeeTokenSymbol = tokens.find(
-        (t) => t.token_address === entryFeeToken
+        (t) => indexAddress(t.token_address) === indexAddress(entryFeeToken)
       )?.symbol;
       if (entryFeeTokenSymbol) {
         uniqueSymbols.add(entryFeeTokenSymbol);

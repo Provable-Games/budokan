@@ -56,12 +56,8 @@ interface UseVoyagerNftsResult {
   hasMore: boolean;
 }
 
-// Use proxy URL if configured, otherwise fall back to direct API access
+// Use proxy URL where API key is hidden server-side
 const VOYAGER_PROXY_URL = import.meta.env.VITE_VOYAGER_PROXY_URL;
-const VOYAGER_API_KEY = import.meta.env.VITE_VOYAGER_API_KEY;
-const VOYAGER_API_BASE_URL =
-  import.meta.env.VITE_VOYAGER_API_BASE_URL ||
-  "https://api.voyager.online/beta";
 
 export const useVoyagerNfts = ({
   contractAddress,
@@ -83,11 +79,9 @@ export const useVoyagerNfts = ({
       return;
     }
 
-    // When using proxy, API key is not needed in frontend
-    if (!VOYAGER_PROXY_URL && !VOYAGER_API_KEY) {
-      setError(
-        new Error("Either Voyager proxy URL or API key must be configured")
-      );
+    // Proxy URL is required (API key is hidden server-side)
+    if (!VOYAGER_PROXY_URL) {
+      setError(new Error("Voyager proxy URL must be configured"));
       return;
     }
 
@@ -117,12 +111,8 @@ export const useVoyagerNfts = ({
 
       params.append("limit", limit.toString());
 
-      // Use proxy URL if configured, otherwise use direct API
-      if (VOYAGER_PROXY_URL) {
-        currentUrl = `${VOYAGER_PROXY_URL}/api/voyager/nft-items?${params.toString()}`;
-      } else {
-        currentUrl = `${VOYAGER_API_BASE_URL}/nft-items?${params.toString()}`;
-      }
+      // Use proxy URL (API key is hidden server-side)
+      currentUrl = `${VOYAGER_PROXY_URL}/api/voyager/nft-items?${params.toString()}`;
 
       // Fetch pages
       while (currentUrl && pageCount < maxPages) {
@@ -131,13 +121,9 @@ export const useVoyagerNfts = ({
           await new Promise((resolve) => setTimeout(resolve, delayMs));
         }
 
-        // Build headers - only include API key if not using proxy
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
         };
-        if (!VOYAGER_PROXY_URL && VOYAGER_API_KEY) {
-          headers["x-api-key"] = VOYAGER_API_KEY;
-        }
 
         const response = await fetch(currentUrl, {
           method: "GET",
@@ -169,13 +155,8 @@ export const useVoyagerNfts = ({
 
         // Check if we should continue fetching
         if (fetchAll && data.pagination?.next) {
-          // Extract the next page URL
-          if (VOYAGER_PROXY_URL) {
-            // When using proxy, construct the full proxy URL
-            currentUrl = `${VOYAGER_PROXY_URL}/api/voyager${data.pagination.next}`;
-          } else {
-            currentUrl = `${VOYAGER_API_BASE_URL}${data.pagination.next}`;
-          }
+          // Construct the full proxy URL for the next page
+          currentUrl = `${VOYAGER_PROXY_URL}/api/voyager${data.pagination.next}`;
         } else {
           setHasMore(!!data.pagination?.next);
           currentUrl = null;

@@ -1,5 +1,6 @@
 import { ChainId } from "@/dojo/setup/networks";
 import { useDojo } from "@/context/dojo";
+import lsLogo from "./ls-logo.png";
 
 export interface Game {
   contract_address: string;
@@ -108,7 +109,7 @@ export const getGames = (): Game[] => {
         contract_address:
           "0x05e2dfbdc3c193de629e5beb116083b06bd944c1608c9c793351d5792ba29863",
         name: "Loot Survivor",
-        image: "https://lootsurvivor.io/favicon-32x32.png",
+        image: lsLogo,
         url: "https://lootsurvivor.io/budokan",
         playUrl: "https://lootsurvivor.io/budokan/play?id=",
         controllerOnly: true,
@@ -150,7 +151,7 @@ export const getGames = (): Game[] => {
         contract_address:
           "0x0035389eec883a077ca4cc036cbe17fc802d297a08e8d7e930781de9ed492d05",
         name: "Loot Survivor",
-        image: "https://lootsurvivor.io/favicon-32x32.png",
+        image: lsLogo,
         url: "https://lootsurvivor.io",
       },
       {

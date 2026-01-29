@@ -916,8 +916,9 @@ export const calculatePrizeValue = (
 ): number => {
   if (prize.type !== "erc20") return 0;
 
-  const price = prices[tokenAddress];
-  const decimals = tokenDecimals?.[prize.address || ""] || 18;
+  const normalizedAddress = indexAddress(tokenAddress);
+  const price = prices[normalizedAddress];
+  const decimals = tokenDecimals?.[normalizedAddress] || 18;
   // Handle array or single bigint value
   const amount = Array.isArray(prize.value) ? prize.value[0] : prize.value;
 
@@ -933,9 +934,12 @@ export const calculateTotalValue = (
   return Object.entries(groupedPrizes)
     .filter(([_, prize]) => prize.type === "erc20")
     .reduce((total, [_symbol, prize]) => {
-      // Use prize address to look up price (prices are now keyed by address)
-      const price = prize.address ? prices[prize.address] : undefined;
-      const decimals = tokenDecimals?.[prize.address || ""] || 18;
+      // Use normalized prize address to look up price
+      const normalizedAddress = prize.address
+        ? indexAddress(prize.address)
+        : "";
+      const price = normalizedAddress ? prices[normalizedAddress] : undefined;
+      const decimals = tokenDecimals?.[normalizedAddress] || 18;
       // Handle array or single bigint value
       const amount = Array.isArray(prize.value) ? prize.value[0] : prize.value;
 

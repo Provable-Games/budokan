@@ -29,7 +29,8 @@ const Schedule = ({ form }: StepProps) => {
     address &&
     PRIVILEGED_ADDRESSES.some(
       (privilegedAddr) =>
-        indexAddress(privilegedAddr).toLowerCase() === indexAddress(address)
+        indexAddress(privilegedAddr).toLowerCase() ===
+        indexAddress(address).toLowerCase()
     );
 
   const [enableRegistration, setEnableRegistration] = useState(false);

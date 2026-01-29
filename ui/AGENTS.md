@@ -154,7 +154,7 @@ Copy `.env.example` to `.env`:
 
 ```bash
 VITE_CHAIN_ID=MAINNET              # KATANA_LOCAL, MAINNET, SEPOLIA, SLOT
-VITE_VOYAGER_API_KEY=your_key      # For blockchain explorer API
+VITE_VOYAGER_PROXY_URL=https://...  # Voyager API proxy (key hidden server-side)
 ```
 
 Network can also be set via URL parameter: `?network=sepolia`
