@@ -342,7 +342,6 @@ const Tournament = () => {
     active: !!tournamentId,
   });
 
-  console.log("Aggregations:", aggregations);
 
   // Fetch ALL sponsored prizes from database for accurate paid places calculation
   const { data: sponsoredPrizesData } = useGetAllTournamentPrizes({

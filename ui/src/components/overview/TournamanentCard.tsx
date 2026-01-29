@@ -123,7 +123,6 @@ export const TournamentCard = ({
     return Array.from(tokenMap.values());
   }, [groupedPrizes, tokens, selectedChainConfig.chainId]);
 
-  console.log(uniquePrizeTokens);
 
   const startDate = new Date(Number(tournament.schedule.game.start) * 1000);
   const currentDate = new Date();
