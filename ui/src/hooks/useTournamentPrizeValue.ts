@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { TokenPrices } from "./useEkuboPrices";
 import { Prize } from "@/generated/models.gen";
+import { indexAddress } from "@/lib/utils";
 
 interface TokenTotal {
   tokenAddress: string;
@@ -47,22 +48,19 @@ export const useTournamentPrizeValue = ({
     }
 
     let total = 0;
-    let hasAllPrices = true;
-    const missingPrices: string[] = [];
 
     // Calculate USD from aggregated database prizes
     if (aggregations?.token_totals) {
       total += aggregations.token_totals.reduce(
         (sum: number, tokenTotal: TokenTotal) => {
           if (tokenTotal.tokenType === "erc20" && tokenTotal.totalAmount) {
-            const price = tokenPrices[tokenTotal.tokenAddress];
-            // If any price is missing, mark that we don't have all prices yet
+            const normalizedAddress = indexAddress(tokenTotal.tokenAddress);
+            const price = tokenPrices[normalizedAddress];
+            // Skip tokens without prices
             if (price === undefined) {
-              hasAllPrices = false;
-              missingPrices.push(tokenTotal.tokenAddress);
               return sum;
             }
-            const decimals = tokenDecimals[tokenTotal.tokenAddress] || 18;
+            const decimals = tokenDecimals[normalizedAddress] || 18;
             const amount = tokenTotal.totalAmount;
 
             return sum + (amount / 10 ** decimals) * price;
@@ -77,24 +75,18 @@ export const useTournamentPrizeValue = ({
     // Only include distributionPrizes - not creator/game shares as those are fees, not prizes
     distributionPrizes.forEach((prize) => {
       if (prize.token_type?.variant?.erc20) {
-        const price = tokenPrices[prize.token_address];
-        // If any price is missing, mark that we don't have all prices yet
+        const normalizedAddress = indexAddress(prize.token_address);
+        const price = tokenPrices[normalizedAddress];
+        // Skip tokens without prices
         if (price === undefined) {
-          hasAllPrices = false;
-          missingPrices.push(prize.token_address);
           return;
         }
         const amount = prize.token_type.variant.erc20.amount || 0;
-        const decimals = tokenDecimals[prize.token_address] || 18;
+        const decimals = tokenDecimals[normalizedAddress] || 18;
 
         total += (amount / 10 ** decimals) * price;
       }
     });
-
-    // If we don't have all prices yet, return 0 to avoid showing partial totals
-    if (!hasAllPrices) {
-      return 0;
-    }
 
     return total;
   }, [

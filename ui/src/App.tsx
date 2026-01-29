@@ -59,7 +59,7 @@ function App() {
 
     // Filter minigames to exclude specific contract addresses
     const filteredMinigames = minigames.filter(
-      (game) => !filteredAddresses.includes(game.contract_address)
+      (game) => !filteredAddresses.includes(game.contract_address),
     );
 
     // Create maps for faster lookups
@@ -75,7 +75,7 @@ function App() {
 
     // Get whitelisted game names for filtering duplicates
     const whitelistedGameNames = new Set(
-      whitelistedGames.map((game) => game.name.toLowerCase())
+      whitelistedGames.map((game) => game.name.toLowerCase()),
     );
 
     // Filter metadata to exclude games with the same name as whitelisted games
@@ -84,7 +84,7 @@ function App() {
     metadataMap.forEach((game, address) => {
       const isWhitelisted = whitelistedMap.has(address);
       const hasSameNameAsWhitelisted = whitelistedGameNames.has(
-        game.name?.toLowerCase()
+        game.name?.toLowerCase(),
       );
 
       // Only include if it's whitelisted OR it doesn't share a name with a whitelisted game

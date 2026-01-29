@@ -1064,8 +1064,6 @@ export const useGetTournamentPrizesAggregations = ({
       SELECT
         pd.token_address,
         pd.token_type,
-        NULL as symbol,
-        NULL as name,
         CASE
           WHEN pd.token_type = 'erc20' THEN
             GROUP_CONCAT(
@@ -1114,8 +1112,6 @@ export const useGetTournamentPrizesAggregations = ({
           json_object(
             'tokenAddress', token_address,
             'tokenType', token_type,
-            'tokenSymbol', symbol,
-            'tokenName', name,
             'totalAmount', total_amount,
             'nftCount', nft_count
           ),

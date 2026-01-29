@@ -6,13 +6,13 @@ import { indexAddress } from "@/lib/utils";
 
 // Normalize token lists to TokenMetadata format
 const normalizeTokenList = (
-  tokens: Array<{ l2_token_address?: string; address?: string; [key: string]: any }>,
+  tokens: Array<{ address: string; [key: string]: any }>,
   tokenType: "erc20" | "erc721" = "erc20"
 ): TokenMetadata[] => {
   return tokens.map((token) => ({
     name: token.name,
     symbol: token.symbol,
-    token_address: token.l2_token_address || token.address || "",
+    token_address: token.address,
     decimals: token.decimals ?? 18,
     token_type: tokenType,
     logo_url: token.logo_url || token.image,

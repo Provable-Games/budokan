@@ -187,7 +187,8 @@ const TokenDialog = ({
                   <div
                     key={index}
                     className={`w-full flex flex-row items-center justify-between hover:bg-brand/20 hover:cursor-pointer px-5 py-2 ${
-                      selectedToken?.address === token.token_address
+                      indexAddress(selectedToken?.address ?? "") ===
+                      indexAddress(token.token_address)
                         ? "bg-terminal-green/75 text-terminal-black"
                         : ""
                     }`}

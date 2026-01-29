@@ -6,11 +6,11 @@ import { indexAddress } from "./utils";
 export interface StaticToken {
   name: string;
   symbol: string;
-  l2_token_address: string;
+  address: string;
   decimals?: number;
   total_supply?: number | null;
   sort_order?: number;
-  logo_url?: string;
+  logo_url?: string | null;
 }
 
 export interface TokenForDisplay {
@@ -38,10 +38,10 @@ export const getTokensForChain = (
     const erc20Tokens: TokenForDisplay[] = mainnetTokens.map((token) => ({
       name: token.name,
       symbol: token.symbol,
-      token_address: token.l2_token_address,
+      token_address: token.address,
       decimals: token.decimals ?? 18,
       token_type: "erc20" as const,
-      logo_url: token.logo_url,
+      logo_url: token.logo_url ?? undefined,
       total_supply: token.total_supply,
       sort_order: token.sort_order,
     }));
@@ -66,10 +66,10 @@ export const getTokensForChain = (
     const erc20Tokens: TokenForDisplay[] = sepoliaTokens.map((token) => ({
       name: token.name,
       symbol: token.symbol,
-      token_address: token.l2_token_address,
+      token_address: token.address,
       decimals: token.decimals ?? 18,
       token_type: "erc20" as const,
-      logo_url: token.logo_url,
+      logo_url: token.logo_url ?? undefined,
       total_supply: token.total_supply,
       sort_order: token.sort_order,
     }));
