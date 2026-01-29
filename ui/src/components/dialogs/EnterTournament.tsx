@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -367,20 +368,11 @@ export function EnterTournamentDialog({
   }, [open, balancesLoading, sellTokensForQuotes.length, entryToken]);
 
   // Fetch Ekubo quotes for swap payments - only when dialog is open and we have tokens
-  const {
-    quotes: ekuboQuotes,
-    isLoading: quotesLoading,
-    refetch: refetchQuotes,
-  } = useEkuboQuotes({
+  const { quotes: ekuboQuotes, isLoading: quotesLoading } = useEkuboQuotes({
     sellTokens: sellTokensForQuotes,
     buyToken: entryToken ?? null,
     amount: quoteAmount,
     enabled: quotesEnabled,
-    config: {
-      fetch: {
-        timeout: 30000, // Increase timeout to 30s for multiple concurrent quote requests
-      },
-    },
   });
 
   // Auto-select payment token when balances load
@@ -1430,112 +1422,124 @@ export function EnterTournamentDialog({
                         ),
                     )}{" "}
                     {
-                      tokens.find((token) => token.token_address === entryToken)
-                        ?.symbol
+                      tokens.find(
+                        (token) =>
+                          indexAddress(token.token_address) ===
+                          indexAddress(entryToken),
+                      )?.symbol
                     }
                   </span>
-                  <span className="text-lg font-bold text-brand">
-                    ${entryFeeUsdCost.toFixed(2)}
-                  </span>
+                  {!isNaN(entryFeeUsdCost) && entryFeeUsdCost > 0 ? (
+                    <span className="text-lg font-bold text-brand">
+                      ${entryFeeUsdCost.toFixed(2)}
+                    </span>
+                  ) : (
+                    <Skeleton className="h-6 w-16" />
+                  )}
                 </div>
 
                 {/* Fee distribution inline */}
-                <TooltipProvider>
-                  <div className="flex items-center gap-1.5 text-xs">
-                    <span className="text-brand-muted text-base">→</span>
-                    {prizePoolShare > 0 && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="flex items-center gap-1 px-1.5 py-0.5 bg-brand/20 rounded cursor-help">
-                            <span className="w-4 h-4">
-                              <TROPHY />
-                            </span>
-                            <span>
-                              $
-                              {(
-                                (entryFeeUsdCost * prizePoolShare) /
-                                10000
-                              ).toFixed(2)}
-                            </span>
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>
-                            Prize Pool ({(prizePoolShare / 100).toFixed(0)}%)
-                          </p>
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
-                    {creatorShare > 0 && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="flex items-center gap-1 px-1.5 py-0.5 bg-neutral/20 rounded cursor-help">
-                            <span className="w-4 h-4">
-                              <USER />
-                            </span>
-                            <span>
-                              $
-                              {formatUsdValue(
-                                (entryFeeUsdCost * creatorShare) / 10000,
-                              )}
-                            </span>
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>
-                            Tournament Creator (
-                            {(creatorShare / 100).toFixed(0)}%)
-                          </p>
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
-                    {gameShare > 0 && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="flex items-center gap-1 px-1.5 py-0.5 bg-neutral/20 rounded cursor-help">
-                            <span className="w-4 h-4">
-                              <SPACE_INVADER_LINE />
-                            </span>
-                            <span>
-                              $
-                              {formatUsdValue(
-                                (entryFeeUsdCost * gameShare) / 10000,
-                              )}
-                            </span>
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>
-                            Game Developer ({(gameShare / 100).toFixed(0)}%)
-                          </p>
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
-                    {refundShare > 0 && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="flex items-center gap-1 px-1.5 py-0.5 bg-neutral/20 rounded cursor-help">
-                            <span className="w-4 h-4">
-                              <REFRESH />
-                            </span>
-                            <span>
-                              $
-                              {formatUsdValue(
-                                (entryFeeUsdCost * refundShare) / 10000,
-                              )}
-                            </span>
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>
-                            Refundable on Exit ({(refundShare / 100).toFixed(0)}
-                            %)
-                          </p>
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
-                  </div>
-                </TooltipProvider>
+                {!isNaN(entryFeeUsdCost) && entryFeeUsdCost > 0 ? (
+                  <TooltipProvider>
+                    <div className="flex items-center gap-1.5 text-xs">
+                      <span className="text-brand-muted text-base">→</span>
+                      {prizePoolShare > 0 && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-brand/20 rounded cursor-help">
+                              <span className="w-4 h-4">
+                                <TROPHY />
+                              </span>
+                              <span>
+                                $
+                                {(
+                                  (entryFeeUsdCost * prizePoolShare) /
+                                  10000
+                                ).toFixed(2)}
+                              </span>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>
+                              Prize Pool ({(prizePoolShare / 100).toFixed(0)}%)
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                      {creatorShare > 0 && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-neutral/20 rounded cursor-help">
+                              <span className="w-4 h-4">
+                                <USER />
+                              </span>
+                              <span>
+                                $
+                                {formatUsdValue(
+                                  (entryFeeUsdCost * creatorShare) / 10000,
+                                )}
+                              </span>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>
+                              Tournament Creator (
+                              {(creatorShare / 100).toFixed(0)}%)
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                      {gameShare > 0 && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-neutral/20 rounded cursor-help">
+                              <span className="w-4 h-4">
+                                <SPACE_INVADER_LINE />
+                              </span>
+                              <span>
+                                $
+                                {formatUsdValue(
+                                  (entryFeeUsdCost * gameShare) / 10000,
+                                )}
+                              </span>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>
+                              Game Developer ({(gameShare / 100).toFixed(0)}%)
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                      {refundShare > 0 && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-neutral/20 rounded cursor-help">
+                              <span className="w-4 h-4">
+                                <REFRESH />
+                              </span>
+                              <span>
+                                $
+                                {formatUsdValue(
+                                  (entryFeeUsdCost * refundShare) / 10000,
+                                )}
+                              </span>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>
+                              Refundable on Exit (
+                              {(refundShare / 100).toFixed(0)}
+                              %)
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
+                  </TooltipProvider>
+                ) : (
+                  <Skeleton className="h-4 w-32" />
+                )}
               </div>
             </div>
           )}
@@ -1548,8 +1552,11 @@ export function EnterTournamentDialog({
               entryFeeUsd={entryFeeUsdCost}
               entryFeeDecimals={getTokenDecimals(chainId, entryToken ?? "")}
               entryFeeSymbol={
-                tokens.find((token) => token.token_address === entryToken)
-                  ?.symbol
+                tokens.find(
+                  (token) =>
+                    indexAddress(token.token_address) ===
+                    indexAddress(entryToken),
+                )?.symbol
               }
               entryFeeLogo={getTokenLogoUrl(chainId, entryToken ?? "")}
               entryFeeUserBalance={balance}
@@ -1558,7 +1565,6 @@ export function EnterTournamentDialog({
               onTokenSelect={setSelectedPaymentToken}
               quotes={ekuboQuotes}
               quotesLoading={quotesLoading || balancesLoading}
-              onRefetch={refetchQuotes}
               creatorShare={creatorShare}
               gameShare={gameShare}
               prizePoolShare={prizePoolShare}

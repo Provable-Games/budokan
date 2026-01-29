@@ -13,7 +13,7 @@ async function main() {
     <StrictMode>
       <StarknetProvider>
         <DojoContextProvider>
-          <EkuboProvider>
+          <EkuboProvider config={{ fetch: { timeout: 30000 } }}>
             <MetagameProvider>
               <Router>
                 <App />
