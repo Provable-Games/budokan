@@ -1,8 +1,7 @@
 import { useMemo } from "react";
 import { Card } from "@/components/ui/card";
-import { feltToString } from "@/lib/utils";
+import { feltToString, formatNumber, indexAddress } from "@/lib/utils";
 import TokenGameIcon from "@/components/icons/TokenGameIcon";
-import { SOLID_CLOCK, USER, CALENDAR } from "@/components/Icons";
 import { useNavigate } from "react-router-dom";
 import Countdown from "@/components/Countdown";
 import { Tournament, Prize } from "@/generated/models.gen";
@@ -10,11 +9,9 @@ import { TokenMetadata } from "@/lib/types";
 import { useDojo } from "@/context/dojo";
 import {
   groupPrizesByTokens,
-  countTotalNFTs,
   extractEntryFeePrizes,
 } from "@/lib/utils/formatting";
 import { TabType } from "@/components/overview/TournamentTabs";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Tooltip,
   TooltipContent,
@@ -26,6 +23,7 @@ import { ChainId } from "@/dojo/setup/networks";
 import { TokenPrices } from "@/hooks/useEkuboPrices";
 import { getTokenLogoUrl } from "@/lib/tokensMeta";
 import { useTournamentPrizeValue } from "@/hooks/useTournamentPrizeValue";
+import { Lock } from "lucide-react";
 
 interface TokenTotal {
   tokenAddress: string;
@@ -52,7 +50,7 @@ interface TournamentCardProps {
 
 export const TournamentCard = ({
   tournament,
-  index,
+  index: _index,
   status,
   prizes,
   entryCount,
@@ -68,7 +66,7 @@ export const TournamentCard = ({
 
   const entryFeeToken = tournament?.entry_fee.Some?.token_address;
   const entryFeeTokenSymbol = tokens.find(
-    (t) => t.token_address === entryFeeToken
+    (t) => indexAddress(t.token_address) === indexAddress(entryFeeToken ?? ""),
   )?.symbol;
 
   // Use distribution_positions from entry fee if available, otherwise use entry count
@@ -81,7 +79,7 @@ export const TournamentCard = ({
     tournament?.id,
     tournament?.entry_fee,
     entryCount,
-    leaderboardSize
+    leaderboardSize,
   );
 
   const allPrizes = [...distributionPrizes, ...(prizes ?? [])];
@@ -97,39 +95,36 @@ export const TournamentCard = ({
     tokenDecimals,
   });
 
-  const totalPrizeNFTs = countTotalNFTs(groupedPrizes);
-
-  // Get unique ERC20 tokens from prizes for display
-  const uniqueErc20Tokens = useMemo(() => {
+  // Get unique tokens from all prizes (ERC20 + ERC721) for logo display
+  const uniquePrizeTokens = useMemo(() => {
     const tokenMap = new Map<
       string,
-      { address: string; symbol: string; logo?: string }
+      { address: string; symbol: string; logo?: string; type: string }
     >();
 
     Object.entries(groupedPrizes).forEach(([, prize]) => {
-      if (prize.type === "erc20") {
-        const token = tokens.find((t) => t.token_address === prize.address);
-        if (token && !tokenMap.has(token.token_address)) {
-          const logo = getTokenLogoUrl(
-            selectedChainConfig.chainId ?? ChainId.SN_MAIN,
-            token.token_address
-          );
-          tokenMap.set(token.token_address, {
-            address: token.token_address,
-            symbol: token.symbol,
-            logo,
-          });
-        }
+      const token = tokens.find(
+        (t) => indexAddress(t.token_address) === indexAddress(prize.address),
+      );
+      if (token && !tokenMap.has(token.token_address)) {
+        const logo = getTokenLogoUrl(
+          selectedChainConfig.chainId ?? ChainId.SN_MAIN,
+          token.token_address,
+        );
+        tokenMap.set(token.token_address, {
+          address: token.token_address,
+          symbol: token.symbol,
+          logo,
+          type: prize.type,
+        });
       }
     });
 
     return Array.from(tokenMap.values());
   }, [groupedPrizes, tokens, selectedChainConfig.chainId]);
 
+
   const startDate = new Date(Number(tournament.schedule.game.start) * 1000);
-  const duration =
-    Number(tournament.schedule.game.end) -
-    Number(tournament.schedule.game.start);
   const currentDate = new Date();
   const currentTimestamp = Math.floor(currentDate.getTime() / 1000);
 
@@ -190,74 +185,67 @@ export const TournamentCard = ({
 
   const gameAddress = tournament.game_config.address;
   const gameName = gameData.find(
-    (game) => game.contract_address === gameAddress
+    (game) => game.contract_address === gameAddress,
   )?.name;
   const gameImage = getGameImage(gameAddress);
 
   const hasEntryFee = tournament?.entry_fee.isSome();
 
-  const entryFee = tournament?.entry_fee.isSome()
-    ? (() => {
-        const entryFeeDecimals = tokenDecimals[entryFeeToken ?? ""] || 18;
-        const entryFeePrice = entryFeeToken
-          ? tokenPrices[entryFeeToken]
-          : undefined;
-
-        // Return "0.00" if price is not available
-        if (!entryFeePrice || isNaN(entryFeePrice)) {
-          return "0.00";
-        }
-
-        const amount = Number(tournament?.entry_fee.Some?.amount!);
-        const humanAmount = amount / 10 ** entryFeeDecimals;
-        return (humanAmount * entryFeePrice).toFixed(2);
-      })()
-    : "Free";
-
-  const renderDuration = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-
-    if (days > 0) {
-      return (
-        <div className="flex flex-row items-center gap-0.5">
-          <span>{days}</span>
-          <span>D</span>
-        </div>
-      );
-    } else if (hours > 0) {
-      return (
-        <div className="flex flex-row items-center gap-0.5">
-          <span>{hours}</span>
-          <span>H</span>
-        </div>
-      );
-    } else if (minutes > 0) {
-      return (
-        <div className="flex flex-row items-center gap-0.5">
-          <span>{minutes}</span>
-          <span>min{minutes > 1 ? "s" : ""}</span>
-        </div>
-      );
-    } else {
-      return (
-        <div className="flex flex-row items-center gap-0.5">
-          <span>{seconds}</span>
-          <span>sec{seconds > 1 ? "s" : ""}</span>
-        </div>
-      );
+  const entryFeeInfo = useMemo(() => {
+    if (!tournament?.entry_fee.isSome()) {
+      return { type: "free" as const };
     }
-  };
+
+    const normalizedEntryFeeToken = indexAddress(entryFeeToken ?? "");
+    const entryFeeDecimals = tokenDecimals[normalizedEntryFeeToken] || 18;
+    const entryFeePrice = entryFeeToken
+      ? tokenPrices[normalizedEntryFeeToken]
+      : undefined;
+
+    const amount = Number(tournament?.entry_fee.Some?.amount!);
+    const humanAmount = amount / 10 ** entryFeeDecimals;
+
+    // Return token amount if price is not available
+    if (!entryFeePrice || isNaN(entryFeePrice)) {
+      return {
+        type: "token" as const,
+        tokenAmount: formatNumber(humanAmount),
+        symbol: entryFeeTokenSymbol ?? "",
+      };
+    }
+
+    return {
+      type: "usd" as const,
+      usdAmount: (humanAmount * entryFeePrice).toFixed(2),
+    };
+  }, [
+    tournament?.entry_fee,
+    entryFeeToken,
+    entryFeeTokenSymbol,
+    tokenDecimals,
+    tokenPrices,
+  ]);
 
   const isRestricted = tournament?.entry_requirement.isSome();
-  const hasEntryLimit =
-    Number(tournament?.entry_requirement?.Some?.entry_limit) > 0;
-  const entryLimit = tournament?.entry_requirement?.Some?.entry_limit;
-  const requirementVariant =
-    tournament?.entry_requirement.Some?.entry_requirement_type?.activeVariant();
-  const tournamentRequirementVariant =
-    tournament?.entry_requirement.Some?.entry_requirement_type?.variant?.tournament?.activeVariant();
+
+  // Compute countdown info once for reuse
+  const countdownInfo = useMemo(() => {
+    const isSubmissionPhase =
+      submissionEnd &&
+      currentTimestamp >= gameEnd &&
+      currentTimestamp < submissionEnd;
+
+    if (isSubmissionPhase) {
+      return { targetTimestamp: submissionEnd!, label: "Submit" };
+    }
+    if (currentTimestamp >= gameStart && currentTimestamp < gameEnd) {
+      return { targetTimestamp: gameEnd, label: "Ends" };
+    }
+    if (currentTimestamp < gameStart) {
+      return { targetTimestamp: gameStart, label: "Starts" };
+    }
+    return null;
+  }, [submissionEnd, currentTimestamp, gameEnd, gameStart]);
 
   return (
     <Card
@@ -266,146 +254,204 @@ export const TournamentCard = ({
       onClick={() => {
         navigate(`/tournament/${Number(tournament.id).toString()}`);
       }}
-      className="h-32 sm:h-48 animate-in fade-in zoom-in duration-300 ease-out"
+      className="h-36 sm:h-44 w-full whitespace-normal animate-in fade-in zoom-in duration-300 ease-out overflow-hidden"
     >
-      <div className="flex flex-col justify-between h-full">
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-row justify-between text-lg 2xl:text-xl h-6">
-            <p className="truncate w-2/3 font-brand">
+      <div className="flex flex-col h-full">
+        {/* Zone A — Header Bar */}
+        <div className="flex flex-row justify-between items-center gap-2">
+          <div className="flex flex-row items-center gap-1.5 min-w-0 flex-1">
+            <Badge
+              variant={tournamentStatus.variant}
+              className="text-[10px] sm:text-xs px-1.5 py-0 sm:py-0.5 rounded-md h-5 flex-shrink-0"
+            >
+              {tournamentStatus.text}
+            </Badge>
+            {isRestricted && (
+              <Lock className="w-3 h-3 text-brand-muted flex-shrink-0" />
+            )}
+            <p className="truncate min-w-0 font-brand text-sm sm:text-base">
               {feltToString(tournament?.metadata?.name!)}
             </p>
-            <div className="flex flex-row gap-2 w-1/3 justify-end">
-              <Tooltip delayDuration={50}>
-                <TooltipTrigger asChild>
-                  <div className="flex flex-row items-center">
-                    <span className="w-6">
-                      <SOLID_CLOCK />
-                    </span>
-                    <span className="text-sm tracking-tight">
-                      {renderDuration(duration)}
-                    </span>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent side="top" align="center">
-                  <p>Duration</p>
-                </TooltipContent>
-              </Tooltip>
-              <Tooltip delayDuration={50}>
-                <TooltipTrigger asChild>
-                  <div className="flex flex-row items-center">
-                    <span className="w-7">
-                      <USER />
-                    </span>
-                    <span>{entryCount}</span>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent side="top" align="center">
-                  <p>Entries</p>
-                </TooltipContent>
-              </Tooltip>
-            </div>
           </div>
-          <div className="hidden sm:block w-full h-0.5 bg-brand/25" />
+          <div className="flex-shrink-0">
+            <Tooltip delayDuration={50}>
+              <TooltipTrigger asChild>
+                <div className="flex items-center justify-center">
+                  <TokenGameIcon image={gameImage} size={"xs"} />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="top" align="center" sideOffset={-10}>
+                {gameName ? gameName : "Unknown"}
+              </TooltipContent>
+            </Tooltip>
+          </div>
         </div>
-        <div className="flex flex-row items-center">
-          <div className="relative w-3/4">
-            <div className="flex flex-row sm:flex-wrap items-center gap-2 overflow-x-auto sm:overflow-visible [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-              {/* Tournament Status */}
-              <Tooltip delayDuration={50}>
-                <TooltipTrigger asChild>
-                  <div className="flex-shrink-0">
-                    <Badge
-                      variant={tournamentStatus.variant}
-                      className="text-xs p-1 rounded-md"
-                    >
-                      {tournamentStatus.text}
-                    </Badge>
+
+        {/* Divider */}
+        <div className="w-full h-px bg-brand/15 my-0.5 sm:my-1" />
+
+        {/* Zone B — Hero Area (Prize Pool) */}
+        <div className="flex flex-col items-center justify-center flex-1 min-h-0 overflow-hidden">
+          {totalPrizesValueUSD > 0 || uniquePrizeTokens.length > 0 ? (
+            <>
+              <div className="flex flex-row items-center gap-1">
+                {uniquePrizeTokens.length > 0 && (
+                  <div className="flex flex-row items-center">
+                    {uniquePrizeTokens.slice(0, 3).map((token, idx) => (
+                      <Tooltip key={idx} delayDuration={50}>
+                        <TooltipTrigger asChild>
+                          <div
+                            className="relative rounded-full border border-background"
+                            style={{
+                              marginLeft: idx > 0 ? "-4px" : 0,
+                              zIndex: 3 - idx,
+                            }}
+                          >
+                            {token.logo ? (
+                              <img
+                                src={token.logo}
+                                alt={token.symbol}
+                                className="w-4 h-4 sm:w-6 sm:h-6 rounded-full"
+                              />
+                            ) : (
+                              <div className="w-4 h-4 sm:w-6 sm:h-6 rounded-full bg-brand/20 flex items-center justify-center text-[7px] sm:text-[10px]">
+                                {token.symbol.slice(0, 2)}
+                              </div>
+                            )}
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" align="center">
+                          <p>{token.symbol}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    ))}
+                    {uniquePrizeTokens.length > 3 && (
+                      <div
+                        className="w-4 h-4 sm:w-6 sm:h-6 rounded-full bg-brand/20 flex items-center justify-center text-[7px] sm:text-[10px] border border-background"
+                        style={{ marginLeft: "-4px", zIndex: 0 }}
+                      >
+                        +{uniquePrizeTokens.length - 3}
+                      </div>
+                    )}
                   </div>
-                </TooltipTrigger>
-                <TooltipContent side="top" align="center">
-                  <p>Tournament Status: {tournamentStatus.text}</p>
-                </TooltipContent>
-              </Tooltip>
+                )}
+                {totalPrizesValueUSD > 0 && (
+                  <span className="font-brand text-lg sm:text-2xl text-brand">
+                    ${formatNumber(totalPrizesValueUSD)}
+                  </span>
+                )}
+              </div>
+              <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-brand-muted">
+                Prize Pool
+              </span>
+            </>
+          ) : !hasEntryFee ? (
+            <>
+              <span className="font-brand text-lg sm:text-2xl text-success">
+                FREE
+              </span>
+              <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-brand-muted">
+                Prize Pool
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="font-brand text-lg sm:text-2xl text-brand-muted">
+                -
+              </span>
+              <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-brand-muted">
+                Prize Pool
+              </span>
+            </>
+          )}
+        </div>
 
-              {/* Restricte Access */}
-              {isRestricted && (
+        {/* Divider */}
+        <div className="w-full h-px bg-brand/15 my-0.5 sm:my-1" />
+
+        {/* Zone C — Footer Bar */}
+        <div className="flex flex-row justify-between items-center">
+          {/* Entry Fee */}
+          <div className="flex flex-col items-center">
+            <span className="text-xs sm:text-sm font-medium">
+              {hasEntryFee ? (
+                entryFeeInfo.type === "usd" ? (
+                  `$${entryFeeInfo.usdAmount}`
+                ) : entryFeeInfo.type === "token" ? (
+                  <span className="flex items-center gap-0.5">
+                    {(() => {
+                      const entryFeeTokenLogo = getTokenLogoUrl(
+                        selectedChainConfig.chainId ?? ChainId.SN_MAIN,
+                        entryFeeToken ?? "",
+                      );
+                      return entryFeeTokenLogo ? (
+                        <Tooltip delayDuration={50}>
+                          <TooltipTrigger asChild>
+                            <img
+                              src={entryFeeTokenLogo}
+                              alt={entryFeeTokenSymbol ?? ""}
+                              className="w-3.5 h-3.5 rounded-full"
+                            />
+                          </TooltipTrigger>
+                          <TooltipContent side="top" align="center">
+                            <p>{entryFeeTokenSymbol}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : null;
+                    })()}
+                    {entryFeeInfo.tokenAmount}
+                  </span>
+                ) : (
+                  "FREE"
+                )
+              ) : (
+                <span className="text-success">FREE</span>
+              )}
+            </span>
+            <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-brand-muted">
+              Entry
+            </span>
+          </div>
+
+          {/* Entries Count */}
+          <div className="flex flex-col items-center">
+            <span className="text-xs sm:text-sm font-medium">{entryCount}</span>
+            <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-brand-muted">
+              Entries
+            </span>
+          </div>
+
+          {/* Timing */}
+          <div className="flex flex-col items-center">
+            {countdownInfo ? (
+              <>
+                <div className="sm:hidden">
+                  <Countdown
+                    targetTimestamp={countdownInfo.targetTimestamp}
+                    label={countdownInfo.label}
+                    labelPosition="horizontal"
+                    size="xs"
+                  />
+                </div>
+                <div className="hidden sm:block">
+                  <Countdown
+                    targetTimestamp={countdownInfo.targetTimestamp}
+                    label={countdownInfo.label}
+                    labelPosition="horizontal"
+                    size="sm"
+                  />
+                </div>
+              </>
+            ) : status === "ended" ? (
+              <>
                 <Tooltip delayDuration={50}>
                   <TooltipTrigger asChild>
-                    <div className="flex-shrink-0">
-                      <Badge
-                        variant="outline"
-                        className="text-xs p-1 rounded-md"
-                      >
-                        Restricted
-                      </Badge>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" align="center">
-                    <span>
-                      {requirementVariant === "allowlist" ? (
-                        "Allowlist"
-                      ) : requirementVariant === "token" ? (
-                        "Token"
-                      ) : requirementVariant === "tournament" ? (
-                        <span>
-                          Tournament{" "}
-                          <span className="capitalize">
-                            {tournamentRequirementVariant}
-                          </span>
-                        </span>
-                      ) : (
-                        "Unknown"
-                      )}
+                    <span className="text-xs sm:text-sm font-medium">
+                      {startDate.toLocaleDateString(undefined, {
+                        month: "numeric",
+                        day: "numeric",
+                      })}
                     </span>
-                  </TooltipContent>
-                </Tooltip>
-              )}
-
-              {/* Limited Entry */}
-              {hasEntryLimit && (
-                <Tooltip delayDuration={50}>
-                  <TooltipTrigger asChild>
-                    <div className="flex-shrink-0">
-                      <Badge
-                        variant="outline"
-                        className="text-xs p-1 rounded-md"
-                      >
-                        {Number(entryLimit) === 1
-                          ? `${Number(entryLimit)} entry`
-                          : `${Number(entryLimit)} entries`}
-                      </Badge>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" align="center">
-                    <p>
-                      {Number(entryLimit) === 1
-                        ? `${Number(entryLimit)} entry`
-                        : `${Number(entryLimit)} entries`}{" "}
-                      per qualification
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              )}
-
-              {/* Start Date - for ended tournaments */}
-              {status === "ended" && (
-                <Tooltip delayDuration={50}>
-                  <TooltipTrigger asChild>
-                    <div className="flex-shrink-0">
-                      <Badge
-                        variant="outline"
-                        className="text-xs p-1 rounded-md flex items-center gap-1"
-                      >
-                        <span className="w-4 h-4">
-                          <CALENDAR />
-                        </span>
-                        {startDate.toLocaleDateString(undefined, {
-                          month: "numeric",
-                          day: "numeric",
-                        })}
-                        /{startDate.getFullYear().toString().slice(-2)}
-                      </Badge>
-                    </div>
                   </TooltipTrigger>
                   <TooltipContent side="top" align="center">
                     <p>
@@ -422,141 +468,12 @@ export const TournamentCard = ({
                     </p>
                   </TooltipContent>
                 </Tooltip>
-              )}
-            </div>
-          </div>
-
-          <div className="flex flex-row w-1/4 justify-end sm:px-2">
-            <Tooltip delayDuration={50}>
-              <TooltipTrigger asChild>
-                <div className="flex items-center justify-center">
-                  <TokenGameIcon key={index} image={gameImage} size={"md"} />
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="top" align="center" sideOffset={-10}>
-                {gameName ? gameName : "Unknown"}
-              </TooltipContent>
-            </Tooltip>
-          </div>
-        </div>
-        <div className="flex flex-row items-center justify-center gap-2 w-full mx-auto">
-          {/* Time Status */}
-          {status === "upcoming" ? (
-            <Countdown
-              targetTimestamp={gameStart}
-              label="Starts In"
-              labelPosition="vertical"
-              className="scale-75 origin-center"
-            />
-          ) : status === "live" ? (
-            <Countdown
-              targetTimestamp={gameEnd}
-              label="Ends In"
-              labelPosition="vertical"
-              className="scale-75 origin-center"
-            />
-          ) : submissionEnd &&
-            currentTimestamp >= gameEnd &&
-            currentTimestamp < submissionEnd ? (
-            <Countdown
-              targetTimestamp={submissionEnd}
-              label="Submission Ends In"
-              labelPosition="vertical"
-              className="scale-75 origin-center"
-            />
-          ) : (
-            <></>
-          )}
-          <div className="flex flex-row items-center gap-1">
-            <span className="text-brand-muted text-sm">Fee:</span>
-            {pricesLoading ? (
-              <Skeleton className="h-6 w-16 bg-brand/20" />
-            ) : hasEntryFee ? (
-              <div className="flex flex-col items-center gap-0.5">
-                {entryFeeTokenSymbol && (
-                  <Tooltip delayDuration={50}>
-                    <TooltipTrigger asChild>
-                      <div className="relative hidden sm:block">
-                        {(() => {
-                          const entryFeeTokenLogo = getTokenLogoUrl(
-                            selectedChainConfig.chainId ?? ChainId.SN_MAIN,
-                            entryFeeToken ?? ""
-                          );
-                          return entryFeeTokenLogo ? (
-                            <img
-                              src={entryFeeTokenLogo}
-                              alt={entryFeeTokenSymbol}
-                              className="w-4 h-4 rounded-full"
-                            />
-                          ) : (
-                            <div className="w-4 h-4 rounded-full bg-brand/20 flex items-center justify-center text-xs">
-                              {entryFeeTokenSymbol.slice(0, 1)}
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" align="center">
-                      <p>{entryFeeTokenSymbol}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-                <span className="text-sm">${entryFee}</span>
-              </div>
+                <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-brand-muted">
+                  Ended
+                </span>
+              </>
             ) : (
-              <span className="text-sm">FREE</span>
-            )}
-          </div>
-          <div className="flex flex-row items-center gap-1">
-            <span className="text-brand-muted text-sm">Pot:</span>
-            {pricesLoading ? (
-              <Skeleton className="h-6 w-16 bg-brand/20" />
-            ) : totalPrizesValueUSD > 0 || totalPrizeNFTs > 0 ? (
-              <div className="flex flex-col items-center gap-0.5">
-                {uniqueErc20Tokens.length > 0 && (
-                  <div className="hidden sm:flex flex-row gap-0.5 items-center">
-                    {uniqueErc20Tokens.slice(0, 3).map((token, idx) => (
-                      <Tooltip key={idx} delayDuration={50}>
-                        <TooltipTrigger asChild>
-                          <div className="relative">
-                            {token.logo ? (
-                              <img
-                                src={token.logo}
-                                alt={token.symbol}
-                                className="w-4 h-4 rounded-full"
-                              />
-                            ) : (
-                              <div className="w-4 h-4 rounded-full bg-brand/20 flex items-center justify-center text-[10px]">
-                                {token.symbol.slice(0, 1)}
-                              </div>
-                            )}
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent side="top" align="center">
-                          <p>{token.symbol}</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    ))}
-                    {uniqueErc20Tokens.length > 3 && (
-                      <span className="text-[10px] text-brand-muted">
-                        +{uniqueErc20Tokens.length - 3}
-                      </span>
-                    )}
-                  </div>
-                )}
-                <div className="flex flex-row items-center gap-1.5">
-                  {totalPrizesValueUSD > 0 && (
-                    <span className="text-sm">${totalPrizesValueUSD.toFixed(2)}</span>
-                  )}
-                  {totalPrizeNFTs > 0 && (
-                    <span className="text-sm">
-                      {totalPrizeNFTs} NFT{totalPrizeNFTs === 1 ? "" : "s"}
-                    </span>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <span className="text-sm">No Prizes</span>
+              <span className="text-xs sm:text-sm text-brand-muted">-</span>
             )}
           </div>
         </div>

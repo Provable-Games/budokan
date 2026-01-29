@@ -340,11 +340,12 @@ export const PrizesTableDialog = ({
                         const prizeRows: JSX.Element[] = [];
 
                         Object.entries(prizes).forEach(([key, prize]) => {
+                          const normalizedAddress = indexAddress(prize.address);
                           const token = tokens.find(
-                            (t) => t.token_address === prize.address
+                            (t) => indexAddress(t.token_address) === normalizedAddress
                           );
-                          const symbol = token?.symbol || key;
-                          const decimals = tokenDecimals[prize.address] || 18;
+                          const symbol = token?.symbol || "?";
+                          const decimals = tokenDecimals[normalizedAddress] || 18;
 
                           if (prize.type === "erc20") {
                             const value = calculatePrizeValue(
@@ -483,11 +484,12 @@ export const PrizesTableDialog = ({
                           const prizeRows: JSX.Element[] = [];
 
                           Object.entries(prizes).forEach(([key, prize]) => {
+                            const normalizedAddress = indexAddress(prize.address);
                             const token = tokens.find(
-                              (t) => t.token_address === prize.address
+                              (t) => indexAddress(t.token_address) === normalizedAddress
                             );
-                            const symbol = token?.symbol || key;
-                            const decimals = tokenDecimals[prize.address] || 18;
+                            const symbol = token?.symbol || "?";
+                            const decimals = tokenDecimals[normalizedAddress] || 18;
 
                             if (prize.type === "erc20") {
                               const value = calculatePrizeValue(

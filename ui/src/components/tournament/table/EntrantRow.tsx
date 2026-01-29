@@ -3,7 +3,7 @@ import { HoverCardContent } from "@/components/ui/hover-card";
 import { HoverCard } from "@/components/ui/hover-card";
 import { HoverCardTrigger } from "@/components/ui/hover-card";
 import { GameTokenData } from "metagame-sdk";
-import { displayAddress } from "@/lib/utils";
+import { displayAddress, indexAddress } from "@/lib/utils";
 import { Ban } from "lucide-react";
 
 interface EntrantRowProps {
@@ -38,7 +38,7 @@ const EntrantRow = ({
         <div className="flex flex-row gap-2">
           <span className="text-brand-muted">Owner:</span>
           <span>
-            {usernames?.get(game?.owner ?? "") ||
+            {usernames?.get(indexAddress(game?.owner ?? "")) ||
               displayAddress(game?.owner ?? "")}
           </span>
         </div>

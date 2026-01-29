@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { PrizeInput } from "@/components/createTournament/inputs/PrizeInput";
 import { PrizeDistributionVisual } from "@/components/createTournament/PrizeDistributionVisual";
 import { FormToken } from "@/lib/types";
-import { calculateDistribution } from "@/lib/utils";
+import { calculateDistribution, indexAddress } from "@/lib/utils";
 import { getTokenLogoUrl } from "@/lib/tokensMeta";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
 import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
@@ -153,7 +153,7 @@ export function PrizeSelector({
   // Update amount based on USD value when price is available
   useEffect(() => {
     if (newPrize.tokenType === "ERC20" && newPrize.value !== undefined && newPrize.value > 0 && newPrize.token?.address) {
-      const price = prices?.[newPrize.token.address] ?? 0;
+      const price = prices?.[indexAddress(newPrize.token.address)] ?? 0;
 
       if (price > 0) {
         const calculatedAmount = newPrize.value / price;
@@ -184,8 +184,9 @@ export function PrizeSelector({
         if (newPrize.tokenType === "ERC20" && newPrize.amount) {
           // Check ERC20 balance
           const balances = await getBalanceGeneral(newPrize.token.address);
+          const normalizedAddress = indexAddress(newPrize.token.address);
           const decimals =
-            tokenDecimals[newPrize.token.address] ||
+            tokenDecimals[normalizedAddress] ||
             (await getTokenDecimals(newPrize.token.address));
           const amount = (newPrize.amount ?? 0) * 10 ** decimals;
 

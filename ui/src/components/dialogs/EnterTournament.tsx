@@ -346,7 +346,7 @@ export function EnterTournamentDialog({
   const [sellTokensForQuotes, setSellTokensForQuotes] = useState<string[]>([]);
   const sellTokensKeyRaw = useMemo(
     () => JSON.stringify(sellTokensForQuotesRaw),
-    [sellTokensForQuotesRaw]
+    [sellTokensForQuotesRaw],
   );
 
   useEffect(() => {
@@ -361,11 +361,17 @@ export function EnterTournamentDialog({
 
   // Memoize enabled to prevent toggling
   const quotesEnabled = useMemo(() => {
-    return open && !balancesLoading && sellTokensForQuotes.length > 0 && !!entryToken;
+    return (
+      open && !balancesLoading && sellTokensForQuotes.length > 0 && !!entryToken
+    );
   }, [open, balancesLoading, sellTokensForQuotes.length, entryToken]);
 
   // Fetch Ekubo quotes for swap payments - only when dialog is open and we have tokens
-  const { quotes: ekuboQuotes, isLoading: quotesLoading, refetch: refetchQuotes } = useEkuboQuotes({
+  const {
+    quotes: ekuboQuotes,
+    isLoading: quotesLoading,
+    refetch: refetchQuotes,
+  } = useEkuboQuotes({
     sellTokens: sellTokensForQuotes,
     buyToken: entryToken ?? null,
     amount: quoteAmount,
@@ -476,7 +482,7 @@ export function EnterTournamentDialog({
       const selectedTokenBalance = tokenBalances.find(
         (b) =>
           indexAddress(b.tokenAddress).toLowerCase() ===
-          indexAddress(selectedPaymentToken).toLowerCase()
+          indexAddress(selectedPaymentToken).toLowerCase(),
       );
       if (!selectedTokenBalance) return false;
 
@@ -1470,7 +1476,7 @@ export function EnterTournamentDialog({
                             <span>
                               $
                               {formatUsdValue(
-                                (entryFeeUsdCost * creatorShare) / 10000
+                                (entryFeeUsdCost * creatorShare) / 10000,
                               )}
                             </span>
                           </div>
@@ -1493,7 +1499,7 @@ export function EnterTournamentDialog({
                             <span>
                               $
                               {formatUsdValue(
-                                (entryFeeUsdCost * gameShare) / 10000
+                                (entryFeeUsdCost * gameShare) / 10000,
                               )}
                             </span>
                           </div>
@@ -1515,7 +1521,7 @@ export function EnterTournamentDialog({
                             <span>
                               $
                               {formatUsdValue(
-                                (entryFeeUsdCost * refundShare) / 10000
+                                (entryFeeUsdCost * refundShare) / 10000,
                               )}
                             </span>
                           </div>
