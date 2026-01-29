@@ -207,7 +207,7 @@ export function EnterTournamentDialog({
           sellToken: selectedPaymentToken,
           buyToken: entryToken,
           minimumReceived: BigInt(entryAmount), // We need at least this much
-          slippagePercent: 5n, // 5% slippage
+          slippagePercent: 1n, // 1% slippage
         });
 
         // Convert to call format expected by the system
