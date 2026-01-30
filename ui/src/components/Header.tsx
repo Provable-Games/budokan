@@ -34,11 +34,22 @@ import {
 } from "@/components/ui/dropdown-menu";
 import useUIStore from "@/hooks/useUIStore";
 import { GameButton } from "@/components/overview/gameFilters/GameButton";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ALERT } from "@/components/Icons";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import WalletsDialog from "@/components/dialogs/Wallets";
+import TermsOfServiceModal from "@/components/dialogs/TermsOfService";
 import logoImage from "@/assets/images/logo.svg";
+
+const TOS_KEY_PREFIX = "budokan_tos_";
+const TOS_VERSION = "1.0";
+
+const hasAcceptedCurrentTerms = (address: string): boolean => {
+  const value = localStorage.getItem(`${TOS_KEY_PREFIX}${address}`);
+  return value === TOS_VERSION;
+};
+
+const saveTermsAcceptance = (address: string): void => {
+  localStorage.setItem(`${TOS_KEY_PREFIX}${address}`, TOS_VERSION);
+};
 
 const Header = () => {
   const { account } = useAccount();
@@ -58,55 +69,40 @@ const Header = () => {
   const walletIcon =
     connector && !isController ? getConnectorIcon(connector) : null;
 
-  // State to control the visibility of the warning banner
-  const [showWarning, setShowWarning] = useState(true);
-
   const [showWallets, setShowWallets] = useState(false);
+  const [showTermsOfService, setShowTermsOfService] = useState(false);
 
-  // Optional: Hide the warning after a certain time or store in localStorage to not show again
+  // Show ToS modal when a wallet connects for the first time
   useEffect(() => {
-    const hasSeenWarning = localStorage.getItem("hasSeenWarning");
-    if (hasSeenWarning) {
-      setShowWarning(false);
+    if (account?.address) {
+      if (!hasAcceptedCurrentTerms(account.address)) {
+        setShowTermsOfService(true);
+      }
+    } else {
+      setShowTermsOfService(false);
     }
-  }, []);
+  }, [account?.address]);
 
-  const dismissWarning = () => {
-    setShowWarning(false);
-    localStorage.setItem("hasSeenWarning", "true");
-  };
+  const acceptTerms = useCallback(() => {
+    if (account?.address) {
+      saveTermsAcceptance(account.address);
+    }
+    setShowTermsOfService(false);
+  }, [account?.address]);
+
+  const declineTerms = useCallback(() => {
+    setShowTermsOfService(false);
+    disconnect();
+  }, [disconnect]);
 
   return (
     <div className="flex flex-col">
-      {/* Warning Banner */}
-      {showWarning && (
-        <Alert
-          variant="destructive"
-          className="rounded-none border-x-0 border-t-0 py-2 hidden sm:block"
-        >
-          <div className="flex items-center gap-5 justify-center w-full">
-            <div className="flex items-center gap-2">
-              <span className="w-4 h-4">
-                <ALERT />
-              </span>
-              <AlertDescription className="text-sm">
-                This is experimental technology involving unaudited contracts.
-                Use at your own risk.
-              </AlertDescription>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={dismissWarning}
-              className="h-6 px-2 text-xs"
-            >
-              Dismiss
-            </Button>
-          </div>
-        </Alert>
-      )}
-
       <WalletsDialog open={showWallets} onOpenChange={setShowWallets} />
+      <TermsOfServiceModal
+        open={showTermsOfService}
+        onAccept={acceptTerms}
+        onDecline={declineTerms}
+      />
 
       <div className="flex flex-row items-center justify-between px-5 sm:py-5 sm:px-10 h-[60px] sm:h-[80px]">
         {/* Hamburger menu for small screens */}
