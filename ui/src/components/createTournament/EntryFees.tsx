@@ -55,6 +55,7 @@ const EntryFees = ({ form }: StepProps) => {
   const creatorFee = form.watch("entryFees.creatorFeePercentage") || 0;
   const gameFee = form.watch("entryFees.gameFeePercentage") || 0;
   const minGameFee = form.watch("entryFees.minGameFeePercentage") || 1;
+  const minEntryFeeUsd = form.watch("entryFees.minEntryFeeUsd") || 1;
   const refundShare = form.watch("entryFees.refundSharePercentage") || 0;
 
   // Calculate prize pool amount (100% - fees - refund)
@@ -167,9 +168,11 @@ const EntryFees = ({ form }: StepProps) => {
                 <FormControl>
                   <TokenAmountInput
                     label="Entry Fee Amount"
-                    description="Fee per entry in USD"
+                    description={`Fee per entry in USD (min $${minEntryFeeUsd})`}
                     value={field.value || 0}
-                    onChange={field.onChange}
+                    onChange={(val) =>
+                      field.onChange(Math.max(minEntryFeeUsd, val))
+                    }
                     tokenAmount={form.watch("entryFees.amount") ?? 0}
                     tokenAddress={
                       form.watch("entryFees.token")?.address ?? ""
@@ -179,6 +182,7 @@ const EntryFees = ({ form }: StepProps) => {
                     disabled={!hasTokenSelected}
                     visible={tokenEverSelected}
                     className="lg:pl-4"
+                    minValue={minEntryFeeUsd}
                   />
                 </FormControl>
               </FormItem>

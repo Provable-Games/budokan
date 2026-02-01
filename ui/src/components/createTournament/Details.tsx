@@ -54,7 +54,8 @@ const Details = ({ form }: StepProps) => {
 
         // Auto-populate entry fee defaults from game config
         const defaults = getGameDefaults(gameAddress, chainId);
-        form.setValue("entryFees.value", defaults.defaultEntryFeeUsd);
+        form.setValue("entryFees.value", defaults.minEntryFeeUsd);
+        form.setValue("entryFees.minEntryFeeUsd", defaults.minEntryFeeUsd);
         form.setValue(
           "entryFees.gameFeePercentage",
           defaults.defaultGameFeePercentage

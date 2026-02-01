@@ -88,6 +88,7 @@ const formSchema = z.object({
       token: z.custom<FormToken>().optional(),
       amount: z.number().min(0).optional(),
       value: z.number().min(0).optional(),
+      minEntryFeeUsd: z.number().min(0).optional(),
       tokenDecimals: z.number().min(0).max(18).optional(),
       creatorFeePercentage: z.number().min(0).max(100).optional(), // Stored as percentage (0-100), converted to basis points (0-10000) on submit
       gameFeePercentage: z.number().min(0).max(100).optional(), // Stored as percentage (0-100), converted to basis points (0-10000) on submit
@@ -180,6 +181,7 @@ const CreateTournament = () => {
       },
       entryFees: {
         value: 1,
+        minEntryFeeUsd: 1,
         creatorFeePercentage: 0,
         gameFeePercentage: 1,
         minGameFeePercentage: 1,
