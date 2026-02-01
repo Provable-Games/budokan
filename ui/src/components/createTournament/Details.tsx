@@ -24,10 +24,16 @@ import {
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { getPlayUrl } from "@/assets/games";
+import { getGameDefaults, getGamesForChain } from "@/assets/games";
+import { useDojo } from "@/context/dojo";
+import { ChainId } from "@/dojo/setup/networks";
+import { mainnetTokens } from "@/lib/mainnetTokens";
+import { sepoliaTokens } from "@/lib/sepoliaTokens";
+import { FormToken } from "@/lib/types";
 
 const Details = ({ form }: StepProps) => {
   const { gameData } = useUIStore();
+  const { selectedChainConfig } = useDojo();
   const [isMobileDialogOpen, setIsMobileDialogOpen] = useState(false);
   const [isMarkdownPreviewOpen, setIsMarkdownPreviewOpen] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -36,17 +42,54 @@ const Details = ({ form }: StepProps) => {
     const subscription = form.watch((_value, { name }) => {
       if (name === "game") {
         form.setValue("settings", "0");
-        // Prefill play_url with the game's playUrl if available
         const gameAddress = form.getValues("game");
-        const playUrl = getPlayUrl(gameAddress);
-        if (playUrl) {
-          form.setValue("play_url", playUrl);
+        const chainId = selectedChainConfig?.chainId ?? "";
+
+        // Prefill play_url with the game's playUrl if available
+        const games = getGamesForChain(chainId);
+        const game = games.find((g) => g.contract_address === gameAddress);
+        if (game?.playUrl) {
+          form.setValue("play_url", game.playUrl);
+        }
+
+        // Auto-populate entry fee defaults from game config
+        const defaults = getGameDefaults(gameAddress, chainId);
+        form.setValue("entryFees.value", defaults.defaultEntryFeeUsd);
+        form.setValue(
+          "entryFees.gameFeePercentage",
+          defaults.defaultGameFeePercentage
+        );
+        form.setValue(
+          "entryFees.minGameFeePercentage",
+          defaults.defaultGameFeePercentage
+        );
+
+        // Look up token metadata to set the FormToken
+        const isSepolia = chainId === ChainId.SN_SEPOLIA;
+        const tokenList = isSepolia ? sepoliaTokens : mainnetTokens;
+        const tokenMeta = tokenList.find(
+          (t) =>
+            t.address.toLowerCase() ===
+            defaults.defaultEntryFeeToken
+              .replace(/^0x0+/, "0x")
+              .toLowerCase()
+        );
+        if (tokenMeta) {
+          const formToken: FormToken = {
+            address: defaults.defaultEntryFeeToken,
+            name: tokenMeta.name,
+            symbol: tokenMeta.symbol,
+            token_type: "erc20",
+            is_registered: true,
+          };
+          form.setValue("entryFees.token", formToken);
+          form.setValue("entryFees.tokenDecimals", tokenMeta.decimals);
         }
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [form]);
+  }, [form, selectedChainConfig]);
 
   return (
     <>

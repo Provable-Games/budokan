@@ -18,6 +18,7 @@ interface FeeDistributionVisualProps {
   tokenSymbol?: string;
   usdValue?: number;
   tokenLogoUrl?: string;
+  minGameFee?: number;
 }
 
 export const FeeDistributionVisual = ({
@@ -32,6 +33,7 @@ export const FeeDistributionVisual = ({
   tokenSymbol = "",
   usdValue = 0,
   tokenLogoUrl = "",
+  minGameFee = 1,
 }: FeeDistributionVisualProps) => {
   const [creatorFeeEnabled, setCreatorFeeEnabled] = useState(creatorFee > 0);
   const [refundShareEnabled, setRefundShareEnabled] = useState(refundShare > 0);
@@ -129,7 +131,7 @@ export const FeeDistributionVisual = ({
         const maxCreator = prizePoolEnabled ? 99 - gameFee - refundShare : 100 - gameFee - refundShare;
         onCreatorFeeChange(Math.max(minCreator, Math.min(maxCreator, newLeftPercentage)));
       } else if (leftSection.label === "Game Fee") {
-        const minGame = 1;
+        const minGame = minGameFee;
         const maxGame = prizePoolEnabled
           ? 99 - creatorFee - refundShare
           : 100 - creatorFee - refundShare;
@@ -147,6 +149,7 @@ export const FeeDistributionVisual = ({
       gameFee,
       refundShare,
       prizePoolEnabled,
+      minGameFee,
       onCreatorFeeChange,
       onGameFeeChange,
       onRefundShareChange,
@@ -291,16 +294,16 @@ export const FeeDistributionVisual = ({
               <div className="w-3 h-3 rounded bg-purple-500" />
               <FormLabel className="text-sm font-medium">Game Fee</FormLabel>
             </div>
-            <span className="text-xs text-muted-foreground">(min 1%)</span>
+            <span className="text-xs text-muted-foreground">(min {minGameFee}%)</span>
           </div>
           <div className="flex items-center gap-2">
             <Input
               type="number"
-              min={1}
+              min={minGameFee}
               max={maxGameFee}
               step={0.1}
               value={gameFee.toFixed(1)}
-              onChange={(e) => onGameFeeChange(Math.min(maxGameFee, Math.max(1, Number(e.target.value))))}
+              onChange={(e) => onGameFeeChange(Math.min(maxGameFee, Math.max(minGameFee, Number(e.target.value))))}
               disabled={disabled}
               className="h-10 text-lg font-bold"
             />
@@ -396,7 +399,7 @@ export const FeeDistributionVisual = ({
 
                 if (currentFees === 0) {
                   // If all fees are 0, distribute equally to game fee
-                  onGameFeeChange(Math.max(1, targetTotal));
+                  onGameFeeChange(Math.max(minGameFee, targetTotal));
                   return;
                 }
 
@@ -404,7 +407,7 @@ export const FeeDistributionVisual = ({
                 const ratio = targetTotal / currentFees;
 
                 const newCreatorFee = creatorFeeEnabled ? creatorFee * ratio : 0;
-                const newGameFee = Math.max(1, gameFee * ratio);
+                const newGameFee = Math.max(minGameFee, gameFee * ratio);
                 const newRefundShare = refundShareEnabled ? refundShare * ratio : 0;
 
                 onCreatorFeeChange(newCreatorFee);
