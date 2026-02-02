@@ -88,9 +88,11 @@ const formSchema = z.object({
       token: z.custom<FormToken>().optional(),
       amount: z.number().min(0).optional(),
       value: z.number().min(0).optional(),
+      minEntryFeeUsd: z.number().min(0).optional(),
       tokenDecimals: z.number().min(0).max(18).optional(),
       creatorFeePercentage: z.number().min(0).max(100).optional(), // Stored as percentage (0-100), converted to basis points (0-10000) on submit
       gameFeePercentage: z.number().min(0).max(100).optional(), // Stored as percentage (0-100), converted to basis points (0-10000) on submit
+      minGameFeePercentage: z.number().min(0).max(100).optional(), // Minimum game fee percentage from game config
       refundSharePercentage: z.number().min(0).max(100).optional(), // Stored as percentage (0-100), converted to basis points (0-10000) on submit
       prizePoolPayoutCount: z.number().min(1).max(1000).optional(), // Number of positions that receive prize pool payouts
       prizeDistribution: z
@@ -160,7 +162,7 @@ const CreateTournament = () => {
 
       // Other steps
       enableGating: false,
-      enableEntryFees: false,
+      enableEntryFees: true,
       enableEntryLimit: true,
       enablePrizes: false,
       gatingOptions: {
@@ -178,8 +180,11 @@ const CreateTournament = () => {
         },
       },
       entryFees: {
+        value: 1,
+        minEntryFeeUsd: 1,
         creatorFeePercentage: 0,
         gameFeePercentage: 1,
+        minGameFeePercentage: 1,
         refundSharePercentage: 0,
         prizePoolPayoutCount: 10,
         distributionType: "exponential",
@@ -379,15 +384,12 @@ const CreateTournament = () => {
         enabled: getValue("enableGating") === true,
       },
       fees: {
-        complete:
-          getValue("enableEntryFees") === true
-            ? !!(
-                getValue("entryFees.token") &&
-                getValue("entryFees.amount") &&
-                getValue("entryFees.amount") > 0
-              )
-            : true,
-        enabled: getValue("enableEntryFees") === true,
+        complete: !!(
+          getValue("entryFees.token") &&
+          getValue("entryFees.amount") &&
+          getValue("entryFees.amount") > 0
+        ),
+        enabled: true,
       },
       prizes: {
         complete: true, // Prizes step is always complete (optional feature)

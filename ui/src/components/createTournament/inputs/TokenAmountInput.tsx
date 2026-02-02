@@ -14,6 +14,7 @@ interface TokenAmountInputProps {
   disabled?: boolean;
   visible?: boolean;
   className?: string;
+  minValue?: number;
 }
 
 export const TokenAmountInput = ({
@@ -28,6 +29,7 @@ export const TokenAmountInput = ({
   disabled = false,
   visible = true,
   className = "",
+  minValue,
 }: TokenAmountInputProps) => {
   return (
     <div
@@ -46,6 +48,7 @@ export const TokenAmountInput = ({
           value={value || undefined}
           onChange={(val) => onChange(val ?? 0)}
           disabled={disabled}
+          minValue={minValue}
         />
         <TokenValue
           amount={tokenAmount}
