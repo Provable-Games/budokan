@@ -8,7 +8,7 @@ import {
   FormLabel,
 } from "@/components/ui/form";
 import React from "react";
-import { calculateDistribution } from "@/lib/utils";
+import { calculateDistribution, indexAddress } from "@/lib/utils";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
 import { getTokenLogoUrl } from "@/lib/tokensMeta";
 import { FeeDistributionVisual } from "@/components/createTournament/FeeDistributionVisual";
@@ -61,7 +61,7 @@ const EntryFees = ({ form }: StepProps) => {
   // Calculate prize pool amount (100% - fees - refund)
   const prizePoolPercentage = Math.max(
     0,
-    100 - creatorFee - gameFee - refundShare
+    100 - creatorFee - gameFee - refundShare,
   );
   const prizePoolAmount =
     ((form.watch("entryFees.amount") ?? 0) * prizePoolPercentage) / 100;
@@ -77,14 +77,14 @@ const EntryFees = ({ form }: StepProps) => {
       creatorFee,
       gameFee,
       refundShare,
-      distributionType
+      distributionType,
     );
     form.setValue(
       "entryFees.prizeDistribution",
       distributions.map((percentage, index) => ({
         position: index + 1,
         percentage,
-      }))
+      })),
     );
   }, [
     creatorFee,
@@ -99,7 +99,9 @@ const EntryFees = ({ form }: StepProps) => {
     form.setValue(
       "entryFees.amount",
       (form.watch("entryFees.value") ?? 0) /
-        (prices?.[form.watch("entryFees.token")?.address ?? ""] ?? 1)
+        (prices?.[
+          indexAddress(form.watch("entryFees.token")?.address ?? "") ?? ""
+        ] ?? 1),
     );
   }, [form.watch("entryFees.value"), prices]);
 
@@ -145,10 +147,7 @@ const EntryFees = ({ form }: StepProps) => {
                       tokenField.onChange(token);
                     }}
                     onTokenDecimalsChange={(decimals) => {
-                      form.setValue(
-                        "entryFees.tokenDecimals",
-                        decimals
-                      );
+                      form.setValue("entryFees.tokenDecimals", decimals);
                     }}
                     quickSelectAddresses={QUICK_SELECT_ADDRESSES}
                     tokenType="erc20"
@@ -174,9 +173,7 @@ const EntryFees = ({ form }: StepProps) => {
                       field.onChange(Math.max(minEntryFeeUsd, val))
                     }
                     tokenAmount={form.watch("entryFees.amount") ?? 0}
-                    tokenAddress={
-                      form.watch("entryFees.token")?.address ?? ""
-                    }
+                    tokenAddress={form.watch("entryFees.token")?.address ?? ""}
                     usdValue={form.watch("entryFees.value") ?? 0}
                     isLoading={pricesLoading}
                     disabled={!hasTokenSelected}
@@ -205,7 +202,7 @@ const EntryFees = ({ form }: StepProps) => {
               onGameFeeChange={(value) =>
                 form.setValue(
                   "entryFees.gameFeePercentage",
-                  Math.max(minGameFee, value)
+                  Math.max(minGameFee, value),
                 )
               }
               minGameFee={minGameFee}
@@ -218,7 +215,7 @@ const EntryFees = ({ form }: StepProps) => {
               usdValue={form.watch("entryFees.value") ?? 0}
               tokenLogoUrl={getTokenLogoUrl(
                 chainId,
-                form.watch("entryFees.token")?.address ?? ""
+                form.watch("entryFees.token")?.address ?? "",
               )}
             />
             {prizePoolPercentage > 0 && (
@@ -245,7 +242,7 @@ const EntryFees = ({ form }: StepProps) => {
                   usdValue={prizePoolValue}
                   tokenLogoUrl={getTokenLogoUrl(
                     chainId,
-                    form.watch("entryFees.token")?.address ?? ""
+                    form.watch("entryFees.token")?.address ?? "",
                   )}
                   leaderboardSize={
                     form.watch("entryFees.prizePoolPayoutCount") ?? 10
