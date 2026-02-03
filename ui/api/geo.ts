@@ -1,5 +1,12 @@
 import { geolocation } from "@vercel/functions";
 
+// Blocked countries (2-letter ISO codes)
+// Add codes here to block entire countries, e.g., "KP", "IR"
+// For testing, add "US" to block all US users
+const BLOCKED_COUNTRIES = new Set<string>([
+  "US", // TESTING ONLY - remove after verification
+]);
+
 const BLOCKED_STATES = new Set([
   "AZ",
   "AR",
@@ -21,7 +28,8 @@ export default function handler(request: Request) {
   const country = geo.country ?? "";
   const region = geo.countryRegion ?? "";
   const blocked =
-    country === "US" && BLOCKED_STATES.has(region.toUpperCase());
+    BLOCKED_COUNTRIES.has(country.toUpperCase()) ||
+    (country === "US" && BLOCKED_STATES.has(region.toUpperCase()));
 
   return new Response(JSON.stringify({ country, region, blocked }), {
     headers: { "Content-Type": "application/json" },
