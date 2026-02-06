@@ -8,6 +8,7 @@ interface GeoBlockResult {
 }
 
 const SESSION_KEY = "budokan_geo_check";
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 export function useGeoBlock(): GeoBlockResult {
   const [result, setResult] = useState<GeoBlockResult>({
@@ -18,18 +19,23 @@ export function useGeoBlock(): GeoBlockResult {
   });
 
   useEffect(() => {
-    // Try reading from sessionStorage cache
+    // Check sessionStorage cache with TTL
     try {
       const cached = sessionStorage.getItem(SESSION_KEY);
       if (cached) {
         const parsed = JSON.parse(cached);
-        setResult({
-          isBlocked: parsed.blocked ?? false,
-          isLoading: false,
-          country: parsed.country ?? "",
-          region: parsed.region ?? "",
-        });
-        return;
+        const age = Date.now() - (parsed.timestamp ?? 0);
+        if (age < CACHE_TTL_MS) {
+          setResult({
+            isBlocked: parsed.blocked ?? false,
+            isLoading: false,
+            country: parsed.country ?? "",
+            region: parsed.region ?? "",
+          });
+          return;
+        }
+        // Cache expired, remove it
+        sessionStorage.removeItem(SESSION_KEY);
       }
     } catch {
       // sessionStorage unavailable, proceed with fetch
@@ -42,9 +48,12 @@ export function useGeoBlock(): GeoBlockResult {
       .then((data) => {
         if (cancelled) return;
 
-        // Cache in sessionStorage
+        // Cache in sessionStorage with timestamp
         try {
-          sessionStorage.setItem(SESSION_KEY, JSON.stringify(data));
+          sessionStorage.setItem(
+            SESSION_KEY,
+            JSON.stringify({ ...data, timestamp: Date.now() })
+          );
         } catch {
           // Ignore storage errors
         }

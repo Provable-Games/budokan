@@ -3,9 +3,7 @@ import { geolocation } from "@vercel/functions";
 // Blocked countries (2-letter ISO codes)
 // Add codes here to block entire countries, e.g., "KP", "IR"
 // For testing, add "US" to block all US users
-const BLOCKED_COUNTRIES = new Set<string>([
-  "US", // TESTING ONLY - remove after verification
-]);
+const BLOCKED_COUNTRIES = new Set<string>([]);
 
 const BLOCKED_STATES = new Set([
   "AZ",
