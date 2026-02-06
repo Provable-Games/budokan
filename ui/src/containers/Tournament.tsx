@@ -845,7 +845,13 @@ const Tournament = () => {
           {!isEnded && (
             <Button
               variant="outline"
-              onClick={() => setAddPrizesDialogOpen(true)}
+              onClick={() => {
+                if (isGeoBlocked) {
+                  setShowGeoBlock(true);
+                } else {
+                  setAddPrizesDialogOpen(true);
+                }
+              }}
             >
               <GIFT />{" "}
               <span className="hidden sm:block 3xl:text-lg">Add Prizes</span>
