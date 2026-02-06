@@ -37,6 +37,8 @@ import { GameButton } from "@/components/overview/gameFilters/GameButton";
 import { useState, useEffect, useCallback } from "react";
 import WalletsDialog from "@/components/dialogs/Wallets";
 import TermsOfServiceModal from "@/components/dialogs/TermsOfService";
+import GeoBlockedDialog from "@/components/dialogs/GeoBlocked";
+import { useGeoBlock } from "@/hooks/useGeoBlock";
 import logoImage from "@/assets/images/logo.svg";
 
 const TOS_KEY_PREFIX = "budokan_tos_";
@@ -71,6 +73,8 @@ const Header = () => {
 
   const [showWallets, setShowWallets] = useState(false);
   const [showTermsOfService, setShowTermsOfService] = useState(false);
+  const [showGeoBlock, setShowGeoBlock] = useState(false);
+  const { isBlocked: isGeoBlocked } = useGeoBlock();
 
   // Show ToS modal when a wallet connects for the first time
   useEffect(() => {
@@ -103,6 +107,7 @@ const Header = () => {
         onAccept={acceptTerms}
         onDecline={declineTerms}
       />
+      <GeoBlockedDialog open={showGeoBlock} onOpenChange={setShowGeoBlock} />
 
       <div className="flex flex-row items-center justify-between px-5 sm:py-5 sm:px-10 h-[60px] sm:h-[80px]">
         {/* Hamburger menu for small screens */}
@@ -231,7 +236,11 @@ const Header = () => {
               // && isAdmin
               <Button
                 onClick={() => {
-                  navigate("/create-tournament");
+                  if (isGeoBlocked) {
+                    setShowGeoBlock(true);
+                  } else {
+                    navigate("/create-tournament");
+                  }
                 }}
               >
                 <span className="flex flex-row items-center gap-2">
