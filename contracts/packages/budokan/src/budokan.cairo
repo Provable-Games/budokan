@@ -2,6 +2,7 @@
 
 #[starknet::contract]
 pub mod Budokan {
+    use budokan::events;
     use budokan::libs::schedule::{
         ScheduleAssertionsImpl, ScheduleAssertionsTrait, ScheduleImpl, ScheduleTrait,
     };
@@ -29,7 +30,6 @@ pub mod Budokan {
     use budokan_interfaces::entry_validator::{
         IENTRY_VALIDATOR_ID, IEntryValidatorDispatcher, IEntryValidatorDispatcherTrait,
     };
-    use budokan::events;
     use budokan_prize::prize::PrizeComponent;
     use budokan_prize::prize::PrizeComponent::PrizeInternalTrait;
     use budokan_registration::registration::RegistrationComponent;
@@ -189,9 +189,7 @@ pub mod Budokan {
 
     #[constructor]
     fn constructor(
-        ref self: ContractState,
-        owner: ContractAddress,
-        default_token_address: ContractAddress,
+        ref self: ContractState, owner: ContractAddress, default_token_address: ContractAddress,
     ) {
         // Initialize ownable component with the provided owner
         self.ownable.initializer(owner);
@@ -696,8 +694,7 @@ pub mod Budokan {
                             "Budokan: Cannot set position for distributed prize (position and distribution are mutually exclusive)",
                         );
                     },
-                    TokenTypeData::erc721(_) => {
-                        // ERC721 prizes don't have distribution, so position is always valid
+                    TokenTypeData::erc721(_) => {// ERC721 prizes don't have distribution, so position is always valid
                     },
                 }
             }
