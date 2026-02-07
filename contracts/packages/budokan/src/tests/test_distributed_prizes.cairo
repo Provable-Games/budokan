@@ -66,7 +66,7 @@ fn test_distributed_prize_claim_all_positions_filled() {
                     distribution_count: Option::Some(3),
                 },
             ),
-            Option::None, // No position = distributed prize
+            Option::None // No position = distributed prize
         );
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
@@ -135,7 +135,9 @@ fn test_distributed_prize_claim_all_positions_filled() {
 
 /// Test that adding prize with BOTH position AND distribution is now REJECTED
 /// This is the fix for the bug where conflicting configs were previously allowed
-#[should_panic(expected: "Budokan: Cannot set position for distributed prize (position and distribution are mutually exclusive)")]
+#[should_panic(
+    expected: "Budokan: Cannot set position for distributed prize (position and distribution are mutually exclusive)",
+)]
 #[test]
 fn test_conflicting_config_position_and_distribution_rejected() {
     let contracts = setup();
@@ -172,7 +174,7 @@ fn test_conflicting_config_position_and_distribution_rejected() {
                     distribution_count: Option::Some(10),
                 },
             ),
-            Option::Some(1), // Position set - should be rejected!
+            Option::Some(1) // Position set - should be rejected!
         );
 }
 
@@ -212,7 +214,7 @@ fn test_single_prize_without_distribution_works() {
                     distribution_count: Option::None,
                 },
             ),
-            Option::Some(1), // Position 1
+            Option::Some(1) // Position 1
         );
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
@@ -289,7 +291,7 @@ fn test_distributed_prize_without_position_works() {
                     distribution_count: Option::Some(3),
                 },
             ),
-            Option::None, // No position = Distributed prize
+            Option::None // No position = Distributed prize
         );
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
@@ -774,7 +776,7 @@ fn test_distributed_prize_beyond_distribution_count_fails() {
                 ERC20Data {
                     amount: prize_amount,
                     distribution: Option::Some(Distribution::Linear(10)),
-                    distribution_count: Option::Some(10), // Only 10 positions
+                    distribution_count: Option::Some(10) // Only 10 positions
                 },
             ),
             Option::None,

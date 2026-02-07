@@ -120,10 +120,6 @@ fn deploy_budokan(denshokan_address: ContractAddress) -> ContractAddress {
     // 2. default_token_address: ContractAddress
     denshokan_address.serialize(ref calldata);
 
-    // 3. event_relayer: ContractAddress (zero = no relayer)
-    let zero_address: ContractAddress = 0_felt252.try_into().unwrap();
-    zero_address.serialize(ref calldata);
-
     let (contract_address, _) = contract_class.deploy(@calldata).expect('deploy budokan failed');
     contract_address
 }

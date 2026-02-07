@@ -1,0 +1,26 @@
+{
+  "name": "@provable-games/budokan-indexer",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "apibara run --allow-env indexers/budokan.indexer.ts",
+    "build": "tsc",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
+  },
+  "dependencies": {
+    "apibara": "next",
+    "@apibara/indexer": "next",
+    "@apibara/starknet": "next",
+    "@apibara/plugin-drizzle": "next",
+    "drizzle-orm": "^0.38.0",
+    "pg": "^8.13.0",
+    "starknet": "^7.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.11.0",
+    "drizzle-kit": "^0.30.0",
+    "typescript": "^5.7.0"
+  }
+}
