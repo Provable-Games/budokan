@@ -694,7 +694,7 @@ pub mod Budokan {
                             "Budokan: Cannot set position for distributed prize (position and distribution are mutually exclusive)",
                         );
                     },
-                    TokenTypeData::erc721(_) => {// ERC721 prizes don't have distribution, so position is always valid
+                    TokenTypeData::erc721(_) => { // ERC721 prizes don't have distribution, so position is always valid
                     },
                 }
             }
