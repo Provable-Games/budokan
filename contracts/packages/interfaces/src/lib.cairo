@@ -13,7 +13,5 @@ pub mod entry_requirement;
 // Entry validator interface (for extension contracts)
 pub mod entry_validator;
 
-// Event relayer interface
-pub mod event_relayer;
 pub mod prize;
 pub mod registration;
