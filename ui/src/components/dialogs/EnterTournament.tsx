@@ -18,7 +18,7 @@ import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
 import { useAccount, useConnect, useProvider } from "@starknet-react/core";
 import { Tournament } from "@/generated/models.gen";
 import { TokenMetadata } from "@/lib/types";
-import { OPUS } from "@/components/Icons";
+import { OPUS, ZKPASSPORT } from "@/components/Icons";
 import {
   feltToString,
   indexAddress,
@@ -57,8 +57,11 @@ import { LoadingSpinner } from "@/components/ui/spinner";
 import {
   getExtensionProof,
   registerTournamentValidator,
+  registerZkPassportValidator,
   getExtensionAddresses,
 } from "@/lib/extensionConfig";
+import { ZKPassportEntry } from "@/components/dialogs/ZKPassportEntry";
+import { findTemplateByCommitment } from "@/lib/zkpassport/templates";
 import { getTokenByAddress } from "@/lib/tokenUtils";
 import { useVoyagerNfts } from "@/hooks/useVoyagerNfts";
 import {
@@ -91,6 +94,7 @@ type Proof = {
   tournamentId?: string;
   tokenId?: string;
   position?: number;
+  zkPassportProof?: string[] | null;
 };
 
 // Update the entriesLeftByTournament type to include either tournamentId or token
@@ -545,6 +549,13 @@ export function EnterTournamentDialog({
     }
   }, [extensionAddresses.tournamentValidator]);
 
+  // Register ZKPassport validator when config loads
+  useEffect(() => {
+    if (extensionAddresses.zkPassportValidator) {
+      registerZkPassportValidator(extensionAddresses.zkPassportValidator);
+    }
+  }, [extensionAddresses.zkPassportValidator]);
+
   // Check if this extension is a tournament validator
   const isTournamentValidatorExtension = useMemo(() => {
     if (!extensionConfig?.address || !extensionAddresses.tournamentValidator)
@@ -589,6 +600,44 @@ export function EnterTournamentDialog({
     );
     return normalizedExtensionAddress === normalizedValidatorAddress;
   }, [extensionConfig?.address, extensionAddresses.opusTrovesValidator]);
+
+  // Check if this extension is a ZKPassport validator
+  const isZkPassportValidatorExtension = useMemo(() => {
+    if (!extensionConfig?.address || !extensionAddresses.zkPassportValidator)
+      return false;
+    const normalizedExtensionAddress = indexAddress(extensionConfig.address);
+    const normalizedValidatorAddress = indexAddress(
+      extensionAddresses.zkPassportValidator,
+    );
+    return normalizedExtensionAddress === normalizedValidatorAddress;
+  }, [extensionConfig?.address, extensionAddresses.zkPassportValidator]);
+
+  // Parse ZKPassport validator config: [verifier_addr, scope, subscope, commitment, maxProofAge, nullifierType]
+  const zkPassportValidatorConfig = useMemo(() => {
+    if (!isZkPassportValidatorExtension || !extensionConfig?.config) {
+      return null;
+    }
+
+    const config = extensionConfig.config;
+    if (!config || config.length < 6) return null;
+
+    const commitment = config[3];
+    const maxProofAge = Number(config[4] || "3600");
+    const template = findTemplateByCommitment(commitment);
+
+    return {
+      verifierAddress: config[0],
+      scope: config[1],
+      subscope: config[2],
+      commitment,
+      maxProofAge,
+      nullifierType: config[5],
+      template,
+    };
+  }, [isZkPassportValidatorExtension, extensionConfig?.config]);
+
+  // ZKPassport proof state - set when user completes verification
+  const [zkPassportProof, setZkPassportProof] = useState<string[] | null>(null);
 
   // Parse Opus Troves validator config: [asset_count, ...asset_addresses, threshold, value_per_entry, max_entries]
   const opusTrovesValidatorConfig = useMemo(() => {
@@ -1334,6 +1383,25 @@ export function EnterTournamentDialog({
         };
       }
 
+      // Handle ZKPassport validator - proof comes from ZKPassportEntry component
+      if (isZkPassportValidatorExtension && zkPassportValidatorConfig) {
+        if (zkPassportProof) {
+          canEnter = true;
+          entriesLeftByTournament = [
+            {
+              address,
+              entriesLeft: 1,
+            },
+          ];
+        }
+
+        return {
+          meetsEntryRequirements: canEnter,
+          proof: { zkPassportProof },
+          entriesLeftByTournament,
+        };
+      }
+
       // Generic extension validation
       const remaining =
         extensionEntriesLeft !== null ? extensionEntriesLeft : Infinity;
@@ -1379,6 +1447,9 @@ export function EnterTournamentDialog({
     extensionBestQualification,
     hasEntryLimit,
     requiredTokenAddresses,
+    isZkPassportValidatorExtension,
+    zkPassportValidatorConfig,
+    zkPassportProof,
   ]);
 
   // display the entry fee distribution
@@ -1580,8 +1651,19 @@ export function EnterTournamentDialog({
                 {requirementVariant === "token" ? (
                   "You must hold the NFT"
                 ) : requirementVariant === "extension" ? (
-                  isTournamentValidatorExtension &&
-                  tournamentValidatorConfig ? (
+                  isZkPassportValidatorExtension &&
+                  zkPassportValidatorConfig ? (
+                    <div className="flex flex-row items-center gap-2">
+                      <span className="w-5 h-5">
+                        <ZKPASSPORT />
+                      </span>
+                      <span>
+                        {zkPassportValidatorConfig.template?.description ??
+                          "ZK Passport verification required"}
+                      </span>
+                    </div>
+                  ) : isTournamentValidatorExtension &&
+                    tournamentValidatorConfig ? (
                     <div className="flex flex-col gap-1">
                       <div className="flex flex-row items-center gap-2">
                         {`You must have ${
@@ -2031,6 +2113,24 @@ export function EnterTournamentDialog({
                           </div>
                         )}
                       </div>
+                      <span className="text-xs text-muted-foreground">
+                        Note: Final validation will be performed by the
+                        extension contract on-chain
+                      </span>
+                    </div>
+                  ) : isZkPassportValidatorExtension &&
+                    zkPassportValidatorConfig ? (
+                    // ZKPassport validator
+                    <div className="flex flex-col gap-2 px-4">
+                      <ZKPassportEntry
+                        template={zkPassportValidatorConfig.template}
+                        onProofReady={(qualification) => {
+                          setZkPassportProof(qualification);
+                        }}
+                        onError={() => {
+                          setZkPassportProof(null);
+                        }}
+                      />
                       <span className="text-xs text-muted-foreground">
                         Note: Final validation will be performed by the
                         extension contract on-chain

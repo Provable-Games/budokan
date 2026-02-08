@@ -1382,6 +1382,19 @@ export const processQualificationProof = (
   }
 
   if (requirementVariant === "extension") {
+    // Check if this is a ZKPassport validator with zkPassportProof
+    if (proof?.zkPassportProof && Array.isArray(proof.zkPassportProof)) {
+      return new CairoOption(
+        CairoOptionVariant.Some,
+        new CairoCustomEnum({
+          Tournament: undefined,
+          NFT: undefined,
+          Address: undefined,
+          Extension: proof.zkPassportProof, // [nullifier_low, nullifier_high, ...garaga_calldata]
+        })
+      );
+    }
+
     // Check if this is a tournament validator with tournament proof
     // Tournament validator proofs have tournamentId, tokenId, and position
     if (proof?.tournamentId && proof?.tokenId && proof?.position !== undefined) {

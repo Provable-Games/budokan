@@ -57,6 +57,7 @@ import { SnapshotConfig } from "./extensions/SnapshotConfig";
 import { ERC20BalanceConfig } from "./extensions/ERC20BalanceConfig";
 import { OpusTrovesConfig } from "./extensions/OpusTrovesConfig";
 import { CustomExtensionConfig } from "./extensions/CustomExtensionConfig";
+import { ZKPassportConfig } from "./extensions/ZKPassportConfig";
 
 const EntryRequirements = ({ form }: StepProps) => {
   const { namespace, selectedChainConfig } = useDojo();
@@ -154,6 +155,11 @@ const EntryRequirements = ({ form }: StepProps) => {
         ) {
           // Check if it's Opus Troves validator
           setSelectedPreset("opus_troves");
+        } else if (
+          extensionAddress === extensionAddresses.zkPassportValidator
+        ) {
+          // Check if it's ZKPassport validator
+          setSelectedPreset("zkpassport");
         } else {
           // Custom contract
           setSelectedPreset(null);
@@ -1200,6 +1206,11 @@ const EntryRequirements = ({ form }: StepProps) => {
                           )}
                           extensionError={extensionError}
                         />
+                      )}
+
+                      {/* ZK Passport Preset Configuration */}
+                      {selectedPreset === "zkpassport" && (
+                        <ZKPassportConfig extensionError={extensionError} />
                       )}
 
                       {/* Custom Contract Configuration */}

@@ -1,0 +1,57 @@
+import { ChainId } from "@/dojo/setup/networks";
+
+/**
+ * ZKPassport Constants
+ *
+ * Pre-computed values for the ZKPassport verification system.
+ * These constants are shared between tournament creation and player entry flows.
+ */
+
+// Pre-computed service scope hash: SHA256("zkpassport.id") truncated to 31 bytes
+export const ZKPASSPORT_SERVICE_SCOPE =
+  "0x8d535e2a7f4ee38a4d12aa88bcf21d2c2f6fa051d12eafba6655bf37e8c11c";
+
+// Pre-computed service subscope hash: SHA256("bigproof") truncated to 31 bytes
+export const ZKPASSPORT_SERVICE_SUBSCOPE =
+  "0xf54fbb0f658e7013ec2114ef095a29bb3e2f95b96dbd93e46f12f67863111a";
+
+// Nullifier type: NON_SALTED = 0
+export const ZKPASSPORT_NULLIFIER_TYPE = "0";
+
+// Default max proof age in seconds (1 hour)
+export const ZKPASSPORT_DEFAULT_MAX_PROOF_AGE = 3600;
+
+// ZKPassport SDK domain
+export const ZKPASSPORT_SDK_DOMAIN = "zkpassport.id";
+
+/**
+ * Garaga Honk verifier addresses by chain
+ */
+export const ZKPASSPORT_VERIFIER_ADDRESSES: Record<string, string> = {
+  [ChainId.SN_SEPOLIA]:
+    "0x06ad2f4c866eabb03443098ecc798af1791952bc138bd32904dd215d8585c655",
+  [ChainId.SN_MAIN]: "", // TODO: Add mainnet verifier address
+};
+
+/**
+ * ZKPassport validator contract addresses by chain
+ */
+export const ZKPASSPORT_VALIDATOR_ADDRESSES: Record<string, string> = {
+  [ChainId.SN_SEPOLIA]:
+    "0x0", // TODO: Add deployed ZKPassport validator address for Sepolia
+  [ChainId.SN_MAIN]: "", // TODO: Add mainnet validator address
+};
+
+/**
+ * Get the ZKPassport validator address for a given chain
+ */
+export const getZkPassportValidatorAddress = (chainId: string): string => {
+  return ZKPASSPORT_VALIDATOR_ADDRESSES[chainId] || "";
+};
+
+/**
+ * Get the Garaga verifier address for a given chain
+ */
+export const getZkPassportVerifierAddress = (chainId: string): string => {
+  return ZKPASSPORT_VERIFIER_ADDRESSES[chainId] || "";
+};

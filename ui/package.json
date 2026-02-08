@@ -59,6 +59,10 @@
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
     "uuid": "^11.0.5",
+    "@zkpassport/registry": "file:../../zkpassport-packages/packages/registry-sdk",
+    "@zkpassport/sdk": "file:../../zkpassport-packages/packages/zkpassport-sdk",
+    "@zkpassport/utils": "file:../../zkpassport-packages/packages/zkpassport-utils",
+    "garaga": "file:../../garaga/tools/npm/garaga_ts",
     "zod": "^3.24.1"
   },
   "devDependencies": {
