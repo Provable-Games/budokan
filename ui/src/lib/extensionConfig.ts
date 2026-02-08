@@ -125,10 +125,36 @@ export const OPUS_SUPPORTED_ASSETS: Record<string, string[]> = {
 };
 
 /**
+ * Maps preset keys to their corresponding address key in EXTENSION_ADDRESSES.
+ * Presets not listed here (e.g. "snapshot") have no on-chain address.
+ */
+export const PRESET_TO_ADDRESS_KEY: Record<
+  string,
+  keyof (typeof EXTENSION_ADDRESSES)[string]
+> = {
+  erc20_balance: "erc20BalanceValidator",
+  opus_troves: "opusTrovesValidator",
+  zkpassport: "zkPassportValidator",
+};
+
+/**
  * Get extension addresses for a specific chain
  */
 export const getExtensionAddresses = (chainId: string) => {
   return EXTENSION_ADDRESSES[chainId] || {};
+};
+
+/**
+ * Get the deployed contract address for a preset on a given chain.
+ * Returns "" if the preset has no on-chain address or isn't deployed.
+ */
+export const getPresetAddress = (
+  presetKey: string,
+  chainId: string,
+): string => {
+  const addressKey = PRESET_TO_ADDRESS_KEY[presetKey];
+  if (!addressKey) return ""; // e.g. snapshot
+  return getExtensionAddresses(chainId)[addressKey] || "";
 };
 
 /**

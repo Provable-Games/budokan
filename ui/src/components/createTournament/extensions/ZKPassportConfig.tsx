@@ -197,8 +197,8 @@ export const ZKPassportConfig = ({
   const [sanctionsEnabled, setSanctionsEnabled] = useState(false);
 
   // Advanced
-  const [gender, setGender] = useState<"" | "male" | "female">("");
-  const [documentType, setDocumentType] = useState<"" | "passport" | "id_card" | "residence_permit" | "other">("");
+  const [gender, setGender] = useState<"__none__" | "male" | "female">("__none__");
+  const [documentType, setDocumentType] = useState<"__none__" | "passport" | "id_card" | "residence_permit" | "other">("__none__");
   const [birthdateAfter, setBirthdateAfter] = useState("");
   const [birthdateBefore, setBirthdateBefore] = useState("");
   const [expiryAfter, setExpiryAfter] = useState("");
@@ -237,11 +237,11 @@ export const ZKPassportConfig = ({
       cfg.sanctions = { enabled: true };
     }
 
-    if (gender) {
+    if (gender && gender !== "__none__") {
       cfg.gender = { eq: gender };
     }
 
-    if (documentType) {
+    if (documentType && documentType !== "__none__") {
       cfg.document_type = { eq: documentType };
     }
 
@@ -274,8 +274,7 @@ export const ZKPassportConfig = ({
       const extensionAddresses = getExtensionAddresses(
         selectedChainConfig?.chainId ?? "",
       );
-      const validatorAddress = extensionAddresses.zkPassportValidator;
-      if (!validatorAddress) return;
+      const validatorAddress = extensionAddresses.zkPassportValidator || "";
 
       const verifierAddress =
         ZKPASSPORT_VERIFIER_ADDRESSES[selectedChainConfig?.chainId ?? ""] ?? "0x0";
@@ -359,8 +358,8 @@ export const ZKPassportConfig = ({
         }
 
         if (decoded.sanctions?.enabled) setSanctionsEnabled(true);
-        if (decoded.gender?.eq) setGender(decoded.gender.eq);
-        if (decoded.document_type?.eq) setDocumentType(decoded.document_type.eq);
+        setGender(decoded.gender?.eq || "__none__");
+        setDocumentType(decoded.document_type?.eq || "__none__");
         if (decoded.birthdate?.gte) setBirthdateAfter(decoded.birthdate.gte);
         if (decoded.birthdate?.lte) setBirthdateBefore(decoded.birthdate.lte);
         if (decoded.expiry_date?.gte) setExpiryAfter(decoded.expiry_date.gte);
@@ -608,7 +607,7 @@ export const ZKPassportConfig = ({
                     <SelectValue placeholder="Any" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Any</SelectItem>
+                    <SelectItem value="__none__">Any</SelectItem>
                     <SelectItem value="male">Male</SelectItem>
                     <SelectItem value="female">Female</SelectItem>
                   </SelectContent>
@@ -626,7 +625,7 @@ export const ZKPassportConfig = ({
                     <SelectValue placeholder="Any" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Any</SelectItem>
+                    <SelectItem value="__none__">Any</SelectItem>
                     <SelectItem value="passport">Passport</SelectItem>
                     <SelectItem value="id_card">ID Card</SelectItem>
                     <SelectItem value="residence_permit">Residence Permit</SelectItem>

@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { StepProps } from "@/containers/CreateTournament";
-import { USER, X, INFO } from "@/components/Icons";
+import { USER, X, INFO, EXTERNAL_LINK } from "@/components/Icons";
 import { displayAddress, feltToString, indexAddress } from "@/lib/utils";
 import TokenGameIcon from "@/components/icons/TokenGameIcon";
 import { Search } from "lucide-react";
@@ -50,8 +50,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   PRESET_EXTENSIONS,
+  PRESET_TO_ADDRESS_KEY,
   getExtensionAddresses,
   getOpusSupportedAssets,
+  getPresetAddress,
 } from "@/lib/extensionConfig";
 import { SnapshotConfig } from "./extensions/SnapshotConfig";
 import { ERC20BalanceConfig } from "./extensions/ERC20BalanceConfig";
@@ -282,8 +284,16 @@ const EntryRequirements = ({ form }: StepProps) => {
                         >
                           Custom Contract
                         </Button>
-                        {Object.entries(PRESET_EXTENSIONS).map(
-                          ([key, config]) => (
+                        {Object.entries(PRESET_EXTENSIONS)
+                          .filter(([key]) => {
+                            // Always show presets that don't need an on-chain address (e.g. snapshot)
+                            if (!PRESET_TO_ADDRESS_KEY[key]) return true;
+                            return !!getPresetAddress(
+                              key,
+                              selectedChainConfig?.chainId ?? "",
+                            );
+                          })
+                          .map(([key, config]) => (
                             <Button
                               key={key}
                               type="button"
@@ -307,9 +317,37 @@ const EntryRequirements = ({ form }: StepProps) => {
                             >
                               {config.name}
                             </Button>
-                          )
-                        )}
+                          ))}
                       </div>
+                      {/* Voyager contract link for selected preset */}
+                      {selectedPreset &&
+                        getPresetAddress(
+                          selectedPreset,
+                          selectedChainConfig?.chainId ?? "",
+                        ) && (
+                          <div className="flex items-center gap-2 text-xs text-brand-muted">
+                            <span>Contract:</span>
+                            <span className="font-mono">
+                              {displayAddress(
+                                getPresetAddress(
+                                  selectedPreset,
+                                  selectedChainConfig?.chainId ?? "",
+                                ),
+                              )}
+                            </span>
+                            <a
+                              href={`${selectedChainConfig?.blockExplorerUrl}/contract/${getPresetAddress(
+                                selectedPreset,
+                                selectedChainConfig?.chainId ?? "",
+                              )}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="w-4 h-4 hover:text-brand transition-colors"
+                            >
+                              <EXTERNAL_LINK />
+                            </a>
+                          </div>
+                        )}
                     </div>
                   )}
 
