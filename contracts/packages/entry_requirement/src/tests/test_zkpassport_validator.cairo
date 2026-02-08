@@ -454,11 +454,50 @@ fn test_entry_removal_releases_nullifier() {
 // Test 13: Config validation - wrong config length
 // ============================================
 #[test]
-#[should_panic(expected: "ZkPassportValidator: config must have exactly 6 elements")]
+#[should_panic(expected: "ZkPassportValidator: config must have at least 6 elements")]
 fn test_config_wrong_length() {
     let (contract_address, entry_validator, _) = deploy_validator();
     start_cheat_caller_address(contract_address, BUDOKAN_ADDRESS());
     entry_validator.add_config(TOURNAMENT_ID, ENTRY_LIMIT, array!['too', 'few'].span());
+}
+
+// ============================================
+// Test 13b: Config with >6 elements succeeds (extended config)
+// ============================================
+#[test]
+fn test_config_extended_elements() {
+    let (contract_address, entry_validator, zkp_validator) = deploy_validator();
+    start_cheat_caller_address(contract_address, BUDOKAN_ADDRESS());
+
+    // Config with extra elements (e.g. serialized query config)
+    let extended_config = array![
+        VERIFIER_ADDRESS().into(),
+        SERVICE_SCOPE,
+        SERVICE_SUBSCOPE,
+        PARAM_COMMITMENT,
+        MAX_PROOF_AGE,
+        NULLIFIER_TYPE,
+        42, // byte length
+        'chunk1',
+        'chunk2',
+    ]
+        .span();
+
+    entry_validator.add_config(TOURNAMENT_ID, ENTRY_LIMIT, extended_config);
+
+    // Core config should be stored correctly
+    assert!(
+        zkp_validator.get_verifier_address(TOURNAMENT_ID) == VERIFIER_ADDRESS(),
+        "Verifier address should be set",
+    );
+    assert!(
+        zkp_validator.get_expected_service_scope(TOURNAMENT_ID) == SERVICE_SCOPE,
+        "Service scope should be set",
+    );
+    assert!(
+        zkp_validator.get_expected_param_commitment(TOURNAMENT_ID) == PARAM_COMMITMENT,
+        "Param commitment should be set",
+    );
 }
 
 // ============================================

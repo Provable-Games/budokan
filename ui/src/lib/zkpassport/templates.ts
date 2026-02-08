@@ -82,3 +82,13 @@ export const getTemplateById = (
 ): ZKPassportTemplate | undefined => {
   return ZKPASSPORT_TEMPLATES.find((t) => t.id === id);
 };
+
+// Re-export composable query config utilities
+export {
+  buildTemplateFromConfig,
+  queryConfigToDescription,
+  queryConfigToQueryBuilder,
+  serializeQueryConfig,
+  deserializeQueryConfig,
+} from "./queryConfig";
+export type { ZKPassportQueryConfig } from "./queryConfig";

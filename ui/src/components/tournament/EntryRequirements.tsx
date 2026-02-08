@@ -55,7 +55,11 @@ import {
   registerZkPassportValidator,
   getExtensionAddresses,
 } from "@/lib/extensionConfig";
-import { findTemplateByCommitment } from "@/lib/zkpassport/templates";
+import {
+  findTemplateByCommitment,
+  queryConfigToDescription,
+} from "@/lib/zkpassport/templates";
+import { deserializeQueryConfig } from "@/lib/zkpassport/queryConfig";
 import { useEffect } from "react";
 import { indexAddress } from "@/lib/utils";
 import { getTokenDecimals } from "@/lib/tokensMeta";
@@ -254,7 +258,7 @@ const EntryRequirements = ({
     return normalizedExtensionAddress === normalizedValidatorAddress;
   }, [extensionConfig?.address, extensionAddresses.zkPassportValidator]);
 
-  // Parse ZKPassport validator config: [verifier_addr, scope, subscope, param_commitment, max_proof_age, nullifier_type]
+  // Parse ZKPassport validator config: [verifier_addr, scope, subscope, param_commitment, max_proof_age, nullifier_type, ...queryConfig]
   const zkPassportValidatorConfig = useMemo(() => {
     if (!isZkPassportValidatorExtension || !extensionConfig?.config) return null;
     const config = extensionConfig.config;
@@ -262,8 +266,25 @@ const EntryRequirements = ({
 
     const paramCommitment = config[3];
     const maxProofAge = Number(config[4]);
-    const template = findTemplateByCommitment(paramCommitment);
 
+    // Try composable config first, then fall back to commitment lookup
+    if (config.length > 6) {
+      try {
+        const queryConfigFelts = config.slice(6);
+        const queryConfig = deserializeQueryConfig(queryConfigFelts);
+        const description = queryConfigToDescription(queryConfig);
+        return {
+          paramCommitment,
+          maxProofAge,
+          templateName: "Custom Requirements",
+          templateDescription: description,
+        };
+      } catch {
+        // Fall through to legacy lookup
+      }
+    }
+
+    const template = findTemplateByCommitment(paramCommitment);
     return {
       paramCommitment,
       maxProofAge,

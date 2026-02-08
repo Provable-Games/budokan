@@ -61,7 +61,10 @@ import {
   getExtensionAddresses,
 } from "@/lib/extensionConfig";
 import { ZKPassportEntry } from "@/components/dialogs/ZKPassportEntry";
-import { findTemplateByCommitment } from "@/lib/zkpassport/templates";
+import {
+  findTemplateByCommitment,
+  buildTemplateFromConfig,
+} from "@/lib/zkpassport/templates";
 import { getTokenByAddress } from "@/lib/tokenUtils";
 import { useVoyagerNfts } from "@/hooks/useVoyagerNfts";
 import {
@@ -612,7 +615,7 @@ export function EnterTournamentDialog({
     return normalizedExtensionAddress === normalizedValidatorAddress;
   }, [extensionConfig?.address, extensionAddresses.zkPassportValidator]);
 
-  // Parse ZKPassport validator config: [verifier_addr, scope, subscope, commitment, maxProofAge, nullifierType]
+  // Parse ZKPassport validator config: [verifier_addr, scope, subscope, commitment, maxProofAge, nullifierType, ...queryConfig]
   const zkPassportValidatorConfig = useMemo(() => {
     if (!isZkPassportValidatorExtension || !extensionConfig?.config) {
       return null;
@@ -623,7 +626,12 @@ export function EnterTournamentDialog({
 
     const commitment = config[3];
     const maxProofAge = Number(config[4] || "3600");
-    const template = findTemplateByCommitment(commitment);
+
+    // Try composable template first (extended config [6+]), then fall back to commitment lookup
+    const template =
+      config.length > 6
+        ? buildTemplateFromConfig(config)
+        : findTemplateByCommitment(commitment);
 
     return {
       verifierAddress: config[0],

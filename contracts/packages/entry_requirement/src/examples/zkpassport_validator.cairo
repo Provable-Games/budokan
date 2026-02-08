@@ -235,7 +235,7 @@ pub mod ZkPassportValidator {
         fn add_config(
             ref self: ContractState, tournament_id: u64, entry_limit: u8, config: Span<felt252>,
         ) {
-            assert!(config.len() == 6, "ZkPassportValidator: config must have exactly 6 elements");
+            assert!(config.len() >= 6, "ZkPassportValidator: config must have at least 6 elements");
 
             let verifier_addr: ContractAddress = (*config.at(0)).try_into().unwrap();
             assert!(!verifier_addr.is_zero(), "ZkPassportValidator: verifier address cannot be zero");
