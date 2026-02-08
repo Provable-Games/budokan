@@ -13,6 +13,7 @@ casm = true
 budokan_extensions_open_entry_validator_mock = "budokan_entry_requirement::tests::mocks::open_entry_validator_mock::open_entry_validator_mock"
 budokan_extensions_SnapshotValidator = "budokan_entry_requirement::examples::snapshot_validator::SnapshotValidator"
 budokan_extensions_TournamentValidator = "budokan_entry_requirement::examples::tournament_validator::TournamentValidator"
+budokan_extensions_ZkPassportValidator = "budokan_entry_requirement::examples::zkpassport_validator::ZkPassportValidator"
 
 [cairo]
 sierra-replace-ids = true
