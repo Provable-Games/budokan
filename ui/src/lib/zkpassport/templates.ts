@@ -66,11 +66,12 @@ export const ZKPASSPORT_TEMPLATES: ZKPassportTemplate[] = [
  * Returns undefined if no matching template is found.
  */
 export const findTemplateByCommitment = (
-  commitment: string
+  commitment: string | number | bigint
 ): ZKPassportTemplate | undefined => {
-  if (!commitment || commitment === "0x0") return undefined;
+  const commitStr = String(commitment);
+  if (!commitStr || commitStr === "0x0" || commitStr === "0") return undefined;
   return ZKPASSPORT_TEMPLATES.find(
-    (t) => t.paramCommitment === commitment && t.id !== "custom"
+    (t) => t.paramCommitment === commitStr && t.id !== "custom"
   );
 };
 

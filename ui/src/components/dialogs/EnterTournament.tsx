@@ -65,6 +65,7 @@ import {
   findTemplateByCommitment,
   buildTemplateFromConfig,
 } from "@/lib/zkpassport/templates";
+import { ZKPASSPORT_SERVICE_SCOPE } from "@/lib/zkpassport/constants";
 import { getTokenByAddress } from "@/lib/tokenUtils";
 import { useVoyagerNfts } from "@/hooks/useVoyagerNfts";
 import {
@@ -615,31 +616,52 @@ export function EnterTournamentDialog({
     return normalizedExtensionAddress === normalizedValidatorAddress;
   }, [extensionConfig?.address, extensionAddresses.zkPassportValidator]);
 
-  // Parse ZKPassport validator config: [verifier_addr, scope, subscope, commitment, maxProofAge, nullifierType, ...queryConfig]
+  // Parse ZKPassport validator config.
+  // Full format:  [verifier_addr, scope, subscope, commitment, maxProofAge, nullifierType, ...queryConfig]
+  // Short format (verifier stripped by empty filter): [scope, subscope, commitment, maxProofAge, nullifierType, ...queryConfig]
   const zkPassportValidatorConfig = useMemo(() => {
     if (!isZkPassportValidatorExtension || !extensionConfig?.config) {
       return null;
     }
 
     const config = extensionConfig.config;
-    if (!config || config.length < 6) return null;
+    if (!config || config.length < 5) return null;
 
-    const commitment = config[3];
-    const maxProofAge = Number(config[4] || "3600");
+    // Convert BigNumberish values to strings for consistent handling
+    const c = config.map((v: unknown) => String(v));
 
-    // Try composable template first (extended config [6+]), then fall back to commitment lookup
-    const template =
-      config.length > 6
-        ? buildTemplateFromConfig(config)
-        : findTemplateByCommitment(commitment);
+    // Detect format by checking if config[0] matches the known service scope.
+    // If so, the verifier address was stripped and the header has 5 fields.
+    const normalizedFirst = indexAddress(c[0]).toLowerCase();
+    const normalizedScope = indexAddress(ZKPASSPORT_SERVICE_SCOPE).toLowerCase();
+    const hasVerifierPrefix = normalizedFirst !== normalizedScope;
+    const headerSize = hasVerifierPrefix ? 6 : 5;
+
+    if (c.length < headerSize) return null;
+
+    const offset = hasVerifierPrefix ? 1 : 0;
+    const scope = c[offset];
+    const subscope = c[offset + 1];
+    const commitment = c[offset + 2];
+    const maxProofAge = Number(config[offset + 3]) || 3600;
+    const nullifierType = c[offset + 4];
+
+    // Try composable template first (extended config), then fall back to commitment lookup
+    let template;
+    if (c.length > headerSize) {
+      template = buildTemplateFromConfig(c, headerSize);
+    }
+    if (!template) {
+      template = findTemplateByCommitment(commitment);
+    }
 
     return {
-      verifierAddress: config[0],
-      scope: config[1],
-      subscope: config[2],
+      verifierAddress: hasVerifierPrefix ? c[0] : "",
+      scope,
+      subscope,
       commitment,
       maxProofAge,
-      nullifierType: config[5],
+      nullifierType,
       template,
     };
   }, [isZkPassportValidatorExtension, extensionConfig?.config]);

@@ -275,7 +275,7 @@ export function serializeQueryConfig(config: ZKPassportQueryConfig): string[] {
  * Deserialize felt252 hex strings back into a ZKPassportQueryConfig.
  * Input: [byteLength, chunk0, chunk1, ...]
  */
-export function deserializeQueryConfig(felts: string[]): ZKPassportQueryConfig {
+export function deserializeQueryConfig(felts: (string | number | bigint)[]): ZKPassportQueryConfig {
   if (felts.length < 2) {
     throw new Error("Invalid query config felts: need at least byteLength + 1 chunk");
   }
@@ -284,13 +284,26 @@ export function deserializeQueryConfig(felts: string[]): ZKPassportQueryConfig {
   const allBytes: number[] = [];
 
   for (let i = 1; i < felts.length; i++) {
-    const hex = felts[i].startsWith("0x") ? felts[i].slice(2) : felts[i];
+    const chunkIndex = i - 1;
+    // Each chunk holds up to FELT_MAX_BYTES (31). The last chunk holds the remainder.
+    const isLastChunk = i === felts.length - 1;
+    const expectedBytes = isLastChunk
+      ? byteLength - chunkIndex * FELT_MAX_BYTES
+      : FELT_MAX_BYTES;
+
+    // Convert BigNumberish to hex string
+    const raw = typeof felts[i] === "string" ? felts[i] as string : "0x" + BigInt(felts[i]).toString(16);
+    let hex = raw.startsWith("0x") ? raw.slice(2) : raw;
+
+    // felt252 values are right-aligned numbers, so the data bytes are at the
+    // end of the hex representation. Extract exactly expectedBytes from the right.
+    hex = hex.padStart(expectedBytes * 2, "0").slice(-(expectedBytes * 2));
+
     for (let j = 0; j < hex.length; j += 2) {
       allBytes.push(parseInt(hex.slice(j, j + 2), 16));
     }
   }
 
-  // Trim to exact byte length
   const trimmed = new Uint8Array(allBytes.slice(0, byteLength));
   const decoder = new TextDecoder();
   const json = decoder.decode(trimmed);
@@ -306,12 +319,13 @@ export function deserializeQueryConfig(felts: string[]): ZKPassportQueryConfig {
  * @param configArray - The full config array from on-chain storage
  */
 export function buildTemplateFromConfig(
-  configArray: string[],
+  configArray: (string | number | bigint)[],
+  headerSize = 6,
 ): ZKPassportTemplate | undefined {
-  if (configArray.length <= 6) return undefined;
+  if (configArray.length <= headerSize) return undefined;
 
   try {
-    const queryConfigFelts = configArray.slice(6);
+    const queryConfigFelts = configArray.slice(headerSize);
     const queryConfig = deserializeQueryConfig(queryConfigFelts);
     const description = queryConfigToDescription(queryConfig);
 
@@ -320,7 +334,7 @@ export function buildTemplateFromConfig(
       name: "Custom Requirements",
       description,
       buildQuery: (qb: any) => queryConfigToQueryBuilder(queryConfig, qb),
-      paramCommitment: configArray[3],
+      paramCommitment: String(configArray[headerSize - 3]),
     };
   } catch {
     return undefined;

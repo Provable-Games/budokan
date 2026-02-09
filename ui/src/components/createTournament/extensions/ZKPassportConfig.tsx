@@ -277,7 +277,7 @@ export const ZKPassportConfig = ({
       const validatorAddress = extensionAddresses.zkPassportValidator || "";
 
       const verifierAddress =
-        ZKPASSPORT_VERIFIER_ADDRESSES[selectedChainConfig?.chainId ?? ""] ?? "0x0";
+        ZKPASSPORT_VERIFIER_ADDRESSES[selectedChainConfig?.chainId ?? ""] || "0x0";
       const maxAge = proofAge || ZKPASSPORT_DEFAULT_MAX_PROOF_AGE.toString();
 
       const paramCommitment = currentMode === "custom" ? commitment : "0x0";
