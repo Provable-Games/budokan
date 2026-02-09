@@ -98,6 +98,35 @@ export function ZKPassportEntry({
     window.addEventListener("unhandledrejection", rejectionHandler);
 
     try {
+      // Intercept WebSocket to log all bridge traffic for diagnostics.
+      // This runs BEFORE the SDK creates its connection.
+      const OriginalWebSocket = window.WebSocket;
+      const WebSocketProxy = new Proxy(OriginalWebSocket, {
+        construct(target, args) {
+          const ws = new target(...(args as [string, ...string[]]));
+          const url = args[0] as string;
+          console.log("[ZKPassport WS] Opening:", url);
+
+          ws.addEventListener("open", () => {
+            console.log("[ZKPassport WS] Connected");
+          });
+          ws.addEventListener("message", (event: MessageEvent) => {
+            const data = typeof event.data === "string" ? event.data : "<binary>";
+            const preview = data.length > 200 ? data.slice(0, 200) + "..." : data;
+            console.log("[ZKPassport WS] Received:", preview);
+          });
+          ws.addEventListener("close", (event: CloseEvent) => {
+            console.log("[ZKPassport WS] Closed:", event.code, event.reason);
+          });
+          ws.addEventListener("error", () => {
+            console.error("[ZKPassport WS] Error event");
+          });
+
+          return ws;
+        },
+      });
+      window.WebSocket = WebSocketProxy as typeof WebSocket;
+
       // Lazy-load ZKPassport SDK
       const { ZKPassport } = await import("@zkpassport/sdk");
 
@@ -120,6 +149,9 @@ export function ZKPassportEntry({
       // Finalize and get callbacks
       const result = configuredBuilder.done();
 
+      // Restore original WebSocket so other code isn't affected
+      window.WebSocket = OriginalWebSocket;
+
       console.log("[ZKPassport] Request created, URL:", result.url);
       console.log("[ZKPassport] Request ID:", result.requestId);
       setQrUrl(result.url);
@@ -127,17 +159,18 @@ export function ZKPassportEntry({
       // Wire up ALL callbacks for diagnostic visibility
 
       result.onBridgeConnect(() => {
-        console.log("[ZKPassport] Bridge connected");
+        console.log("[ZKPassport] Bridge connected, isBridgeConnected:", result.isBridgeConnected());
       });
 
       result.onRequestReceived(() => {
-        console.log("[ZKPassport] Request received by mobile app");
+        console.log("[ZKPassport] Request received by mobile app, isBridgeConnected:", result.isBridgeConnected());
         if (!abortRef.current) {
           setStatus("generating_proof");
 
           // Start bridge connection monitoring
           bridgePollRef.current = setInterval(() => {
             const connected = result.isBridgeConnected();
+            console.log("[ZKPassport] Bridge poll - connected:", connected);
             if (!connected) {
               console.warn("[ZKPassport] Bridge disconnected during proof generation");
               handleError("Connection to ZKPassport app was lost. Please try again.");
