@@ -306,41 +306,38 @@ const Overview = () => {
       fromTournamentId: fromTournamentId,
     });
 
-  // Extract unique token addresses from tournaments
+  // Extract unique token addresses from all accumulated tournaments (not just current page)
   const uniqueTokenAddresses = useMemo(() => {
-    const currentData = selectedTab === "my" ? myTournaments : tournaments;
     const addresses = new Set<string>();
 
-    if (currentData && Array.isArray(currentData)) {
-      currentData.forEach((item: any) => {
-        // Extract from entry fees
-        if (item.tournament?.entry_fee?.Some?.token_address) {
-          addresses.add(item.tournament.entry_fee.Some.token_address);
-        }
-        // Extract from prizes
-        if (item.prizes && Array.isArray(item.prizes)) {
-          item.prizes.forEach((prize: any) => {
-            if (prize?.token_address) {
-              addresses.add(prize.token_address);
-            }
-          });
-        }
-        // Extract from aggregations
-        if (
-          item.aggregations?.token_totals &&
-          Array.isArray(item.aggregations.token_totals)
-        ) {
-          item.aggregations.token_totals.forEach((tokenTotal: any) => {
-            if (tokenTotal?.tokenAddress) {
-              addresses.add(tokenTotal.tokenAddress);
-            }
-          });
-        }
-      });
-    }
+    currentTournaments.forEach((item: any) => {
+      // Extract from entry fees
+      if (item.tournament?.entry_fee?.Some?.token_address) {
+        addresses.add(item.tournament.entry_fee.Some.token_address);
+      }
+      // Extract from prizes
+      if (item.prizes && Array.isArray(item.prizes)) {
+        item.prizes.forEach((prize: any) => {
+          if (prize?.token_address) {
+            addresses.add(prize.token_address);
+          }
+        });
+      }
+      // Extract from aggregations
+      if (
+        item.aggregations?.token_totals &&
+        Array.isArray(item.aggregations.token_totals)
+      ) {
+        item.aggregations.token_totals.forEach((tokenTotal: any) => {
+          if (tokenTotal?.tokenAddress) {
+            addresses.add(tokenTotal.tokenAddress);
+          }
+        });
+      }
+    });
 
     return Array.from(addresses);
-  }, [selectedTab, tournaments, myTournaments]);
+  }, [currentTournaments]);
 
   // Get token metadata for all unique addresses from static lists
   const tokensArray = useMemo(() => {
