@@ -92,7 +92,8 @@ export const EXTENSION_ADDRESSES: Record<
     erc20BalanceValidator:
       "0x028112199f873e919963277b41ef1231365986e2fd7722501cd7d293de60b64e",
     opusTrovesValidator: "", // TODO: Add Opus Troves validator address for Sepolia
-    zkPassportValidator: "", // TODO: Add ZKPassport validator address for Sepolia
+    zkPassportValidator:
+      "0x046af2c4fe14ddf0f6a3bf91a3981e71c1b150e85701d387a05a201b1c530c7f",
   },
   [ChainId.SN_MAIN]: {
     tournamentValidator:
@@ -101,7 +102,8 @@ export const EXTENSION_ADDRESSES: Record<
       "0x051fc2681f65ee18e99dab3cc2ca2eca1b4532c735e752f575ace91ed30f17b7",
     opusTrovesValidator:
       "0x0604bc0d54727f439786c65d7dc6f7d46de1aba7e129ef9caf65fef111a1644e",
-    zkPassportValidator: "", // TODO: Add ZKPassport validator address for Mainnet
+    zkPassportValidator:
+      "0x01a25f04d151c1295ba3223f7e63b89ec89762fe29d68c5f1896f86cadf62f4c",
   },
 };
 

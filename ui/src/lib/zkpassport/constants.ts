@@ -38,8 +38,9 @@ export const ZKPASSPORT_VERIFIER_ADDRESSES: Record<string, string> = {
  */
 export const ZKPASSPORT_VALIDATOR_ADDRESSES: Record<string, string> = {
   [ChainId.SN_SEPOLIA]:
-    "0x0", // TODO: Add deployed ZKPassport validator address for Sepolia
-  [ChainId.SN_MAIN]: "", // TODO: Add mainnet validator address
+    "0x046af2c4fe14ddf0f6a3bf91a3981e71c1b150e85701d387a05a201b1c530c7f",
+  [ChainId.SN_MAIN]:
+    "0x01a25f04d151c1295ba3223f7e63b89ec89762fe29d68c5f1896f86cadf62f4c",
 };
 
 /**
