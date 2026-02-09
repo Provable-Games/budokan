@@ -7,9 +7,9 @@ import { ChainId } from "@/dojo/setup/networks";
  * These constants are shared between tournament creation and player entry flows.
  */
 
-// Pre-computed service scope hash: SHA256("zkpassport.id") truncated to 31 bytes
+// Pre-computed service scope hash: SHA256("budokan.gg") truncated to 31 bytes
 export const ZKPASSPORT_SERVICE_SCOPE =
-  "0x8d535e2a7f4ee38a4d12aa88bcf21d2c2f6fa051d12eafba6655bf37e8c11c";
+  "0xfd0da854551dce0be291b43380e6e6ceb1338fccf04c84f048a2d311bb0e50";
 
 // Pre-computed service subscope hash: SHA256("bigproof") truncated to 31 bytes
 export const ZKPASSPORT_SERVICE_SUBSCOPE =
@@ -22,7 +22,7 @@ export const ZKPASSPORT_NULLIFIER_TYPE = "0";
 export const ZKPASSPORT_DEFAULT_MAX_PROOF_AGE = 3600;
 
 // ZKPassport SDK domain
-export const ZKPASSPORT_SDK_DOMAIN = "zkpassport.id";
+export const ZKPASSPORT_SDK_DOMAIN = "budokan.gg";
 
 /**
  * Garaga Honk verifier addresses by chain
