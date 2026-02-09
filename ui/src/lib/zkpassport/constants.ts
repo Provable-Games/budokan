@@ -30,7 +30,8 @@ export const ZKPASSPORT_SDK_DOMAIN = "budokan.gg";
 export const ZKPASSPORT_VERIFIER_ADDRESSES: Record<string, string> = {
   [ChainId.SN_SEPOLIA]:
     "0x06ad2f4c866eabb03443098ecc798af1791952bc138bd32904dd215d8585c655",
-  [ChainId.SN_MAIN]: "", // TODO: Add mainnet verifier address
+  [ChainId.SN_MAIN]:
+    "0x06ea7206289f1787b5521544b6281cc4f3e9779a69786dc7661fc8524fe3d32f",
 };
 
 /**
