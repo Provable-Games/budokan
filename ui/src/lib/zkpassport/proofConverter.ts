@@ -6,6 +6,8 @@
  * initial bundle size small.
  */
 
+import { ChainId } from "@/dojo/setup/networks";
+
 /**
  * Proof data collected from the ZKPassport SDK's onProofGenerated callback.
  * We only store the fields we need for conversion.
@@ -14,6 +16,15 @@ export interface CollectedProof {
   proof: string; // hex-encoded proof
   name: string; // circuit name (e.g., "outer_6")
   version?: string; // circuit version
+}
+
+/**
+ * Maps a Starknet chainId to the Ethereum chainId used by the ZKPassport registry.
+ * Mainnet uses Ethereum mainnet (1), everything else uses Sepolia (11155111).
+ */
+function getRegistryChainId(starknetChainId?: string): number {
+  if (starknetChainId === ChainId.SN_MAIN) return 1;
+  return 11155111; // Ethereum Sepolia
 }
 
 /**
@@ -57,11 +68,13 @@ function findOuterProof(proofs: CollectedProof[]): CollectedProof | undefined {
  *
  * @param proofs - Array of collected proof results from the ZKPassport SDK
  * @param uniqueIdentifier - The unique identifier (nullifier) from the SDK result
+ * @param starknetChainId - The current Starknet chain ID (determines which Ethereum registry to use)
  * @returns Array of string values for the Extension qualification proof
  */
 export async function buildQualification(
   proofs: CollectedProof[],
-  uniqueIdentifier: string
+  uniqueIdentifier: string,
+  starknetChainId?: string
 ): Promise<string[]> {
   // Extract nullifier as [low, high]
   const [nullifierLow, nullifierHigh] = extractNullifier(uniqueIdentifier);
@@ -82,7 +95,8 @@ export async function buildQualification(
 
   // Lazy-load registry client to fetch the verification key
   const { RegistryClient } = await import("@zkpassport/registry");
-  const registryClient = new RegistryClient({ chainId: 11155111 }); // Sepolia
+  const registryChainId = getRegistryChainId(starknetChainId);
+  const registryClient = new RegistryClient({ chainId: registryChainId });
   const circuitManifest = await registryClient.getCircuitManifest(undefined, {
     version: outerProof.version,
   });

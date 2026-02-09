@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useFormContext } from "react-hook-form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -269,8 +269,40 @@ export const ZKPassportConfig = ({
     [queryConfig],
   );
 
+  // Track the computed commitment for composable mode
+  const [composableCommitment, setComposableCommitment] = useState("0x0");
+  const commitmentComputeRef = useRef(0);
+
+  // Compute param commitment when queryConfig changes
+  useEffect(() => {
+    if (mode !== "composable" || Object.keys(queryConfig).length === 0) {
+      setComposableCommitment("0x0");
+      return;
+    }
+
+    const computeId = ++commitmentComputeRef.current;
+
+    (async () => {
+      try {
+        const { computeParamCommitment } = await import(
+          "@/lib/zkpassport/computeCommitment"
+        );
+        const result = await computeParamCommitment(queryConfig);
+        // Only update if this is still the latest computation
+        if (commitmentComputeRef.current === computeId) {
+          setComposableCommitment(result);
+        }
+      } catch (err) {
+        console.error("[ZKPassport] Commitment computation failed:", err);
+        if (commitmentComputeRef.current === computeId) {
+          setComposableCommitment("0x0");
+        }
+      }
+    })();
+  }, [mode, queryConfig]);
+
   const updateFormConfig = useCallback(
-    (currentMode: ConfigMode, commitment: string, proofAge: string, currentQueryConfig: ZKPassportQueryConfig) => {
+    (currentMode: ConfigMode, commitment: string, proofAge: string, currentQueryConfig: ZKPassportQueryConfig, computedCommitment: string) => {
       const extensionAddresses = getExtensionAddresses(
         selectedChainConfig?.chainId ?? "",
       );
@@ -280,7 +312,7 @@ export const ZKPassportConfig = ({
         ZKPASSPORT_VERIFIER_ADDRESSES[selectedChainConfig?.chainId ?? ""] || "0x0";
       const maxAge = proofAge || ZKPASSPORT_DEFAULT_MAX_PROOF_AGE.toString();
 
-      const paramCommitment = currentMode === "custom" ? commitment : "0x0";
+      const paramCommitment = currentMode === "custom" ? commitment : computedCommitment;
 
       const configArray = [
         verifierAddress,
@@ -378,8 +410,8 @@ export const ZKPassportConfig = ({
 
   // Update form when config state changes
   useEffect(() => {
-    updateFormConfig(mode, customCommitment, maxProofAge, queryConfig);
-  }, [mode, customCommitment, maxProofAge, queryConfig, updateFormConfig]);
+    updateFormConfig(mode, customCommitment, maxProofAge, queryConfig, composableCommitment);
+  }, [mode, customCommitment, maxProofAge, queryConfig, composableCommitment, updateFormConfig]);
 
   return (
     <div className="space-y-4">

@@ -19,12 +19,19 @@ interface ZKPassportEntryProps {
   template: ZKPassportTemplate | undefined;
   onProofReady: (qualification: string[]) => void;
   onError: (error: string) => void;
+  chainId?: string;
 }
+
+/** Timeout in ms after onRequestReceived with no result/error */
+const PROOF_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+/** Interval in ms to poll bridge connection status */
+const BRIDGE_POLL_INTERVAL_MS = 3000;
 
 export function ZKPassportEntry({
   template,
   onProofReady,
   onError,
+  chainId,
 }: ZKPassportEntryProps) {
   const [status, setStatus] = useState<VerificationStatus>("idle");
   const [errorMessage, setErrorMessage] = useState("");
@@ -32,13 +39,35 @@ export function ZKPassportEntry({
   const [proofProgress, setProofProgress] = useState({ current: 0, total: 0 });
   const abortRef = useRef(false);
   const collectedProofsRef = useRef<CollectedProof[]>([]);
+  const bridgePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       abortRef.current = true;
+      if (bridgePollRef.current) clearInterval(bridgePollRef.current);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   }, []);
+
+  const handleError = useCallback(
+    (msg: string) => {
+      if (abortRef.current) return;
+      if (bridgePollRef.current) {
+        clearInterval(bridgePollRef.current);
+        bridgePollRef.current = null;
+      }
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+      setErrorMessage(msg);
+      setStatus("error");
+      onError(msg);
+    },
+    [onError],
+  );
 
   const startVerification = useCallback(async () => {
     if (!template) {
@@ -53,17 +82,36 @@ export function ZKPassportEntry({
     setErrorMessage("");
     setProofProgress({ current: 0, total: 0 });
 
+    // Clean up any previous polling/timeouts
+    if (bridgePollRef.current) clearInterval(bridgePollRef.current);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+
+    // Catch unhandled rejections from the SDK's unawaited promises
+    const rejectionHandler = (event: PromiseRejectionEvent) => {
+      console.error("[ZKPassport] Unhandled promise rejection:", event.reason);
+      handleError(
+        event.reason instanceof Error
+          ? event.reason.message
+          : "Unexpected error during verification",
+      );
+    };
+    window.addEventListener("unhandledrejection", rejectionHandler);
+
     try {
       // Lazy-load ZKPassport SDK
       const { ZKPassport } = await import("@zkpassport/sdk");
 
+      console.log("[ZKPassport] Initializing SDK with domain:", ZKPASSPORT_SDK_DOMAIN);
       const zkpassport = new ZKPassport(ZKPASSPORT_SDK_DOMAIN);
 
       // Create the verification request
+      console.log("[ZKPassport] Creating request with template:", template.id, template.description);
       const queryBuilder = await zkpassport.request({
         name: "Budokan Tournament",
         logo: "https://zkpassport.id/logo.png",
         purpose: template.description,
+        scope: ZKPASSPORT_SDK_DOMAIN,
+        devMode: true,
       });
 
       // Apply the template's query
@@ -72,16 +120,46 @@ export function ZKPassportEntry({
       // Finalize and get callbacks
       const result = configuredBuilder.done();
 
+      console.log("[ZKPassport] Request created, URL:", result.url);
+      console.log("[ZKPassport] Request ID:", result.requestId);
       setQrUrl(result.url);
 
-      // Wire up callbacks
+      // Wire up ALL callbacks for diagnostic visibility
+
+      result.onBridgeConnect(() => {
+        console.log("[ZKPassport] Bridge connected");
+      });
+
       result.onRequestReceived(() => {
+        console.log("[ZKPassport] Request received by mobile app");
         if (!abortRef.current) {
           setStatus("generating_proof");
+
+          // Start bridge connection monitoring
+          bridgePollRef.current = setInterval(() => {
+            const connected = result.isBridgeConnected();
+            if (!connected) {
+              console.warn("[ZKPassport] Bridge disconnected during proof generation");
+              handleError("Connection to ZKPassport app was lost. Please try again.");
+            }
+          }, BRIDGE_POLL_INTERVAL_MS);
+
+          // Start timeout - if no result within PROOF_TIMEOUT_MS, show error
+          timeoutRef.current = setTimeout(() => {
+            console.error("[ZKPassport] Timed out waiting for proof result");
+            handleError(
+              "Verification timed out. The ZKPassport app may have encountered an error. Please try again.",
+            );
+          }, PROOF_TIMEOUT_MS);
         }
       });
 
+      result.onGeneratingProof(() => {
+        console.log("[ZKPassport] Mobile app started generating proof");
+      });
+
       result.onProofGenerated((proof: { proof?: string; name?: string; version?: string; total?: number }) => {
+        console.log("[ZKPassport] Proof generated:", proof.name, "version:", proof.version);
         if (!abortRef.current) {
           // Collect proof data for later conversion
           if (proof.proof && proof.name) {
@@ -99,12 +177,26 @@ export function ZKPassportEntry({
       });
 
       result.onResult(async (response: { uniqueIdentifier: string | undefined; verified: boolean }) => {
+        console.log("[ZKPassport] Result received:", {
+          verified: response.verified,
+          hasIdentifier: !!response.uniqueIdentifier,
+          proofsCollected: collectedProofsRef.current.length,
+        });
+
+        // Clear monitoring
+        if (bridgePollRef.current) {
+          clearInterval(bridgePollRef.current);
+          bridgePollRef.current = null;
+        }
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+          timeoutRef.current = null;
+        }
+
         if (abortRef.current) return;
 
         if (!response.verified || !response.uniqueIdentifier) {
-          setErrorMessage("Verification failed: proofs could not be verified");
-          setStatus("error");
-          onError("Verification failed");
+          handleError("Verification failed: proofs could not be verified");
           return;
         }
 
@@ -116,53 +208,57 @@ export function ZKPassportEntry({
             "@/lib/zkpassport/proofConverter"
           );
 
+          console.log("[ZKPassport] Converting proofs for Starknet...");
           const qualification = await buildQualification(
             collectedProofsRef.current,
-            response.uniqueIdentifier
+            response.uniqueIdentifier,
+            chainId,
           );
 
           if (!abortRef.current) {
+            console.log("[ZKPassport] Proof conversion complete, qualification length:", qualification.length);
             setStatus("ready");
             onProofReady(qualification);
           }
         } catch (err) {
+          console.error("[ZKPassport] Proof conversion error:", err);
           if (!abortRef.current) {
             const msg =
               err instanceof Error ? err.message : "Proof conversion failed";
-            setErrorMessage(msg);
-            setStatus("error");
-            onError(msg);
+            handleError(msg);
           }
         }
       });
 
       result.onReject(() => {
+        console.log("[ZKPassport] User rejected the verification request");
         if (!abortRef.current) {
-          setErrorMessage("User rejected the verification request");
-          setStatus("error");
-          onError("User rejected");
+          handleError("User rejected the verification request");
         }
       });
 
       result.onError((error: string) => {
+        console.error("[ZKPassport] SDK error:", error);
         if (!abortRef.current) {
-          setErrorMessage(error || "An error occurred during verification");
-          setStatus("error");
-          onError(error);
+          handleError(error || "An error occurred during verification");
         }
       });
     } catch (err) {
+      console.error("[ZKPassport] Initialization error:", err);
       if (!abortRef.current) {
         const msg =
           err instanceof Error
             ? err.message
             : "Failed to initialize ZKPassport";
-        setErrorMessage(msg);
-        setStatus("error");
-        onError(msg);
+        handleError(msg);
       }
     }
-  }, [template, onProofReady, onError]);
+
+    // Cleanup rejection listener when the flow completes or component re-renders
+    return () => {
+      window.removeEventListener("unhandledrejection", rejectionHandler);
+    };
+  }, [template, onProofReady, onError, chainId, handleError]);
 
   const renderContent = () => {
     switch (status) {

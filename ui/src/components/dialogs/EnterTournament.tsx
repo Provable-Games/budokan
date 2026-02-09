@@ -2154,6 +2154,7 @@ export function EnterTournamentDialog({
                     <div className="flex flex-col gap-2 px-4">
                       <ZKPassportEntry
                         template={zkPassportValidatorConfig.template}
+                        chainId={chainId}
                         onProofReady={(qualification) => {
                           setZkPassportProof(qualification);
                         }}
