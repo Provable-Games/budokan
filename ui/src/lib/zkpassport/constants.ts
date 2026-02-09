@@ -21,8 +21,16 @@ export const ZKPASSPORT_NULLIFIER_TYPE = "0";
 // Default max proof age in seconds (1 hour)
 export const ZKPASSPORT_DEFAULT_MAX_PROOF_AGE = 3600;
 
-// ZKPassport SDK domain
-export const ZKPASSPORT_SDK_DOMAIN = "budokan.gg";
+// ZKPassport SDK domain — override via ?zkpassport_domain=<domain> URL param for testing
+export const ZKPASSPORT_SDK_DOMAIN = (() => {
+  if (typeof window !== "undefined") {
+    const param = new URLSearchParams(window.location.search).get(
+      "zkpassport_domain",
+    );
+    if (param) return param;
+  }
+  return "budokan.gg";
+})();
 
 /**
  * Garaga Honk verifier addresses by chain
