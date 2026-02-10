@@ -120,7 +120,8 @@ export function ZKPassportEntry({
         logo: "https://zkpassport.id/logo.png",
         purpose: template.description,
         scope: ZKPASSPORT_SDK_DOMAIN,
-        mode: "compressed",
+        // Keep proof layout compatible with current Garaga calldata generation.
+        mode: "fast",
       });
 
       // Apply the template's query
