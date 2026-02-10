@@ -22,6 +22,15 @@ export interface CollectedProof {
  */
 const ZKPASSPORT_REGISTRY_CHAIN_ID = 11155111; // Ethereum Sepolia
 
+function hexToBytes(hex: string): Uint8Array {
+  const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
+  const bytes = new Uint8Array(clean.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16);
+  }
+  return bytes;
+}
+
 /**
  * Extracts a nullifier from a 256-bit unique identifier string.
  * Splits into [low_128, high_128] for Starknet u256 representation.
@@ -105,12 +114,24 @@ export async function buildQualification(
   }
 
   // Lazy-load ZKPassport utils for proof parsing
-  const { getProofData, getNumberOfPublicInputs } = await import(
-    "@zkpassport/utils"
-  );
+  const { getNumberOfPublicInputs } = await import("@zkpassport/utils");
 
   const numPublicInputs = getNumberOfPublicInputs(outerProof.name);
-  const proofData = getProofData(outerProof.proof, numPublicInputs);
+
+  // Parse raw proof hex into bytes. The format is:
+  //   [publicInput0 (32 bytes)][publicInput1 (32 bytes)]...[raw proof bytes]
+  // Garaga needs the raw proof bytes and public input bytes separately.
+  const rawBytes = hexToBytes(outerProof.proof);
+  const publicInputsByteLength = numPublicInputs * 32;
+  const publicInputsBytes = rawBytes.slice(0, publicInputsByteLength);
+  const proofBytes = rawBytes.slice(publicInputsByteLength);
+
+  console.log("[ZKPassport] Proof split:", {
+    rawLength: rawBytes.length,
+    numPublicInputs,
+    publicInputsLength: publicInputsBytes.length,
+    proofLength: proofBytes.length,
+  });
 
   // Lazy-load registry client to fetch the verification key
   const { RegistryClient } = await import("@zkpassport/registry");
@@ -127,25 +148,6 @@ export async function buildQualification(
   // Decode vkey from base64
   const vkeyBytes = Uint8Array.from(atob(packagedCircuit.vkey), (c) =>
     c.charCodeAt(0),
-  );
-
-  // Convert proof hex to bytes
-  const proofHex = proofData.proof.join("");
-  const proofBytes = new Uint8Array(
-    proofHex.match(/.{1,2}/g)!.map((byte: string) => parseInt(byte, 16)),
-  );
-
-  // Convert public inputs to bytes (each is a 32-byte field element)
-  const publicInputsHex = proofData.publicInputs
-    .map((pi: string) => {
-      const hex = pi.startsWith("0x") ? pi.slice(2) : pi;
-      return hex.padStart(64, "0");
-    })
-    .join("");
-  const publicInputsBytes = new Uint8Array(
-    publicInputsHex
-      .match(/.{1,2}/g)!
-      .map((byte: string) => parseInt(byte, 16)),
   );
 
   // Lazy-load Garaga WASM module and initialize before use
