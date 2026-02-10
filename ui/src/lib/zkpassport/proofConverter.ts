@@ -31,6 +31,168 @@ function hexToBytes(hex: string): Uint8Array {
   return bytes;
 }
 
+interface HonkVkHeader {
+  logCircuitSize: number;
+  publicInputsSize: number;
+}
+
+const LEGACY_PREFIX_FIELDS = 24;
+const LEGACY_SUFFIX_FIELDS = 132;
+const LEGACY_UNIVARIATE_FIELDS = 9;
+const NEW_UNIVARIATE_FIELDS = 16;
+
+function parseHonkVkHeader(vkeyBytes: Uint8Array): HonkVkHeader | undefined {
+  if (vkeyBytes.length < 96) {
+    return undefined;
+  }
+
+  const readWordAsNumber = (offset: number): number | undefined => {
+    const hex = Array.from(vkeyBytes.slice(offset, offset + 32))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+    const value = BigInt("0x" + hex);
+    if (value > BigInt(Number.MAX_SAFE_INTEGER)) {
+      return undefined;
+    }
+    return Number(value);
+  };
+
+  const logCircuitSize = readWordAsNumber(0);
+  const publicInputsSize = readWordAsNumber(32);
+
+  if (
+    logCircuitSize === undefined ||
+    publicInputsSize === undefined ||
+    logCircuitSize <= 0 ||
+    publicInputsSize <= 0
+  ) {
+    return undefined;
+  }
+
+  return { logCircuitSize, publicInputsSize };
+}
+
+/**
+ * Compatibility fallback for newer outer_count_4 proofs whose sumcheck block
+ * contains 16 values per round instead of the legacy 9 expected by Garaga 1.0.1.
+ *
+ * This keeps the verifier-critical layout intact and only truncates the extra
+ * 7 values per round before retrying calldata generation.
+ */
+function tryRecoverLegacyProofLayout(
+  proofBytes: Uint8Array,
+  logCircuitSize: number,
+): Uint8Array | undefined {
+  if (proofBytes.length % 32 !== 0 || logCircuitSize <= 0) {
+    return undefined;
+  }
+
+  const expectedNewFields =
+    LEGACY_PREFIX_FIELDS +
+    logCircuitSize * NEW_UNIVARIATE_FIELDS +
+    LEGACY_SUFFIX_FIELDS;
+
+  const currentFields = proofBytes.length / 32;
+  if (currentFields !== expectedNewFields) {
+    return undefined;
+  }
+
+  const expectedLegacyFields =
+    LEGACY_PREFIX_FIELDS +
+    logCircuitSize * LEGACY_UNIVARIATE_FIELDS +
+    LEGACY_SUFFIX_FIELDS;
+
+  const recovered = new Uint8Array(expectedLegacyFields * 32);
+  let outOffset = 0;
+
+  const copyFieldRange = (startField: number, count: number) => {
+    const start = startField * 32;
+    const end = (startField + count) * 32;
+    recovered.set(proofBytes.slice(start, end), outOffset);
+    outOffset += count * 32;
+  };
+
+  // Prefix (commitments and fixed header section)
+  copyFieldRange(0, LEGACY_PREFIX_FIELDS);
+
+  // Sumcheck univariates: keep the first 9 values per round
+  const sumcheckStart = LEGACY_PREFIX_FIELDS;
+  for (let i = 0; i < logCircuitSize; i++) {
+    const roundStart = sumcheckStart + i * NEW_UNIVARIATE_FIELDS;
+    copyFieldRange(roundStart, LEGACY_UNIVARIATE_FIELDS);
+  }
+
+  // Suffix (sumcheck evaluations + Gemini + KZG section)
+  const suffixStart = sumcheckStart + logCircuitSize * NEW_UNIVARIATE_FIELDS;
+  copyFieldRange(suffixStart, LEGACY_SUFFIX_FIELDS);
+
+  return recovered;
+}
+
+function inferLogCircuitSizeFromLengths(
+  proofLengthBytes: number,
+  expectedLengthBytes: number,
+): number | undefined {
+  if (
+    proofLengthBytes <= 0 ||
+    expectedLengthBytes <= 0 ||
+    proofLengthBytes % 32 !== 0 ||
+    expectedLengthBytes % 32 !== 0 ||
+    proofLengthBytes <= expectedLengthBytes
+  ) {
+    return undefined;
+  }
+
+  const proofFields = proofLengthBytes / 32;
+  const expectedFields = expectedLengthBytes / 32;
+  const extraPerRound = NEW_UNIVARIATE_FIELDS - LEGACY_UNIVARIATE_FIELDS;
+  const deltaFields = proofFields - expectedFields;
+
+  if (deltaFields % extraPerRound !== 0) {
+    return undefined;
+  }
+
+  const logCircuitSize = deltaFields / extraPerRound;
+  if (logCircuitSize <= 0) {
+    return undefined;
+  }
+
+  const reconstructedLegacyFields =
+    LEGACY_PREFIX_FIELDS +
+    logCircuitSize * LEGACY_UNIVARIATE_FIELDS +
+    LEGACY_SUFFIX_FIELDS;
+  const reconstructedNewFields =
+    LEGACY_PREFIX_FIELDS +
+    logCircuitSize * NEW_UNIVARIATE_FIELDS +
+    LEGACY_SUFFIX_FIELDS;
+
+  if (
+    reconstructedLegacyFields !== expectedFields ||
+    reconstructedNewFields !== proofFields
+  ) {
+    return undefined;
+  }
+
+  return logCircuitSize;
+}
+
+function parseExpectedProofLength(error: unknown): number | undefined {
+  const message =
+    typeof error === "string"
+      ? error
+      : error instanceof Error
+        ? error.message
+        : undefined;
+  if (!message) return undefined;
+
+  const match = message.match(/expected\s+(\d+)\)?/i);
+  if (!match) {
+    return undefined;
+  }
+  const expected = Number(match[1]);
+  return Number.isFinite(expected) ? expected : undefined;
+}
+
 /**
  * Extracts a nullifier from a 256-bit unique identifier string.
  * Splits into [low_128, high_128] for Starknet u256 representation.
@@ -149,26 +311,6 @@ export async function buildQualification(
     throw new Error("No valid outer proof found in ZKPassport result");
   }
 
-  // Lazy-load ZKPassport utils for proof parsing
-  const { getNumberOfPublicInputs } = await import("@zkpassport/utils");
-
-  const numPublicInputs = getNumberOfPublicInputs(outerProof.name);
-
-  // Parse raw proof hex into bytes. The format is:
-  //   [publicInput0 (32 bytes)][publicInput1 (32 bytes)]...[raw proof bytes]
-  // Garaga needs the raw proof bytes and public input bytes separately.
-  const rawBytes = hexToBytes(outerProof.proof);
-  const publicInputsByteLength = numPublicInputs * 32;
-  const publicInputsBytes = rawBytes.slice(0, publicInputsByteLength);
-  const proofBytes = rawBytes.slice(publicInputsByteLength);
-
-  console.log("[ZKPassport] Proof split:", {
-    rawLength: rawBytes.length,
-    numPublicInputs,
-    publicInputsLength: publicInputsBytes.length,
-    proofLength: proofBytes.length,
-  });
-
   // Lazy-load registry client to fetch the verification key
   const { RegistryClient } = await import("@zkpassport/registry");
   const registryClient = new RegistryClient({ chainId: ZKPASSPORT_REGISTRY_CHAIN_ID });
@@ -186,14 +328,91 @@ export async function buildQualification(
     c.charCodeAt(0),
   );
 
+  const vkHeader = parseHonkVkHeader(vkeyBytes);
+
+  // Lazy-load ZKPassport utils for proof parsing
+  const { getNumberOfPublicInputs, getNumberOfPublicInputsFromVkey } =
+    await import("@zkpassport/utils");
+  const numPublicInputsFromName = getNumberOfPublicInputs(outerProof.name);
+  const numPublicInputsFromVkey = getNumberOfPublicInputsFromVkey(vkeyBytes);
+  const numPublicInputsFromVk =
+    vkHeader && vkHeader.publicInputsSize >= 16
+      ? vkHeader.publicInputsSize - 16
+      : undefined;
+  const numPublicInputs =
+    numPublicInputsFromVkey ?? numPublicInputsFromVk ?? numPublicInputsFromName;
+
+  // Parse raw proof hex into bytes. The format is:
+  //   [publicInput0 (32 bytes)][publicInput1 (32 bytes)]...[raw proof bytes]
+  // Garaga needs the raw proof bytes and public input bytes separately.
+  const rawBytes = hexToBytes(outerProof.proof);
+  const publicInputsByteLength = numPublicInputs * 32;
+  const publicInputsBytes = rawBytes.slice(0, publicInputsByteLength);
+  const proofBytes = rawBytes.slice(publicInputsByteLength);
+
+  console.log("[ZKPassport] Proof split:", {
+    rawLength: rawBytes.length,
+    numPublicInputs,
+    numPublicInputsFromName,
+    numPublicInputsFromVkey,
+    numPublicInputsFromVk,
+    vkLength: vkeyBytes.length,
+    vkLogCircuitSize: vkHeader?.logCircuitSize,
+    publicInputsLength: publicInputsBytes.length,
+    proofLength: proofBytes.length,
+  });
+
   // Lazy-load Garaga WASM module and initialize before use
   const garaga = await import("garaga");
   await garaga.init();
-  const garagaCalldata = garaga.getZKHonkCallData(
-    proofBytes,
-    publicInputsBytes,
-    vkeyBytes,
-  );
+
+  let garagaCalldata: bigint[];
+  try {
+    garagaCalldata = garaga.getZKHonkCallData(
+      proofBytes,
+      publicInputsBytes,
+      vkeyBytes,
+    );
+  } catch (error) {
+    const expectedProofLength = parseExpectedProofLength(error);
+    const inferredLogCircuitSize =
+      expectedProofLength !== undefined
+        ? inferLogCircuitSizeFromLengths(proofBytes.length, expectedProofLength)
+        : undefined;
+    const logCircuitSizeForRecovery =
+      vkHeader?.logCircuitSize ?? inferredLogCircuitSize;
+
+    const recoveredProofBytes =
+      expectedProofLength !== undefined &&
+      proofBytes.length > expectedProofLength &&
+      logCircuitSizeForRecovery !== undefined
+        ? tryRecoverLegacyProofLayout(proofBytes, logCircuitSizeForRecovery)
+        : undefined;
+
+    if (
+      recoveredProofBytes &&
+      expectedProofLength !== undefined &&
+      recoveredProofBytes.length === expectedProofLength
+    ) {
+      console.warn(
+        "[ZKPassport] Retrying calldata generation with legacy-compatible proof layout",
+        {
+          originalProofLength: proofBytes.length,
+          recoveredProofLength: recoveredProofBytes.length,
+          expectedProofLength,
+          logCircuitSizeForRecovery,
+        },
+      );
+
+      garagaCalldata = garaga.getZKHonkCallData(
+        recoveredProofBytes,
+        publicInputsBytes,
+        vkeyBytes,
+      );
+    } else {
+      throw error;
+    }
+  }
 
   // Build final qualification: [nullifier_low, nullifier_high, ...garaga_calldata]
   return [
