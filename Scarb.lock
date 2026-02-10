@@ -62,6 +62,7 @@ dependencies = [
  "game_components_minigame",
  "game_components_prize",
  "game_components_registration",
+ "game_components_registry",
  "game_components_test_common",
  "game_components_token",
  "game_components_utils",

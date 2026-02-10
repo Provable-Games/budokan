@@ -269,7 +269,7 @@ pub mod tournament_validator_mock {
 
                 // Verify token is at the claimed position on leaderboard
                 let leaderboard_token_id = *leaderboard.at((position - 1).into());
-                if leaderboard_token_id != token_id {
+                if leaderboard_token_id != token_id.into() {
                     return false;
                 }
 

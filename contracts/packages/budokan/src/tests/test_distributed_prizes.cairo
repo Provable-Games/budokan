@@ -91,9 +91,9 @@ fn test_distributed_prize_claim_all_positions_filled() {
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
-    contracts.minigame.end_game(token_id1, 100);
-    contracts.minigame.end_game(token_id2, 50);
-    contracts.minigame.end_game(token_id3, 25);
+    contracts.minigame.end_game(token_id1.into(), 100);
+    contracts.minigame.end_game(token_id2.into(), 50);
+    contracts.minigame.end_game(token_id3.into(), 25);
     contracts.budokan.submit_score(tournament.id, token_id1, 1);
     contracts.budokan.submit_score(tournament.id, token_id2, 2);
     contracts.budokan.submit_score(tournament.id, token_id3, 3);
@@ -232,7 +232,7 @@ fn test_single_prize_without_distribution_works() {
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
-    contracts.minigame.end_game(token_id, 100);
+    contracts.minigame.end_game(token_id.into(), 100);
     contracts.budokan.submit_score(tournament.id, token_id, 1);
 
     // Move to finalized
@@ -315,9 +315,9 @@ fn test_distributed_prize_without_position_works() {
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
-    contracts.minigame.end_game(token_id1, 100);
-    contracts.minigame.end_game(token_id2, 50);
-    contracts.minigame.end_game(token_id3, 25);
+    contracts.minigame.end_game(token_id1.into(), 100);
+    contracts.minigame.end_game(token_id2.into(), 50);
+    contracts.minigame.end_game(token_id3.into(), 25);
     contracts.budokan.submit_score(tournament.id, token_id1, 1);
     contracts.budokan.submit_score(tournament.id, token_id2, 2);
     contracts.budokan.submit_score(tournament.id, token_id3, 3);
@@ -494,8 +494,8 @@ fn test_distributed_prize_partial_entrants_partial_refund() {
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
-    contracts.minigame.end_game(token_id1, 100);
-    contracts.minigame.end_game(token_id2, 50);
+    contracts.minigame.end_game(token_id1.into(), 100);
+    contracts.minigame.end_game(token_id2.into(), 50);
 
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
     contracts.budokan.submit_score(tournament.id, token_id1, 1);
@@ -623,7 +623,7 @@ fn test_exponential_100_distribution_with_10_positions() {
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
-    contracts.minigame.end_game(token_id1, 100);
+    contracts.minigame.end_game(token_id1.into(), 100);
     contracts.budokan.submit_score(tournament.id, token_id1, 1);
 
     // Finalize
