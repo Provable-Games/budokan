@@ -228,15 +228,34 @@ export function ZKPassportEntry({
 
         if (abortRef.current) return;
 
-        if (!response.verified || !response.uniqueIdentifier) {
-          handleError("Verification failed: proofs could not be verified");
+        // Determine the unique identifier to use for the nullifier.
+        // If SDK's client-side verify succeeded, use its uniqueIdentifier.
+        // If verify failed (e.g. registry issue), extract from proof public inputs.
+        let identifier = response.uniqueIdentifier;
+        if (!identifier && collectedProofsRef.current.length > 0) {
+          console.warn("[ZKPassport] SDK verify failed — extracting nullifier from proof public inputs");
+          try {
+            const { extractNullifierFromProof } = await import(
+              "@/lib/zkpassport/proofConverter"
+            );
+            identifier = await extractNullifierFromProof(collectedProofsRef.current);
+          } catch (err) {
+            console.error("[ZKPassport] Failed to extract nullifier:", err);
+          }
+        }
+
+        if (!identifier) {
+          handleError("Verification failed: could not determine unique identifier");
           return;
+        }
+
+        if (!response.verified) {
+          console.warn("[ZKPassport] Client-side verify returned false — proceeding with on-chain verification");
         }
 
         setStatus("converting");
 
         try {
-          // Lazy-load proof converter
           const { buildQualification } = await import(
             "@/lib/zkpassport/proofConverter"
           );
@@ -244,8 +263,7 @@ export function ZKPassportEntry({
           console.log("[ZKPassport] Converting proofs for Starknet...");
           const qualification = await buildQualification(
             collectedProofsRef.current,
-            response.uniqueIdentifier,
-            chainId,
+            identifier,
           );
 
           if (!abortRef.current) {

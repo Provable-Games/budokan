@@ -6,8 +6,6 @@
  * initial bundle size small.
  */
 
-import { ChainId } from "@/dojo/setup/networks";
-
 /**
  * Proof data collected from the ZKPassport SDK's onProofGenerated callback.
  * We only store the fields we need for conversion.
@@ -19,13 +17,10 @@ export interface CollectedProof {
 }
 
 /**
- * Maps a Starknet chainId to the Ethereum chainId used by the ZKPassport registry.
- * Mainnet uses Ethereum mainnet (1), everything else uses Sepolia (11155111).
+ * ZKPassport deploys circuit manifests and vkeys only to the Ethereum Sepolia
+ * registry, regardless of which Starknet chain is in use.
  */
-function getRegistryChainId(starknetChainId?: string): number {
-  if (starknetChainId === ChainId.SN_MAIN) return 1;
-  return 11155111; // Ethereum Sepolia
-}
+const ZKPASSPORT_REGISTRY_CHAIN_ID = 11155111; // Ethereum Sepolia
 
 /**
  * Extracts a nullifier from a 256-bit unique identifier string.
@@ -62,19 +57,36 @@ function findOuterProof(proofs: CollectedProof[]): CollectedProof | undefined {
 }
 
 /**
+ * Extracts the scoped nullifier directly from the outer proof's public inputs.
+ * Used as a fallback when the SDK's verify() fails (e.g. registry unavailable)
+ * and doesn't return a uniqueIdentifier via onResult.
+ */
+export async function extractNullifierFromProof(proofs: CollectedProof[]): Promise<string | undefined> {
+  const outerProof = findOuterProof(proofs);
+  if (!outerProof?.proof) return undefined;
+
+  const { getProofData, getNumberOfPublicInputs } = await import("@zkpassport/utils");
+  const { getNullifierFromOuterProof } = await import("@zkpassport/utils/recursion");
+
+  const numPublicInputs = getNumberOfPublicInputs(outerProof.name);
+  const proofData = getProofData(outerProof.proof, numPublicInputs);
+  const nullifier: bigint = getNullifierFromOuterProof(proofData);
+
+  return "0x" + nullifier.toString(16);
+}
+
+/**
  * Builds the complete qualification proof for the ZKPassport validator contract.
  *
  * The qualification format is: [nullifier_low, nullifier_high, ...garaga_calldata]
  *
  * @param proofs - Array of collected proof results from the ZKPassport SDK
  * @param uniqueIdentifier - The unique identifier (nullifier) from the SDK result
- * @param starknetChainId - The current Starknet chain ID (determines which Ethereum registry to use)
  * @returns Array of string values for the Extension qualification proof
  */
 export async function buildQualification(
   proofs: CollectedProof[],
   uniqueIdentifier: string,
-  starknetChainId?: string
 ): Promise<string[]> {
   // Extract nullifier as [low, high]
   const [nullifierLow, nullifierHigh] = extractNullifier(uniqueIdentifier);
@@ -95,8 +107,7 @@ export async function buildQualification(
 
   // Lazy-load registry client to fetch the verification key
   const { RegistryClient } = await import("@zkpassport/registry");
-  const registryChainId = getRegistryChainId(starknetChainId);
-  const registryClient = new RegistryClient({ chainId: registryChainId });
+  const registryClient = new RegistryClient({ chainId: ZKPASSPORT_REGISTRY_CHAIN_ID });
   const circuitManifest = await registryClient.getCircuitManifest(undefined, {
     version: outerProof.version,
   });
