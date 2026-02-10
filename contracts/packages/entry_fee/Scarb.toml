@@ -3,9 +3,6 @@ name = "budokan_entry_fee"
 version.workspace = true
 edition.workspace = true
 
-[lib]
-
-
 [dependencies]
 starknet.workspace = true
 openzeppelin_interfaces.workspace = true

@@ -15,7 +15,6 @@ build-external-contracts = [
     "game_components_token::examples::minigame_registry_contract::MinigameRegistryContract",
 ]
 
-
 [dependencies]
 starknet.workspace = true
 dojo.workspace = true
@@ -38,8 +37,5 @@ budokan_prize = { path = "../prize" }
 budokan_registration = { path = "../registration" }
 
 [dev-dependencies]
-cairo_test = "2.13.1"
+cairo_test.workspace = true
 snforge_std.workspace = true
-
-[features]
-default = []

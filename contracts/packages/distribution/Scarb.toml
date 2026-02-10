@@ -3,9 +3,6 @@ name = "budokan_distribution"
 version.workspace = true
 edition.workspace = true
 
-[lib]
-
-
 [dependencies]
 starknet.workspace = true
 math = { path = "../math" }
