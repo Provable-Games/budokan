@@ -65,7 +65,10 @@ import {
   findTemplateByCommitment,
   buildTemplateFromConfig,
 } from "@/lib/zkpassport/templates";
-import { ZKPASSPORT_SERVICE_SCOPE } from "@/lib/zkpassport/constants";
+import {
+  ZKPASSPORT_SERVICE_SCOPE,
+  getZkPassportVerifierAddress,
+} from "@/lib/zkpassport/constants";
 import { getTokenByAddress } from "@/lib/tokenUtils";
 import { useVoyagerNfts } from "@/hooks/useVoyagerNfts";
 import {
@@ -2155,6 +2158,8 @@ export function EnterTournamentDialog({
                       <ZKPassportEntry
                         template={zkPassportValidatorConfig.template}
                         chainId={chainId}
+                        provider={provider}
+                        verifierAddress={getZkPassportVerifierAddress(chainId)}
                         onProofReady={(qualification) => {
                           setZkPassportProof(qualification);
                         }}

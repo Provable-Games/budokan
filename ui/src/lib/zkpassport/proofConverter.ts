@@ -92,6 +92,42 @@ export async function extractNullifierFromProof(proofs: CollectedProof[]): Promi
 }
 
 /**
+ * Validates a proof by calling the deployed Garaga verifier contract via RPC.
+ * Replaces the broken client-side SDK verify() which fails due to CORS.
+ *
+ * @param proofCalldata - The Garaga calldata array (output of getZKHonkCallData)
+ * @param verifierAddress - On-chain Garaga Honk verifier contract address
+ * @param provider - Starknet provider with callContract method
+ * @returns Object with valid flag and optional public inputs
+ */
+export async function verifyProofViaRPC(
+  proofCalldata: string[],
+  verifierAddress: string,
+  provider: { callContract: (call: { contractAddress: string; entrypoint: string; calldata: string[] }) => Promise<string[]> },
+): Promise<{ valid: boolean; publicInputs?: bigint[] }> {
+  const { CallData } = await import("starknet");
+
+  const result = await provider.callContract({
+    contractAddress: verifierAddress,
+    entrypoint: "verify_ultra_keccak_zk_honk_proof",
+    calldata: CallData.compile([proofCalldata]),
+  });
+
+  // Result<Span<u256>, felt252>: Ok=[0, count, ...values], Err=[1, error]
+  if (BigInt(result[0]) === 0n) {
+    const count = Number(BigInt(result[1]));
+    const publicInputs: bigint[] = [];
+    for (let i = 0; i < count; i++) {
+      const low = BigInt(result[2 + i * 2]);
+      const high = BigInt(result[3 + i * 2]);
+      publicInputs.push((high << 128n) | low);
+    }
+    return { valid: true, publicInputs };
+  }
+  return { valid: false };
+}
+
+/**
  * Builds the complete qualification proof for the ZKPassport validator contract.
  *
  * The qualification format is: [nullifier_low, nullifier_high, ...garaga_calldata]

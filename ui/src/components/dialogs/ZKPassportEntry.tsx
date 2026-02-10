@@ -12,6 +12,7 @@ type VerificationStatus =
   | "waiting_scan"
   | "generating_proof"
   | "converting"
+  | "validating"
   | "ready"
   | "error";
 
@@ -20,6 +21,14 @@ interface ZKPassportEntryProps {
   onProofReady: (qualification: string[]) => void;
   onError: (error: string) => void;
   chainId?: string;
+  provider?: {
+    callContract: (call: {
+      contractAddress: string;
+      entrypoint: string;
+      calldata: string[];
+    }) => Promise<string[]>;
+  };
+  verifierAddress?: string;
 }
 
 /** Timeout in ms after onRequestReceived with no result/error */
@@ -32,6 +41,8 @@ export function ZKPassportEntry({
   onProofReady,
   onError,
   chainId,
+  provider,
+  verifierAddress,
 }: ZKPassportEntryProps) {
   const [status, setStatus] = useState<VerificationStatus>("idle");
   const [errorMessage, setErrorMessage] = useState("");
@@ -98,50 +109,18 @@ export function ZKPassportEntry({
     window.addEventListener("unhandledrejection", rejectionHandler);
 
     try {
-      // Intercept WebSocket to log all bridge traffic for diagnostics.
-      // This runs BEFORE the SDK creates its connection.
-      const OriginalWebSocket = window.WebSocket;
-      const WebSocketProxy = new Proxy(OriginalWebSocket, {
-        construct(target, args) {
-          const ws = new target(...(args as [string, ...string[]]));
-          const url = args[0] as string;
-          console.log("[ZKPassport WS] Opening:", url);
-
-          ws.addEventListener("open", () => {
-            console.log("[ZKPassport WS] Connected");
-          });
-          ws.addEventListener("message", (event: MessageEvent) => {
-            const data = typeof event.data === "string" ? event.data : "<binary>";
-            const preview = data.length > 200 ? data.slice(0, 200) + "..." : data;
-            console.log("[ZKPassport WS] Received:", preview);
-          });
-          ws.addEventListener("close", (event: CloseEvent) => {
-            console.log("[ZKPassport WS] Closed:", event.code, event.reason);
-          });
-          ws.addEventListener("error", () => {
-            console.error("[ZKPassport WS] Error event");
-          });
-
-          return ws;
-        },
-      });
-      window.WebSocket = WebSocketProxy as typeof WebSocket;
-
       // Lazy-load ZKPassport SDK
       const { ZKPassport } = await import("@zkpassport/sdk");
 
-      console.log("[ZKPassport] Initializing SDK with domain:", ZKPASSPORT_SDK_DOMAIN);
       const zkpassport = new ZKPassport(ZKPASSPORT_SDK_DOMAIN);
 
       // Create the verification request
-      console.log("[ZKPassport] Creating request with template:", template.id, template.description);
       const queryBuilder = await zkpassport.request({
         name: "Budokan Tournament",
         logo: "https://zkpassport.id/logo.png",
         purpose: template.description,
         scope: ZKPASSPORT_SDK_DOMAIN,
         mode: "compressed",
-        devMode: true,
       });
 
       // Apply the template's query
@@ -150,37 +129,25 @@ export function ZKPassportEntry({
       // Finalize and get callbacks
       const result = configuredBuilder.done();
 
-      // Restore original WebSocket so other code isn't affected
-      window.WebSocket = OriginalWebSocket;
-
-      console.log("[ZKPassport] Request created, URL:", result.url);
-      console.log("[ZKPassport] Request ID:", result.requestId);
       setQrUrl(result.url);
 
-      // Wire up ALL callbacks for diagnostic visibility
-
       result.onBridgeConnect(() => {
-        console.log("[ZKPassport] Bridge connected, isBridgeConnected:", result.isBridgeConnected());
+        console.log("[ZKPassport] Bridge connected");
       });
 
       result.onRequestReceived(() => {
-        console.log("[ZKPassport] Request received by mobile app, isBridgeConnected:", result.isBridgeConnected());
         if (!abortRef.current) {
           setStatus("generating_proof");
 
           // Start bridge connection monitoring
           bridgePollRef.current = setInterval(() => {
-            const connected = result.isBridgeConnected();
-            console.log("[ZKPassport] Bridge poll - connected:", connected);
-            if (!connected) {
-              console.warn("[ZKPassport] Bridge disconnected during proof generation");
+            if (!result.isBridgeConnected()) {
               handleError("Connection to ZKPassport app was lost. Please try again.");
             }
           }, BRIDGE_POLL_INTERVAL_MS);
 
-          // Start timeout - if no result within PROOF_TIMEOUT_MS, show error
+          // Start timeout
           timeoutRef.current = setTimeout(() => {
-            console.error("[ZKPassport] Timed out waiting for proof result");
             handleError(
               "Verification timed out. The ZKPassport app may have encountered an error. Please try again.",
             );
@@ -189,13 +156,11 @@ export function ZKPassportEntry({
       });
 
       result.onGeneratingProof(() => {
-        console.log("[ZKPassport] Mobile app started generating proof");
+        console.log("[ZKPassport] Generating proof on mobile");
       });
 
       result.onProofGenerated((proof: { proof?: string; name?: string; version?: string; total?: number }) => {
-        console.log("[ZKPassport] Proof generated:", proof.name, "version:", proof.version);
         if (!abortRef.current) {
-          // Collect proof data for later conversion
           if (proof.proof && proof.name) {
             collectedProofsRef.current.push({
               proof: proof.proof,
@@ -210,13 +175,7 @@ export function ZKPassportEntry({
         }
       });
 
-      result.onResult(async (response: { uniqueIdentifier: string | undefined; verified: boolean }) => {
-        console.log("[ZKPassport] Result received:", {
-          verified: response.verified,
-          hasIdentifier: !!response.uniqueIdentifier,
-          proofsCollected: collectedProofsRef.current.length,
-        });
-
+      result.onResult(async () => {
         // Clear monitoring
         if (bridgePollRef.current) {
           clearInterval(bridgePollRef.current);
@@ -229,19 +188,14 @@ export function ZKPassportEntry({
 
         if (abortRef.current) return;
 
-        // Determine the unique identifier to use for the nullifier.
-        // If SDK's client-side verify succeeded, use its uniqueIdentifier.
-        // If verify failed (e.g. registry issue), extract from proof public inputs.
-        let identifier = response.uniqueIdentifier;
-        if (!identifier && collectedProofsRef.current.length > 0) {
-          console.warn("[ZKPassport] SDK verify failed — extracting nullifier from proof public inputs");
-          console.log("[ZKPassport] Collected proof names:", collectedProofsRef.current.map(p => p.name));
+        // Always extract nullifier from proof public inputs directly
+        let identifier: string | undefined;
+        if (collectedProofsRef.current.length > 0) {
           try {
             const { extractNullifierFromProof } = await import(
               "@/lib/zkpassport/proofConverter"
             );
             identifier = await extractNullifierFromProof(collectedProofsRef.current);
-            console.log("[ZKPassport] Extracted nullifier:", identifier);
           } catch (err) {
             console.error("[ZKPassport] Failed to extract nullifier:", err);
           }
@@ -252,25 +206,44 @@ export function ZKPassportEntry({
           return;
         }
 
-        if (!response.verified) {
-          console.warn("[ZKPassport] Client-side verify returned false — proceeding with on-chain verification");
-        }
-
         setStatus("converting");
 
         try {
-          const { buildQualification } = await import(
+          const { buildQualification, verifyProofViaRPC } = await import(
             "@/lib/zkpassport/proofConverter"
           );
 
-          console.log("[ZKPassport] Converting proofs for Starknet...");
           const qualification = await buildQualification(
             collectedProofsRef.current,
             identifier,
           );
 
+          if (abortRef.current) return;
+
+          // Validate via RPC if provider and verifier address are available
+          if (provider && verifierAddress) {
+            setStatus("validating");
+            try {
+              // The garaga calldata is everything after nullifier_low and nullifier_high
+              const garagaCalldata = qualification.slice(2);
+              const rpcResult = await verifyProofViaRPC(
+                garagaCalldata,
+                verifierAddress,
+                provider,
+              );
+
+              if (!rpcResult.valid) {
+                handleError("On-chain proof validation failed. Please try again.");
+                return;
+              }
+              console.log("[ZKPassport] RPC validation passed");
+            } catch (err) {
+              console.error("[ZKPassport] RPC validation error:", err);
+              // Continue anyway — the on-chain tx will validate
+            }
+          }
+
           if (!abortRef.current) {
-            console.log("[ZKPassport] Proof conversion complete, qualification length:", qualification.length);
             setStatus("ready");
             onProofReady(qualification);
           }
@@ -285,7 +258,6 @@ export function ZKPassportEntry({
       });
 
       result.onReject(() => {
-        console.log("[ZKPassport] User rejected the verification request");
         if (!abortRef.current) {
           handleError("User rejected the verification request");
         }
@@ -312,7 +284,7 @@ export function ZKPassportEntry({
     return () => {
       window.removeEventListener("unhandledrejection", rejectionHandler);
     };
-  }, [template, onProofReady, onError, chainId, handleError]);
+  }, [template, onProofReady, onError, chainId, handleError, provider, verifierAddress]);
 
   const renderContent = () => {
     switch (status) {
@@ -367,6 +339,16 @@ export function ZKPassportEntry({
             <LoadingSpinner />
             <span className="text-sm">
               Converting for Starknet...
+            </span>
+          </div>
+        );
+
+      case "validating":
+        return (
+          <div className="flex flex-col items-center gap-3">
+            <LoadingSpinner />
+            <span className="text-sm">
+              Validating proof on-chain...
             </span>
           </div>
         );
