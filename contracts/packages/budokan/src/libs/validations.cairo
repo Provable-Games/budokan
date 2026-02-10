@@ -3,8 +3,8 @@
 //! Pure validation functions for tournament operations
 //! These functions operate only on inputs without any storage access
 
-use budokan_distribution::models::BASIS_POINTS;
 use core::num::traits::Zero;
+use game_components_distribution::models::BASIS_POINTS;
 use starknet::ContractAddress;
 
 /// Validates that entry fee shares don't exceed 100% (BASIS_POINTS)

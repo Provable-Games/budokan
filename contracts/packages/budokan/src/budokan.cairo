@@ -17,26 +17,22 @@ pub mod Budokan {
         TournamentMetaStorePacking,
     };
     use budokan::models::schedule::{Phase, Schedule};
-    use budokan_distribution::calculator;
-    use budokan_distribution::models::{
-        BASIS_POINTS, DIST_TYPE_CUSTOM, DIST_TYPE_EXPONENTIAL, DIST_TYPE_LINEAR, DIST_TYPE_UNIFORM,
-    };
-    use budokan_entry_fee::entry_fee::EntryFeeComponent;
-    use budokan_entry_fee::entry_fee::EntryFeeComponent::EntryFeeInternalTrait;
-    use budokan_entry_requirement::entry_requirement::EntryRequirementComponent;
-    use budokan_entry_requirement::entry_requirement::EntryRequirementComponent::EntryRequirementInternalTrait;
     use budokan_interfaces::budokan::IBudokan;
-    use budokan_interfaces::entry_validator::{
-        IENTRY_VALIDATOR_ID, IEntryValidatorDispatcher, IEntryValidatorDispatcherTrait,
-    };
     use budokan_interfaces::event_relayer::{
         IBudokanEventRelayerDispatcher, IBudokanEventRelayerDispatcherTrait,
     };
-    use budokan_prize::prize::PrizeComponent;
-    use budokan_prize::prize::PrizeComponent::PrizeInternalTrait;
-    use budokan_registration::registration::RegistrationComponent;
-    use budokan_registration::registration::RegistrationComponent::RegistrationInternalTrait;
     use core::num::traits::Zero;
+    use game_components_distribution::calculator;
+    use game_components_distribution::models::{
+        BASIS_POINTS, DIST_TYPE_CUSTOM, DIST_TYPE_EXPONENTIAL, DIST_TYPE_LINEAR, DIST_TYPE_UNIFORM,
+    };
+    use game_components_entry_fee::entry_fee::EntryFeeComponent;
+    use game_components_entry_fee::entry_fee::EntryFeeComponent::EntryFeeInternalTrait;
+    use game_components_entry_requirement::entry_requirement::EntryRequirementComponent;
+    use game_components_entry_requirement::entry_requirement::EntryRequirementComponent::EntryRequirementInternalTrait;
+    use game_components_interfaces::entry_validator::{
+        IENTRY_VALIDATOR_ID, IEntryValidatorDispatcher, IEntryValidatorDispatcherTrait,
+    };
     use game_components_leaderboard::interface::ILeaderboard;
     use game_components_leaderboard::leaderboard::leaderboard::LeaderboardResult;
     use game_components_leaderboard::leaderboard_component::LeaderboardComponent;
@@ -55,6 +51,10 @@ pub mod Budokan {
         IMINIGAME_ID, IMinigameDispatcher, IMinigameDispatcherTrait, IMinigameTokenDataDispatcher,
         IMinigameTokenDataDispatcherTrait,
     };
+    use game_components_prize::prize::PrizeComponent;
+    use game_components_prize::prize::PrizeComponent::PrizeInternalTrait;
+    use game_components_registration::registration::RegistrationComponent;
+    use game_components_registration::registration::RegistrationComponent::RegistrationInternalTrait;
     use game_components_token::core::interface::{
         IMinigameTokenDispatcher, IMinigameTokenDispatcherTrait,
     };
@@ -696,8 +696,7 @@ pub mod Budokan {
                             "Budokan: Cannot set position for distributed prize (position and distribution are mutually exclusive)",
                         );
                     },
-                    TokenTypeData::erc721(_) => {
-                        // ERC721 prizes don't have distribution, so position is always valid
+                    TokenTypeData::erc721(_) => {// ERC721 prizes don't have distribution, so position is always valid
                     },
                 }
             }

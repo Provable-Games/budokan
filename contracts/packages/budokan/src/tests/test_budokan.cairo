@@ -27,11 +27,13 @@ use budokan::tests::mocks::tournament_validator_mock::{
 };
 use budokan::tests::setup_denshokan;
 use budokan_interfaces::budokan::{IBudokanDispatcher, IBudokanDispatcherTrait};
-use budokan_interfaces::entry_validator::IEntryValidatorDispatcher;
-use budokan_interfaces::prize::{IPrizeDispatcher, IPrizeDispatcherTrait};
-use budokan_interfaces::registration::{IRegistrationDispatcher, IRegistrationDispatcherTrait};
 use core::option::Option;
 use core::serde::Serde;
+use game_components_interfaces::entry_validator::IEntryValidatorDispatcher;
+use game_components_interfaces::prize::{IPrizeDispatcher, IPrizeDispatcherTrait};
+use game_components_interfaces::registration::{
+    IRegistrationDispatcher, IRegistrationDispatcherTrait,
+};
 use game_components_metagame::interface::IMETAGAME_ID;
 use game_components_test_starknet::minigame::mocks::minigame_starknet_mock::{
     IMinigameStarknetMockDispatcher, IMinigameStarknetMockDispatcherTrait,
