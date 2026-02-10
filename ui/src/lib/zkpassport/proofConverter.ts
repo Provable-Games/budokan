@@ -36,8 +36,12 @@ interface HonkVkHeader {
   publicInputsSize: number;
 }
 
-const LEGACY_PREFIX_FIELDS = 24;
-const LEGACY_SUFFIX_FIELDS = 132;
+// Garaga Rust parser layout before sumcheck:
+// pairing_point_object (16) + 9 G1 points (18) + libra_sum (1) = 35 fields
+const LEGACY_PREFIX_FIELDS = 35;
+// Garaga Rust parser layout after sumcheck for log_n = variable:
+// 41 evals + 1 + 6 + 1 + 2*(log_n-1) + log_n + 4 + 4 = 121 fields when log_n terms are excluded
+const LEGACY_SUFFIX_FIELDS = 121;
 const LEGACY_UNIVARIATE_FIELDS = 9;
 const NEW_UNIVARIATE_FIELDS = 16;
 
