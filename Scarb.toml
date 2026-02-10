@@ -1,12 +1,6 @@
 [workspace]
 members = [
-    "contracts/packages/math",
-    "contracts/packages/distribution",
     "contracts/packages/interfaces",
-    "contracts/packages/entry_fee",
-    "contracts/packages/entry_requirement",
-    "contracts/packages/prize",
-    "contracts/packages/registration",
     "contracts/packages/budokan",
 ]
 
@@ -31,6 +25,13 @@ game_components_utils = { git = "https://github.com/Provable-Games/game-componen
 game_components_test_starknet = { git = "https://github.com/Provable-Games/game-components.git", tag = "v2.13.1" }
 game_components_token = { git = "https://github.com/Provable-Games/game-components.git", tag = "v2.13.1" }
 game_components_leaderboard = { git = "https://github.com/Provable-Games/game-components.git", tag = "v2.13.1" }
+game_components_interfaces = { path = "/workspace/game-components-2.13/packages/interfaces" }
+game_components_math = { path = "/workspace/game-components-2.13/packages/math" }
+game_components_distribution = { path = "/workspace/game-components-2.13/packages/distribution" }
+game_components_registration = { path = "/workspace/game-components-2.13/packages/registration" }
+game_components_entry_requirement = { path = "/workspace/game-components-2.13/packages/entry_requirement" }
+game_components_entry_fee = { path = "/workspace/game-components-2.13/packages/entry_fee" }
+game_components_prize = { path = "/workspace/game-components-2.13/packages/prize" }
 
 [scripts]
 test = "snforge test"

@@ -30,12 +30,14 @@ pub trait ITournamentValidatorMock<TState> {
 
 #[starknet::contract]
 pub mod tournament_validator_mock {
-    use budokan_entry_requirement::entry_validator::EntryValidatorComponent;
-    use budokan_entry_requirement::entry_validator::EntryValidatorComponent::{
+    use budokan_interfaces::budokan::{IBudokanDispatcher, IBudokanDispatcherTrait};
+    use game_components_entry_requirement::entry_validator::EntryValidatorComponent;
+    use game_components_entry_requirement::entry_validator::EntryValidatorComponent::{
         EntryValidator, InternalTrait as EntryValidatorInternalTrait,
     };
-    use budokan_interfaces::budokan::{IBudokanDispatcher, IBudokanDispatcherTrait};
-    use budokan_interfaces::registration::{IRegistrationDispatcher, IRegistrationDispatcherTrait};
+    use game_components_interfaces::registration::{
+        IRegistrationDispatcher, IRegistrationDispatcherTrait,
+    };
     use game_components_minigame::interface::{IMinigameDispatcher, IMinigameDispatcherTrait};
     use openzeppelin_interfaces::erc721::{IERC721Dispatcher, IERC721DispatcherTrait};
     use openzeppelin_introspection::src5::SRC5Component;
@@ -64,7 +66,6 @@ pub mod tournament_validator_mock {
         #[substorage(v0)]
         src5: SRC5Component::Storage,
         /// The Budokan contract address
-        #[allow(starknet::colliding_storage_paths)]
         budokan_address: ContractAddress,
         /// Qualifier type per tournament (0 = participants, 1 = winners)
         qualifier_type: Map<u64, felt252>,
@@ -97,43 +98,43 @@ pub mod tournament_validator_mock {
     impl EntryValidatorImplInternal of EntryValidator<ContractState> {
         fn validate_entry(
             self: @ContractState,
-            tournament_id: u64,
+            context_id: u64,
             player_address: ContractAddress,
             qualification: Span<felt252>,
         ) -> bool {
-            self.validate_entry_internal(tournament_id, player_address, qualification)
+            self.validate_entry_internal(context_id, player_address, qualification)
         }
 
         fn should_ban_entry(
             self: @ContractState,
-            tournament_id: u64,
+            context_id: u64,
             game_token_id: u64,
             current_owner: ContractAddress,
             qualification: Span<felt252>,
         ) -> bool {
             // Check if the current owner still has valid entry based on qualifying tournament
             // If not, this entry should be banned
-            !self.validate_entry_internal(tournament_id, current_owner, qualification)
+            !self.validate_entry_internal(context_id, current_owner, qualification)
         }
 
         fn entries_left(
             self: @ContractState,
-            tournament_id: u64,
+            context_id: u64,
             player_address: ContractAddress,
             qualification: Span<felt252>,
         ) -> Option<u8> {
-            let entry_limit = self.tournament_entry_limit.read(tournament_id);
+            let entry_limit = self.tournament_entry_limit.read(context_id);
             if entry_limit == 0 {
                 return Option::None; // Unlimited entries
             }
-            let key = (tournament_id, player_address);
+            let key = (context_id, player_address);
             let current_entries = self.tournament_entries.read(key);
             let remaining_entries = entry_limit - current_entries;
             return Option::Some(remaining_entries);
         }
 
         fn add_config(
-            ref self: ContractState, tournament_id: u64, entry_limit: u8, config: Span<felt252>,
+            ref self: ContractState, context_id: u64, entry_limit: u8, config: Span<felt252>,
         ) {
             // config[0]: qualifier_type (0 = participants, 1 = winners)
             // config[1..]: qualifying tournament IDs
@@ -148,11 +149,11 @@ pub mod tournament_validator_mock {
                 "Invalid qualifier type",
             );
 
-            self.qualifier_type.write(tournament_id, qualifier_type);
-            self.tournament_entry_limit.write(tournament_id, entry_limit);
+            self.qualifier_type.write(context_id, qualifier_type);
+            self.tournament_entry_limit.write(context_id, entry_limit);
 
             // Store qualifying tournament IDs
-            let mut vec = self.qualifying_tournament_ids.entry(tournament_id);
+            let mut vec = self.qualifying_tournament_ids.entry(context_id);
             let mut i: u32 = 1;
             loop {
                 if i >= config.len() {
@@ -166,26 +167,26 @@ pub mod tournament_validator_mock {
 
         fn on_entry_added(
             ref self: ContractState,
-            tournament_id: u64,
+            context_id: u64,
             game_token_id: u64,
             player_address: ContractAddress,
             qualification: Span<felt252>,
         ) {
             // Track entry count (component already tracks game_token_ids)
-            let key = (tournament_id, player_address);
+            let key = (context_id, player_address);
             let current_entries = self.tournament_entries.read(key);
             self.tournament_entries.write(key, current_entries + 1);
         }
 
         fn on_entry_removed(
             ref self: ContractState,
-            tournament_id: u64,
+            context_id: u64,
             game_token_id: u64,
             player_address: ContractAddress,
             qualification: Span<felt252>,
         ) {
             // Decrement entry count
-            let key = (tournament_id, player_address);
+            let key = (context_id, player_address);
             let current_entries = self.tournament_entries.read(key);
             if current_entries > 0 {
                 self.tournament_entries.write(key, current_entries - 1);

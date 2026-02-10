@@ -52,16 +52,17 @@ dependencies = [
 name = "budokan"
 version = "0.0.1"
 dependencies = [
- "budokan_distribution",
- "budokan_entry_fee",
- "budokan_entry_requirement",
  "budokan_interfaces",
- "budokan_prize",
- "budokan_registration",
  "dojo",
+ "game_components_distribution",
+ "game_components_entry_fee",
+ "game_components_entry_requirement",
+ "game_components_interfaces",
  "game_components_leaderboard",
  "game_components_metagame",
  "game_components_minigame",
+ "game_components_prize",
+ "game_components_registration",
  "game_components_test_starknet",
  "game_components_token",
  "game_components_utils",
@@ -74,58 +75,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "budokan_distribution"
-version = "0.0.1"
-dependencies = [
- "alexandria_math",
- "budokan_interfaces",
- "math",
- "snforge_std",
-]
-
-[[package]]
-name = "budokan_entry_fee"
-version = "0.0.1"
-dependencies = [
- "budokan_interfaces",
- "openzeppelin_interfaces",
- "snforge_std",
-]
-
-[[package]]
-name = "budokan_entry_requirement"
-version = "0.0.1"
-dependencies = [
- "budokan_interfaces",
- "openzeppelin_interfaces",
- "openzeppelin_introspection",
- "openzeppelin_token",
- "snforge_std",
-]
-
-[[package]]
 name = "budokan_interfaces"
 version = "0.0.1"
 dependencies = [
- "snforge_std",
-]
-
-[[package]]
-name = "budokan_prize"
-version = "0.0.1"
-dependencies = [
- "budokan_distribution",
- "budokan_interfaces",
- "dojo",
- "openzeppelin_interfaces",
- "snforge_std",
-]
-
-[[package]]
-name = "budokan_registration"
-version = "0.0.1"
-dependencies = [
- "budokan_interfaces",
+ "game_components_interfaces",
  "snforge_std",
 ]
 
@@ -143,12 +96,45 @@ version = "1.8.0"
 source = "git+https://github.com/dojoengine/dojo?tag=v1.8.0#843d276a42c3fc34084a88af9f11fa7690bf3d75"
 
 [[package]]
+name = "game_components_distribution"
+version = "1.5.1"
+dependencies = [
+ "game_components_interfaces",
+ "game_components_math",
+]
+
+[[package]]
+name = "game_components_entry_fee"
+version = "1.5.1"
+dependencies = [
+ "game_components_interfaces",
+ "openzeppelin_interfaces",
+]
+
+[[package]]
+name = "game_components_entry_requirement"
+version = "1.5.1"
+dependencies = [
+ "game_components_interfaces",
+ "openzeppelin_interfaces",
+ "openzeppelin_introspection",
+]
+
+[[package]]
+name = "game_components_interfaces"
+version = "1.5.1"
+
+[[package]]
 name = "game_components_leaderboard"
 version = "1.5.1"
 source = "git+https://github.com/Provable-Games/game-components.git?tag=v2.13.1#960c84aae59239763a2a2a339e0c649b0527f07d"
 dependencies = [
  "openzeppelin_introspection",
 ]
+
+[[package]]
+name = "game_components_math"
+version = "1.5.1"
 
 [[package]]
 name = "game_components_metagame"
@@ -174,6 +160,22 @@ dependencies = [
  "openzeppelin_interfaces",
  "openzeppelin_introspection",
  "openzeppelin_token",
+]
+
+[[package]]
+name = "game_components_prize"
+version = "1.5.1"
+dependencies = [
+ "game_components_distribution",
+ "game_components_interfaces",
+ "openzeppelin_interfaces",
+]
+
+[[package]]
+name = "game_components_registration"
+version = "1.5.1"
+dependencies = [
+ "game_components_interfaces",
 ]
 
 [[package]]
@@ -220,10 +222,6 @@ dependencies = [
 name = "graffiti"
 version = "0.1.0"
 source = "git+https://github.com/ponderingdemocritus/graffiti?rev=bc569531791dbc71c6cd8d9bc154c34eedad31fe#bc569531791dbc71c6cd8d9bc154c34eedad31fe"
-
-[[package]]
-name = "math"
-version = "0.0.1"
 
 [[package]]
 name = "openzeppelin_access"

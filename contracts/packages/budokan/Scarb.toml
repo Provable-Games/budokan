@@ -32,12 +32,13 @@ game_components_utils.workspace = true
 game_components_test_starknet.workspace = true
 game_components_token.workspace = true
 game_components_leaderboard.workspace = true
-budokan_distribution = { path = "../distribution" }
 budokan_interfaces = { path = "../interfaces" }
-budokan_entry_fee = { path = "../entry_fee" }
-budokan_entry_requirement = { path = "../entry_requirement" }
-budokan_prize = { path = "../prize" }
-budokan_registration = { path = "../registration" }
+game_components_interfaces.workspace = true
+game_components_distribution.workspace = true
+game_components_entry_fee.workspace = true
+game_components_entry_requirement.workspace = true
+game_components_prize.workspace = true
+game_components_registration.workspace = true
 
 [dev-dependencies]
 cairo_test = "2.13.1"

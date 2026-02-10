@@ -75,6 +75,8 @@ import {
   TOURNAMENT_VERSION_KEY,
   EXCLUDED_TOURNAMENT_IDS,
 } from "@/lib/constants";
+import GeoBlockedDialog from "@/components/dialogs/GeoBlocked";
+import { useGeoBlock } from "@/hooks/useGeoBlock";
 
 const Tournament = () => {
   const { id } = useParams<{ id: string }>();
@@ -89,6 +91,8 @@ const Tournament = () => {
   const [submitScoresDialogOpen, setSubmitScoresDialogOpen] = useState(false);
   const [addPrizesDialogOpen, setAddPrizesDialogOpen] = useState(false);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
+  const [showGeoBlock, setShowGeoBlock] = useState(false);
+  const { isBlocked: isGeoBlocked } = useGeoBlock();
   const [loading, setLoading] = useState(true);
   const [tournamentExists, setTournamentExists] = useState(false);
   const [tokenDecimals, setTokenDecimals] = useState<Record<string, number>>(
@@ -746,12 +750,12 @@ const Tournament = () => {
     if (!tournamentModel || !extensionRequirement) return [];
 
     // Check if this extension is a tournament validator by looking at the config format
-    // Tournament validator config: [qualifier_type, ...tournament_ids]
+    // Tournament validator config: [qualifier_type, qualifying_mode, top_positions, ...tournament_ids]
     const config = extensionRequirement.config;
-    if (!config || config.length < 2) return [];
+    if (!config || config.length < 4) return [];
 
-    // Extract tournament IDs (skip first element which is qualifier_type)
-    const tournamentIds = config.slice(1);
+    // Extract tournament IDs (skip first 3 elements: qualifier_type, qualifying_mode, top_positions)
+    const tournamentIds = config.slice(3);
     return tournamentIds.map((id: any) => padU64(BigInt(id)));
   }, [tournamentModel, extensionRequirement]);
 
@@ -841,7 +845,13 @@ const Tournament = () => {
           {!isEnded && (
             <Button
               variant="outline"
-              onClick={() => setAddPrizesDialogOpen(true)}
+              onClick={() => {
+                if (isGeoBlocked) {
+                  setShowGeoBlock(true);
+                } else {
+                  setAddPrizesDialogOpen(true);
+                }
+              }}
             >
               <GIFT />{" "}
               <span className="hidden sm:block 3xl:text-lg">Add Prizes</span>
@@ -853,7 +863,13 @@ const Tournament = () => {
           (registrationType === "open" && !isEnded) ? (
             <Button
               className="uppercase [&_svg]:w-6 [&_svg]:h-6 overflow-visible whitespace-nowrap"
-              onClick={() => setEnterDialogOpen(true)}
+              onClick={() => {
+                if (isGeoBlocked) {
+                  setShowGeoBlock(true);
+                } else {
+                  setEnterDialogOpen(true);
+                }
+              }}
             >
               <span className="hidden sm:block flex-shrink-0">
                 <SPACE_INVADER_SOLID />
@@ -884,7 +900,13 @@ const Tournament = () => {
           ) : isSubmitted ? (
             <Button
               className="uppercase"
-              onClick={() => setClaimDialogOpen(true)}
+              onClick={() => {
+                if (isGeoBlocked) {
+                  setShowGeoBlock(true);
+                } else {
+                  setClaimDialogOpen(true);
+                }
+              }}
               disabled={allClaimed || claimablePrizesCount === 0}
             >
               <MONEY />
@@ -944,6 +966,10 @@ const Tournament = () => {
             onOpenChange={setSettingsDialogOpen}
             game={gameAddress ?? ""}
             settings={settings[0]}
+          />
+          <GeoBlockedDialog
+            open={showGeoBlock}
+            onOpenChange={setShowGeoBlock}
           />
         </div>
       </div>

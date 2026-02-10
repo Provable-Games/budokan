@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 // Import types from other interface packages
-pub use budokan_interfaces::distribution::Distribution;
-pub use budokan_interfaces::entry_requirement::{
+pub use game_components_interfaces::distribution::Distribution;
+pub use game_components_interfaces::entry_requirement::{
     EntryRequirement, EntryRequirementType, ExtensionConfig, NFTQualification, QualificationProof,
 };
-pub use budokan_interfaces::prize::{ERC20Data, ERC721Data, Prize, PrizeType, TokenTypeData};
+pub use game_components_interfaces::prize::{ERC20Data, ERC721Data, Prize, PrizeType, TokenTypeData};
 use starknet::ContractAddress;
 
 // ==============================================

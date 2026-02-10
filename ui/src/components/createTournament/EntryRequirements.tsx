@@ -208,6 +208,7 @@ const EntryRequirements = ({ form }: StepProps) => {
                       >
                         Token
                       </Button>
+                      {/* Tournament and Extension options temporarily disabled
                       <Button
                         type="button"
                         variant={
@@ -219,6 +220,7 @@ const EntryRequirements = ({ form }: StepProps) => {
                       >
                         Tournaments
                       </Button>
+                      */}
                       <Button
                         type="button"
                         variant={
@@ -231,6 +233,7 @@ const EntryRequirements = ({ form }: StepProps) => {
                         Whitelist{" "}
                         <span className="hidden sm:inline">Addresses</span>
                       </Button>
+                      {/* Tournament and Extension options temporarily disabled
                       <Button
                         type="button"
                         variant={
@@ -242,6 +245,7 @@ const EntryRequirements = ({ form }: StepProps) => {
                       >
                         Extension
                       </Button>
+                      */}
                     </div>
                   </div>
                   <div className="hidden sm:block w-0.5 h-full bg-brand/25" />
