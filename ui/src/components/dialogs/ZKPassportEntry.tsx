@@ -234,11 +234,13 @@ export function ZKPassportEntry({
         let identifier = response.uniqueIdentifier;
         if (!identifier && collectedProofsRef.current.length > 0) {
           console.warn("[ZKPassport] SDK verify failed — extracting nullifier from proof public inputs");
+          console.log("[ZKPassport] Collected proof names:", collectedProofsRef.current.map(p => p.name));
           try {
             const { extractNullifierFromProof } = await import(
               "@/lib/zkpassport/proofConverter"
             );
             identifier = await extractNullifierFromProof(collectedProofsRef.current);
+            console.log("[ZKPassport] Extracted nullifier:", identifier);
           } catch (err) {
             console.error("[ZKPassport] Failed to extract nullifier:", err);
           }

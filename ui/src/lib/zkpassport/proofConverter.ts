@@ -63,7 +63,12 @@ function findOuterProof(proofs: CollectedProof[]): CollectedProof | undefined {
  */
 export async function extractNullifierFromProof(proofs: CollectedProof[]): Promise<string | undefined> {
   const outerProof = findOuterProof(proofs);
-  if (!outerProof?.proof) return undefined;
+  if (!outerProof?.proof) {
+    console.warn("[ZKPassport] No outer proof found in collected proofs");
+    return undefined;
+  }
+
+  console.log("[ZKPassport] Extracting nullifier from outer proof:", outerProof.name);
 
   const { getProofData, getNumberOfPublicInputs } = await import("@zkpassport/utils");
   const { getNullifierFromOuterProof } = await import("@zkpassport/utils/recursion");
@@ -71,6 +76,8 @@ export async function extractNullifierFromProof(proofs: CollectedProof[]): Promi
   const numPublicInputs = getNumberOfPublicInputs(outerProof.name);
   const proofData = getProofData(outerProof.proof, numPublicInputs);
   const nullifier: bigint = getNullifierFromOuterProof(proofData);
+
+  console.log("[ZKPassport] Extracted nullifier:", nullifier.toString(16).slice(0, 16) + "...");
 
   return "0x" + nullifier.toString(16);
 }
