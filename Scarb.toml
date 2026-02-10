@@ -36,6 +36,7 @@ game_components_leaderboard = { git = "https://github.com/Provable-Games/game-co
 test = "snforge test"
 
 [profile.dev.cairo]
+sierra-replace-ids = true
 unstable-add-statements-code-locations-debug-info = true
 unstable-add-statements-functions-debug-info = true
 inlining-strategy = "avoid"

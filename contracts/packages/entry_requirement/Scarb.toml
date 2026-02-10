@@ -15,8 +15,6 @@ budokan_extensions_SnapshotValidator = "budokan_entry_requirement::examples::sna
 budokan_extensions_TournamentValidator = "budokan_entry_requirement::examples::tournament_validator::TournamentValidator"
 budokan_extensions_ZkPassportValidator = "budokan_entry_requirement::examples::zkpassport_validator::ZkPassportValidator"
 
-[cairo]
-sierra-replace-ids = true
 
 [dependencies]
 starknet.workspace = true

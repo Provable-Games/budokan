@@ -1,7 +1,9 @@
 use budokan_entry_requirement::examples::zkpassport_validator::{
     IZkPassportValidatorDispatcher, IZkPassportValidatorDispatcherTrait,
 };
-use budokan_interfaces::entry_validator::{IEntryValidatorDispatcher, IEntryValidatorDispatcherTrait};
+use budokan_interfaces::entry_validator::{
+    IEntryValidatorDispatcher, IEntryValidatorDispatcherTrait,
+};
 use core::poseidon::poseidon_hash_span;
 use snforge_std::{
     ContractClassTrait, DeclareResultTrait, declare, start_cheat_block_timestamp,
@@ -39,7 +41,9 @@ fn PLAYER_ADDRESS_2() -> ContractAddress {
     'player2'.try_into().unwrap()
 }
 
-fn deploy_validator() -> (ContractAddress, IEntryValidatorDispatcher, IZkPassportValidatorDispatcher) {
+fn deploy_validator() -> (
+    ContractAddress, IEntryValidatorDispatcher, IZkPassportValidatorDispatcher,
+) {
     let contract = declare("ZkPassportValidator").unwrap().contract_class();
     let constructor_calldata = array![BUDOKAN_ADDRESS().into(), 0]; // registration_only = false
     let (contract_address, _) = contract.deploy(@constructor_calldata).unwrap();
@@ -52,11 +56,7 @@ fn deploy_validator() -> (ContractAddress, IEntryValidatorDispatcher, IZkPasspor
 
 fn config_span() -> Span<felt252> {
     array![
-        VERIFIER_ADDRESS().into(),
-        SERVICE_SCOPE,
-        SERVICE_SUBSCOPE,
-        PARAM_COMMITMENT,
-        MAX_PROOF_AGE,
+        VERIFIER_ADDRESS().into(), SERVICE_SCOPE, SERVICE_SUBSCOPE, PARAM_COMMITMENT, MAX_PROOF_AGE,
         NULLIFIER_TYPE,
     ]
         .span()
@@ -74,13 +74,8 @@ fn mock_public_inputs() -> Array<u256> {
         low: NULLIFIER_LOW.try_into().unwrap(), high: NULLIFIER_HIGH.try_into().unwrap(),
     };
     array![
-        0_u256,
-        PROOF_TIME.into(),
-        SERVICE_SCOPE.into(),
-        SERVICE_SUBSCOPE.into(),
-        PARAM_COMMITMENT.into(),
-        NULLIFIER_TYPE.into(),
-        nullifier,
+        0_u256, PROOF_TIME.into(), SERVICE_SCOPE.into(), SERVICE_SUBSCOPE.into(),
+        PARAM_COMMITMENT.into(), NULLIFIER_TYPE.into(), nullifier,
     ]
 }
 
@@ -92,8 +87,7 @@ fn qualification_span() -> Span<felt252> {
 }
 
 fn setup_valid_scenario(
-    contract_address: ContractAddress,
-    entry_validator: IEntryValidatorDispatcher,
+    contract_address: ContractAddress, entry_validator: IEntryValidatorDispatcher,
 ) {
     // Cheat block timestamp
     start_cheat_block_timestamp(contract_address, BLOCK_TIME);
@@ -352,8 +346,7 @@ fn test_duplicate_nullifier_same_tournament() {
     assert!(result, "First entry should be valid");
 
     // Record the entry
-    entry_validator
-        .add_entry(TOURNAMENT_ID, 1, PLAYER_ADDRESS(), qualification_span());
+    entry_validator.add_entry(TOURNAMENT_ID, 1, PLAYER_ADDRESS(), qualification_span());
 
     // Re-mock the verifier (start_mock_call persists but let's be explicit)
     start_mock_call(
@@ -392,8 +385,7 @@ fn test_cross_tournament_same_nullifier() {
         .valid_entry(TOURNAMENT_ID, PLAYER_ADDRESS(), qualification_span());
     assert!(result1, "Tournament 1 entry should be valid");
 
-    entry_validator
-        .add_entry(TOURNAMENT_ID, 1, PLAYER_ADDRESS(), qualification_span());
+    entry_validator.add_entry(TOURNAMENT_ID, 1, PLAYER_ADDRESS(), qualification_span());
 
     // Re-mock
     start_mock_call(
@@ -420,16 +412,16 @@ fn test_entry_removal_releases_nullifier() {
     let result1 = entry_validator
         .valid_entry(TOURNAMENT_ID, PLAYER_ADDRESS(), qualification_span());
     assert!(result1, "First entry should be valid");
-    entry_validator
-        .add_entry(TOURNAMENT_ID, 1, PLAYER_ADDRESS(), qualification_span());
+    entry_validator.add_entry(TOURNAMENT_ID, 1, PLAYER_ADDRESS(), qualification_span());
 
     // Nullifier should be used
     let nullifier_hash = poseidon_hash_span(array![NULLIFIER_LOW, NULLIFIER_HIGH].span());
-    assert!(zkp_validator.is_nullifier_used(TOURNAMENT_ID, nullifier_hash), "Nullifier should be used");
+    assert!(
+        zkp_validator.is_nullifier_used(TOURNAMENT_ID, nullifier_hash), "Nullifier should be used",
+    );
 
     // Remove entry (ban)
-    entry_validator
-        .remove_entry(TOURNAMENT_ID, 1, PLAYER_ADDRESS(), qualification_span());
+    entry_validator.remove_entry(TOURNAMENT_ID, 1, PLAYER_ADDRESS(), qualification_span());
 
     // Nullifier should be released
     assert!(
@@ -471,15 +463,9 @@ fn test_config_extended_elements() {
 
     // Config with extra elements (e.g. serialized query config)
     let extended_config = array![
-        VERIFIER_ADDRESS().into(),
-        SERVICE_SCOPE,
-        SERVICE_SUBSCOPE,
-        PARAM_COMMITMENT,
-        MAX_PROOF_AGE,
-        NULLIFIER_TYPE,
-        42, // byte length
-        'chunk1',
-        'chunk2',
+        VERIFIER_ADDRESS().into(), SERVICE_SCOPE, SERVICE_SUBSCOPE, PARAM_COMMITMENT, MAX_PROOF_AGE,
+        NULLIFIER_TYPE, 42, // byte length
+        'chunk1', 'chunk2',
     ]
         .span();
 
@@ -514,11 +500,8 @@ fn test_config_zero_verifier_address() {
             ENTRY_LIMIT,
             array![
                 0, // zero verifier address
-                SERVICE_SCOPE,
-                SERVICE_SUBSCOPE,
-                PARAM_COMMITMENT,
-                MAX_PROOF_AGE,
-                NULLIFIER_TYPE,
+                SERVICE_SCOPE, SERVICE_SUBSCOPE, PARAM_COMMITMENT,
+                MAX_PROOF_AGE, NULLIFIER_TYPE,
             ]
                 .span(),
         );
@@ -547,21 +530,16 @@ fn test_entries_left_tracking() {
     entry_validator.add_config(TOURNAMENT_ID, ENTRY_LIMIT, config_span());
 
     // Initially should have full entries left
-    let left = entry_validator
-        .entries_left(TOURNAMENT_ID, PLAYER_ADDRESS(), qualification_span());
+    let left = entry_validator.entries_left(TOURNAMENT_ID, PLAYER_ADDRESS(), qualification_span());
     assert!(left == Option::Some(ENTRY_LIMIT), "Should start with full entries");
 
     // After adding one entry
-    entry_validator
-        .add_entry(TOURNAMENT_ID, 1, PLAYER_ADDRESS(), qualification_span());
-    let left2 = entry_validator
-        .entries_left(TOURNAMENT_ID, PLAYER_ADDRESS(), qualification_span());
+    entry_validator.add_entry(TOURNAMENT_ID, 1, PLAYER_ADDRESS(), qualification_span());
+    let left2 = entry_validator.entries_left(TOURNAMENT_ID, PLAYER_ADDRESS(), qualification_span());
     assert!(left2 == Option::Some(ENTRY_LIMIT - 1), "Should have one less entry");
 
     // After removing entry
-    entry_validator
-        .remove_entry(TOURNAMENT_ID, 1, PLAYER_ADDRESS(), qualification_span());
-    let left3 = entry_validator
-        .entries_left(TOURNAMENT_ID, PLAYER_ADDRESS(), qualification_span());
+    entry_validator.remove_entry(TOURNAMENT_ID, 1, PLAYER_ADDRESS(), qualification_span());
+    let left3 = entry_validator.entries_left(TOURNAMENT_ID, PLAYER_ADDRESS(), qualification_span());
     assert!(left3 == Option::Some(ENTRY_LIMIT), "Should restore entry after removal");
 }

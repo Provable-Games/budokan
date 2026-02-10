@@ -129,9 +129,7 @@ pub mod ZkPassportValidator {
             let proof_data = qualification.slice(2, qualification.len() - 2);
 
             // 4. Call verifier
-            let verifier = IUltraKeccakZKHonkVerifierDispatcher {
-                contract_address: verifier_addr,
-            };
+            let verifier = IUltraKeccakZKHonkVerifierDispatcher { contract_address: verifier_addr };
             let result = verifier.verify_ultra_keccak_zk_honk_proof(proof_data);
             let public_inputs = match result {
                 Result::Ok(inputs) => inputs,
@@ -198,7 +196,9 @@ pub mod ZkPassportValidator {
             }
 
             // 12. Sybil check: nullifier not already used for this tournament
-            let nullifier_hash = InternalImpl::hash_nullifier(claimed_nullifier_low, claimed_nullifier_high);
+            let nullifier_hash = InternalImpl::hash_nullifier(
+                claimed_nullifier_low, claimed_nullifier_high,
+            );
             if self.used_nullifiers.read((tournament_id, nullifier_hash)) {
                 return false;
             }
@@ -238,7 +238,9 @@ pub mod ZkPassportValidator {
             assert!(config.len() >= 6, "ZkPassportValidator: config must have at least 6 elements");
 
             let verifier_addr: ContractAddress = (*config.at(0)).try_into().unwrap();
-            assert!(!verifier_addr.is_zero(), "ZkPassportValidator: verifier address cannot be zero");
+            assert!(
+                !verifier_addr.is_zero(), "ZkPassportValidator: verifier address cannot be zero",
+            );
 
             self.verifier_address.write(tournament_id, verifier_addr);
             self.expected_service_scope.write(tournament_id, *config.at(1));

@@ -11,7 +11,9 @@
 use budokan_entry_requirement::examples::zkpassport_validator::{
     IZkPassportValidatorDispatcher, IZkPassportValidatorDispatcherTrait,
 };
-use budokan_interfaces::entry_validator::{IEntryValidatorDispatcher, IEntryValidatorDispatcherTrait};
+use budokan_interfaces::entry_validator::{
+    IEntryValidatorDispatcher, IEntryValidatorDispatcherTrait,
+};
 use core::poseidon::poseidon_hash_span;
 use snforge_std::fs::{FileTrait, read_txt};
 use snforge_std::{
@@ -74,7 +76,9 @@ fn verifier_address() -> ContractAddress {
     VERIFIER_ADDRESS_FELT.try_into().unwrap()
 }
 
-fn deploy_validator() -> (ContractAddress, IEntryValidatorDispatcher, IZkPassportValidatorDispatcher) {
+fn deploy_validator() -> (
+    ContractAddress, IEntryValidatorDispatcher, IZkPassportValidatorDispatcher,
+) {
     let contract = declare("ZkPassportValidator").unwrap().contract_class();
     let constructor_calldata = array![BUDOKAN_ADDRESS().into(), 0]; // registration_only = false
     let (contract_address, _) = contract.deploy(@constructor_calldata).unwrap();
@@ -87,12 +91,8 @@ fn deploy_validator() -> (ContractAddress, IEntryValidatorDispatcher, IZkPasspor
 
 fn real_config_span() -> Span<felt252> {
     array![
-        VERIFIER_ADDRESS_FELT,
-        REAL_SERVICE_SCOPE,
-        REAL_SERVICE_SUBSCOPE,
-        REAL_PARAM_COMMITMENT,
-        MAX_PROOF_AGE,
-        REAL_NULLIFIER_TYPE,
+        VERIFIER_ADDRESS_FELT, REAL_SERVICE_SCOPE, REAL_SERVICE_SUBSCOPE, REAL_PARAM_COMMITMENT,
+        MAX_PROOF_AGE, REAL_NULLIFIER_TYPE,
     ]
         .span()
 }
@@ -108,7 +108,7 @@ fn real_qualification_span() -> Span<felt252> {
     while i < len {
         qualification.append(*proof_calldata.at(i));
         i += 1;
-    };
+    }
     qualification.span()
 }
 
@@ -162,10 +162,9 @@ fn test_fork_corrupted_proof_rejected() {
             qualification.append(*proof_calldata.at(i));
         }
         i += 1;
-    };
+    }
 
-    let result = entry_validator
-        .valid_entry(TOURNAMENT_ID, PLAYER_ADDRESS(), qualification.span());
+    let result = entry_validator.valid_entry(TOURNAMENT_ID, PLAYER_ADDRESS(), qualification.span());
     // If the verifier didn't panic, it must have returned Err, so validate_entry returns false.
     // If it returned true, this assert panics — #[should_panic] catches it.
     assert!(!result, "Corrupted proof was accepted");
@@ -183,12 +182,9 @@ fn test_fork_wrong_scope_config_rejected() {
 
     // Configure with wrong service scope
     let wrong_config = array![
-        VERIFIER_ADDRESS_FELT,
-        'wrong_scope', // wrong service scope
+        VERIFIER_ADDRESS_FELT, 'wrong_scope', // wrong service scope
         REAL_SERVICE_SUBSCOPE,
-        REAL_PARAM_COMMITMENT,
-        MAX_PROOF_AGE,
-        REAL_NULLIFIER_TYPE,
+        REAL_PARAM_COMMITMENT, MAX_PROOF_AGE, REAL_NULLIFIER_TYPE,
     ]
         .span();
     entry_validator.add_config(TOURNAMENT_ID, ENTRY_LIMIT, wrong_config);
@@ -220,9 +216,7 @@ fn test_fork_duplicate_nullifier_blocked() {
     entry_validator.add_entry(TOURNAMENT_ID, 1, PLAYER_ADDRESS(), qualification);
 
     // Verify nullifier is recorded
-    let nullifier_hash = poseidon_hash_span(
-        array![REAL_NULLIFIER_LOW, REAL_NULLIFIER_HIGH].span(),
-    );
+    let nullifier_hash = poseidon_hash_span(array![REAL_NULLIFIER_LOW, REAL_NULLIFIER_HIGH].span());
     assert!(
         zkp_validator.is_nullifier_used(TOURNAMENT_ID, nullifier_hash),
         "Nullifier should be marked as used",
@@ -230,8 +224,7 @@ fn test_fork_duplicate_nullifier_blocked() {
 
     // Second entry with same proof/nullifier should fail (Sybil check)
     let qualification2 = real_qualification_span();
-    let result2 = entry_validator
-        .valid_entry(TOURNAMENT_ID, PLAYER_ADDRESS_2(), qualification2);
+    let result2 = entry_validator.valid_entry(TOURNAMENT_ID, PLAYER_ADDRESS_2(), qualification2);
     assert!(!result2, "Duplicate nullifier should be blocked even with valid proof");
 }
 
@@ -281,10 +274,7 @@ fn test_fork_config_inspection() {
         zkp_validator.get_expected_param_commitment(TOURNAMENT_ID) == REAL_PARAM_COMMITMENT,
         "Param commitment mismatch",
     );
-    assert!(
-        zkp_validator.get_max_proof_age(TOURNAMENT_ID) == 86400,
-        "Max proof age mismatch",
-    );
+    assert!(zkp_validator.get_max_proof_age(TOURNAMENT_ID) == 86400, "Max proof age mismatch");
     assert!(
         zkp_validator.get_expected_nullifier_type(TOURNAMENT_ID) == REAL_NULLIFIER_TYPE,
         "Nullifier type mismatch",
@@ -311,10 +301,10 @@ fn test_fork_entry_removal_and_reentry() {
     entry_validator.add_entry(TOURNAMENT_ID, 1, PLAYER_ADDRESS(), qualification);
 
     // Verify nullifier is used
-    let nullifier_hash = poseidon_hash_span(
-        array![REAL_NULLIFIER_LOW, REAL_NULLIFIER_HIGH].span(),
+    let nullifier_hash = poseidon_hash_span(array![REAL_NULLIFIER_LOW, REAL_NULLIFIER_HIGH].span());
+    assert!(
+        zkp_validator.is_nullifier_used(TOURNAMENT_ID, nullifier_hash), "Nullifier should be used",
     );
-    assert!(zkp_validator.is_nullifier_used(TOURNAMENT_ID, nullifier_hash), "Nullifier should be used");
 
     // Remove entry (simulates ban)
     entry_validator.remove_entry(TOURNAMENT_ID, 1, PLAYER_ADDRESS(), qualification);
@@ -327,7 +317,6 @@ fn test_fork_entry_removal_and_reentry() {
 
     // Re-entry should succeed
     let qualification2 = real_qualification_span();
-    let result2 = entry_validator
-        .valid_entry(TOURNAMENT_ID, PLAYER_ADDRESS(), qualification2);
+    let result2 = entry_validator.valid_entry(TOURNAMENT_ID, PLAYER_ADDRESS(), qualification2);
     assert!(result2, "Re-entry after removal should succeed with real verifier");
 }
