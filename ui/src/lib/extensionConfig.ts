@@ -13,7 +13,8 @@ export type ExtensionProofType =
   | "custom"
   | "snapshot"
   | "tournament"
-  | "erc20_balance";
+  | "erc20_balance"
+  | "zkpassport";
 
 export interface ExtensionConfig {
   name: string;
@@ -29,6 +30,8 @@ export interface ExtensionConfig {
   isTournamentValidator?: boolean;
   // For ERC20 balance validators, indicates this validates ERC20 token balance
   isERC20BalanceValidator?: boolean;
+  // For ZKPassport validators, indicates this validates ZK passport proofs
+  isZkPassportValidator?: boolean;
 }
 
 // Preset extension configurations
@@ -56,6 +59,15 @@ export const PRESET_EXTENSIONS: Record<string, ExtensionConfig> = {
     extractProof: () => [], // No proof required
     isPreset: true,
   },
+  zkpassport: {
+    name: "ZK Passport",
+    description:
+      "Validates entry based on zero-knowledge passport proofs (age, nationality, etc.)",
+    proofType: "zkpassport",
+    extractProof: () => [], // Proof is built via ZKPassport SDK flow
+    isPreset: true,
+    isZkPassportValidator: true,
+  },
 };
 
 /**
@@ -71,6 +83,7 @@ export const EXTENSION_ADDRESSES: Record<
     erc20BalanceValidator?: string;
     opusTrovesValidator?: string;
     snapshotValidator?: string;
+    zkPassportValidator?: string;
   }
 > = {
   [ChainId.SN_SEPOLIA]: {
@@ -79,6 +92,8 @@ export const EXTENSION_ADDRESSES: Record<
     erc20BalanceValidator:
       "0x028112199f873e919963277b41ef1231365986e2fd7722501cd7d293de60b64e",
     opusTrovesValidator: "", // TODO: Add Opus Troves validator address for Sepolia
+    zkPassportValidator:
+      "0x046af2c4fe14ddf0f6a3bf91a3981e71c1b150e85701d387a05a201b1c530c7f",
   },
   [ChainId.SN_MAIN]: {
     tournamentValidator:
@@ -87,6 +102,8 @@ export const EXTENSION_ADDRESSES: Record<
       "0x051fc2681f65ee18e99dab3cc2ca2eca1b4532c735e752f575ace91ed30f17b7",
     opusTrovesValidator:
       "0x0604bc0d54727f439786c65d7dc6f7d46de1aba7e129ef9caf65fef111a1644e",
+    zkPassportValidator:
+      "0x01a25f04d151c1295ba3223f7e63b89ec89762fe29d68c5f1896f86cadf62f4c",
   },
 };
 
@@ -110,10 +127,36 @@ export const OPUS_SUPPORTED_ASSETS: Record<string, string[]> = {
 };
 
 /**
+ * Maps preset keys to their corresponding address key in EXTENSION_ADDRESSES.
+ * Presets not listed here (e.g. "snapshot") have no on-chain address.
+ */
+export const PRESET_TO_ADDRESS_KEY: Record<
+  string,
+  keyof (typeof EXTENSION_ADDRESSES)[string]
+> = {
+  erc20_balance: "erc20BalanceValidator",
+  opus_troves: "opusTrovesValidator",
+  zkpassport: "zkPassportValidator",
+};
+
+/**
  * Get extension addresses for a specific chain
  */
 export const getExtensionAddresses = (chainId: string) => {
   return EXTENSION_ADDRESSES[chainId] || {};
+};
+
+/**
+ * Get the deployed contract address for a preset on a given chain.
+ * Returns "" if the preset has no on-chain address or isn't deployed.
+ */
+export const getPresetAddress = (
+  presetKey: string,
+  chainId: string,
+): string => {
+  const addressKey = PRESET_TO_ADDRESS_KEY[presetKey];
+  if (!addressKey) return ""; // e.g. snapshot
+  return getExtensionAddresses(chainId)[addressKey] || "";
 };
 
 /**
@@ -218,6 +261,28 @@ export const registerERC20BalanceValidator = (
   registerExtensionConfig(
     erc20BalanceValidatorAddress,
     PRESET_EXTENSIONS.erc20_balance
+  );
+};
+
+/**
+ * Check if an extension is a ZKPassport validator
+ */
+export const isZkPassportValidator = (extensionAddress: string): boolean => {
+  const config = getExtensionConfig(extensionAddress);
+  return config?.isZkPassportValidator === true;
+};
+
+/**
+ * Register the ZKPassport validator address for a chain
+ * This should be called when the chain config is loaded
+ */
+export const registerZkPassportValidator = (
+  zkPassportValidatorAddress: string
+): void => {
+  if (!zkPassportValidatorAddress) return;
+  registerExtensionConfig(
+    zkPassportValidatorAddress,
+    PRESET_EXTENSIONS.zkpassport
   );
 };
 

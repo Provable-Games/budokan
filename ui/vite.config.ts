@@ -4,6 +4,7 @@ import react from "@vitejs/plugin-react";
 import wasm from "vite-plugin-wasm";
 import mkcert from "vite-plugin-mkcert";
 import topLevelAwait from "vite-plugin-top-level-await";
+import { nodePolyfills } from "vite-plugin-node-polyfills";
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -16,6 +17,14 @@ export default defineConfig({
       },
     }),
     wasm(),
+    nodePolyfills({
+      globals: {
+        Buffer: true,
+        global: true,
+        process: true,
+      },
+      protocolImports: true,
+    }),
     process.env.VITE_CHAIN_ID !== "KATANA_LOCAL" && mkcert(),
     topLevelAwait(),
   ],
@@ -23,6 +32,10 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+  },
+  define: {
+    global: "globalThis",
+    "process.env": {},
   },
   build: {
     target: ["esnext"],

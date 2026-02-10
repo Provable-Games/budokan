@@ -1,0 +1,137 @@
+name: Codex Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: codex-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      has-reviews: ${{ steps.set-matrix.outputs.has-reviews }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            contracts:
+              - 'contracts/**'
+            frontend:
+              - 'ui/**'
+              - 'client/**'
+            indexer-api:
+              - 'indexer/**'
+              - 'api/**'
+
+      - id: set-matrix
+        run: |
+          ENTRIES='[]'
+          if [ "${{ steps.filter.outputs.contracts }}" == "true" ]; then
+            ENTRIES=$(echo "$ENTRIES" | jq -c '. + [{"prompt-file":".github/prompts/cairo-review.md","comment-header":"Cairo/Starknet Contract Review","diff-paths":"contracts/"}]')
+          fi
+          if [ "${{ steps.filter.outputs.frontend }}" == "true" ]; then
+            ENTRIES=$(echo "$ENTRIES" | jq -c '. + [{"prompt-file":".github/prompts/client-review.md","comment-header":"React/Frontend Review","diff-paths":"ui/ client/"}]')
+          fi
+          if [ "${{ steps.filter.outputs.indexer-api }}" == "true" ]; then
+            ENTRIES=$(echo "$ENTRIES" | jq -c '. + [{"prompt-file":".github/prompts/indexer-review.md","comment-header":"Indexer/API Review","diff-paths":"indexer/ api/"}]')
+          fi
+          echo "matrix={\"include\":$ENTRIES}" >> $GITHUB_OUTPUT
+          if [ "$ENTRIES" = '[]' ]; then
+            echo "has-reviews=false" >> $GITHUB_OUTPUT
+          else
+            echo "has-reviews=true" >> $GITHUB_OUTPUT
+          fi
+
+  review:
+    needs: changes
+    if: needs.changes.outputs.has-reviews == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.changes.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Inject OAuth Session
+        run: |
+          mkdir -p ~/.codex
+          echo '${{ secrets.CODEX_AUTH_DOT_JSON }}' > ~/.codex/auth.json
+          chmod 600 ~/.codex/auth.json
+
+      - name: Build review prompt
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          {
+            cat "${{ matrix.prompt-file }}"
+
+            echo ""
+            echo "---"
+            echo ""
+            echo "This is PR #${{ github.event.pull_request.number }} for ${{ github.repository }}."
+            echo ""
+            echo "Review ONLY the changes introduced by the PR. Run this command to see the diff:"
+            echo "  git diff ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} -- ${{ matrix.diff-paths }}"
+            echo ""
+            echo "Pull request title: ${PR_TITLE}"
+            echo "Pull request body:"
+            echo "${PR_BODY}"
+            echo ""
+            echo "---"
+            echo ""
+
+            cat <<'EOF'
+          Format each finding as:
+          [SEVERITY] file_path:line_number — description
+          Impact: what could go wrong
+          Fix: concrete code change
+
+          Where SEVERITY is one of: CRITICAL, HIGH, MEDIUM, LOW, INFO
+
+          End with a summary: counts of findings by severity.
+          EOF
+          } > /tmp/prompt.txt
+
+      - name: Run Codex review
+        run: |
+          npx -y @openai/codex@0.98.0 exec --full-auto \
+            -c 'model="gpt-5.3-codex"' \
+            -c 'model_reasoning_effort="xhigh"' \
+            -o /tmp/review.txt \
+            "$(cat /tmp/prompt.txt)" 2>&1 || true
+          cat /tmp/review.txt
+
+      - name: Post review comment
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -s /tmp/review.txt ]; then
+            {
+              echo "## ${{ matrix.comment-header }}"
+              echo ""
+              cat /tmp/review.txt
+            } > /tmp/review-formatted.txt
+            gh pr comment ${{ github.event.pull_request.number }} --body-file /tmp/review-formatted.txt
+          fi

@@ -12,6 +12,7 @@ import {
   EXTERNAL_LINK,
   INFO,
   OPUS,
+  ZKPASSPORT,
 } from "@/components/Icons";
 import {
   HoverCard,
@@ -51,8 +52,14 @@ import { getTokenByAddress } from "@/lib/tokenUtils";
 import {
   registerTournamentValidator,
   registerERC20BalanceValidator,
+  registerZkPassportValidator,
   getExtensionAddresses,
 } from "@/lib/extensionConfig";
+import {
+  findTemplateByCommitment,
+  queryConfigToDescription,
+} from "@/lib/zkpassport/templates";
+import { deserializeQueryConfig } from "@/lib/zkpassport/queryConfig";
 import { useEffect } from "react";
 import { indexAddress } from "@/lib/utils";
 import { getTokenDecimals } from "@/lib/tokensMeta";
@@ -197,6 +204,13 @@ const EntryRequirements = ({
     }
   }, [extensionAddresses.erc20BalanceValidator]);
 
+  // Register ZKPassport validator when config loads
+  useEffect(() => {
+    if (extensionAddresses.zkPassportValidator) {
+      registerZkPassportValidator(extensionAddresses.zkPassportValidator);
+    }
+  }, [extensionAddresses.zkPassportValidator]);
+
   // Check if this extension is a tournament validator
   const isTournamentValidatorExtension = useMemo(() => {
     if (!extensionConfig?.address || !extensionAddresses.tournamentValidator)
@@ -232,6 +246,52 @@ const EntryRequirements = ({
     );
     return normalizedExtensionAddress === normalizedValidatorAddress;
   }, [extensionConfig?.address, extensionAddresses.opusTrovesValidator]);
+
+  // Check if this extension is a ZKPassport validator
+  const isZkPassportValidatorExtension = useMemo(() => {
+    if (!extensionConfig?.address || !extensionAddresses.zkPassportValidator)
+      return false;
+    const normalizedExtensionAddress = indexAddress(extensionConfig.address);
+    const normalizedValidatorAddress = indexAddress(
+      extensionAddresses.zkPassportValidator
+    );
+    return normalizedExtensionAddress === normalizedValidatorAddress;
+  }, [extensionConfig?.address, extensionAddresses.zkPassportValidator]);
+
+  // Parse ZKPassport validator config: [verifier_addr, scope, subscope, param_commitment, max_proof_age, nullifier_type, ...queryConfig]
+  const zkPassportValidatorConfig = useMemo(() => {
+    if (!isZkPassportValidatorExtension || !extensionConfig?.config) return null;
+    const config = extensionConfig.config;
+    if (!config || config.length < 6) return null;
+
+    const paramCommitment = config[3];
+    const maxProofAge = Number(config[4]);
+
+    // Try composable config first, then fall back to commitment lookup
+    if (config.length > 6) {
+      try {
+        const queryConfigFelts = config.slice(6);
+        const queryConfig = deserializeQueryConfig(queryConfigFelts);
+        const description = queryConfigToDescription(queryConfig);
+        return {
+          paramCommitment,
+          maxProofAge,
+          templateName: "Custom Requirements",
+          templateDescription: description,
+        };
+      } catch {
+        // Fall through to legacy lookup
+      }
+    }
+
+    const template = findTemplateByCommitment(paramCommitment);
+    return {
+      paramCommitment,
+      maxProofAge,
+      templateName: template?.name || "Custom",
+      templateDescription: template?.description || "Custom ZK Passport requirement",
+    };
+  }, [isZkPassportValidatorExtension, extensionConfig?.config]);
 
   // Parse tournament validator config: [qualifier_type, qualifying_mode, top_positions, ...tournament_ids]
   const tournamentValidatorConfig = useMemo(() => {
@@ -468,6 +528,17 @@ const EntryRequirements = ({
               <OPUS />
             </span>
             <span className="hidden sm:block text-xs">Opus Troves</span>
+          </div>
+        );
+      }
+      // Show as ZK Passport if it's a ZKPassport validator
+      if (isZkPassportValidatorExtension) {
+        return (
+          <div className="flex flex-row items-center gap-1 w-full">
+            <span className="w-6">
+              <ZKPASSPORT />
+            </span>
+            <span className="hidden sm:block text-xs">ZK Passport</span>
           </div>
         );
       }
@@ -754,6 +825,56 @@ const EntryRequirements = ({
                     </span>
                   </div>
                 )}
+              </div>
+              {!!hasEntryLimit && (
+                <div className="flex flex-wrap items-center gap-2 text-xs mt-1">
+                  <span className="text-brand-muted whitespace-nowrap">
+                    Entry Limit:
+                  </span>
+                  <span className="font-medium">{Number(entryLimit)}</span>
+                </div>
+              )}
+            </div>
+          </>
+        );
+      }
+      // Show ZKPassport details if it's a ZKPassport validator
+      if (isZkPassportValidatorExtension && zkPassportValidatorConfig) {
+        return (
+          <>
+            <div className="flex flex-col gap-2">
+              <p className="text-muted-foreground text-xs">
+                To enter you must verify your identity with ZK Passport:
+              </p>
+              <div className="flex flex-col gap-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="w-6 flex-shrink-0">
+                    <ZKPASSPORT />
+                  </span>
+                  <span className="font-medium text-sm">
+                    {zkPassportValidatorConfig.templateName}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-1 text-xs mt-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-brand-muted whitespace-nowrap">
+                      Requirement:
+                    </span>
+                    <span className="font-medium">
+                      {zkPassportValidatorConfig.templateDescription}
+                    </span>
+                  </div>
+                  {zkPassportValidatorConfig.maxProofAge > 0 && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-brand-muted whitespace-nowrap">
+                        Max Proof Age:
+                      </span>
+                      <span className="font-medium">
+                        {zkPassportValidatorConfig.maxProofAge}s
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
               {!!hasEntryLimit && (
                 <div className="flex flex-wrap items-center gap-2 text-xs mt-1">

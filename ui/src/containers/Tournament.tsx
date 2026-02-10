@@ -13,6 +13,7 @@ import { useProvider } from "@starknet-react/core";
 import TournamentTimeline from "@/components/TournamentTimeline";
 import Countdown from "@/components/Countdown";
 import { feltToString, indexAddress, padAddress, padU64, formatNumber } from "@/lib/utils";
+import { isTournamentValidator } from "@/lib/extensionConfig";
 import { addAddressPadding } from "starknet";
 import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
 import {
@@ -745,7 +746,9 @@ const Tournament = () => {
   const tournamentIdsQuery = useMemo(() => {
     if (!tournamentModel || !extensionRequirement) return [];
 
-    // Check if this extension is a tournament validator by looking at the config format
+    // Only parse config as tournament IDs for tournament validator extensions
+    if (!isTournamentValidator(extensionRequirement.address)) return [];
+
     // Tournament validator config: [qualifier_type, ...tournament_ids]
     const config = extensionRequirement.config;
     if (!config || config.length < 2) return [];

@@ -3,8 +3,8 @@ account = "deployer"
 
 [sncast.sepolia]
 account = "deployer"
-url = "https://api.cartridge.gg/x/starknet/sepolia"
+url = "https://api.cartridge.gg/x/starknet/sepolia/rpc/v0_10"
 
 [sncast.mainnet]
 account = "deployer"
-url = "https://api.cartridge.gg/x/starknet/mainnet"
+url = "https://api.cartridge.gg/x/starknet/mainnet/rpc/v0_10"

@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { StepProps } from "@/containers/CreateTournament";
-import { USER, X, INFO } from "@/components/Icons";
+import { USER, X, INFO, EXTERNAL_LINK } from "@/components/Icons";
 import { displayAddress, feltToString, indexAddress } from "@/lib/utils";
 import TokenGameIcon from "@/components/icons/TokenGameIcon";
 import { Search } from "lucide-react";
@@ -50,13 +50,16 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   PRESET_EXTENSIONS,
+  PRESET_TO_ADDRESS_KEY,
   getExtensionAddresses,
   getOpusSupportedAssets,
+  getPresetAddress,
 } from "@/lib/extensionConfig";
 import { SnapshotConfig } from "./extensions/SnapshotConfig";
 import { ERC20BalanceConfig } from "./extensions/ERC20BalanceConfig";
 import { OpusTrovesConfig } from "./extensions/OpusTrovesConfig";
 import { CustomExtensionConfig } from "./extensions/CustomExtensionConfig";
+import { ZKPassportConfig } from "./extensions/ZKPassportConfig";
 
 const EntryRequirements = ({ form }: StepProps) => {
   const { namespace, selectedChainConfig } = useDojo();
@@ -154,6 +157,11 @@ const EntryRequirements = ({ form }: StepProps) => {
         ) {
           // Check if it's Opus Troves validator
           setSelectedPreset("opus_troves");
+        } else if (
+          extensionAddress === extensionAddresses.zkPassportValidator
+        ) {
+          // Check if it's ZKPassport validator
+          setSelectedPreset("zkpassport");
         } else {
           // Custom contract
           setSelectedPreset(null);
@@ -276,8 +284,16 @@ const EntryRequirements = ({ form }: StepProps) => {
                         >
                           Custom Contract
                         </Button>
-                        {Object.entries(PRESET_EXTENSIONS).map(
-                          ([key, config]) => (
+                        {Object.entries(PRESET_EXTENSIONS)
+                          .filter(([key]) => {
+                            // Always show presets that don't need an on-chain address (e.g. snapshot)
+                            if (!PRESET_TO_ADDRESS_KEY[key]) return true;
+                            return !!getPresetAddress(
+                              key,
+                              selectedChainConfig?.chainId ?? "",
+                            );
+                          })
+                          .map(([key, config]) => (
                             <Button
                               key={key}
                               type="button"
@@ -301,9 +317,37 @@ const EntryRequirements = ({ form }: StepProps) => {
                             >
                               {config.name}
                             </Button>
-                          )
-                        )}
+                          ))}
                       </div>
+                      {/* Voyager contract link for selected preset */}
+                      {selectedPreset &&
+                        getPresetAddress(
+                          selectedPreset,
+                          selectedChainConfig?.chainId ?? "",
+                        ) && (
+                          <div className="flex items-center gap-2 text-xs text-brand-muted">
+                            <span>Contract:</span>
+                            <span className="font-mono">
+                              {displayAddress(
+                                getPresetAddress(
+                                  selectedPreset,
+                                  selectedChainConfig?.chainId ?? "",
+                                ),
+                              )}
+                            </span>
+                            <a
+                              href={`${selectedChainConfig?.blockExplorerUrl}/contract/${getPresetAddress(
+                                selectedPreset,
+                                selectedChainConfig?.chainId ?? "",
+                              )}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="w-4 h-4 hover:text-brand transition-colors"
+                            >
+                              <EXTERNAL_LINK />
+                            </a>
+                          </div>
+                        )}
                     </div>
                   )}
 
@@ -686,7 +730,7 @@ const EntryRequirements = ({ form }: StepProps) => {
                                             className="h-4 w-4 hover:cursor-pointer"
                                             onClick={() => {
                                               field.onChange(
-                                                field.value.filter(
+                                                (field.value ?? []).filter(
                                                   (v) =>
                                                     v !== selectedTournament
                                                 )
@@ -1032,7 +1076,7 @@ const EntryRequirements = ({ form }: StepProps) => {
 
                                               // Then check if it's already in the existing list
                                               if (
-                                                field.value.some(
+                                                (field.value ?? []).some(
                                                   (existingAddr) =>
                                                     indexAddress(existingAddr).toLowerCase() ===
                                                     indexAddress(addr).toLowerCase()
@@ -1096,7 +1140,7 @@ const EntryRequirements = ({ form }: StepProps) => {
 
                                           if (uniqueValidAddresses.length > 0) {
                                             field.onChange([
-                                              ...field.value,
+                                              ...(field.value ?? []),
                                               ...uniqueValidAddresses,
                                             ]);
                                             setNewAddress("");
@@ -1120,20 +1164,20 @@ const EntryRequirements = ({ form }: StepProps) => {
                                     </Button>
                                   </div>
                                 </div>
-                                {field.value.length > 0 && (
+                                {(field.value ?? []).length > 0 && (
                                   <>
                                     <div className="w-full h-0.5 bg-brand/25" />
                                     <div className="flex flex-row items-center justify-between">
                                       <div className="flex flex-col gap-2">
                                         <span className="text-sm">
-                                          {field.value.length} address
-                                          {field.value.length !== 1
+                                          {(field.value ?? []).length} address
+                                          {(field.value ?? []).length !== 1
                                             ? "es"
                                             : ""}{" "}
                                           added
                                         </span>
                                         <div className="flex flex-row gap-2 w-5/6">
-                                          {field.value.map((address, index) => (
+                                          {(field.value ?? []).map((address, index) => (
                                             <div
                                               key={index}
                                               className="flex items-center justify-between p-2 border border-neutral rounded w-fit"
@@ -1145,7 +1189,7 @@ const EntryRequirements = ({ form }: StepProps) => {
                                                 className="h-4 w-4 ml-2 hover:cursor-pointer"
                                                 onClick={() => {
                                                   const newAddresses = [
-                                                    ...field.value,
+                                                    ...(field.value ?? []),
                                                   ];
                                                   newAddresses.splice(index, 1);
                                                   field.onChange(newAddresses);
@@ -1200,6 +1244,11 @@ const EntryRequirements = ({ form }: StepProps) => {
                           )}
                           extensionError={extensionError}
                         />
+                      )}
+
+                      {/* ZK Passport Preset Configuration */}
+                      {selectedPreset === "zkpassport" && (
+                        <ZKPassportConfig extensionError={extensionError} />
                       )}
 
                       {/* Custom Contract Configuration */}

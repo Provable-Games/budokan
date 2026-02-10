@@ -766,3 +766,47 @@ export const OPUS: React.FC = () => (
     </defs>
   </svg>
 );
+
+export const ZKPASSPORT: React.FC = () => (
+  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle
+      cx="12"
+      cy="12"
+      r="10"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    />
+    <ellipse
+      cx="12"
+      cy="12"
+      rx="4"
+      ry="10"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    />
+    <line
+      x1="2"
+      y1="12"
+      x2="22"
+      y2="12"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    />
+    <line
+      x1="4"
+      y1="7"
+      x2="20"
+      y2="7"
+      stroke="currentColor"
+      strokeWidth="1"
+    />
+    <line
+      x1="4"
+      y1="17"
+      x2="20"
+      y2="17"
+      stroke="currentColor"
+      strokeWidth="1"
+    />
+  </svg>
+);
