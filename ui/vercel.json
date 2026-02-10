@@ -3,8 +3,5 @@
     "VITE_ZKPASSPORT_VERIFIER_SEPOLIA": "0x06ad2f4c866eabb03443098ecc798af1791952bc138bd32904dd215d8585c655",
     "VITE_ZKPASSPORT_VERIFIER_MAINNET": "0x0453bff1bf79bf1c4417484aafa88f1d16c285567339a0297201a324655cef96"
   },
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/$1" },
-    { "source": "/(.*)", "destination": "/index.html" }
-  ]
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }

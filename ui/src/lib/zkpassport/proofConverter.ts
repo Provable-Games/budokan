@@ -2,11 +2,9 @@
  * ZKPassport Proof Converter
  *
  * Converts ZKPassport SDK proofs into Garaga Starknet calldata format.
- * Uses dynamic imports for ZKPassport registry utilities to keep initial bundle
- * size small.
+ * Uses dynamic imports for Garaga WASM and ZKPassport registry to keep
+ * initial bundle size small.
  */
-
-import { generateCalldata } from "@/lib/zkpassport/calldataService";
 
 /**
  * Proof data collected from the ZKPassport SDK's onProofGenerated callback.
@@ -31,12 +29,6 @@ function hexToBytes(hex: string): Uint8Array {
     bytes[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16);
   }
   return bytes;
-}
-
-function bytesToHex(bytes: Uint8Array): string {
-  return (
-    "0x" + Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("")
-  );
 }
 
 /**
@@ -189,17 +181,24 @@ export async function buildQualification(
     { validate: false },
   );
 
-  // Generate calldata server-side to avoid browser runtime issues from Node polyfills.
-  const garagaCalldata = await generateCalldata(
-    bytesToHex(proofBytes),
-    bytesToHex(publicInputsBytes),
-    packagedCircuit.vkey,
+  // Decode vkey from base64
+  const vkeyBytes = Uint8Array.from(atob(packagedCircuit.vkey), (c) =>
+    c.charCodeAt(0),
+  );
+
+  // Lazy-load Garaga WASM module and initialize before use
+  const garaga = await import("garaga");
+  await garaga.init();
+  const garagaCalldata = garaga.getZKHonkCallData(
+    proofBytes,
+    publicInputsBytes,
+    vkeyBytes,
   );
 
   // Build final qualification: [nullifier_low, nullifier_high, ...garaga_calldata]
   return [
     nullifierLow,
     nullifierHigh,
-    ...garagaCalldata,
+    ...garagaCalldata.map((v: bigint) => v.toString()),
   ];
 }
