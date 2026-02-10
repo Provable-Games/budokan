@@ -2,9 +2,11 @@
  * ZKPassport Proof Converter
  *
  * Converts ZKPassport SDK proofs into Garaga Starknet calldata format.
- * Uses dynamic imports for Garaga WASM and ZKPassport registry to keep
- * initial bundle size small.
+ * Uses dynamic imports for ZKPassport registry utilities to keep initial bundle
+ * size small.
  */
+
+import { generateCalldata } from "@/lib/zkpassport/calldataService";
 
 /**
  * Proof data collected from the ZKPassport SDK's onProofGenerated callback.
@@ -29,6 +31,12 @@ function hexToBytes(hex: string): Uint8Array {
     bytes[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16);
   }
   return bytes;
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  return (
+    "0x" + Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("")
+  );
 }
 
 /**
@@ -95,7 +103,7 @@ export async function extractNullifierFromProof(proofs: CollectedProof[]): Promi
  * Validates a proof by calling the deployed Garaga verifier contract via RPC.
  * Replaces the broken client-side SDK verify() which fails due to CORS.
  *
- * @param proofCalldata - The Garaga calldata array (output of getZKHonkCallData)
+ * @param proofCalldata - The Garaga calldata array
  * @param verifierAddress - On-chain Garaga Honk verifier contract address
  * @param provider - Starknet provider with callContract method
  * @returns Object with valid flag and optional public inputs
@@ -181,24 +189,17 @@ export async function buildQualification(
     { validate: false },
   );
 
-  // Decode vkey from base64
-  const vkeyBytes = Uint8Array.from(atob(packagedCircuit.vkey), (c) =>
-    c.charCodeAt(0),
-  );
-
-  // Lazy-load Garaga WASM module and initialize before use
-  const garaga = await import("garaga");
-  await garaga.init();
-  const garagaCalldata = garaga.getZKHonkCallData(
-    proofBytes,
-    publicInputsBytes,
-    vkeyBytes,
+  // Generate calldata server-side to avoid browser runtime issues from Node polyfills.
+  const garagaCalldata = await generateCalldata(
+    bytesToHex(proofBytes),
+    bytesToHex(publicInputsBytes),
+    packagedCircuit.vkey,
   );
 
   // Build final qualification: [nullifier_low, nullifier_high, ...garaga_calldata]
   return [
     nullifierLow,
     nullifierHigh,
-    ...garagaCalldata.map((v: bigint) => v.toString()),
+    ...garagaCalldata,
   ];
 }
