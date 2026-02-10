@@ -86,6 +86,8 @@ export const useEkuboPrices = ({
   const [errorTokens, setErrorTokens] = useState<Set<string>>(new Set());
   const [fetchTrigger, setFetchTrigger] = useState(0);
   const retryCountRef = useRef(0);
+  const pricesRef = useRef<TokenPrices>(prices);
+  pricesRef.current = prices;
 
   const isMainnet = selectedChainConfig.chainId === ChainId.SN_MAIN;
   const apiBase = selectedChainConfig.ekuboPriceAPI;
@@ -127,9 +129,17 @@ export const useEkuboPrices = ({
         return;
       }
 
-      // Initial fetch: all tokens
-      let tokensToFetch = [...normalizedTokens];
-      const allPrices: TokenPrices = {};
+      // Only fetch tokens we don't already have prices for
+      const allPrices: TokenPrices = { ...pricesRef.current };
+      let tokensToFetch = normalizedTokens.filter(
+        (addr) => allPrices[addr] === undefined
+      );
+
+      // If all tokens already have prices, we're done
+      if (tokensToFetch.length === 0) {
+        setIsLoading(false);
+        return;
+      }
 
       while (tokensToFetch.length > 0) {
         if (abortController.signal.aborted) return;

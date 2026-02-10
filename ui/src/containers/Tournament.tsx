@@ -750,12 +750,12 @@ const Tournament = () => {
     if (!tournamentModel || !extensionRequirement) return [];
 
     // Check if this extension is a tournament validator by looking at the config format
-    // Tournament validator config: [qualifier_type, ...tournament_ids]
+    // Tournament validator config: [qualifier_type, qualifying_mode, top_positions, ...tournament_ids]
     const config = extensionRequirement.config;
-    if (!config || config.length < 2) return [];
+    if (!config || config.length < 4) return [];
 
-    // Extract tournament IDs (skip first element which is qualifier_type)
-    const tournamentIds = config.slice(1);
+    // Extract tournament IDs (skip first 3 elements: qualifier_type, qualifying_mode, top_positions)
+    const tournamentIds = config.slice(3);
     return tournamentIds.map((id: any) => padU64(BigInt(id)));
   }, [tournamentModel, extensionRequirement]);
 

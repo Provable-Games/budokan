@@ -1,5 +1,4 @@
-scarb 2.13.1
-sozo 1.8.0
-starknet-foundry 0.53.0
+scarb 2.15.1
+starknet-foundry 0.55.0
 rust 1.89.0
 cairo-coverage 0.6.0

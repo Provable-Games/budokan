@@ -2,6 +2,7 @@
 
 #[starknet::contract]
 pub mod Budokan {
+    use budokan::events;
     use budokan::libs::schedule::{
         ScheduleAssertionsImpl, ScheduleAssertionsTrait, ScheduleImpl, ScheduleTrait,
     };
@@ -17,26 +18,22 @@ pub mod Budokan {
         TournamentMetaStorePacking,
     };
     use budokan::models::schedule::{Phase, Schedule};
-    use budokan_distribution::calculator;
-    use budokan_distribution::models::{
+    use budokan_interfaces::budokan::IBudokan;
+    use core::num::traits::Zero;
+    use game_components_distribution::calculator;
+    use game_components_distribution::models::{
         BASIS_POINTS, DIST_TYPE_CUSTOM, DIST_TYPE_EXPONENTIAL, DIST_TYPE_LINEAR, DIST_TYPE_UNIFORM,
     };
-    use budokan_entry_fee::entry_fee::EntryFeeComponent;
-    use budokan_entry_fee::entry_fee::EntryFeeComponent::EntryFeeInternalTrait;
-    use budokan_entry_requirement::entry_requirement::EntryRequirementComponent;
-    use budokan_entry_requirement::entry_requirement::EntryRequirementComponent::EntryRequirementInternalTrait;
-    use budokan_interfaces::budokan::IBudokan;
-    use budokan_interfaces::entry_validator::{
+    use game_components_entry_fee::entry_fee::EntryFeeComponent;
+    use game_components_entry_fee::entry_fee::EntryFeeComponent::EntryFeeInternalTrait;
+    use game_components_entry_requirement::entry_requirement::EntryRequirementComponent;
+    use game_components_entry_requirement::entry_requirement::EntryRequirementComponent::EntryRequirementInternalTrait;
+    use game_components_interfaces::entry_validator::{
         IENTRY_VALIDATOR_ID, IEntryValidatorDispatcher, IEntryValidatorDispatcherTrait,
     };
-    use budokan_interfaces::event_relayer::{
-        IBudokanEventRelayerDispatcher, IBudokanEventRelayerDispatcherTrait,
+    use game_components_interfaces::registry::{
+        IMinigameRegistryDispatcher, IMinigameRegistryDispatcherTrait,
     };
-    use budokan_prize::prize::PrizeComponent;
-    use budokan_prize::prize::PrizeComponent::PrizeInternalTrait;
-    use budokan_registration::registration::RegistrationComponent;
-    use budokan_registration::registration::RegistrationComponent::RegistrationInternalTrait;
-    use core::num::traits::Zero;
     use game_components_leaderboard::interface::ILeaderboard;
     use game_components_leaderboard::leaderboard::leaderboard::LeaderboardResult;
     use game_components_leaderboard::leaderboard_component::LeaderboardComponent;
@@ -55,11 +52,12 @@ pub mod Budokan {
         IMINIGAME_ID, IMinigameDispatcher, IMinigameDispatcherTrait, IMinigameTokenDataDispatcher,
         IMinigameTokenDataDispatcherTrait,
     };
+    use game_components_prize::prize::PrizeComponent;
+    use game_components_prize::prize::PrizeComponent::PrizeInternalTrait;
+    use game_components_registration::registration::RegistrationComponent;
+    use game_components_registration::registration::RegistrationComponent::RegistrationInternalTrait;
     use game_components_token::core::interface::{
         IMinigameTokenDispatcher, IMinigameTokenDispatcherTrait,
-    };
-    use game_components_token::examples::minigame_registry_contract::{
-        IMinigameRegistryDispatcher, IMinigameRegistryDispatcherTrait,
     };
     use openzeppelin_access::ownable::OwnableComponent;
     use openzeppelin_interfaces::erc721::{IERC721Dispatcher, IERC721DispatcherTrait, IERC721_ID};
@@ -139,8 +137,6 @@ pub mod Budokan {
         entry_requirement: EntryRequirementComponent::Storage,
         #[substorage(v0)]
         prize: PrizeComponent::Storage,
-        // Event relayer for external indexing
-        event_relayer: ContractAddress,
         // Platform-wide metrics
         total_tournaments: u64,
         // Tournament base data - using TournamentMeta for packed fields
@@ -183,14 +179,17 @@ pub mod Budokan {
         EntryRequirementEvent: EntryRequirementComponent::Event,
         #[flat]
         PrizeEvent: PrizeComponent::Event,
+        TournamentCreated: events::TournamentCreated,
+        TournamentRegistration: events::TournamentRegistration,
+        LeaderboardUpdated: events::LeaderboardUpdated,
+        PrizeAdded: events::PrizeAdded,
+        RewardClaimed: events::RewardClaimed,
+        QualificationEntriesUpdated: events::QualificationEntriesUpdated,
     }
 
     #[constructor]
     fn constructor(
-        ref self: ContractState,
-        owner: ContractAddress,
-        default_token_address: ContractAddress,
-        event_relayer: ContractAddress,
+        ref self: ContractState, owner: ContractAddress, default_token_address: ContractAddress,
     ) {
         // Initialize ownable component with the provided owner
         self.ownable.initializer(owner);
@@ -201,9 +200,6 @@ pub mod Budokan {
 
         // Initialize leaderboard component with this contract as owner
         self.leaderboard.initializer(get_contract_address());
-
-        // Set event relayer
-        self.event_relayer.write(event_relayer);
     }
 
     #[abi(embed_v0)]
@@ -221,24 +217,28 @@ pub mod Budokan {
 
     #[abi(embed_v0)]
     impl GameContextImpl of IMetagameContext<ContractState> {
-        fn has_context(self: @ContractState, token_id: u64) -> bool {
+        fn has_context(self: @ContractState, token_id: felt252) -> bool {
+            let token_id_u64: u64 = token_id.try_into().expect('token_id exceeds u64::MAX');
             let default_token_dispatcher = IMinigameTokenDispatcher {
                 contract_address: self.default_token_address(),
             };
             let game_address = default_token_dispatcher.token_game_address(token_id);
-            let tournament_id = self.registration._get_context_id_for_token(game_address, token_id);
+            let tournament_id = self
+                .registration
+                ._get_context_id_for_token(game_address, token_id_u64);
             tournament_id != 0
         }
     }
 
     #[abi(embed_v0)]
     impl GameContextDetailsImpl of IMetagameContextDetails<ContractState> {
-        fn context_details(self: @ContractState, token_id: u64) -> GameContextDetails {
+        fn context_details(self: @ContractState, token_id: felt252) -> GameContextDetails {
+            let token_id_u64: u64 = token_id.try_into().expect('token_id exceeds u64::MAX');
             let default_token_dispatcher = IMinigameTokenDispatcher {
                 contract_address: self.default_token_address(),
             };
             let game_address = default_token_dispatcher.token_game_address(token_id);
-            let registration = self.registration._get_registration(game_address, token_id);
+            let registration = self.registration._get_registration(game_address, token_id_u64);
             let context = array![
                 GameContext {
                     name: "Tournament ID", value: format!("{}", registration.context_id),
@@ -270,7 +270,7 @@ pub mod Budokan {
             self.registration._get_entry_count(tournament_id)
         }
 
-        fn get_leaderboard(self: @ContractState, tournament_id: u64) -> Array<u64> {
+        fn get_leaderboard(self: @ContractState, tournament_id: u64) -> Array<felt252> {
             self._get_leaderboard(tournament_id)
         }
 
@@ -321,23 +321,25 @@ pub mod Budokan {
                 self._assert_valid_entry_requirement(entry_requirement, schedule);
             }
 
-            let empty_objective_ids: Span<u32> = array![].span();
+            let empty_objective_id: Option<u32> = Option::None;
 
             // mint a game to the tournament creator for reward distribution
-            let creator_token_id = self
+            let creator_token_id: u64 = self
                 ._mint_game(
                     game_config.address,
                     Option::Some('Tournament Creator'),
                     Option::Some(game_config.settings_id),
                     Option::Some(schedule.game.start),
                     Option::Some(schedule.game.end),
-                    Option::Some(empty_objective_ids),
+                    empty_objective_id,
                     Option::None, // creator token, so we don't want to give it context
                     Option::None, // client_url
                     Option::None, // renderer_address
                     creator_rewards_address,
                     false,
-                );
+                )
+                .try_into()
+                .unwrap();
 
             self
                 ._create_tournament(
@@ -405,7 +407,7 @@ pub mod Budokan {
                 self.entry_fee.deposit_entry_fee(@stored_fee);
             }
 
-            let empty_objective_ids: Span<u32> = array![].span();
+            let empty_objective_id: Option<u32> = Option::None;
             let context = self._create_context(tournament_id);
 
             let client_url = if tournament.game_config.play_url.len() == 0 {
@@ -415,20 +417,22 @@ pub mod Budokan {
             };
 
             // mint game to the determined recipient
-            let game_token_id = self
+            let game_token_id: u64 = self
                 ._mint_game(
                     tournament.game_config.address,
                     Option::Some(player_name),
                     Option::Some(tournament.game_config.settings_id),
                     Option::Some(tournament.schedule.game.start),
                     Option::Some(tournament.schedule.game.end),
-                    Option::Some(empty_objective_ids),
+                    empty_objective_id,
                     Option::Some(context),
                     client_url,
                     Option::None, // renderer_address
                     mint_to_address, // to
                     tournament.game_config.soulbound // soulbound
-                );
+                )
+                .try_into()
+                .unwrap();
 
             // For extension-based entry requirements, register the entry with the extension
             // now that we have the game_token_id
@@ -544,20 +548,23 @@ pub mod Budokan {
             // Update registration to mark as banned using component
             self.registration.ban_registration(game_address, game_token_id);
 
-            // Emit event if relayer is configured
-            let relayer_address = self.event_relayer.read();
-            if !relayer_address.is_zero() {
-                let relayer = IBudokanEventRelayerDispatcher { contract_address: relayer_address };
-                relayer
-                    .emit_registration(
-                        game_address,
-                        game_token_id,
+            // Emit native event
+            let game_token_address = IMinigameDispatcher { contract_address: game_address }
+                .token_address();
+            let player_address = IERC721Dispatcher { contract_address: game_token_address }
+                .owner_of(game_token_id.into());
+            self
+                .emit(
+                    events::TournamentRegistration {
                         tournament_id,
-                        registration.entry_number,
-                        false, // has_submitted
-                        true // is_banned
-                    );
-            }
+                        game_token_id,
+                        game_address,
+                        player_address,
+                        entry_number: registration.entry_number,
+                        has_submitted: false,
+                        is_banned: true,
+                    },
+                );
         }
 
         /// @title Submit score
@@ -590,7 +597,7 @@ pub mod Budokan {
             // Submit score using leaderboard component (config is stored in leaderboard)
             let result = self
                 .leaderboard
-                .submit_score(tournament_id, token_id, submitted_score, position);
+                .submit_score(tournament_id, token_id.into(), submitted_score, position);
 
             // Handle result
             match result {
@@ -598,15 +605,14 @@ pub mod Budokan {
                     // mark score as submitted
                     self._mark_score_submitted(tournament_id, token_id);
 
-                    // Emit event to relayer if configured
-                    let relayer_address = self.event_relayer.read();
-                    if !relayer_address.is_zero() {
-                        let leaderboard = self._get_leaderboard(tournament_id);
-                        let relayer = IBudokanEventRelayerDispatcher {
-                            contract_address: relayer_address,
-                        };
-                        relayer.emit_leaderboard(tournament_id, leaderboard.span());
-                    }
+                    // Emit native event
+                    let leaderboard = self._get_leaderboard(tournament_id);
+                    self
+                        .emit(
+                            events::LeaderboardUpdated {
+                                tournament_id, token_ids: leaderboard.span(),
+                            },
+                        );
                 },
                 LeaderboardResult::InvalidPosition => { panic!("Budokan: Invalid position"); },
                 LeaderboardResult::DuplicateEntry => {
@@ -696,8 +702,7 @@ pub mod Budokan {
                             "Budokan: Cannot set position for distributed prize (position and distribution are mutually exclusive)",
                         );
                     },
-                    TokenTypeData::erc721(_) => {
-                        // ERC721 prizes don't have distribution, so position is always valid
+                    TokenTypeData::erc721(_) => { // ERC721 prizes don't have distribution, so position is always valid
                     },
                 }
             }
@@ -734,7 +739,7 @@ pub mod Budokan {
         /// @param tournament_id The tournament ID to query.
         /// @return An array of token IDs representing the leaderboard order.
         #[inline(always)]
-        fn _get_leaderboard(self: @ContractState, tournament_id: u64) -> Array<u64> {
+        fn _get_leaderboard(self: @ContractState, tournament_id: u64) -> Array<felt252> {
             let span = LeaderboardStore::get_leaderboard(self.leaderboard, tournament_id);
             let mut result = ArrayTrait::new();
             let mut i: u32 = 0;
@@ -742,7 +747,7 @@ pub mod Budokan {
                 if i >= span.len() {
                     break;
                 }
-                result.append(*span.at(i));
+                result.append((*span.at(i)).into());
                 i += 1;
             }
             result
@@ -760,20 +765,25 @@ pub mod Budokan {
         fn _set_registration(ref self: ContractState, registration: @Registration) {
             self.registration.set_registration(registration);
 
-            // Emit event if relayer is configured
-            let relayer_address = self.event_relayer.read();
-            if !relayer_address.is_zero() {
-                let relayer = IBudokanEventRelayerDispatcher { contract_address: relayer_address };
-                relayer
-                    .emit_registration(
-                        *registration.game_address,
-                        *registration.game_token_id,
-                        *registration.context_id,
-                        *registration.entry_number,
-                        *registration.has_submitted,
-                        *registration.is_banned,
-                    );
+            // Emit native event - get player address from token ownership
+            let game_token_address = IMinigameDispatcher {
+                contract_address: *registration.game_address,
             }
+                .token_address();
+            let player_address = IERC721Dispatcher { contract_address: game_token_address }
+                .owner_of((*registration.game_token_id).into());
+            self
+                .emit(
+                    events::TournamentRegistration {
+                        tournament_id: *registration.context_id,
+                        game_token_id: *registration.game_token_id,
+                        game_address: *registration.game_address,
+                        player_address,
+                        entry_number: *registration.entry_number,
+                        has_submitted: *registration.has_submitted,
+                        is_banned: *registration.is_banned,
+                    },
+                );
         }
 
         // Tournament operations - reading from packed storage
@@ -971,13 +981,12 @@ pub mod Budokan {
                     game_config.address,
                 );
 
-            // Emit events if relayer is configured
-            let relayer_address = self.event_relayer.read();
-            if !relayer_address.is_zero() {
-                let relayer = IBudokanEventRelayerDispatcher { contract_address: relayer_address };
-                relayer
-                    .emit_tournament(
+            // Emit native event
+            self
+                .emit(
+                    events::TournamentCreated {
                         tournament_id,
+                        game_address: game_config.address,
                         created_at,
                         created_by,
                         creator_token_id,
@@ -986,10 +995,8 @@ pub mod Budokan {
                         game_config,
                         entry_fee,
                         entry_requirement,
-                    );
-                // Emit platform metrics update
-                relayer.emit_platform_metrics('budokan', tournament_id);
-            }
+                    },
+                );
 
             // Return reconstructed tournament model from storage
             self._get_tournament(tournament_id)
@@ -998,25 +1005,19 @@ pub mod Budokan {
         // Prize operations
         #[inline(always)]
         fn _emit_prize_added(ref self: ContractState, prize: Prize) {
-            // Emit events if relayer is configured
-            let relayer_address = self.event_relayer.read();
-            if !relayer_address.is_zero() {
-                let relayer = IBudokanEventRelayerDispatcher { contract_address: relayer_address };
-                // Read position from storage (0 means distributed prize)
-                let payout_position = self.prize_position.entry(prize.id).read();
-                relayer
-                    .emit_prize(
-                        prize.id,
-                        prize.context_id,
+            // Read position from storage (0 means distributed prize)
+            let payout_position = self.prize_position.entry(prize.id).read();
+            self
+                .emit(
+                    events::PrizeAdded {
+                        tournament_id: prize.context_id,
+                        prize_id: prize.id,
                         payout_position,
-                        prize.token_address,
-                        prize.token_type,
-                        prize.sponsor_address,
-                    );
-                // Emit prize metrics update
-                let total_prizes = self.prize.get_total_prizes();
-                relayer.emit_prize_metrics('budokan', total_prizes);
-            }
+                        token_address: prize.token_address,
+                        token_type: prize.token_type,
+                        sponsor_address: prize.sponsor_address,
+                    },
+                );
         }
 
         fn _set_reward_claim(ref self: ContractState, tournament_id: u64, reward_type: RewardType) {
@@ -1052,12 +1053,8 @@ pub mod Budokan {
                 },
             }
 
-            // Emit event if relayer is configured
-            let relayer_address = self.event_relayer.read();
-            if !relayer_address.is_zero() {
-                let relayer = IBudokanEventRelayerDispatcher { contract_address: relayer_address };
-                relayer.emit_reward_claim(tournament_id, reward_type, true);
-            }
+            // Emit native event
+            self.emit(events::RewardClaimed { tournament_id, reward_type, claimed: true });
         }
 
         fn _is_position_claim_made(
@@ -1069,16 +1066,7 @@ pub mod Budokan {
         // Entry count operations
         #[inline(always)]
         fn _increment_entry_count(ref self: ContractState, tournament_id: u64) -> u32 {
-            let count = self.registration.increment_entry_count(tournament_id);
-
-            // Emit entry count update if relayer is configured
-            let relayer_address = self.event_relayer.read();
-            if !relayer_address.is_zero() {
-                let relayer = IBudokanEventRelayerDispatcher { contract_address: relayer_address };
-                relayer.emit_entry_count(tournament_id, count);
-            }
-
-            count
+            self.registration.increment_entry_count(tournament_id)
         }
 
         // Qualification operations
@@ -1096,9 +1084,9 @@ pub mod Budokan {
         #[inline(always)]
         fn get_score_for_token_id(
             self: @ContractState, contract_address: ContractAddress, token_id: u64,
-        ) -> u32 {
+        ) -> u64 {
             let game_dispatcher = IMinigameTokenDataDispatcher { contract_address };
-            game_dispatcher.score(token_id)
+            game_dispatcher.score(token_id.into())
         }
 
         #[inline(always)]
@@ -1109,7 +1097,10 @@ pub mod Budokan {
         }
 
         fn _is_top_score(
-            self: @ContractState, game_address: ContractAddress, leaderboard: Span<u64>, score: u32,
+            self: @ContractState,
+            game_address: ContractAddress,
+            leaderboard: Span<felt252>,
+            score: u64,
         ) -> bool {
             let num_scores = leaderboard.len();
 
@@ -1117,7 +1108,7 @@ pub mod Budokan {
                 return true;
             }
 
-            let last_place_id = *leaderboard.at(num_scores - 1);
+            let last_place_id: u64 = (*leaderboard.at(num_scores - 1)).try_into().unwrap();
             let last_place_score = self.get_score_for_token_id(game_address, last_place_id);
             score >= last_place_score
         }
@@ -1246,7 +1237,7 @@ pub mod Budokan {
 
         #[inline(always)]
         fn _assert_payout_is_top_score(
-            self: @ContractState, payout_position: u8, winner_token_ids: Span<u64>,
+            self: @ContractState, payout_position: u8, winner_token_ids: Span<felt252>,
         ) {
             assert!(
                 payout_position.into() <= winner_token_ids.len(),
@@ -1321,28 +1312,31 @@ pub mod Budokan {
             settings_id: Option<u32>,
             start: Option<u64>,
             end: Option<u64>,
-            objective_ids: Option<Span<u32>>,
+            objective_id: Option<u32>,
             context: Option<GameContextDetails>,
             client_url: Option<ByteArray>,
             renderer_address: Option<ContractAddress>,
             to: ContractAddress,
             soulbound: bool,
-        ) -> u64 {
+        ) -> felt252 {
             let game_dispatcher = IMinigameDispatcher { contract_address: game_address };
             let game_token_address = game_dispatcher.token_address();
             IMinigameTokenDispatcher { contract_address: game_token_address }
                 .mint(
-                    Option::Some(game_address),
+                    game_address,
                     player_name,
                     settings_id,
                     start,
                     end,
-                    objective_ids,
+                    objective_id,
                     context,
                     client_url,
                     renderer_address,
                     to,
                     soulbound,
+                    false, // paymaster
+                    0_u16, // salt
+                    0_u16 // metadata
                 )
         }
 
@@ -1500,7 +1494,7 @@ pub mod Budokan {
             let total_pool = total_entries.into() * entry_fee.amount;
 
             // Get actual leaderboard size (number of players who submitted scores)
-            let leaderboard = self.leaderboard.get_leaderboard(tournament_id);
+            let leaderboard = self._get_leaderboard(tournament_id);
             let leaderboard_size: u32 = leaderboard.len();
 
             // Validate position is at least 1
@@ -1530,7 +1524,7 @@ pub mod Budokan {
 
             // Get recipient for this position
             let recipient_address = if position <= leaderboard_size {
-                let winner_token_id = *leaderboard.at(position - 1);
+                let winner_token_id: felt252 = *leaderboard.at(position - 1);
                 self._get_owner(game_token_address, winner_token_id.into())
             } else {
                 // No entry at this position, default to tournament creator
@@ -1606,7 +1600,7 @@ pub mod Budokan {
                     contract_address: tournament.game_config.address,
                 };
                 let game_token_address = game_dispatcher.token_address();
-                let winner_token_id = *leaderboard.at(position - 1);
+                let winner_token_id: felt252 = *leaderboard.at(position - 1);
                 let recipient_address = self._get_owner(game_token_address, winner_token_id.into());
 
                 match prize.token_type {
@@ -1718,7 +1712,7 @@ pub mod Budokan {
                     contract_address: tournament.game_config.address,
                 };
                 let game_token_address = game_dispatcher.token_address();
-                let winner_token_id = *leaderboard.at(payout_index - 1);
+                let winner_token_id: felt252 = *leaderboard.at(payout_index - 1);
                 let recipient_address = self._get_owner(game_token_address, winner_token_id.into());
 
                 // Transfer calculated amount
@@ -1749,21 +1743,24 @@ pub mod Budokan {
             let game_address = tournament.game_config.address;
             self.registration.mark_score_submitted(game_address, token_id);
 
-            // Emit registration event with has_submitted=true
-            let relayer_address = self.event_relayer.read();
-            if !relayer_address.is_zero() {
-                let registration = self.registration._get_registration(game_address, token_id);
-                let relayer = IBudokanEventRelayerDispatcher { contract_address: relayer_address };
-                relayer
-                    .emit_registration(
+            // Emit native event with has_submitted=true
+            let registration = self.registration._get_registration(game_address, token_id);
+            let game_token_address = IMinigameDispatcher { contract_address: game_address }
+                .token_address();
+            let player_address = IERC721Dispatcher { contract_address: game_token_address }
+                .owner_of(token_id.into());
+            self
+                .emit(
+                    events::TournamentRegistration {
+                        tournament_id,
+                        game_token_id: token_id,
                         game_address,
-                        token_id,
-                        registration.context_id,
-                        registration.entry_number,
-                        registration.has_submitted,
-                        registration.is_banned,
-                    );
-            }
+                        player_address,
+                        entry_number: registration.entry_number,
+                        has_submitted: registration.has_submitted,
+                        is_banned: registration.is_banned,
+                    },
+                );
         }
 
         fn _process_entry_requirement(
@@ -1789,26 +1786,23 @@ pub mod Budokan {
                 .entry_requirement
                 .update_qualification_entries(tournament_id, qualifier, entry_requirement);
 
-            // Emit qualification entries event if relayer is configured
-            // (only for non-extension entry requirements which track entries internally)
+            // Emit native event for non-extension entry requirements with entry limits
             match entry_requirement.entry_requirement_type {
                 EntryRequirementType::extension(_) => { // Extension handles its own entry tracking
                 },
                 _ => {
                     if entry_requirement.entry_limit != 0 {
-                        let relayer_address = self.event_relayer.read();
-                        if !relayer_address.is_zero() {
-                            let qualification_entries = self
-                                .entry_requirement
-                                ._get_qualification_entries(tournament_id, qualifier);
-                            let relayer = IBudokanEventRelayerDispatcher {
-                                contract_address: relayer_address,
-                            };
-                            relayer
-                                .emit_qualification_entries(
-                                    tournament_id, qualifier, qualification_entries.entry_count,
-                                );
-                        }
+                        let qualification_entries = self
+                            .entry_requirement
+                            ._get_qualification_entries(tournament_id, qualifier);
+                        self
+                            .emit(
+                                events::QualificationEntriesUpdated {
+                                    tournament_id,
+                                    qualification_proof: qualifier,
+                                    entry_count: qualification_entries.entry_count,
+                                },
+                            );
                     }
                 },
             }

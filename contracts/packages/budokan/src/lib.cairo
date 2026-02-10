@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 pub mod budokan;
+pub mod events;
 
 // Models (types)
 pub mod models {

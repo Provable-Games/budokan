@@ -9,7 +9,7 @@ use budokan::tests::interfaces::IERC20MockDispatcherTrait;
 use budokan::tests::test_budokan::{TestContracts, setup};
 use budokan::tests::utils;
 use budokan_interfaces::budokan::IBudokanDispatcherTrait;
-use game_components_test_starknet::minigame::mocks::minigame_starknet_mock::IMinigameStarknetMockDispatcherTrait;
+use game_components_test_common::mocks::minigame_starknet_mock::IMinigameStarknetMockDispatcherTrait;
 use starknet::testing;
 
 #[test]

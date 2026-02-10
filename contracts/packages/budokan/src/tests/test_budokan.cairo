@@ -27,13 +27,15 @@ use budokan::tests::mocks::tournament_validator_mock::{
 };
 use budokan::tests::setup_denshokan;
 use budokan_interfaces::budokan::{IBudokanDispatcher, IBudokanDispatcherTrait};
-use budokan_interfaces::entry_validator::IEntryValidatorDispatcher;
-use budokan_interfaces::prize::{IPrizeDispatcher, IPrizeDispatcherTrait};
-use budokan_interfaces::registration::{IRegistrationDispatcher, IRegistrationDispatcherTrait};
 use core::option::Option;
 use core::serde::Serde;
+use game_components_interfaces::entry_validator::IEntryValidatorDispatcher;
+use game_components_interfaces::prize::{IPrizeDispatcher, IPrizeDispatcherTrait};
+use game_components_interfaces::registration::{
+    IRegistrationDispatcher, IRegistrationDispatcherTrait,
+};
 use game_components_metagame::interface::IMETAGAME_ID;
-use game_components_test_starknet::minigame::mocks::minigame_starknet_mock::{
+use game_components_test_common::mocks::minigame_starknet_mock::{
     IMinigameStarknetMockDispatcher, IMinigameStarknetMockDispatcherTrait,
 };
 use game_components_token::interface::IMinigameTokenMixinDispatcher;
@@ -119,10 +121,6 @@ fn deploy_budokan(denshokan_address: ContractAddress) -> ContractAddress {
 
     // 2. default_token_address: ContractAddress
     denshokan_address.serialize(ref calldata);
-
-    // 3. event_relayer: ContractAddress (zero = no relayer)
-    let zero_address: ContractAddress = 0_felt252.try_into().unwrap();
-    zero_address.serialize(ref calldata);
 
     let (contract_address, _) = contract_class.deploy(@calldata).expect('deploy budokan failed');
     contract_address
@@ -929,7 +927,7 @@ fn test_create_tournament_gated_by_multiple_tournaments() {
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
-    contracts.minigame.end_game(first_entry_token_id, 10);
+    contracts.minigame.end_game(first_entry_token_id.into(), 10);
     contracts.budokan.submit_score(first_tournament.id, first_entry_token_id, 1);
 
     // Enter and complete second tournament
@@ -945,7 +943,7 @@ fn test_create_tournament_gated_by_multiple_tournaments() {
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
-    contracts.minigame.end_game(second_entry_token_id, 20);
+    contracts.minigame.end_game(second_entry_token_id.into(), 20);
     contracts.budokan.submit_score(second_tournament.id, second_entry_token_id, 1);
 
     // Settle tournaments
@@ -1074,7 +1072,7 @@ fn test_create_tournament_gated_by_participants() {
 
     // Only owner submits a score - other_player does NOT submit
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
-    contracts.minigame.end_game(owner_token_id, 100);
+    contracts.minigame.end_game(owner_token_id.into(), 100);
     contracts.budokan.submit_score(qualifying_tournament.id, owner_token_id, 1);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
@@ -1706,7 +1704,7 @@ fn test_submit_score_basic() {
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
-    contracts.minigame.end_game(token_id, 100);
+    contracts.minigame.end_game(token_id.into(), 100);
 
     // Submit score for first place (position 1)
     contracts.budokan.submit_score(tournament.id, token_id, 1);
@@ -1714,7 +1712,7 @@ fn test_submit_score_basic() {
     // Verify leaderboard
     let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
     assert!(leaderboard.len() == 1, "Invalid leaderboard length");
-    assert!(*leaderboard.at(0) == token_id, "Invalid token id in leaderboard");
+    assert!(*leaderboard.at(0) == token_id.into(), "Invalid token id in leaderboard");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
     stop_cheat_block_timestamp(contracts.budokan.contract_address);
@@ -1759,10 +1757,10 @@ fn test_submit_score_multiple_positions() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // Set different scores
-    contracts.minigame.end_game(token_id1, 100);
-    contracts.minigame.end_game(token_id2, 50);
-    contracts.minigame.end_game(token_id3, 75);
-    contracts.minigame.end_game(token_id4, 1);
+    contracts.minigame.end_game(token_id1.into(), 100);
+    contracts.minigame.end_game(token_id2.into(), 50);
+    contracts.minigame.end_game(token_id3.into(), 75);
+    contracts.minigame.end_game(token_id4.into(), 1);
 
     // Submit scores in different order than final ranking
     contracts.budokan.submit_score(tournament.id, token_id3, 1); // 75 points
@@ -1773,10 +1771,10 @@ fn test_submit_score_multiple_positions() {
     // Verify leaderboard
     let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
     assert!(leaderboard.len() == 4, "Invalid leaderboard length");
-    assert!(*leaderboard.at(0) == token_id1, "Invalid first place");
-    assert!(*leaderboard.at(1) == token_id3, "Invalid second place");
-    assert!(*leaderboard.at(2) == token_id2, "Invalid third place");
-    assert!(*leaderboard.at(3) == token_id4, "Invalid fourth place");
+    assert!(*leaderboard.at(0) == token_id1.into(), "Invalid first place");
+    assert!(*leaderboard.at(1) == token_id3.into(), "Invalid second place");
+    assert!(*leaderboard.at(2) == token_id2.into(), "Invalid third place");
+    assert!(*leaderboard.at(3) == token_id4.into(), "Invalid fourth place");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
     stop_cheat_block_timestamp(contracts.budokan.contract_address);
@@ -1813,8 +1811,8 @@ fn test_submit_score_lower_score() {
     start_cheat_block_timestamp(contracts.budokan.contract_address, end_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, end_time);
 
-    contracts.minigame.end_game(token_id1, 100);
-    contracts.minigame.end_game(token_id2, 50);
+    contracts.minigame.end_game(token_id1.into(), 100);
+    contracts.minigame.end_game(token_id2.into(), 50);
 
     // Submit higher score first
     contracts.budokan.submit_score(tournament.id, token_id1, 1);
@@ -1854,7 +1852,7 @@ fn test_submit_score_invalid_position() {
     start_cheat_block_timestamp(contracts.budokan.contract_address, end_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, end_time);
 
-    contracts.minigame.end_game(token_id, 100);
+    contracts.minigame.end_game(token_id.into(), 100);
 
     // Try to submit for position 3 when only 2 prize spots exist
     contracts.budokan.submit_score(tournament.id, token_id, 3);
@@ -1888,7 +1886,7 @@ fn test_submit_score_already_submitted() {
     start_cheat_block_timestamp(contracts.budokan.contract_address, end_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, end_time);
 
-    contracts.minigame.end_game(token_id, 100);
+    contracts.minigame.end_game(token_id.into(), 100);
 
     // Submit score once
     contracts.budokan.submit_score(tournament.id, token_id, 1);
@@ -1926,7 +1924,7 @@ fn test_submit_score_wrong_period() {
     start_cheat_block_timestamp(contracts.budokan.contract_address, live_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, live_time);
 
-    contracts.minigame.end_game(token_id, 100);
+    contracts.minigame.end_game(token_id.into(), 100);
     contracts.budokan.submit_score(tournament.id, token_id, 1);
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -1958,7 +1956,7 @@ fn test_submit_score_position_zero() {
     start_cheat_block_timestamp(contracts.budokan.contract_address, end_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, end_time);
 
-    contracts.minigame.end_game(token_id, 100);
+    contracts.minigame.end_game(token_id.into(), 100);
 
     // Try to submit for position 0
     contracts.budokan.submit_score(tournament.id, token_id, 0);
@@ -1998,8 +1996,8 @@ fn test_submit_score_with_gap() {
     start_cheat_block_timestamp(contracts.budokan.contract_address, end_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, end_time);
 
-    contracts.minigame.end_game(token_id1, 100);
-    contracts.minigame.end_game(token_id2, 75);
+    contracts.minigame.end_game(token_id1.into(), 100);
+    contracts.minigame.end_game(token_id2.into(), 75);
 
     // Submit to position 1 first
     contracts.budokan.submit_score(tournament.id, token_id1, 1);
@@ -2093,7 +2091,7 @@ fn test_claim_prizes_with_sponsored_prizes() {
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
-    contracts.minigame.end_game(entry_token_id, 1);
+    contracts.minigame.end_game(entry_token_id.into(), 1);
 
     contracts.budokan.submit_score(tournament.id, entry_token_id, 1);
 
@@ -2175,7 +2173,7 @@ fn test_claim_prizes_prize_already_claimed() {
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
-    contracts.minigame.end_game(entry_token_id, 1);
+    contracts.minigame.end_game(entry_token_id.into(), 1);
 
     contracts.budokan.submit_score(tournament.id, entry_token_id, 1);
 
@@ -2255,7 +2253,7 @@ fn test_state_transitions() {
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
-    contracts.minigame.end_game(token_id, 100);
+    contracts.minigame.end_game(token_id.into(), 100);
     contracts.budokan.submit_score(tournament.id, token_id, 1);
 
     let phase = contracts.budokan.current_phase(tournament.id);
@@ -2348,8 +2346,8 @@ fn test_tournament_with_partial_submissions() {
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
-    contracts.minigame.end_game(token_id1, 100);
-    contracts.minigame.end_game(token_id2, 50);
+    contracts.minigame.end_game(token_id1.into(), 100);
+    contracts.minigame.end_game(token_id2.into(), 50);
 
     contracts.budokan.submit_score(tournament.id, token_id1, 1);
     contracts.budokan.submit_score(tournament.id, token_id2, 2);
@@ -2357,8 +2355,8 @@ fn test_tournament_with_partial_submissions() {
     // Verify only 2 positions filled
     let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
     assert!(leaderboard.len() == 2, "Leaderboard should have 2 entries");
-    assert!(*leaderboard.at(0) == token_id1, "Invalid first place");
-    assert!(*leaderboard.at(1) == token_id2, "Invalid second place");
+    assert!(*leaderboard.at(0) == token_id1.into(), "Invalid first place");
+    assert!(*leaderboard.at(1) == token_id2.into(), "Invalid second place");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
     stop_cheat_block_timestamp(contracts.budokan.contract_address);
@@ -2400,7 +2398,7 @@ fn test_create_tournament_gated_by_multiple_tournaments_with_limited_entry() {
     start_cheat_block_timestamp(contracts.budokan.contract_address, end_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, end_time);
 
-    contracts.minigame.end_game(first_entry_token_id, 10);
+    contracts.minigame.end_game(first_entry_token_id.into(), 10);
     contracts.budokan.submit_score(first_tournament.id, first_entry_token_id, 1);
 
     // Enter and complete second tournament
@@ -2414,7 +2412,7 @@ fn test_create_tournament_gated_by_multiple_tournaments_with_limited_entry() {
     start_cheat_block_timestamp(contracts.budokan.contract_address, end_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, end_time);
 
-    contracts.minigame.end_game(second_entry_token_id, 20);
+    contracts.minigame.end_game(second_entry_token_id.into(), 20);
     contracts.budokan.submit_score(second_tournament.id, second_entry_token_id, 1);
 
     // Settle tournaments
@@ -2523,7 +2521,7 @@ fn test_tournament_gated_caller_owns_qualifying_token_different_player() {
     start_cheat_block_timestamp(contracts.budokan.contract_address, end_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, end_time);
 
-    contracts.minigame.end_game(first_entry_token_id, 10);
+    contracts.minigame.end_game(first_entry_token_id.into(), 10);
     contracts.budokan.submit_score(first_tournament.id, first_entry_token_id, 1);
 
     // Settle first tournament
@@ -2621,7 +2619,7 @@ fn test_tournament_gated_caller_does_not_own_qualifying_token() {
     let end_time = TEST_END_TIME().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, end_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, end_time);
-    contracts.minigame.end_game(first_entry_token_id, 10);
+    contracts.minigame.end_game(first_entry_token_id.into(), 10);
     contracts.budokan.submit_score(first_tournament.id, first_entry_token_id, 1);
 
     // Settle first tournament
@@ -2859,8 +2857,8 @@ fn test_score_submission_multiple_players() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, game_time);
 
     // End games with different scores - player 1 submits first, player 2 has higher score
-    contracts.minigame.end_game(entry_token_id_1, 500);
-    contracts.minigame.end_game(entry_token_id_2, 1000);
+    contracts.minigame.end_game(entry_token_id_1.into(), 500);
+    contracts.minigame.end_game(entry_token_id_2.into(), 1000);
 
     // Player 1 submits score at position 1 first
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -3164,8 +3162,8 @@ fn test_prize_refunded_to_sponsor_when_position_exceeds_leaderboard() {
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
-    contracts.minigame.end_game(token_id1, 100);
-    contracts.minigame.end_game(token_id2, 50);
+    contracts.minigame.end_game(token_id1.into(), 100);
+    contracts.minigame.end_game(token_id2.into(), 50);
     contracts.budokan.submit_score(tournament.id, token_id1, 1);
     contracts.budokan.submit_score(tournament.id, token_id2, 2);
 
@@ -3334,13 +3332,13 @@ fn test_get_leaderboard_after_submissions() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, game_time);
 
     // End game and submit score
-    contracts.minigame.end_game(entry_token_id, 1000);
+    contracts.minigame.end_game(entry_token_id.into(), 1000);
     contracts.budokan.submit_score(tournament.id, entry_token_id, 1);
 
     // Get leaderboard
     let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
     assert!(leaderboard.len() == 1, "Leaderboard should have 1 entry");
-    assert!(*leaderboard.at(0) == entry_token_id, "Leaderboard should contain the token ID");
+    assert!(*leaderboard.at(0) == entry_token_id.into(), "Leaderboard should contain the token ID");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
     stop_cheat_block_timestamp(contracts.budokan.contract_address);
@@ -3395,8 +3393,8 @@ fn test_leaderboard_ordering_by_score() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, game_time);
 
     // Player 1 gets lower score, player 2 gets higher score
-    contracts.minigame.end_game(entry_token_id_1, 500);
-    contracts.minigame.end_game(entry_token_id_2, 1000);
+    contracts.minigame.end_game(entry_token_id_1.into(), 500);
+    contracts.minigame.end_game(entry_token_id_2.into(), 1000);
 
     // Player 1 submits first at position 1
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -3411,8 +3409,12 @@ fn test_leaderboard_ordering_by_score() {
     // Get leaderboard - player 2 should be first (higher score)
     let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
     assert!(leaderboard.len() == 2, "Leaderboard should have 2 entries");
-    assert!(*leaderboard.at(0) == entry_token_id_2, "Player 2 should be first (higher score)");
-    assert!(*leaderboard.at(1) == entry_token_id_1, "Player 1 should be second (lower score)");
+    assert!(
+        *leaderboard.at(0) == entry_token_id_2.into(), "Player 2 should be first (higher score)",
+    );
+    assert!(
+        *leaderboard.at(1) == entry_token_id_1.into(), "Player 1 should be second (lower score)",
+    );
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
     stop_cheat_block_timestamp(contracts.budokan.contract_address);
@@ -3684,7 +3686,7 @@ fn test_claim_entry_fee_prizes() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, game_time);
 
     // End game and submit score
-    contracts.minigame.end_game(entry_token_id, 1000);
+    contracts.minigame.end_game(entry_token_id.into(), 1000);
     contracts.budokan.submit_score(tournament.id, entry_token_id, 1);
 
     // Move to finalized period
@@ -3773,19 +3775,19 @@ fn test_claim_entry_fee_exponential_distribution_five_players() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, game_time);
 
     // Submit scores for all players (in descending order)
-    contracts.minigame.end_game(player1, 5000);
+    contracts.minigame.end_game(player1.into(), 5000);
     contracts.budokan.submit_score(tournament.id, player1, 1);
 
-    contracts.minigame.end_game(player2, 4000);
+    contracts.minigame.end_game(player2.into(), 4000);
     contracts.budokan.submit_score(tournament.id, player2, 2);
 
-    contracts.minigame.end_game(player3, 3000);
+    contracts.minigame.end_game(player3.into(), 3000);
     contracts.budokan.submit_score(tournament.id, player3, 3);
 
-    contracts.minigame.end_game(player4, 2000);
+    contracts.minigame.end_game(player4.into(), 2000);
     contracts.budokan.submit_score(tournament.id, player4, 4);
 
-    contracts.minigame.end_game(player5, 1000);
+    contracts.minigame.end_game(player5.into(), 1000);
     contracts.budokan.submit_score(tournament.id, player5, 5);
 
     // Move to finalized period
@@ -3903,7 +3905,7 @@ fn test_registration_has_submitted_flag() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, game_time);
 
     // End game and submit score
-    contracts.minigame.end_game(entry_token_id, 1000);
+    contracts.minigame.end_game(entry_token_id.into(), 1000);
     contracts.budokan.submit_score(tournament.id, entry_token_id, 1);
 
     // Check has_submitted is true after submission
@@ -3949,8 +3951,8 @@ fn test_submit_score_tie_higher_game_id() {
         .enter_tournament(tournament.id, 'player2', owner, Option::None);
 
     // Set both players to have the same score
-    contracts.minigame.end_game(player1, 100);
-    contracts.minigame.end_game(player2, 100);
+    contracts.minigame.end_game(player1.into(), 100);
+    contracts.minigame.end_game(player2.into(), 100);
 
     // Move to submission phase
     let sub_time = TEST_END_TIME().into();
@@ -3994,8 +3996,8 @@ fn test_submit_score_tie_lower_game_id() {
         .enter_tournament(tournament.id, 'player2', owner, Option::None);
 
     // Set both players to have the same score
-    contracts.minigame.end_game(player1, 100);
-    contracts.minigame.end_game(player2, 100);
+    contracts.minigame.end_game(player1.into(), 100);
+    contracts.minigame.end_game(player2.into(), 100);
 
     // Move to submission phase
     let sub_time = TEST_END_TIME().into();
@@ -4010,8 +4012,8 @@ fn test_submit_score_tie_lower_game_id() {
 
     // Get leaderboard - player1 should be first due to lower game ID
     let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
-    assert!(*leaderboard.at(0) == player1, "Player1 should be first place");
-    assert!(*leaderboard.at(1) == player2, "Player2 should be second place");
+    assert!(*leaderboard.at(0) == player1.into(), "Player1 should be first place");
+    assert!(*leaderboard.at(1) == player2.into(), "Player2 should be second place");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
     stop_cheat_block_timestamp(contracts.budokan.contract_address);
@@ -4055,9 +4057,9 @@ fn test_submit_score_tie_higher_game_id_for_lower_position() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, sub_time);
 
     // Set scores - player1 and player2 have same score, player3 has lower
-    contracts.minigame.end_game(token_id1, 100); // First player (lower ID)
-    contracts.minigame.end_game(token_id2, 100); // Second player (higher ID)
-    contracts.minigame.end_game(token_id3, 50); // Third player
+    contracts.minigame.end_game(token_id1.into(), 100); // First player (lower ID)
+    contracts.minigame.end_game(token_id2.into(), 100); // Second player (higher ID)
+    contracts.minigame.end_game(token_id3.into(), 50); // Third player
 
     // Submit scores in order
     contracts.budokan.submit_score(tournament.id, token_id1, 1); // First place
@@ -4067,9 +4069,9 @@ fn test_submit_score_tie_higher_game_id_for_lower_position() {
     // Verify leaderboard
     let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
     assert!(leaderboard.len() == 3, "Invalid leaderboard length");
-    assert!(*leaderboard.at(0) == token_id1, "Invalid first place");
-    assert!(*leaderboard.at(1) == token_id2, "Invalid second place");
-    assert!(*leaderboard.at(2) == token_id3, "Invalid third place");
+    assert!(*leaderboard.at(0) == token_id1.into(), "Invalid first place");
+    assert!(*leaderboard.at(1) == token_id2.into(), "Invalid second place");
+    assert!(*leaderboard.at(2) == token_id3.into(), "Invalid third place");
 
     // Verify registrations are marked as submitted
     let reg1 = contracts
@@ -4126,8 +4128,8 @@ fn test_submit_score_tie_lower_game_id_for_lower_position() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, sub_time);
 
     // Set equal scores for both players
-    contracts.minigame.end_game(token_id1, 100); // First player (lower ID)
-    contracts.minigame.end_game(token_id2, 100); // Second player (higher ID)
+    contracts.minigame.end_game(token_id1.into(), 100); // First player (lower ID)
+    contracts.minigame.end_game(token_id2.into(), 100); // Second player (higher ID)
 
     // Submit higher ID first
     contracts.budokan.submit_score(tournament.id, token_id2, 1); // First place
@@ -4267,7 +4269,7 @@ fn test_banned_game_id_cannot_submit_score() {
     let game_time = TEST_START_TIME().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, game_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, game_time);
-    contracts.minigame.end_game(game_id, 100);
+    contracts.minigame.end_game(game_id.into(), 100);
 
     // Move to submission period
     let sub_time = TEST_END_TIME().into();
@@ -4937,7 +4939,7 @@ fn test_use_host_token_to_qualify_into_tournament_gated_tournament() {
     let end_time = TEST_END_TIME().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, end_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, end_time);
-    contracts.minigame.end_game(first_entry_token_id, 100);
+    contracts.minigame.end_game(first_entry_token_id.into(), 100);
     contracts.budokan.submit_score(first_tournament.id, first_entry_token_id, 1);
 
     // Settle first tournament
@@ -4948,7 +4950,7 @@ fn test_use_host_token_to_qualify_into_tournament_gated_tournament() {
     // assert first_entry_token_id is in the leaderboard
     let leaderboard = contracts.budokan.get_leaderboard(first_tournament.id);
     let first_place = *leaderboard.at(0);
-    assert!(first_place == first_entry_token_id, "Invalid first place for first tournament");
+    assert!(first_place == first_entry_token_id.into(), "Invalid first place for first tournament");
 
     // Deploy tournament validator extension
     let tournament_validator_address = deploy_tournament_validator_mock(
@@ -5029,8 +5031,8 @@ fn test_enter_tournament_wrong_submission_type() {
     let end_time = TEST_END_TIME().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, end_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, end_time);
-    contracts.minigame.end_game(first_entry_token_id, 100);
-    contracts.minigame.end_game(second_entry_token_id, 10);
+    contracts.minigame.end_game(first_entry_token_id.into(), 100);
+    contracts.minigame.end_game(second_entry_token_id.into(), 10);
     contracts.budokan.submit_score(first_tournament.id, first_entry_token_id, 1);
 
     // Settle first tournament
@@ -5041,7 +5043,7 @@ fn test_enter_tournament_wrong_submission_type() {
     // assert first_entry_token_id is in the leaderboard
     let leaderboard = contracts.budokan.get_leaderboard(first_tournament.id);
     let first_place = *leaderboard.at(0);
-    assert!(first_place == first_entry_token_id, "Invalid first place for first tournament");
+    assert!(first_place == first_entry_token_id.into(), "Invalid first place for first tournament");
 
     // Deploy tournament validator extension
     let tournament_validator_address = deploy_tournament_validator_mock(
@@ -5160,16 +5162,16 @@ fn test_submit_score_gas_check() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, end_time);
 
     // Set scores for each player
-    contracts.minigame.end_game(player1, 100);
-    contracts.minigame.end_game(player2, 90);
-    contracts.minigame.end_game(player3, 80);
-    contracts.minigame.end_game(player4, 70);
-    contracts.minigame.end_game(player5, 60);
-    contracts.minigame.end_game(player6, 50);
-    contracts.minigame.end_game(player7, 40);
-    contracts.minigame.end_game(player8, 30);
-    contracts.minigame.end_game(player9, 20);
-    contracts.minigame.end_game(player10, 10);
+    contracts.minigame.end_game(player1.into(), 100);
+    contracts.minigame.end_game(player2.into(), 90);
+    contracts.minigame.end_game(player3.into(), 80);
+    contracts.minigame.end_game(player4.into(), 70);
+    contracts.minigame.end_game(player5.into(), 60);
+    contracts.minigame.end_game(player6.into(), 50);
+    contracts.minigame.end_game(player7.into(), 40);
+    contracts.minigame.end_game(player8.into(), 30);
+    contracts.minigame.end_game(player9.into(), 20);
+    contracts.minigame.end_game(player10.into(), 10);
 
     // Submit scores for each player
     contracts.budokan.submit_score(tournament.id, player1, 1);
@@ -5195,16 +5197,16 @@ fn test_submit_score_gas_check() {
     // Verify final leaderboard
     let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
     assert!(leaderboard.len() == 10, "Invalid leaderboard length");
-    assert!(*leaderboard.at(0) == player1, "Invalid first place");
-    assert!(*leaderboard.at(1) == player2, "Invalid second place");
-    assert!(*leaderboard.at(2) == player3, "Invalid third place");
-    assert!(*leaderboard.at(3) == player4, "Invalid fourth place");
-    assert!(*leaderboard.at(4) == player5, "Invalid fifth place");
-    assert!(*leaderboard.at(5) == player6, "Invalid sixth place");
-    assert!(*leaderboard.at(6) == player7, "Invalid seventh place");
-    assert!(*leaderboard.at(7) == player8, "Invalid eighth place");
-    assert!(*leaderboard.at(8) == player9, "Invalid ninth place");
-    assert!(*leaderboard.at(9) == player10, "Invalid tenth place");
+    assert!(*leaderboard.at(0) == player1.into(), "Invalid first place");
+    assert!(*leaderboard.at(1) == player2.into(), "Invalid second place");
+    assert!(*leaderboard.at(2) == player3.into(), "Invalid third place");
+    assert!(*leaderboard.at(3) == player4.into(), "Invalid fourth place");
+    assert!(*leaderboard.at(4) == player5.into(), "Invalid fifth place");
+    assert!(*leaderboard.at(5) == player6.into(), "Invalid sixth place");
+    assert!(*leaderboard.at(6) == player7.into(), "Invalid seventh place");
+    assert!(*leaderboard.at(7) == player8.into(), "Invalid eighth place");
+    assert!(*leaderboard.at(8) == player9.into(), "Invalid ninth place");
+    assert!(*leaderboard.at(9) == player10.into(), "Invalid tenth place");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
     stop_cheat_block_timestamp(contracts.budokan.contract_address);
@@ -5327,19 +5329,19 @@ fn test_claim_tournament_creator_share() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, game_time);
 
     // Submit scores for all players
-    contracts.minigame.end_game(player1, 5000);
+    contracts.minigame.end_game(player1.into(), 5000);
     contracts.budokan.submit_score(tournament.id, player1, 1);
 
-    contracts.minigame.end_game(player2, 4000);
+    contracts.minigame.end_game(player2.into(), 4000);
     contracts.budokan.submit_score(tournament.id, player2, 2);
 
-    contracts.minigame.end_game(player3, 3000);
+    contracts.minigame.end_game(player3.into(), 3000);
     contracts.budokan.submit_score(tournament.id, player3, 3);
 
-    contracts.minigame.end_game(player4, 2000);
+    contracts.minigame.end_game(player4.into(), 2000);
     contracts.budokan.submit_score(tournament.id, player4, 4);
 
-    contracts.minigame.end_game(player5, 1000);
+    contracts.minigame.end_game(player5.into(), 1000);
     contracts.budokan.submit_score(tournament.id, player5, 5);
 
     // Move to finalized period
@@ -5438,13 +5440,13 @@ fn test_claim_game_creator_share() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, game_time);
 
     // Submit scores for all players
-    contracts.minigame.end_game(player1, 300);
+    contracts.minigame.end_game(player1.into(), 300);
     contracts.budokan.submit_score(tournament.id, player1, 1);
 
-    contracts.minigame.end_game(player2, 200);
+    contracts.minigame.end_game(player2.into(), 200);
     contracts.budokan.submit_score(tournament.id, player2, 2);
 
-    contracts.minigame.end_game(player3, 100);
+    contracts.minigame.end_game(player3.into(), 100);
     contracts.budokan.submit_score(tournament.id, player3, 3);
 
     // Move to finalized period
@@ -5541,7 +5543,7 @@ fn test_claim_refund_share() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, game_time);
 
     // Submit score for player
-    contracts.minigame.end_game(player1_token, 100);
+    contracts.minigame.end_game(player1_token.into(), 100);
     contracts.budokan.submit_score(tournament.id, player1_token, 1);
 
     // Move to finalized period
@@ -5647,13 +5649,13 @@ fn test_claim_all_shares_combined() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, game_time);
 
     // Submit scores for all players
-    contracts.minigame.end_game(player1, 300);
+    contracts.minigame.end_game(player1.into(), 300);
     contracts.budokan.submit_score(tournament.id, player1, 1);
 
-    contracts.minigame.end_game(player2, 200);
+    contracts.minigame.end_game(player2.into(), 200);
     contracts.budokan.submit_score(tournament.id, player2, 2);
 
-    contracts.minigame.end_game(player3, 100);
+    contracts.minigame.end_game(player3.into(), 100);
     contracts.budokan.submit_score(tournament.id, player3, 3);
 
     // Move to finalized period
@@ -5827,7 +5829,7 @@ fn test_cannot_claim_tournament_creator_share_twice() {
     start_cheat_block_timestamp(contracts.budokan.contract_address, game_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, game_time);
 
-    contracts.minigame.end_game(player1, 100);
+    contracts.minigame.end_game(player1.into(), 100);
     contracts.budokan.submit_score(tournament.id, player1, 1);
 
     let finalized_time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD + 1).into();
@@ -5896,7 +5898,7 @@ fn test_cannot_claim_game_creator_share_twice() {
     start_cheat_block_timestamp(contracts.budokan.contract_address, game_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, game_time);
 
-    contracts.minigame.end_game(player1, 100);
+    contracts.minigame.end_game(player1.into(), 100);
     contracts.budokan.submit_score(tournament.id, player1, 1);
 
     let finalized_time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD + 1).into();
@@ -5967,7 +5969,7 @@ fn test_cannot_claim_refund_twice() {
     start_cheat_block_timestamp(contracts.budokan.contract_address, game_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, game_time);
 
-    contracts.minigame.end_game(player1_token_id, 100);
+    contracts.minigame.end_game(player1_token_id.into(), 100);
     contracts.budokan.submit_score(tournament.id, player1_token_id, 1);
 
     let finalized_time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD + 1).into();
