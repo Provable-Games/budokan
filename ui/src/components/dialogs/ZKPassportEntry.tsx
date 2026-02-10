@@ -140,6 +140,7 @@ export function ZKPassportEntry({
         logo: "https://zkpassport.id/logo.png",
         purpose: template.description,
         scope: ZKPASSPORT_SDK_DOMAIN,
+        mode: "compressed",
         devMode: true,
       });
 
