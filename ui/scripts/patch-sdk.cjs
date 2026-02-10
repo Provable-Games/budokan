@@ -1,5 +1,5 @@
 /**
- * Patches @zkpassport/sdk to fix three issues:
+ * Patches @zkpassport/sdk to fix four issues:
  *
  * 1. handleEncryptedMessage is called without await, silently swallowing
  *    errors from the async verify() chain. This adds .catch() error handling
@@ -9,7 +9,11 @@
  *    (e.g. registry fetch failure), onResult never fires. This wraps verify()
  *    in a try-catch so onResult fires with verified:false on failure.
  *
- * 3. RegistryClient is hardcoded to Ethereum Mainnet (chainId: 1), but
+ * 3. verify() dynamically imports @aztec/bb.js which references `process`
+ *    (Node.js global) causing ReferenceError in browsers. Since we validate
+ *    proofs via RPC instead, we stub out the import with a no-op backend.
+ *
+ * 4. RegistryClient is hardcoded to Ethereum Mainnet (chainId: 1), but
  *    ZKPassport only deploys circuit manifests to Ethereum Sepolia. This
  *    changes it to Sepolia (chainId: 11155111) so circuit manifests and
  *    verification keys can be fetched.
@@ -55,7 +59,18 @@ function patchFile(filePath) {
     },
   );
 
-  // Fix 3: Change RegistryClient chainId from Mainnet (1) to Sepolia (11155111).
+  // Fix 3: Skip @aztec/bb.js import in verify() to avoid `process is not defined`
+  // in browser. We do RPC-based validation instead. Replace the dynamic import
+  // with a no-op that returns a stub backend. The SDK's verify() will fall through
+  // to verified:false, and our RPC validation takes over.
+  code = code.replace(
+    /\{UltraHonkVerifierBackend:(\w+)\}\s*=\s*await import\(['"]@aztec\/bb\.js['"]\)/,
+    (match, varName) => {
+      return `{UltraHonkVerifierBackend:${varName}}={UltraHonkVerifierBackend:class{async verifyProof(){return false}destroy(){}}}`;
+    }
+  );
+
+  // Fix 4: Change RegistryClient chainId from Mainnet (1) to Sepolia (11155111).
   // The SDK uses `new RegistryClient({chainId:1})` in three places:
   //   - checkCertificateRegistryRoot
   //   - checkCircuitRegistryRoot
