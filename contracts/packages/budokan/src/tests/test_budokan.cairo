@@ -35,7 +35,7 @@ use game_components_interfaces::registration::{
     IRegistrationDispatcher, IRegistrationDispatcherTrait,
 };
 use game_components_metagame::interface::IMETAGAME_ID;
-use game_components_test_starknet::minigame::mocks::minigame_starknet_mock::{
+use game_components_test_common::mocks::minigame_starknet_mock::{
     IMinigameStarknetMockDispatcher, IMinigameStarknetMockDispatcherTrait,
 };
 use game_components_token::interface::IMinigameTokenMixinDispatcher;

@@ -31,6 +31,9 @@ pub mod Budokan {
     use game_components_interfaces::entry_validator::{
         IENTRY_VALIDATOR_ID, IEntryValidatorDispatcher, IEntryValidatorDispatcherTrait,
     };
+    use game_components_interfaces::registry::{
+        IMinigameRegistryDispatcher, IMinigameRegistryDispatcherTrait,
+    };
     use game_components_leaderboard::interface::ILeaderboard;
     use game_components_leaderboard::leaderboard::leaderboard::LeaderboardResult;
     use game_components_leaderboard::leaderboard_component::LeaderboardComponent;
@@ -55,9 +58,6 @@ pub mod Budokan {
     use game_components_registration::registration::RegistrationComponent::RegistrationInternalTrait;
     use game_components_token::core::interface::{
         IMinigameTokenDispatcher, IMinigameTokenDispatcherTrait,
-    };
-    use game_components_token::examples::minigame_registry_contract::{
-        IMinigameRegistryDispatcher, IMinigameRegistryDispatcherTrait,
     };
     use openzeppelin_access::ownable::OwnableComponent;
     use openzeppelin_interfaces::erc721::{IERC721Dispatcher, IERC721DispatcherTrait, IERC721_ID};
@@ -217,24 +217,28 @@ pub mod Budokan {
 
     #[abi(embed_v0)]
     impl GameContextImpl of IMetagameContext<ContractState> {
-        fn has_context(self: @ContractState, token_id: u64) -> bool {
+        fn has_context(self: @ContractState, token_id: felt252) -> bool {
+            let token_id_u64: u64 = token_id.try_into().expect('token_id exceeds u64::MAX');
             let default_token_dispatcher = IMinigameTokenDispatcher {
                 contract_address: self.default_token_address(),
             };
             let game_address = default_token_dispatcher.token_game_address(token_id);
-            let tournament_id = self.registration._get_context_id_for_token(game_address, token_id);
+            let tournament_id = self
+                .registration
+                ._get_context_id_for_token(game_address, token_id_u64);
             tournament_id != 0
         }
     }
 
     #[abi(embed_v0)]
     impl GameContextDetailsImpl of IMetagameContextDetails<ContractState> {
-        fn context_details(self: @ContractState, token_id: u64) -> GameContextDetails {
+        fn context_details(self: @ContractState, token_id: felt252) -> GameContextDetails {
+            let token_id_u64: u64 = token_id.try_into().expect('token_id exceeds u64::MAX');
             let default_token_dispatcher = IMinigameTokenDispatcher {
                 contract_address: self.default_token_address(),
             };
             let game_address = default_token_dispatcher.token_game_address(token_id);
-            let registration = self.registration._get_registration(game_address, token_id);
+            let registration = self.registration._get_registration(game_address, token_id_u64);
             let context = array![
                 GameContext {
                     name: "Tournament ID", value: format!("{}", registration.context_id),
@@ -266,7 +270,7 @@ pub mod Budokan {
             self.registration._get_entry_count(tournament_id)
         }
 
-        fn get_leaderboard(self: @ContractState, tournament_id: u64) -> Array<u64> {
+        fn get_leaderboard(self: @ContractState, tournament_id: u64) -> Array<felt252> {
             self._get_leaderboard(tournament_id)
         }
 
@@ -317,23 +321,25 @@ pub mod Budokan {
                 self._assert_valid_entry_requirement(entry_requirement, schedule);
             }
 
-            let empty_objective_ids: Span<u32> = array![].span();
+            let empty_objective_id: Option<u32> = Option::None;
 
             // mint a game to the tournament creator for reward distribution
-            let creator_token_id = self
+            let creator_token_id: u64 = self
                 ._mint_game(
                     game_config.address,
                     Option::Some('Tournament Creator'),
                     Option::Some(game_config.settings_id),
                     Option::Some(schedule.game.start),
                     Option::Some(schedule.game.end),
-                    Option::Some(empty_objective_ids),
+                    empty_objective_id,
                     Option::None, // creator token, so we don't want to give it context
                     Option::None, // client_url
                     Option::None, // renderer_address
                     creator_rewards_address,
                     false,
-                );
+                )
+                .try_into()
+                .unwrap();
 
             self
                 ._create_tournament(
@@ -401,7 +407,7 @@ pub mod Budokan {
                 self.entry_fee.deposit_entry_fee(@stored_fee);
             }
 
-            let empty_objective_ids: Span<u32> = array![].span();
+            let empty_objective_id: Option<u32> = Option::None;
             let context = self._create_context(tournament_id);
 
             let client_url = if tournament.game_config.play_url.len() == 0 {
@@ -411,20 +417,22 @@ pub mod Budokan {
             };
 
             // mint game to the determined recipient
-            let game_token_id = self
+            let game_token_id: u64 = self
                 ._mint_game(
                     tournament.game_config.address,
                     Option::Some(player_name),
                     Option::Some(tournament.game_config.settings_id),
                     Option::Some(tournament.schedule.game.start),
                     Option::Some(tournament.schedule.game.end),
-                    Option::Some(empty_objective_ids),
+                    empty_objective_id,
                     Option::Some(context),
                     client_url,
                     Option::None, // renderer_address
                     mint_to_address, // to
                     tournament.game_config.soulbound // soulbound
-                );
+                )
+                .try_into()
+                .unwrap();
 
             // For extension-based entry requirements, register the entry with the extension
             // now that we have the game_token_id
@@ -589,7 +597,7 @@ pub mod Budokan {
             // Submit score using leaderboard component (config is stored in leaderboard)
             let result = self
                 .leaderboard
-                .submit_score(tournament_id, token_id, submitted_score, position);
+                .submit_score(tournament_id, token_id.into(), submitted_score, position);
 
             // Handle result
             match result {
@@ -731,7 +739,7 @@ pub mod Budokan {
         /// @param tournament_id The tournament ID to query.
         /// @return An array of token IDs representing the leaderboard order.
         #[inline(always)]
-        fn _get_leaderboard(self: @ContractState, tournament_id: u64) -> Array<u64> {
+        fn _get_leaderboard(self: @ContractState, tournament_id: u64) -> Array<felt252> {
             let span = LeaderboardStore::get_leaderboard(self.leaderboard, tournament_id);
             let mut result = ArrayTrait::new();
             let mut i: u32 = 0;
@@ -739,7 +747,7 @@ pub mod Budokan {
                 if i >= span.len() {
                     break;
                 }
-                result.append(*span.at(i));
+                result.append((*span.at(i)).into());
                 i += 1;
             }
             result
@@ -1076,9 +1084,9 @@ pub mod Budokan {
         #[inline(always)]
         fn get_score_for_token_id(
             self: @ContractState, contract_address: ContractAddress, token_id: u64,
-        ) -> u32 {
+        ) -> u64 {
             let game_dispatcher = IMinigameTokenDataDispatcher { contract_address };
-            game_dispatcher.score(token_id)
+            game_dispatcher.score(token_id.into())
         }
 
         #[inline(always)]
@@ -1089,7 +1097,10 @@ pub mod Budokan {
         }
 
         fn _is_top_score(
-            self: @ContractState, game_address: ContractAddress, leaderboard: Span<u64>, score: u32,
+            self: @ContractState,
+            game_address: ContractAddress,
+            leaderboard: Span<felt252>,
+            score: u64,
         ) -> bool {
             let num_scores = leaderboard.len();
 
@@ -1097,7 +1108,7 @@ pub mod Budokan {
                 return true;
             }
 
-            let last_place_id = *leaderboard.at(num_scores - 1);
+            let last_place_id: u64 = (*leaderboard.at(num_scores - 1)).try_into().unwrap();
             let last_place_score = self.get_score_for_token_id(game_address, last_place_id);
             score >= last_place_score
         }
@@ -1226,7 +1237,7 @@ pub mod Budokan {
 
         #[inline(always)]
         fn _assert_payout_is_top_score(
-            self: @ContractState, payout_position: u8, winner_token_ids: Span<u64>,
+            self: @ContractState, payout_position: u8, winner_token_ids: Span<felt252>,
         ) {
             assert!(
                 payout_position.into() <= winner_token_ids.len(),
@@ -1301,28 +1312,31 @@ pub mod Budokan {
             settings_id: Option<u32>,
             start: Option<u64>,
             end: Option<u64>,
-            objective_ids: Option<Span<u32>>,
+            objective_id: Option<u32>,
             context: Option<GameContextDetails>,
             client_url: Option<ByteArray>,
             renderer_address: Option<ContractAddress>,
             to: ContractAddress,
             soulbound: bool,
-        ) -> u64 {
+        ) -> felt252 {
             let game_dispatcher = IMinigameDispatcher { contract_address: game_address };
             let game_token_address = game_dispatcher.token_address();
             IMinigameTokenDispatcher { contract_address: game_token_address }
                 .mint(
-                    Option::Some(game_address),
+                    game_address,
                     player_name,
                     settings_id,
                     start,
                     end,
-                    objective_ids,
+                    objective_id,
                     context,
                     client_url,
                     renderer_address,
                     to,
                     soulbound,
+                    false, // paymaster
+                    0_u16, // salt
+                    0_u16 // metadata
                 )
         }
 
@@ -1480,7 +1494,7 @@ pub mod Budokan {
             let total_pool = total_entries.into() * entry_fee.amount;
 
             // Get actual leaderboard size (number of players who submitted scores)
-            let leaderboard = self.leaderboard.get_leaderboard(tournament_id);
+            let leaderboard = self._get_leaderboard(tournament_id);
             let leaderboard_size: u32 = leaderboard.len();
 
             // Validate position is at least 1
@@ -1510,7 +1524,7 @@ pub mod Budokan {
 
             // Get recipient for this position
             let recipient_address = if position <= leaderboard_size {
-                let winner_token_id = *leaderboard.at(position - 1);
+                let winner_token_id: felt252 = *leaderboard.at(position - 1);
                 self._get_owner(game_token_address, winner_token_id.into())
             } else {
                 // No entry at this position, default to tournament creator
@@ -1586,7 +1600,7 @@ pub mod Budokan {
                     contract_address: tournament.game_config.address,
                 };
                 let game_token_address = game_dispatcher.token_address();
-                let winner_token_id = *leaderboard.at(position - 1);
+                let winner_token_id: felt252 = *leaderboard.at(position - 1);
                 let recipient_address = self._get_owner(game_token_address, winner_token_id.into());
 
                 match prize.token_type {
@@ -1698,7 +1712,7 @@ pub mod Budokan {
                     contract_address: tournament.game_config.address,
                 };
                 let game_token_address = game_dispatcher.token_address();
-                let winner_token_id = *leaderboard.at(payout_index - 1);
+                let winner_token_id: felt252 = *leaderboard.at(payout_index - 1);
                 let recipient_address = self._get_owner(game_token_address, winner_token_id.into());
 
                 // Transfer calculated amount

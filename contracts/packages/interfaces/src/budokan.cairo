@@ -101,7 +101,7 @@ pub trait IBudokan<TState> {
     fn total_tournaments(self: @TState) -> u64;
     fn tournament(self: @TState, tournament_id: u64) -> Tournament;
     fn tournament_entries(self: @TState, tournament_id: u64) -> u32;
-    fn get_leaderboard(self: @TState, tournament_id: u64) -> Array<u64>;
+    fn get_leaderboard(self: @TState, tournament_id: u64) -> Array<felt252>;
     fn current_phase(self: @TState, tournament_id: u64) -> Phase;
 
     // Write functions

@@ -2,11 +2,11 @@
 
 use core::serde::Serde;
 use game_components_minigame::interface::IMinigameDispatcher;
-use game_components_test_starknet::minigame::mocks::minigame_starknet_mock::{
+use game_components_test_common::examples::minigame_registry_contract::IMinigameRegistryDispatcher;
+use game_components_test_common::mocks::minigame_starknet_mock::{
     IMinigameStarknetMockDispatcher, IMinigameStarknetMockInitDispatcher,
     IMinigameStarknetMockInitDispatcherTrait,
 };
-use game_components_token::examples::minigame_registry_contract::IMinigameRegistryDispatcher;
 use game_components_token::interface::IMinigameTokenMixinDispatcher;
 use openzeppelin_interfaces::erc721::ERC721ABIDispatcher;
 use openzeppelin_interfaces::introspection::ISRC5Dispatcher;

@@ -39,7 +39,7 @@ pub struct TournamentRegistration {
 pub struct LeaderboardUpdated {
     #[key]
     pub tournament_id: u64,
-    pub token_ids: Span<u64>,
+    pub token_ids: Span<felt252>,
 }
 
 #[derive(Drop, starknet::Event)]
