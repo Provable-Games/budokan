@@ -57,7 +57,7 @@ jobs:
           ${{ github.event.pull_request.body }}
           PROMPT
 
-          npx -y @openai/codex -q --approval-mode full-auto "$(cat /tmp/codex-prompt.txt)" > /tmp/review.txt 2>&1 || true
+          npx -y @openai/codex exec --full-auto -m "gpt-5.3-codex xhigh" -o /tmp/review.txt "$(cat /tmp/codex-prompt.txt)" 2>&1 || true
           cat /tmp/review.txt
 
       - name: Post review comment
