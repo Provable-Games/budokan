@@ -148,8 +148,9 @@ export async function buildQualification(
       .map((byte: string) => parseInt(byte, 16)),
   );
 
-  // Lazy-load Garaga WASM module for calldata generation
+  // Lazy-load Garaga WASM module and initialize before use
   const garaga = await import("garaga");
+  await garaga.init();
   const garagaCalldata = garaga.getZKHonkCallData(
     proofBytes,
     publicInputsBytes,
