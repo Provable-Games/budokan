@@ -228,7 +228,32 @@ export function extractNullifier(
  * The outer proof wraps all inner proofs and is what gets verified on-chain.
  */
 function findOuterProof(proofs: CollectedProof[]): CollectedProof | undefined {
-  return proofs.find((p) => p.name?.startsWith("outer"));
+  const startsWithOuter = proofs.find((p) =>
+    p.name?.toLowerCase().startsWith("outer"),
+  );
+  if (startsWithOuter) {
+    return startsWithOuter;
+  }
+
+  const containsOuter = proofs.find((p) =>
+    p.name?.toLowerCase().includes("outer"),
+  );
+  if (containsOuter) {
+    return containsOuter;
+  }
+
+  // Fallback for SDK naming changes: outer proof is typically the largest blob.
+  const largestProof = [...proofs]
+    .filter((p) => Boolean(p.proof))
+    .sort((a, b) => b.proof.length - a.proof.length)[0];
+  if (largestProof) {
+    console.warn("[ZKPassport] Falling back to largest proof as outer proof", {
+      selectedName: largestProof.name,
+      selectedProofLength: largestProof.proof.length,
+      availableProofNames: proofs.map((p) => p.name),
+    });
+  }
+  return largestProof;
 }
 
 /**
@@ -239,7 +264,10 @@ function findOuterProof(proofs: CollectedProof[]): CollectedProof | undefined {
 export async function extractNullifierFromProof(proofs: CollectedProof[]): Promise<string | undefined> {
   const outerProof = findOuterProof(proofs);
   if (!outerProof?.proof) {
-    console.warn("[ZKPassport] No outer proof found in collected proofs");
+    console.warn("[ZKPassport] No usable proof found in collected proofs", {
+      proofCount: proofs.length,
+      proofNames: proofs.map((p) => p.name),
+    });
     return undefined;
   }
 

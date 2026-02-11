@@ -168,6 +168,12 @@ export function ZKPassportEntry({
               name: proof.name,
               version: proof.version,
             });
+            console.log("[ZKPassport] Proof generated:", {
+              name: proof.name,
+              version: proof.version,
+              proofHexLength: proof.proof.length,
+              collectedCount: collectedProofsRef.current.length,
+            });
           }
           setProofProgress((prev) => ({
             current: prev.current + 1,
@@ -176,7 +182,7 @@ export function ZKPassportEntry({
         }
       });
 
-      result.onResult(async () => {
+      result.onResult(async (response: { uniqueIdentifier?: string; verified?: boolean }) => {
         // Clear monitoring
         if (bridgePollRef.current) {
           clearInterval(bridgePollRef.current);
@@ -189,9 +195,16 @@ export function ZKPassportEntry({
 
         if (abortRef.current) return;
 
-        // Always extract nullifier from proof public inputs directly
-        let identifier: string | undefined;
-        if (collectedProofsRef.current.length > 0) {
+        console.log("[ZKPassport] Result received:", {
+          verified: response?.verified,
+          hasUniqueIdentifier: Boolean(response?.uniqueIdentifier),
+          proofCount: collectedProofsRef.current.length,
+          proofNames: collectedProofsRef.current.map((p) => p.name),
+        });
+
+        // Prefer uniqueIdentifier directly from SDK result, then fallback to proof parsing.
+        let identifier: string | undefined = response?.uniqueIdentifier;
+        if (!identifier && collectedProofsRef.current.length > 0) {
           try {
             const { extractNullifierFromProof } = await import(
               "@/lib/zkpassport/proofConverter"
@@ -204,6 +217,13 @@ export function ZKPassportEntry({
 
         if (!identifier) {
           handleError("Verification failed: could not determine unique identifier");
+          return;
+        }
+
+        if (collectedProofsRef.current.length === 0) {
+          handleError(
+            "Verification result received but no proofs were returned by the SDK. Please try again.",
+          );
           return;
         }
 
