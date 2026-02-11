@@ -120,8 +120,9 @@ export function ZKPassportEntry({
         logo: "https://zkpassport.id/logo.png",
         purpose: template.description,
         scope: ZKPASSPORT_SDK_DOMAIN,
-        // Keep proof layout compatible with current Garaga calldata generation.
-        mode: "fast",
+        // On-chain Starknet verification requires the recursive outer proof (outer_count_*),
+        // which is only produced in compressed mode.
+        mode: "compressed",
       });
 
       // Apply the template's query
@@ -217,6 +218,17 @@ export function ZKPassportEntry({
 
         if (!identifier) {
           handleError("Verification failed: could not determine unique identifier");
+          return;
+        }
+
+        const hasOuterProof = collectedProofsRef.current.some(
+          (p) => p.name?.toLowerCase().startsWith("outer")
+            || p.name?.toLowerCase().includes("outer"),
+        );
+        if (!hasOuterProof) {
+          handleError(
+            "Verification did not return a recursive outer proof. Please retry verification.",
+          );
           return;
         }
 
