@@ -221,4 +221,31 @@ export const registerERC20BalanceValidator = (
   );
 };
 
+/**
+ * Get all whitelisted extension addresses for a chain (normalized)
+ */
+export const getWhitelistedExtensionAddresses = (
+  chainId: string
+): Set<string> => {
+  const addresses = EXTENSION_ADDRESSES[chainId] || {};
+  const set = new Set<string>();
+  for (const addr of Object.values(addresses)) {
+    if (addr) {
+      set.add(indexAddress(addr));
+    }
+  }
+  return set;
+};
+
+/**
+ * Check if an extension address is whitelisted for a chain
+ */
+export const isWhitelistedExtension = (
+  extensionAddress: string,
+  chainId: string
+): boolean => {
+  const whitelist = getWhitelistedExtensionAddresses(chainId);
+  return whitelist.has(indexAddress(extensionAddress));
+};
+
 export default extensionConfigs;

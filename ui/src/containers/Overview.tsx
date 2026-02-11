@@ -47,6 +47,7 @@ import {
 import { LoadingSpinner } from "@/components/ui/spinner";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
 import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
+import { isWhitelistedExtension } from "@/lib/extensionConfig";
 
 const SORT_OPTIONS = {
   upcoming: [
@@ -434,12 +435,25 @@ const Overview = () => {
       ) {
         const processedTournaments = processTournamentsFromRaw(rawTournaments);
 
+        // Filter out tournaments with non-whitelisted extension entry requirements
+        const chainId = selectedChainConfig?.chainId ?? "";
+        const filteredTournaments = processedTournaments.filter((t) => {
+          const req = t.tournament.entry_requirement;
+          if (!req.isSome()) return true;
+          const variant = req.Some?.entry_requirement_type?.activeVariant();
+          if (variant !== "extension") return true;
+          const extAddress =
+            req.Some?.entry_requirement_type?.variant?.extension?.address;
+          if (!extAddress) return true;
+          return isWhitelistedExtension(extAddress, chainId);
+        });
+
         // For first page, replace all tournaments
         // For subsequent pages, add only new tournaments
         if (currentPage === 0) {
-          setTournaments(selectedTab as TournamentTab, processedTournaments);
+          setTournaments(selectedTab as TournamentTab, filteredTournaments);
         } else {
-          addTournaments(selectedTab as TournamentTab, processedTournaments);
+          addTournaments(selectedTab as TournamentTab, filteredTournaments);
         }
       } else if (currentPage === 0) {
         // If there are no results for the first page, clear the tournaments
