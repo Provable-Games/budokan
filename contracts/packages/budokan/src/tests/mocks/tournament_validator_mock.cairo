@@ -108,7 +108,7 @@ pub mod tournament_validator_mock {
         fn should_ban_entry(
             self: @ContractState,
             context_id: u64,
-            game_token_id: u64,
+            game_token_id: felt252,
             current_owner: ContractAddress,
             qualification: Span<felt252>,
         ) -> bool {
@@ -168,7 +168,7 @@ pub mod tournament_validator_mock {
         fn on_entry_added(
             ref self: ContractState,
             context_id: u64,
-            game_token_id: u64,
+            game_token_id: felt252,
             player_address: ContractAddress,
             qualification: Span<felt252>,
         ) {
@@ -181,7 +181,7 @@ pub mod tournament_validator_mock {
         fn on_entry_removed(
             ref self: ContractState,
             context_id: u64,
-            game_token_id: u64,
+            game_token_id: felt252,
             player_address: ContractAddress,
             qualification: Span<felt252>,
         ) {
@@ -210,7 +210,7 @@ pub mod tournament_validator_mock {
             }
 
             let qualifying_tournament_id: u64 = (*qualification.at(0)).try_into().unwrap();
-            let token_id: u64 = (*qualification.at(1)).try_into().unwrap();
+            let token_id: felt252 = *qualification.at(1);
 
             // Check if qualifying tournament is in the valid set
             if !self.is_qualifying_tournament(tournament_id, qualifying_tournament_id) {
@@ -227,10 +227,29 @@ pub mod tournament_validator_mock {
             let qualifying_tournament = budokan.tournament(qualifying_tournament_id);
             let game_address = qualifying_tournament.game_config.address;
 
-            // Check registration exists
-            let registration = registration_dispatcher.get_registration(game_address, token_id);
-            if registration.entry_number == 0
-                || registration.context_id != qualifying_tournament_id {
+            // Check registration exists - use entry count to find the entry
+            let entry_count = registration_dispatcher.get_entry_count(qualifying_tournament_id);
+            if entry_count == 0 {
+                return false;
+            }
+
+            // Search entries to find one matching this token_id
+            let mut found = false;
+            let mut registration = registration_dispatcher.get_entry(qualifying_tournament_id, 1);
+            let mut i: u32 = 1;
+            loop {
+                if i > entry_count {
+                    break;
+                }
+                let entry = registration_dispatcher.get_entry(qualifying_tournament_id, i);
+                if entry.game_token_id == token_id {
+                    registration = entry;
+                    found = true;
+                    break;
+                }
+                i += 1;
+            }
+            if !found || registration.context_id != qualifying_tournament_id {
                 return false;
             }
 
@@ -269,7 +288,7 @@ pub mod tournament_validator_mock {
 
                 // Verify token is at the claimed position on leaderboard
                 let leaderboard_token_id = *leaderboard.at((position - 1).into());
-                if leaderboard_token_id != token_id.into() {
+                if leaderboard_token_id != token_id {
                     return false;
                 }
 

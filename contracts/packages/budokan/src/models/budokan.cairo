@@ -4,12 +4,12 @@
 pub use budokan_interfaces::budokan::{
     Distribution, ERC20Data, ERC721Data, EntryFee, EntryFeeRewardType, EntryRequirement,
     EntryRequirementType, ExtensionConfig, GameConfig, Metadata, NFTQualification, Period, Phase,
-    Prize, PrizeType, QualificationProof, RewardType, Schedule, TokenTypeData, Tournament,
+    PrizeData, PrizeType, QualificationProof, RewardType, Schedule, TokenTypeData, Tournament,
 };
-/// Storage format for entry fees (used internally by components)
-/// This is an alias to the entry_fee component's EntryFee type
-pub use game_components_entry_fee::models::EntryFee as StoredEntryFee;
 pub use game_components_entry_fee::models::EntryFeeClaimType;
+/// Storage format for entry fees (used internally by components)
+/// This is an alias to the entry_fee component's EntryFeeConfig type
+pub use game_components_entry_fee::models::EntryFeeConfig as StoredEntryFee;
 
 // Re-export internal types from component packages
 pub use game_components_interfaces::entry_fee::{AdditionalShare};

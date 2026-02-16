@@ -1288,7 +1288,7 @@ fn test_allowlist_gated_tournament_with_entry_limit() {
     stop_cheat_block_timestamp(contracts.minigame.contract_address);
 }
 
-#[should_panic(expected: "Budokan: Qualifying address is not in allowlist")]
+#[should_panic(expected: "EntryRequirement: Qualifying address is not in allowlist")]
 #[test]
 fn test_allowlist_gated_tournament_unauthorized() {
     let contracts = setup();
@@ -1499,28 +1499,26 @@ fn test_extension_gated_tournament() {
     let qualification_proof = Option::Some(QualificationProof::Extension(array![].span()));
 
     // OWNER already has an ERC721 token (minted in setup), so they should be able to enter
-    let (token_id, entry_number) = contracts
+    let (token_id, entry_id) = contracts
         .budokan
         .enter_tournament(tournament.id, 'test_player', owner, qualification_proof);
 
     // Verify entry was successful
-    assert(entry_number == 1, 'Invalid entry number');
+    assert(entry_id == 1, 'Invalid entry number');
     let entries = contracts.budokan.tournament_entries(tournament.id);
     assert(entries == 1, 'Invalid entry count');
 
     // Verify registration information
-    let registration = contracts
-        .registration
-        .get_registration(contracts.minigame.contract_address, token_id);
+    let registration = contracts.registration.get_entry(tournament.id, entry_id);
     assert(registration.context_id == tournament.id, 'Wrong tournament id');
-    assert(registration.entry_number == 1, 'Wrong entry number');
+    assert(registration.entry_id == 1, 'Wrong entry number');
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
     stop_cheat_block_timestamp(contracts.budokan.contract_address);
     stop_cheat_block_timestamp(contracts.minigame.contract_address);
 }
 
-#[should_panic(expected: "Budokan: Invalid entry according to extension")]
+#[should_panic(expected: "EntryRequirement: Invalid entry according to extension")]
 #[test]
 fn test_extension_gated_tournament_unauthorized() {
     let contracts = setup();
@@ -1596,14 +1594,12 @@ fn test_enter_tournament() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // enter tournament
-    let (game_token_id, entry_number) = contracts
+    let (game_token_id, entry_id) = contracts
         .budokan
         .enter_tournament(tournament.id, 'test_player', owner, Option::None);
 
     // verify registration information
-    let player1_registration = contracts
-        .registration
-        .get_registration(contracts.minigame.contract_address, game_token_id);
+    let player1_registration = contracts.registration.get_entry(tournament.id, entry_id);
 
     assert!(
         player1_registration.context_id == tournament.id,
@@ -1611,12 +1607,12 @@ fn test_enter_tournament() {
         tournament.id,
         player1_registration.context_id,
     );
-    assert!(player1_registration.entry_number == 1, "Entry number should be 1");
+    assert!(player1_registration.entry_id == 1, "Entry number should be 1");
     assert!(
-        player1_registration.entry_number == entry_number,
+        player1_registration.entry_id == entry_id,
         "Invalid entry number for player 1, expected: {}, got: {}",
-        entry_number,
-        player1_registration.entry_number,
+        entry_id,
+        player1_registration.entry_id,
     );
     assert!(player1_registration.has_submitted == false, "submitted score should be false");
 
@@ -1655,17 +1651,15 @@ fn test_enter_tournament_season() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // enter tournament
-    let (game_token_id, entry_number) = contracts
+    let (game_token_id, entry_id) = contracts
         .budokan
         .enter_tournament(tournament.id, 'test_player', owner, Option::None);
 
     // verify registration information
-    let player1_registration = contracts
-        .registration
-        .get_registration(contracts.minigame.contract_address, game_token_id);
+    let player1_registration = contracts.registration.get_entry(tournament.id, entry_id);
 
     assert!(player1_registration.context_id == tournament.id, "Wrong tournament id");
-    assert!(player1_registration.entry_number == entry_number, "Invalid entry number");
+    assert!(player1_registration.entry_id == entry_id, "Invalid entry number");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
     stop_cheat_block_timestamp(contracts.budokan.contract_address);
@@ -2739,13 +2733,13 @@ fn test_extension_gated_tournament_with_entry_limit() {
     let qualification_proof = Option::Some(QualificationProof::Extension(array![].span()));
 
     // OWNER already has an ERC721 token (minted in setup), so they should be able to enter
-    let (token_id, entry_number) = contracts
+    let (token_id, entry_id) = contracts
         .budokan
         .enter_tournament(tournament.id, 'test_player', owner, qualification_proof);
 
     // Verify entry was successful
-    assert(entry_number == 1, 'Invalid entry number');
-    assert!(token_id > 0, "Entry token ID should be positive");
+    assert(entry_id == 1, 'Invalid entry number');
+    assert!(token_id != 0, "Entry token ID should be positive");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
     stop_cheat_block_timestamp(contracts.budokan.contract_address);
@@ -2798,13 +2792,13 @@ fn test_third_party_enters_player_into_tournament() {
 
     // Third party (owner) enters a different player into the tournament
     let player = 0x123_felt252.try_into().unwrap();
-    let (entry_token_id, entry_number) = contracts
+    let (entry_token_id, entry_id) = contracts
         .budokan
         .enter_tournament(tournament.id, 'sponsored_player', player, Option::None);
 
     // Verify entry was successful
-    assert!(entry_token_id > 0, "Entry token ID should be positive");
-    assert!(entry_number == 1, "Entry number should be 1");
+    assert!(entry_token_id != 0, "Entry token ID should be positive");
+    assert!(entry_id == 1, "Entry number should be 1");
 
     // Verify the entry token was minted to the player_address (not caller)
     // Note: In this contract, tokens are minted to player_address unless qualification is used
@@ -2954,16 +2948,14 @@ fn test_get_registration() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // Enter tournament
-    let (entry_token_id, entry_number) = contracts
+    let (entry_token_id, entry_id) = contracts
         .budokan
         .enter_tournament(tournament.id, 'test_player', owner, Option::None);
 
     // Get registration
-    let registration = contracts
-        .registration
-        .get_registration(contracts.minigame.contract_address, entry_token_id);
+    let registration = contracts.registration.get_entry(tournament.id, entry_id);
     assert!(registration.context_id == tournament.id, "Tournament ID should match");
-    assert!(registration.entry_number == entry_number, "Entry number should match");
+    assert!(registration.entry_id == entry_id, "Entry number should match");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
     stop_cheat_block_timestamp(contracts.budokan.contract_address);
@@ -3195,10 +3187,10 @@ fn test_prize_refunded_to_sponsor_when_position_exceeds_leaderboard() {
     stop_cheat_block_timestamp(contracts.minigame.contract_address);
 }
 
-// ==================== Get Tournament ID for Token ID Tests ====================
+// ==================== Get Entry / Entry Exists Tests ====================
 
 #[test]
-fn test_get_context_id_for_token_id() {
+fn test_get_entry_for_token_id() {
     let owner = OWNER;
     let contracts = setup();
 
@@ -3215,15 +3207,14 @@ fn test_get_context_id_for_token_id() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // Enter tournament
-    let (entry_token_id, _) = contracts
+    let (entry_token_id, entry_id) = contracts
         .budokan
         .enter_tournament(tournament.id, 'test_player', owner, Option::None);
 
-    // Get tournament ID for the token
-    let retrieved_tournament_id = contracts
-        .registration
-        .get_context_id_for_token(contracts.minigame.contract_address, entry_token_id);
-    assert!(retrieved_tournament_id == tournament.id, "Tournament ID should match");
+    // Get entry and verify context_id matches tournament
+    let entry = contracts.registration.get_entry(tournament.id, entry_id);
+    assert!(entry.context_id == tournament.id, "Tournament ID should match");
+    assert!(entry.game_token_id == entry_token_id, "Game token ID should match");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
     stop_cheat_block_timestamp(contracts.budokan.contract_address);
@@ -3231,19 +3222,17 @@ fn test_get_context_id_for_token_id() {
 }
 
 #[test]
-fn test_get_tournament_id_for_unregistered_token() {
+fn test_entry_does_not_exist_for_unregistered_token() {
     let owner = OWNER;
     let contracts = setup();
 
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
 
-    // Try to get tournament ID for a token that was never entered
-    let tournament_id = contracts
-        .registration
-        .get_context_id_for_token(contracts.minigame.contract_address, 99999);
+    // Check that entry does not exist for a context/entry that was never created
+    let exists = contracts.registration.entry_exists(99999, 1);
 
-    // Should return 0 for unregistered token
-    assert!(tournament_id == 0, "Should return 0 for unregistered token");
+    // Should return false for unregistered entry
+    assert!(!exists, "Should return false for unregistered entry");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
 }
@@ -3268,14 +3257,12 @@ fn test_get_registration_banned_not_banned() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // Enter tournament
-    let (entry_token_id, _) = contracts
+    let (_entry_token_id, entry_id) = contracts
         .budokan
         .enter_tournament(tournament.id, 'test_player', owner, Option::None);
 
     // Get registration banned status
-    let is_banned = contracts
-        .registration
-        .is_registration_banned(contracts.minigame.contract_address, entry_token_id);
+    let is_banned = contracts.registration.is_entry_banned(tournament.id, entry_id);
     assert!(!is_banned, "Should not be banned initially");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -3889,14 +3876,12 @@ fn test_registration_has_submitted_flag() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // Enter tournament
-    let (entry_token_id, _) = contracts
+    let (entry_token_id, entry_id) = contracts
         .budokan
         .enter_tournament(tournament.id, 'player1', owner, Option::None);
 
     // Check has_submitted is false before submission
-    let registration_before = contracts
-        .registration
-        .get_registration(contracts.minigame.contract_address, entry_token_id);
+    let registration_before = contracts.registration.get_entry(tournament.id, entry_id);
     assert!(!registration_before.has_submitted, "has_submitted should be false before submission");
 
     // Move to game period
@@ -3909,9 +3894,7 @@ fn test_registration_has_submitted_flag() {
     contracts.budokan.submit_score(tournament.id, entry_token_id, 1);
 
     // Check has_submitted is true after submission
-    let registration_after = contracts
-        .registration
-        .get_registration(contracts.minigame.contract_address, entry_token_id);
+    let registration_after = contracts.registration.get_entry(tournament.id, entry_id);
     assert!(registration_after.has_submitted, "has_submitted should be true after submission");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -4041,13 +4024,13 @@ fn test_submit_score_tie_higher_game_id_for_lower_position() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, reg_time);
 
     // Enter tournament with three players
-    let (token_id1, _) = contracts
+    let (token_id1, entry_id1) = contracts
         .budokan
         .enter_tournament(tournament.id, 'player1', owner, Option::None);
-    let (token_id2, _) = contracts
+    let (token_id2, entry_id2) = contracts
         .budokan
         .enter_tournament(tournament.id, 'player2', owner, Option::None);
-    let (token_id3, _) = contracts
+    let (token_id3, entry_id3) = contracts
         .budokan
         .enter_tournament(tournament.id, 'player3', owner, Option::None);
 
@@ -4074,15 +4057,9 @@ fn test_submit_score_tie_higher_game_id_for_lower_position() {
     assert!(*leaderboard.at(2) == token_id3.into(), "Invalid third place");
 
     // Verify registrations are marked as submitted
-    let reg1 = contracts
-        .registration
-        .get_registration(contracts.minigame.contract_address, token_id1);
-    let reg2 = contracts
-        .registration
-        .get_registration(contracts.minigame.contract_address, token_id2);
-    let reg3 = contracts
-        .registration
-        .get_registration(contracts.minigame.contract_address, token_id3);
+    let reg1 = contracts.registration.get_entry(tournament.id, entry_id1);
+    let reg2 = contracts.registration.get_entry(tournament.id, entry_id2);
+    let reg3 = contracts.registration.get_entry(tournament.id, entry_id3);
 
     assert!(reg1.has_submitted, "Player 1 should be marked as submitted");
     assert!(reg2.has_submitted, "Player 2 should be marked as submitted");
@@ -4173,10 +4150,10 @@ fn test_ban_game_ids_during_registration() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, reg_time);
 
     let qualification = QualificationProof::Extension(extension_config.config);
-    let (game_id_1, _) = contracts
+    let (game_id_1, entry_id_1) = contracts
         .budokan
         .enter_tournament(tournament.id, 'player1', owner, Option::Some(qualification));
-    let (game_id_2, _) = contracts
+    let (game_id_2, entry_id_2) = contracts
         .budokan
         .enter_tournament(tournament.id, 'player2', owner, Option::Some(qualification));
 
@@ -4190,25 +4167,19 @@ fn test_ban_game_ids_during_registration() {
     stop_cheat_caller_address(contracts.denshokan.contract_address);
 
     // Verify registrations exist and are not banned initially
-    let is_banned_1 = contracts
-        .registration
-        .is_registration_banned(contracts.minigame.contract_address, game_id_1);
+    let is_banned_1 = contracts.registration.is_entry_banned(tournament.id, entry_id_1);
     assert!(!is_banned_1, "Registration should not be banned initially");
 
     // Ban game_id_1 - should be banned because owner doesn't have qualifying token
     contracts.budokan.ban_entry(tournament.id, game_id_1, array![].span());
 
     // Verify game_id_1 is now banned (owned by invalid_player)
-    let is_banned_1_after = contracts
-        .registration
-        .is_registration_banned(contracts.minigame.contract_address, game_id_1);
+    let is_banned_1_after = contracts.registration.is_entry_banned(tournament.id, entry_id_1);
     assert!(is_banned_1_after, "Game ID 1 should be banned - owner doesn't have qualifying token");
 
     // Verify game_id_2 is NOT banned (still owned by valid_player, and we didn't call ban_entry on
     // it)
-    let is_banned_2 = contracts
-        .registration
-        .is_registration_banned(contracts.minigame.contract_address, game_id_2);
+    let is_banned_2 = contracts.registration.is_entry_banned(tournament.id, entry_id_2);
     assert!(!is_banned_2, "Game ID 2 should not be banned - owner has qualifying token");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -4312,7 +4283,7 @@ fn test_anyone_can_ban() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, reg_time);
 
     let qualification = QualificationProof::Extension(extension_config.config);
-    let (game_id, _) = contracts
+    let (game_id, entry_id) = contracts
         .budokan
         .enter_tournament(tournament.id, 'player1', owner, Option::Some(qualification));
 
@@ -4335,9 +4306,7 @@ fn test_anyone_can_ban() {
     contracts.budokan.ban_entry(tournament.id, game_id, array![].span());
 
     // Verify game ID is now banned
-    let is_banned = contracts
-        .registration
-        .is_registration_banned(contracts.minigame.contract_address, game_id);
+    let is_banned = contracts.registration.is_entry_banned(tournament.id, entry_id);
     assert!(is_banned, "Registration should be banned");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -4437,7 +4406,7 @@ fn test_can_ban_during_staging_phase() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, registration_start_time);
 
     let qualification = QualificationProof::Extension(extension_config.config);
-    let (game_id, _) = contracts
+    let (game_id, entry_id) = contracts
         .budokan
         .enter_tournament(tournament.id, 'player1', owner, Option::Some(qualification));
 
@@ -4464,9 +4433,7 @@ fn test_can_ban_during_staging_phase() {
     contracts.budokan.ban_entry(tournament.id, game_id, array![].span());
 
     // Verify game ID is now banned
-    let is_banned = contracts
-        .registration
-        .is_registration_banned(contracts.minigame.contract_address, game_id);
+    let is_banned = contracts.registration.is_entry_banned(tournament.id, entry_id);
     assert!(is_banned, "Registration should be banned during staging phase");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -4553,13 +4520,13 @@ fn test_ban_multiple_game_ids() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, reg_time);
 
     let qualification = QualificationProof::Extension(extension_config.config);
-    let (game_id_1, _) = contracts
+    let (game_id_1, entry_id_1) = contracts
         .budokan
         .enter_tournament(tournament.id, 'player1', owner, Option::Some(qualification));
-    let (game_id_2, _) = contracts
+    let (game_id_2, entry_id_2) = contracts
         .budokan
         .enter_tournament(tournament.id, 'player2', owner, Option::Some(qualification));
-    let (game_id_3, _) = contracts
+    let (game_id_3, entry_id_3) = contracts
         .budokan
         .enter_tournament(tournament.id, 'player3', owner, Option::Some(qualification));
 
@@ -4579,15 +4546,9 @@ fn test_ban_multiple_game_ids() {
     contracts.budokan.ban_entry(tournament.id, game_id_3, array![].span());
 
     // Verify correct IDs are banned
-    let is_banned_1 = contracts
-        .registration
-        .is_registration_banned(contracts.minigame.contract_address, game_id_1);
-    let is_banned_2 = contracts
-        .registration
-        .is_registration_banned(contracts.minigame.contract_address, game_id_2);
-    let is_banned_3 = contracts
-        .registration
-        .is_registration_banned(contracts.minigame.contract_address, game_id_3);
+    let is_banned_1 = contracts.registration.is_entry_banned(tournament.id, entry_id_1);
+    let is_banned_2 = contracts.registration.is_entry_banned(tournament.id, entry_id_2);
+    let is_banned_3 = contracts.registration.is_entry_banned(tournament.id, entry_id_3);
 
     assert!(is_banned_1, "Registration 1 should be banned - owner doesn't have qualifying token");
     assert!(!is_banned_2, "Registration 2 should not be banned");
@@ -4631,7 +4592,7 @@ fn test_cannot_ban_already_banned_game_id() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, reg_time);
 
     let qualification = QualificationProof::Extension(extension_config.config);
-    let (game_id, _) = contracts
+    let (game_id, entry_id) = contracts
         .budokan
         .enter_tournament(tournament.id, 'player1', owner, Option::Some(qualification));
 
@@ -4648,9 +4609,7 @@ fn test_cannot_ban_already_banned_game_id() {
     contracts.budokan.ban_entry(tournament.id, game_id, array![].span());
 
     // Verify game ID is banned
-    let is_banned = contracts
-        .registration
-        .is_registration_banned(contracts.minigame.contract_address, game_id);
+    let is_banned = contracts.registration.is_entry_banned(tournament.id, entry_id);
     assert!(is_banned, "Game ID should be banned");
 
     // Attempt to ban the same game ID again - should panic
@@ -4767,7 +4726,7 @@ fn test_extension_gated_caller_qualifies_different_player() {
     stop_cheat_block_timestamp(contracts.minigame.contract_address);
 }
 
-#[should_panic(expected: "Budokan: Invalid entry according to extension")]
+#[should_panic(expected: "EntryRequirement: Invalid entry according to extension")]
 #[test]
 fn test_extension_gated_caller_does_not_qualify() {
     let owner = OWNER;
@@ -4914,7 +4873,7 @@ fn test_extension_with_registration_only_requires_registration_period() {
 
 // ==================== Tournament Entry Tests ====================
 
-#[should_panic(expected: "Budokan: Invalid entry according to extension")]
+#[should_panic(expected: "EntryRequirement: Invalid entry according to extension")]
 #[test]
 fn test_use_host_token_to_qualify_into_tournament_gated_tournament() {
     let owner = OWNER;
@@ -5002,7 +4961,7 @@ fn test_use_host_token_to_qualify_into_tournament_gated_tournament() {
         .enter_tournament(second_tournament.id, 'test_player', owner, wrong_qualification);
 }
 
-#[should_panic(expected: "Budokan: Invalid entry according to extension")]
+#[should_panic(expected: "EntryRequirement: Invalid entry according to extension")]
 #[test]
 fn test_enter_tournament_wrong_submission_type() {
     let owner = OWNER;
@@ -5918,7 +5877,7 @@ fn test_cannot_claim_game_creator_share_twice() {
         .claim_reward(tournament.id, RewardType::EntryFee(EntryFeeRewardType::GameCreator));
 }
 
-#[should_panic(expected: "Budokan: Refund share already claimed for token 2")]
+#[should_panic(expected: "Budokan: Refund share already claimed for token")]
 #[test]
 fn test_cannot_claim_refund_twice() {
     let owner = OWNER;

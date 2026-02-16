@@ -14,7 +14,7 @@ pub struct TournamentCreated {
     pub game_address: ContractAddress,
     pub created_at: u64,
     pub created_by: ContractAddress,
-    pub creator_token_id: u64,
+    pub creator_token_id: felt252,
     pub metadata: Metadata,
     pub schedule: Schedule,
     pub game_config: GameConfig,
@@ -27,7 +27,7 @@ pub struct TournamentRegistration {
     #[key]
     pub tournament_id: u64,
     #[key]
-    pub game_token_id: u64,
+    pub game_token_id: felt252,
     pub game_address: ContractAddress,
     pub player_address: ContractAddress,
     pub entry_number: u32,

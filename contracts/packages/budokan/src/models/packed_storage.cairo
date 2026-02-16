@@ -8,7 +8,9 @@ pub use game_components_entry_fee::models::{EntryFeeData, EntryFeeDataStorePacki
 pub use game_components_entry_requirement::models::{
     EntryRequirementMeta, EntryRequirementMetaStorePacking,
 };
-pub use game_components_registration::models::{RegistrationData, RegistrationDataStorePacking};
+pub use game_components_registration::models::{
+    RegistrationEntryData, RegistrationEntryDataStorePacking,
+};
 use starknet::storage_access::StorePacking;
 
 // Constants for packing/unpacking
@@ -28,13 +30,13 @@ const MASK_35: u128 = 0x7FFFFFFFF; // 35 bits of 1s
 const MASK_64: u128 = 0xffffffffffffffff;
 
 /// Tournament metadata (small fields packed together)
-/// Packs: created_at (u64/35 bits) | creator_token_id (u64) | settings_id (u32) | soulbound (bool)
-/// Total: 35 + 64 + 32 + 1 = 132 bits -> fits in u256
+/// Packs: created_at (u64/35 bits) | settings_id (u32) | soulbound (bool)
+/// Total: 35 + 32 + 1 = 68 bits -> fits in u256
 /// created_at uses 35 bits (valid until year ~3059), also serves as exists check (0 = not exists)
+/// Note: creator_token_id is stored separately as it's a felt252 (251 bits, too large to pack)
 #[derive(Copy, Drop, Serde)]
 pub struct TournamentMeta {
     pub created_at: u64, // 35 bits, 0 = tournament doesn't exist
-    pub creator_token_id: u64, // 64 bits
     pub settings_id: u32, // 32 bits
     pub soulbound: bool // 1 bit
 }
@@ -46,11 +48,10 @@ pub impl TournamentMetaStorePacking of StorePacking<TournamentMeta, u256> {
         } else {
             0
         };
-        // Layout: created_at(35) | creator_token_id(64) | settings_id(32) | soulbound(1)
+        // Layout: created_at(35) | settings_id(32) | soulbound(1)
         let packed: u256 = value.created_at.into()
-            + (value.creator_token_id.into() * TWO_POW_35.into())
-            + (value.settings_id.into() * TWO_POW_35.into() * TWO_POW_64.into())
-            + (soulbound_u256 * TWO_POW_35.into() * TWO_POW_64.into() * TWO_POW_32.into());
+            + (value.settings_id.into() * TWO_POW_35.into())
+            + (soulbound_u256 * TWO_POW_35.into() * TWO_POW_32.into());
         packed
     }
 
@@ -59,16 +60,11 @@ pub impl TournamentMetaStorePacking of StorePacking<TournamentMeta, u256> {
         let two_pow_35_u256: u256 = TWO_POW_35.into();
 
         let created_at: u64 = (value & mask_35_u256).try_into().unwrap();
-        let creator_token_id: u64 = ((value / two_pow_35_u256) & MASK_64.into())
-            .try_into()
-            .unwrap();
-        let settings_id: u32 = ((value / (two_pow_35_u256 * TWO_POW_64.into())) & MASK_32.into())
-            .try_into()
-            .unwrap();
-        let soulbound_val = (value / (two_pow_35_u256 * TWO_POW_64.into() * TWO_POW_32.into())) & 1;
+        let settings_id: u32 = ((value / two_pow_35_u256) & MASK_32.into()).try_into().unwrap();
+        let soulbound_val = (value / (two_pow_35_u256 * TWO_POW_32.into())) & 1;
         let soulbound = soulbound_val == 1;
 
-        TournamentMeta { created_at, creator_token_id, settings_id, soulbound }
+        TournamentMeta { created_at, settings_id, soulbound }
     }
 }
 
