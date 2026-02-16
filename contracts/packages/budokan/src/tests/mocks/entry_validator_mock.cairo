@@ -8,8 +8,8 @@ pub trait IEntryValidatorMock<TState> {
 #[starknet::contract]
 pub mod entry_validator_mock {
     use core::num::traits::Zero;
-    use game_components_entry_requirement::entry_validator::EntryValidatorComponent;
-    use game_components_entry_requirement::entry_validator::EntryValidatorComponent::{
+    use game_components_metagame::entry_requirement::entry_validator::EntryValidatorComponent;
+    use game_components_metagame::entry_requirement::entry_validator::EntryValidatorComponent::{
         EntryValidator, InternalTrait as EntryValidatorInternalTrait,
     };
     use openzeppelin_interfaces::erc721::{IERC721Dispatcher, IERC721DispatcherTrait};

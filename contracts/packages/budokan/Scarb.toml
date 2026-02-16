@@ -8,12 +8,7 @@ edition.workspace = true
 [[target.starknet-contract]]
 sierra = true
 casm = true
-build-external-contracts = [
-    "game_components_test_common::mocks::minigame_starknet_mock::minigame_starknet_mock",
-    "game_components_test_common::mocks::metagame_starknet_mock::metagame_starknet_mock",
-    "game_components_test_common::examples::full_token_contract::FullTokenContract",
-    "game_components_test_common::examples::minigame_registry_contract::MinigameRegistryContract",
-]
+build-external-contracts = []
 
 [cairo]
 sierra-replace-ids = true
@@ -25,20 +20,12 @@ openzeppelin_introspection.workspace = true
 openzeppelin_token.workspace = true
 openzeppelin_interfaces.workspace = true
 openzeppelin_upgrades.workspace = true
+game_components_embeddable_game_standard.workspace = true
 game_components_metagame.workspace = true
-game_components_minigame.workspace = true
-game_components_utils.workspace = true
-game_components_test_common.workspace = true
-game_components_token.workspace = true
-game_components_leaderboard.workspace = true
-budokan_interfaces = { path = "../interfaces" }
+game_components_utilities.workspace = true
 game_components_interfaces.workspace = true
-game_components_distribution.workspace = true
-game_components_entry_fee.workspace = true
-game_components_entry_requirement.workspace = true
-game_components_prize.workspace = true
-game_components_registration.workspace = true
-game_components_registry.workspace = true
+game_components_test_common.workspace = true
+budokan_interfaces = { path = "../interfaces" }
 
 [dev-dependencies]
 cairo_test = "2.15.0"
