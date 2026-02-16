@@ -5,7 +5,9 @@ pub use game_components_interfaces::distribution::Distribution;
 pub use game_components_interfaces::entry_requirement::{
     EntryRequirement, EntryRequirementType, ExtensionConfig, NFTQualification, QualificationProof,
 };
-pub use game_components_interfaces::prize::{ERC20Data, ERC721Data, Prize, PrizeType, TokenTypeData};
+pub use game_components_interfaces::prize::{
+    ERC20Data, ERC721Data, PrizeData, PrizeType, TokenTypeData,
+};
 use starknet::ContractAddress;
 
 // ==============================================
@@ -55,7 +57,7 @@ pub struct Tournament {
     pub id: u64,
     pub created_at: u64,
     pub created_by: ContractAddress,
-    pub creator_token_id: u64,
+    pub creator_token_id: felt252,
     pub metadata: Metadata,
     pub schedule: Schedule,
     pub game_config: GameConfig,
@@ -82,7 +84,7 @@ pub enum EntryFeeRewardType {
     Position: u32,
     TournamentCreator,
     GameCreator,
-    Refund: u64,
+    Refund: felt252,
 }
 
 #[derive(Copy, Drop, Serde)]
@@ -121,11 +123,13 @@ pub trait IBudokan<TState> {
         player_name: felt252,
         player_address: ContractAddress,
         qualification: Option<QualificationProof>,
-    ) -> (u64, u32);
+    ) -> (felt252, u32);
 
-    fn ban_entry(ref self: TState, tournament_id: u64, game_token_id: u64, proof: Span<felt252>);
+    fn ban_entry(
+        ref self: TState, tournament_id: u64, game_token_id: felt252, proof: Span<felt252>,
+    );
 
-    fn submit_score(ref self: TState, tournament_id: u64, token_id: u64, position: u8);
+    fn submit_score(ref self: TState, tournament_id: u64, token_id: felt252, position: u8);
 
     fn claim_reward(ref self: TState, tournament_id: u64, reward_type: RewardType);
 
@@ -135,5 +139,5 @@ pub trait IBudokan<TState> {
         token_address: ContractAddress,
         token_type: TokenTypeData,
         position: Option<u32>,
-    ) -> Prize;
+    ) -> PrizeData;
 }
