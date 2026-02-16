@@ -4,11 +4,11 @@
 // These structs implement StorePacking to pack multiple fields into single storage slots
 
 // Re-export component package packed storage for convenience
-pub use game_components_entry_fee::models::{EntryFeeData, EntryFeeDataStorePacking};
-pub use game_components_entry_requirement::models::{
+pub use game_components_metagame::entry_fee::models::{EntryFeeData, EntryFeeDataStorePacking};
+pub use game_components_metagame::entry_requirement::models::{
     EntryRequirementMeta, EntryRequirementMetaStorePacking,
 };
-pub use game_components_registration::models::{
+pub use game_components_metagame::registration::models::{
     RegistrationEntryData, RegistrationEntryDataStorePacking,
 };
 use starknet::storage_access::StorePacking;

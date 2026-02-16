@@ -27,6 +27,10 @@ mod tests {
         pub mod erc20_mock;
         pub mod erc721_mock;
         pub mod erc721_old_mock;
+        pub mod full_token_contract;
+        pub mod metagame_starknet_mock;
+        pub mod minigame_registry_contract;
+        pub mod minigame_starknet_mock;
         pub mod tournament_validator_mock;
     }
     pub mod constants;

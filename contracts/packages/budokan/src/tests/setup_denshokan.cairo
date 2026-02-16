@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: UNLICENSED
 
-use core::serde::Serde;
-use game_components_minigame::interface::IMinigameDispatcher;
-use game_components_registry::interface::IMinigameRegistryDispatcher;
-use game_components_test_common::mocks::minigame_starknet_mock::{
+use budokan::tests::mocks::minigame_starknet_mock::{
     IMinigameStarknetMockDispatcher, IMinigameStarknetMockInitDispatcher,
     IMinigameStarknetMockInitDispatcherTrait,
 };
-use game_components_token::interface::IMinigameTokenMixinDispatcher;
+use core::serde::Serde;
+use game_components_embeddable_game_standard::minigame::interface::IMinigameDispatcher;
+use game_components_embeddable_game_standard::registry::interface::IMinigameRegistryDispatcher;
+use game_components_embeddable_game_standard::token::interface::IMinigameTokenMixinDispatcher;
 use openzeppelin_interfaces::erc721::ERC721ABIDispatcher;
 use openzeppelin_interfaces::introspection::ISRC5Dispatcher;
 use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};

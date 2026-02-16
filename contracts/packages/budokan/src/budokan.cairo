@@ -20,14 +20,24 @@ pub mod Budokan {
     use budokan::models::schedule::{Phase, Schedule};
     use budokan_interfaces::budokan::IBudokan;
     use core::num::traits::Zero;
-    use game_components_distribution::calculator;
-    use game_components_distribution::models::{
-        BASIS_POINTS, DIST_TYPE_CUSTOM, DIST_TYPE_EXPONENTIAL, DIST_TYPE_LINEAR, DIST_TYPE_UNIFORM,
+    use game_components_embeddable_game_standard::metagame::extensions::context::context::ContextComponent;
+    use game_components_embeddable_game_standard::metagame::extensions::context::interface::{
+        IMetagameContext, IMetagameContextDetails,
     };
-    use game_components_entry_fee::entry_fee::EntryFeeComponent;
-    use game_components_entry_fee::entry_fee::EntryFeeComponent::EntryFeeInternalTrait;
-    use game_components_entry_requirement::entry_requirement::EntryRequirementComponent;
-    use game_components_entry_requirement::entry_requirement::EntryRequirementComponent::EntryRequirementInternalTrait;
+    use game_components_embeddable_game_standard::metagame::extensions::context::structs::{
+        GameContext, GameContextDetails,
+    };
+    use game_components_embeddable_game_standard::metagame::metagame::MetagameComponent;
+    use game_components_embeddable_game_standard::minigame::extensions::settings::interface::{
+        IMinigameSettingsDispatcher, IMinigameSettingsDispatcherTrait,
+    };
+    use game_components_embeddable_game_standard::minigame::interface::{
+        IMINIGAME_ID, IMinigameDispatcher, IMinigameDispatcherTrait, IMinigameTokenDataDispatcher,
+        IMinigameTokenDataDispatcherTrait,
+    };
+    use game_components_embeddable_game_standard::token::core::interface::{
+        IMinigameTokenDispatcher, IMinigameTokenDispatcherTrait,
+    };
     use game_components_interfaces::entry_fee::{
         EntryFee as ComponentEntryFee, EntryFeeConfig, EntryFeeDeposit,
     };
@@ -38,30 +48,22 @@ pub mod Budokan {
     use game_components_interfaces::registry::{
         IMinigameRegistryDispatcher, IMinigameRegistryDispatcherTrait,
     };
-    use game_components_leaderboard::interface::ILeaderboard;
-    use game_components_leaderboard::leaderboard::leaderboard::LeaderboardResult;
-    use game_components_leaderboard::leaderboard_component::LeaderboardComponent;
-    use game_components_leaderboard::leaderboard_component::LeaderboardComponent::LeaderboardInternalTrait;
-    use game_components_leaderboard::store::Store as LeaderboardStore;
-    use game_components_metagame::extensions::context::context::ContextComponent;
-    use game_components_metagame::extensions::context::interface::{
-        IMetagameContext, IMetagameContextDetails,
-    };
-    use game_components_metagame::extensions::context::structs::{GameContext, GameContextDetails};
-    use game_components_metagame::metagame::MetagameComponent;
-    use game_components_minigame::extensions::settings::interface::{
-        IMinigameSettingsDispatcher, IMinigameSettingsDispatcherTrait,
-    };
-    use game_components_minigame::interface::{
-        IMINIGAME_ID, IMinigameDispatcher, IMinigameDispatcherTrait, IMinigameTokenDataDispatcher,
-        IMinigameTokenDataDispatcherTrait,
-    };
-    use game_components_prize::prize::PrizeComponent;
-    use game_components_prize::prize::PrizeComponent::PrizeInternalTrait;
-    use game_components_registration::registration::RegistrationComponent;
-    use game_components_registration::registration::RegistrationComponent::RegistrationInternalTrait;
-    use game_components_token::core::interface::{
-        IMinigameTokenDispatcher, IMinigameTokenDispatcherTrait,
+    use game_components_metagame::entry_fee::entry_fee::EntryFeeComponent;
+    use game_components_metagame::entry_fee::entry_fee::EntryFeeComponent::EntryFeeInternalTrait;
+    use game_components_metagame::entry_requirement::entry_requirement::EntryRequirementComponent;
+    use game_components_metagame::entry_requirement::entry_requirement::EntryRequirementComponent::EntryRequirementInternalTrait;
+    use game_components_metagame::leaderboard::interface::ILeaderboard;
+    use game_components_metagame::leaderboard::leaderboard::leaderboard::LeaderboardResult;
+    use game_components_metagame::leaderboard::leaderboard_component::LeaderboardComponent;
+    use game_components_metagame::leaderboard::leaderboard_component::LeaderboardComponent::LeaderboardInternalTrait;
+    use game_components_metagame::leaderboard::store::Store as LeaderboardStore;
+    use game_components_metagame::prize::prize::PrizeComponent;
+    use game_components_metagame::prize::prize::PrizeComponent::PrizeInternalTrait;
+    use game_components_metagame::registration::registration::RegistrationComponent;
+    use game_components_metagame::registration::registration::RegistrationComponent::RegistrationInternalTrait;
+    use game_components_utilities::distribution::calculator;
+    use game_components_utilities::distribution::models::{
+        BASIS_POINTS, DIST_TYPE_CUSTOM, DIST_TYPE_EXPONENTIAL, DIST_TYPE_LINEAR, DIST_TYPE_UNIFORM,
     };
     use openzeppelin_access::ownable::OwnableComponent;
     use openzeppelin_interfaces::erc721::{IERC721Dispatcher, IERC721DispatcherTrait};

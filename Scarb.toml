@@ -18,21 +18,12 @@ openzeppelin_introspection = { git = "https://github.com/OpenZeppelin/cairo-cont
 openzeppelin_token = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0" }
 openzeppelin_interfaces = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0" }
 openzeppelin_upgrades = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0" }
-game_components_metagame = { git = "https://github.com/Provable-Games/game-components.git", branch = "next" }
-game_components_minigame = { git = "https://github.com/Provable-Games/game-components.git", branch = "next" }
-game_components_utils = { git = "https://github.com/Provable-Games/game-components.git", branch = "next" }
-game_components_test_common = { git = "https://github.com/Provable-Games/game-components.git", branch = "next" }
-game_components_token = { git = "https://github.com/Provable-Games/game-components.git", branch = "next" }
-game_components_leaderboard = { git = "https://github.com/Provable-Games/game-components.git", branch = "next" }
-game_components_interfaces = { git = "https://github.com/Provable-Games/game-components.git", branch = "next" }
-game_components_math = { git = "https://github.com/Provable-Games/game-components.git", branch = "next" }
-game_components_distribution = { git = "https://github.com/Provable-Games/game-components.git", branch = "next" }
-game_components_registration = { git = "https://github.com/Provable-Games/game-components.git", branch = "next" }
-game_components_entry_requirement = { git = "https://github.com/Provable-Games/game-components.git", branch = "next" }
-game_components_entry_fee = { git = "https://github.com/Provable-Games/game-components.git", branch = "next" }
-game_components_prize = { git = "https://github.com/Provable-Games/game-components.git", branch = "next" }
-game_components_testing = { git = "https://github.com/Provable-Games/game-components.git", branch = "next" }
-game_components_registry = { git = "https://github.com/Provable-Games/game-components.git", branch = "next" }
+game_components_embeddable_game_standard = { path = "../game-components/packages/embeddable_game_standard" }
+game_components_metagame = { path = "../game-components/packages/metagame" }
+game_components_utilities = { path = "../game-components/packages/utilities" }
+game_components_interfaces = { path = "../game-components/packages/interfaces" }
+game_components_test_common = { path = "../game-components/packages/test_common" }
+game_components_testing = { path = "../game-components/packages/testing" }
 
 [scripts]
 test = "snforge test"

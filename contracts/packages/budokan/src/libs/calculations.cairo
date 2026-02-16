@@ -4,7 +4,7 @@
 //! These functions operate only on inputs without any storage access
 
 use core::num::traits::WideMul;
-use game_components_distribution::models::BASIS_POINTS;
+use game_components_utilities::distribution::models::BASIS_POINTS;
 
 /// Calculate payout amount from basis points and total value
 /// Returns: (basis_points * total_value) / BASIS_POINTS
