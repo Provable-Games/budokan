@@ -47,7 +47,7 @@ import {
 import { LoadingSpinner } from "@/components/ui/spinner";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
 import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
-import { isWhitelistedExtension } from "@/lib/extensionConfig";
+import { getWhitelistedExtensionAddresses } from "@/lib/extensionConfig";
 
 const SORT_OPTIONS = {
   upcoming: [
@@ -144,6 +144,12 @@ const Overview = () => {
     return isMainnet ? padU64(BigInt(STARTING_TOURNAMENT_ID)) : undefined;
   }, [isMainnet]);
 
+  const whitelistedExtensions = useMemo(() => {
+    const chainId = selectedChainConfig?.chainId ?? "";
+    const addressSet = getWhitelistedExtensionAddresses(chainId);
+    return Array.from(addressSet);
+  }, [selectedChainConfig?.chainId]);
+
   const {
     data: upcomingTournamentsCount,
     refetch: refetchUpcomingTournamentsCount,
@@ -151,6 +157,7 @@ const Overview = () => {
     namespace: namespace,
     currentTime: currentTime,
     fromTournamentId: fromTournamentId,
+    whitelistedExtensions,
   });
 
   const { data: liveTournamentsCount } = useGetLiveTournamentsCount({
@@ -158,6 +165,7 @@ const Overview = () => {
     currentTime: currentTime,
     fromTournamentId: fromTournamentId,
     excludedTournamentIds: EXCLUDED_TOURNAMENT_IDS,
+    whitelistedExtensions,
   });
 
   const { data: endedTournamentsCount } = useGetEndedTournamentsCount({
@@ -165,6 +173,7 @@ const Overview = () => {
     currentTime: currentTime,
     fromTournamentId: fromTournamentId,
     excludedTournamentIds: EXCLUDED_TOURNAMENT_IDS,
+    whitelistedExtensions,
   });
 
   const queryAddress = useMemo(() => {
@@ -274,6 +283,7 @@ const Overview = () => {
     sortBy: currentSortBy,
     fromTournamentId: fromTournamentId,
     excludedTournamentIds: EXCLUDED_TOURNAMENT_IDS,
+    whitelistedExtensions,
     // Only activate the query for the appropriate tabs and when we need to fetch
     active: ["upcoming", "live", "ended"].includes(selectedTab) && shouldFetch,
   });
@@ -435,25 +445,12 @@ const Overview = () => {
       ) {
         const processedTournaments = processTournamentsFromRaw(rawTournaments);
 
-        // Filter out tournaments with non-whitelisted extension entry requirements
-        const chainId = selectedChainConfig?.chainId ?? "";
-        const filteredTournaments = processedTournaments.filter((t) => {
-          const req = t.tournament.entry_requirement;
-          if (!req.isSome()) return true;
-          const variant = req.Some?.entry_requirement_type?.activeVariant();
-          if (variant !== "extension") return true;
-          const extAddress =
-            req.Some?.entry_requirement_type?.variant?.extension?.address;
-          if (!extAddress) return true;
-          return isWhitelistedExtension(extAddress, chainId);
-        });
-
         // For first page, replace all tournaments
         // For subsequent pages, add only new tournaments
         if (currentPage === 0) {
-          setTournaments(selectedTab as TournamentTab, filteredTournaments);
+          setTournaments(selectedTab as TournamentTab, processedTournaments);
         } else {
-          addTournaments(selectedTab as TournamentTab, filteredTournaments);
+          addTournaments(selectedTab as TournamentTab, processedTournaments);
         }
       } else if (currentPage === 0) {
         // If there are no results for the first page, clear the tournaments
