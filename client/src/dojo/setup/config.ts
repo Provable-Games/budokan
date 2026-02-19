@@ -1,14 +1,5 @@
 import { StarknetDomain } from "starknet";
-import { DojoManifest } from "@/dojo/hooks/useDojoSystem";
-import tournament_manifest_mainnet from "../../../../contracts/manifest_mainnet.json";
-import tournament_manifest_sepolia from "../../../../contracts/manifest_sepolia.json";
 import { ChainId, CHAINS } from "@/dojo/setup/networks";
-import { DojoAppConfig } from "@/context/dojo";
-
-export const manifests: Record<ChainId, DojoManifest> = {
-  [ChainId.SN_MAIN]: tournament_manifest_mainnet as DojoManifest,
-  [ChainId.SN_SEPOLIA]: tournament_manifest_sepolia as DojoManifest,
-};
 
 export const namespace: Record<ChainId, string> = {
   [ChainId.SN_MAIN]: "budokan_relayer_0_0_12",
@@ -29,10 +20,15 @@ export const makeStarknetDomain = (chainId: ChainId): StarknetDomain => ({
 
 //------------------------
 
+export interface DojoAppConfig {
+  selectedChainId: ChainId;
+  namespace: string;
+  starknetDomain: StarknetDomain;
+}
+
 export const makeDojoAppConfig = (chainId: ChainId): DojoAppConfig => {
   return {
     selectedChainId: chainId,
-    manifest: manifests[chainId],
     namespace: namespace[chainId],
     starknetDomain: makeStarknetDomain(chainId),
   };
