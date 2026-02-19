@@ -6,7 +6,6 @@ import {
 } from "metagame-sdk";
 import { feltToString } from "@/lib/utils";
 import { ChainId, CHAINS } from "@/dojo/setup/networks";
-import { manifests } from "@/dojo/setup/config";
 
 export const MetagameProvider = ({ children }: { children: ReactNode }) => {
   const [metagameClient, setMetagameClient] = useState<any>(undefined);
@@ -16,9 +15,8 @@ export const MetagameProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     const selectedChainConfig = CHAINS[chainId as ChainId];
-    const manifest = manifests[chainId as ChainId];
 
-    if (!manifest || !selectedChainConfig) {
+    if (!selectedChainConfig) {
       console.error(`No config found for chain ID: ${chainId}`);
       setMetagameClient(undefined);
       return;
@@ -27,7 +25,7 @@ export const MetagameProvider = ({ children }: { children: ReactNode }) => {
     // Initialize Metagame SDK
     initMetagame({
       toriiUrl: selectedChainConfig.toriiUrl!,
-      worldAddress: manifest.world.address ?? "",
+      worldAddress: selectedChainConfig.budokanAddress ?? "",
       tokenAddress: selectedChainConfig.denshokanAddress,
     })
       .then(setMetagameClient)

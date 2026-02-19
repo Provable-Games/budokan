@@ -10,7 +10,6 @@ import {
 import React from "react";
 import { ChainId, CHAINS, getDefaultChainId } from "@/dojo/setup/networks";
 import { initializeController } from "@/dojo/setup/controllerSetup";
-import { manifests } from "@/dojo/setup/config";
 
 // Initialize controller outside component - always mainnet
 const initController = () => {
@@ -22,8 +21,7 @@ const initController = () => {
 
     return initializeController(
       chainRpcUrls,
-      ChainId.SN_MAIN,
-      manifests[ChainId.SN_MAIN]
+      ChainId.SN_MAIN
     );
   } catch (error) {
     console.error(

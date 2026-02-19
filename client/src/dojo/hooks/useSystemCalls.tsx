@@ -11,7 +11,6 @@ import {
   ERC721Data,
 } from "@/generated/models.gen";
 import {
-  Account,
   BigNumberish,
   CairoOption,
   CairoOptionVariant,
@@ -19,7 +18,6 @@ import {
   ByteArray,
   byteArray,
   Uint256,
-  AccountInterface,
   CairoCustomEnum,
   Contract,
 } from "starknet";
@@ -30,7 +28,7 @@ import { useEntityUpdates } from "@/dojo/hooks/useEntityUpdates";
 import BUDOKAN_ABI from "@/lib/abis/budokan";
 
 export const useSystemCalls = () => {
-  const { client, selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useDojo();
   const { account, address } = useAccount();
   const { provider } = useProvider();
   const tournamentAddress = selectedChainConfig.budokanAddress!;
@@ -867,22 +865,6 @@ export const useSystemCalls = () => {
     }
   };
 
-  // Game
-
-  const endGame = async (gameId: BigNumberish, score: BigNumberish) => {
-    try {
-      const resolvedClient = await client;
-      await resolvedClient.game_mock.endGame(
-        account as unknown as Account | AccountInterface,
-        gameId,
-        score
-      );
-    } catch (error) {
-      console.error("Error executing end game:", error);
-      throw error;
-    }
-  };
-
   const getBalanceGeneral = async (tokenAddress: string) => {
     const result = await account?.callContract({
       contractAddress: tokenAddress,
@@ -922,16 +904,6 @@ export const useSystemCalls = () => {
       entrypoint: "mint",
       calldata: [recipient, tokenId],
     });
-  };
-
-  const getErc20Balance = async (address: string) => {
-    const resolvedClient = await client;
-    return await resolvedClient.erc20_mock.balanceOf(address);
-  };
-
-  const getErc721Balance = async (address: string) => {
-    const resolvedClient = await client;
-    return await resolvedClient.erc721_mock.balanceOf(address);
   };
 
   const getTokenDecimals = async (tokenAddress: string) => {
@@ -1228,12 +1200,9 @@ export const useSystemCalls = () => {
     createTournamentAndApproveAndAddPrizesBatched,
     claimPrizes,
     claimPrizesBatched,
-    endGame,
     getBalanceGeneral,
     mintErc721,
     mintErc20,
-    getErc20Balance,
-    getErc721Balance,
     getTokenDecimals,
     getTokenInfo,
     registerToken,

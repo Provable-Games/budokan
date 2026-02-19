@@ -87,6 +87,8 @@ export const EXTENSION_ADDRESSES: Record<
       "0x051fc2681f65ee18e99dab3cc2ca2eca1b4532c735e752f575ace91ed30f17b7",
     opusTrovesValidator:
       "0x0604bc0d54727f439786c65d7dc6f7d46de1aba7e129ef9caf65fef111a1644e",
+    snapshotValidator:
+      "0x03e6820e9e1cfb5c22465a86f469c651355f05397e29fc94de8e832d5f3d8ede",
   },
 };
 
@@ -134,7 +136,7 @@ const extensionConfigs: Record<string, ExtensionConfig> = {
  * Get extension configuration by contract address
  */
 export const getExtensionConfig = (
-  extensionAddress: string
+  extensionAddress: string,
 ): ExtensionConfig | null => {
   const normalizedAddress = indexAddress(extensionAddress);
   return extensionConfigs[normalizedAddress] || null;
@@ -147,7 +149,7 @@ export const getExtensionConfig = (
 export const getExtensionProof = (
   extensionAddress: string,
   playerAddress: string,
-  context?: any
+  context?: any,
 ): string[] => {
   const config = getExtensionConfig(extensionAddress);
 
@@ -165,7 +167,7 @@ export const getExtensionProof = (
  */
 export const registerExtensionConfig = (
   extensionAddress: string,
-  config: ExtensionConfig
+  config: ExtensionConfig,
 ): void => {
   const normalizedAddress = indexAddress(extensionAddress);
   extensionConfigs[normalizedAddress] = config;
@@ -192,11 +194,11 @@ export const isTournamentValidator = (extensionAddress: string): boolean => {
  * This should be called when the chain config is loaded
  */
 export const registerTournamentValidator = (
-  tournamentValidatorAddress: string
+  tournamentValidatorAddress: string,
 ): void => {
   registerExtensionConfig(
     tournamentValidatorAddress,
-    PRESET_EXTENSIONS.tournament
+    PRESET_EXTENSIONS.tournament,
   );
 };
 
@@ -213,12 +215,39 @@ export const isERC20BalanceValidator = (extensionAddress: string): boolean => {
  * This should be called when the chain config is loaded
  */
 export const registerERC20BalanceValidator = (
-  erc20BalanceValidatorAddress: string
+  erc20BalanceValidatorAddress: string,
 ): void => {
   registerExtensionConfig(
     erc20BalanceValidatorAddress,
-    PRESET_EXTENSIONS.erc20_balance
+    PRESET_EXTENSIONS.erc20_balance,
   );
+};
+
+/**
+ * Get all whitelisted extension addresses for a chain (normalized)
+ */
+export const getWhitelistedExtensionAddresses = (
+  chainId: string,
+): Set<string> => {
+  const addresses = EXTENSION_ADDRESSES[chainId] || {};
+  const set = new Set<string>();
+  for (const addr of Object.values(addresses)) {
+    if (addr) {
+      set.add(indexAddress(addr));
+    }
+  }
+  return set;
+};
+
+/**
+ * Check if an extension address is whitelisted for a chain
+ */
+export const isWhitelistedExtension = (
+  extensionAddress: string,
+  chainId: string,
+): boolean => {
+  const whitelist = getWhitelistedExtensionAddresses(chainId);
+  return whitelist.has(indexAddress(extensionAddress));
 };
 
 export default extensionConfigs;

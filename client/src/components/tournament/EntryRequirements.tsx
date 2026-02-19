@@ -12,6 +12,7 @@ import {
   EXTERNAL_LINK,
   INFO,
   OPUS,
+  VERIFIED,
 } from "@/components/Icons";
 import {
   HoverCard,
@@ -232,6 +233,29 @@ const EntryRequirements = ({
     );
     return normalizedExtensionAddress === normalizedValidatorAddress;
   }, [extensionConfig?.address, extensionAddresses.opusTrovesValidator]);
+
+  // Check if this extension is a Snapshot validator
+  const isSnapshotValidatorExtension = useMemo(() => {
+    if (!extensionConfig?.address || !extensionAddresses.snapshotValidator)
+      return false;
+    const normalizedExtensionAddress = indexAddress(extensionConfig.address);
+    const normalizedValidatorAddress = indexAddress(
+      extensionAddresses.snapshotValidator
+    );
+    return normalizedExtensionAddress === normalizedValidatorAddress;
+  }, [extensionConfig?.address, extensionAddresses.snapshotValidator]);
+
+  // Parse Snapshot validator config: the config is the snapshot space ID
+  const snapshotValidatorConfig = useMemo(() => {
+    if (!isSnapshotValidatorExtension || !extensionConfig?.config) {
+      return null;
+    }
+    const config = extensionConfig.config;
+    if (!config || config.length === 0) return null;
+    return {
+      snapshotId: Number(BigInt(config[0] ?? "0")).toString(),
+    };
+  }, [isSnapshotValidatorExtension, extensionConfig?.config]);
 
   // Parse tournament validator config: [qualifier_type, qualifying_mode, top_positions, ...tournament_ids]
   const tournamentValidatorConfig = useMemo(() => {
@@ -468,6 +492,17 @@ const EntryRequirements = ({
               <OPUS />
             </span>
             <span className="hidden sm:block text-xs">Opus Troves</span>
+          </div>
+        );
+      }
+      // Show as Snapshot if it's a Snapshot validator
+      if (isSnapshotValidatorExtension) {
+        return (
+          <div className="flex flex-row items-center gap-1 w-full">
+            <span className="w-6">
+              <VERIFIED />
+            </span>
+            <span className="hidden sm:block text-xs">Snapshot</span>
           </div>
         );
       }
@@ -751,6 +786,38 @@ const EntryRequirements = ({
                     </span>
                     <span className="font-medium">
                       {opusTrovesValidatorConfig.maxEntries}
+                    </span>
+                  </div>
+                )}
+              </div>
+              {!!hasEntryLimit && (
+                <div className="flex flex-wrap items-center gap-2 text-xs mt-1">
+                  <span className="text-brand-muted whitespace-nowrap">
+                    Entry Limit:
+                  </span>
+                  <span className="font-medium">{Number(entryLimit)}</span>
+                </div>
+              )}
+            </div>
+          </>
+        );
+      }
+      // Show Snapshot details if it's a Snapshot validator
+      if (isSnapshotValidatorExtension) {
+        return (
+          <>
+            <div className="flex flex-col gap-2">
+              <p className="text-muted-foreground text-xs">
+                To enter you must hold a qualifying Snapshot:
+              </p>
+              <div className="flex flex-col gap-1 text-xs">
+                {snapshotValidatorConfig?.snapshotId && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-brand-muted whitespace-nowrap">
+                      Snapshot ID:
+                    </span>
+                    <span className="font-medium font-mono">
+                      {snapshotValidatorConfig.snapshotId}
                     </span>
                   </div>
                 )}

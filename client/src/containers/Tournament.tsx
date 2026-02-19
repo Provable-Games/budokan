@@ -1060,12 +1060,12 @@ const Tournament = () => {
           <div className="flex flex-row items-center justify-between gap-4">
             <div
               className={`relative overflow-hidden flex-1 min-w-0 ${
-                tournamentModel?.metadata?.description?.startsWith("#")
+                /[#*\-[>|`]|\n/.test(tournamentModel?.metadata?.description ?? "")
                   ? ""
                   : "h-6"
               }`}
             >
-              {tournamentModel?.metadata?.description?.startsWith("#") ? (
+              {/[#*\-[>|`]|\n/.test(tournamentModel?.metadata?.description ?? "") ? (
                 <Button
                   onClick={() => setIsDescriptionDialogOpen(true)}
                   variant="outline"

@@ -345,15 +345,6 @@ export const TournamentCard = ({
                 Prize Pool
               </span>
             </>
-          ) : !hasEntryFee ? (
-            <>
-              <span className="font-brand text-lg sm:text-2xl text-success">
-                FREE
-              </span>
-              <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-brand-muted">
-                Prize Pool
-              </span>
-            </>
           ) : (
             <>
               <span className="font-brand text-lg sm:text-2xl text-brand-muted">
