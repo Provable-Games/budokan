@@ -36,21 +36,21 @@
 
 ```bash
 # example:
-# cd client && pnpm lint && pnpm build
+# cd client && bun run lint && bun run build
 ```
 
 ### Area-specific verification
 
 #### If `contracts/**` changed
 
-- [ ] `cd contracts && scarb build`
-- [ ] `cd contracts && scarb test` (or targeted tests listed below)
+- [ ] `scarb build`
+- [ ] `scarb test` (or targeted tests listed below)
 - [ ] Security-sensitive paths (auth, external calls, arithmetic, state transitions) reviewed
 
 #### If `client/**` changed
 
-- [ ] `cd client && pnpm lint`
-- [ ] `cd client && pnpm build`
+- [ ] `cd client && bun run lint`
+- [ ] `cd client && bun run build`
 - [ ] Manual smoke test completed for impacted routes/states
 - [ ] Visual evidence attached for UI changes (screenshots/GIF)
 

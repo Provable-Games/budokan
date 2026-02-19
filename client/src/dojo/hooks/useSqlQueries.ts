@@ -1,7 +1,7 @@
 import { useSqlExecute } from "@/lib/dojo/hooks/useSqlExecute";
 import { useMemo } from "react";
 import { BigNumberish } from "starknet";
-import { padU64 } from "@/lib/utils";
+import { padU64, indexAddress, padAddress } from "@/lib/utils";
 import { TOURNAMENT_VERSION_KEY } from "@/lib/constants";
 
 // Helper function to generate SQL exclusion clause for tournament IDs
@@ -10,6 +10,22 @@ const getExcludedTournamentsClause = (excludedIds: number[]): string => {
   return `AND t.id NOT IN (${excludedIds
     .map((id) => `'${padU64(BigInt(id))}'`)
     .join(",")})`;
+};
+
+// Helper function to generate SQL clause filtering out non-whitelisted extension entry requirements
+const getExtensionWhitelistClause = (
+  whitelistedAddresses?: string[]
+): string => {
+  if (!whitelistedAddresses) return "";
+  if (whitelistedAddresses.length === 0) {
+    // If no whitelist, exclude ALL extension-type requirements
+    return `AND (t.'entry_requirement' != 'Some' OR t.'entry_requirement.Some.entry_requirement_type' != 'extension')`;
+  }
+  return `AND (
+    t.'entry_requirement' != 'Some'
+    OR t.'entry_requirement.Some.entry_requirement_type' != 'extension'
+    OR t.'entry_requirement.Some.entry_requirement_type.extension.address' IN (${whitelistedAddresses.flatMap((a) => [indexAddress(a), padAddress(a)]).map((a) => `'${a}'`).join(",")})
+  )`;
 };
 
 export const useGetGameSettingsCount = ({
@@ -117,15 +133,21 @@ export const useGetUpcomingTournamentsCount = ({
   currentTime,
   fromTournamentId,
   excludedTournamentIds = [],
+  whitelistedExtensions,
 }: {
   namespace: string;
   currentTime: bigint;
   fromTournamentId?: string;
   excludedTournamentIds?: number[];
+  whitelistedExtensions?: string[];
 }) => {
   const excludedIdsKey = useMemo(
     () => JSON.stringify(excludedTournamentIds),
     [excludedTournamentIds]
+  );
+  const whitelistKey = useMemo(
+    () => JSON.stringify(whitelistedExtensions),
+    [whitelistedExtensions]
   );
   const query = useMemo(
     () => `
@@ -134,8 +156,9 @@ export const useGetUpcomingTournamentsCount = ({
     WHERE t.'schedule.game.start' > '${padU64(currentTime)}'
     ${fromTournamentId ? `AND t.id > '${fromTournamentId}'` : ""}
     ${getExcludedTournamentsClause(excludedTournamentIds)}
+    ${getExtensionWhitelistClause(whitelistedExtensions)}
   `,
-    [namespace, currentTime, fromTournamentId, excludedIdsKey]
+    [namespace, currentTime, fromTournamentId, excludedIdsKey, whitelistKey]
   );
   const { data, loading, error, refetch } = useSqlExecute(query);
   return { data: data?.[0]?.count, loading, error, refetch };
@@ -146,15 +169,21 @@ export const useGetLiveTournamentsCount = ({
   currentTime,
   fromTournamentId,
   excludedTournamentIds = [],
+  whitelistedExtensions,
 }: {
   namespace: string;
   currentTime: bigint;
   fromTournamentId?: string;
   excludedTournamentIds?: number[];
+  whitelistedExtensions?: string[];
 }) => {
   const excludedIdsKey = useMemo(
     () => JSON.stringify(excludedTournamentIds),
     [excludedTournamentIds]
+  );
+  const whitelistKey = useMemo(
+    () => JSON.stringify(whitelistedExtensions),
+    [whitelistedExtensions]
   );
   const query = useMemo(
     () => `
@@ -165,8 +194,9 @@ export const useGetLiveTournamentsCount = ({
     )}' AND t.'schedule.game.end' > '${padU64(currentTime)}')
     ${fromTournamentId ? `AND t.id > '${fromTournamentId}'` : ""}
     ${getExcludedTournamentsClause(excludedTournamentIds)}
+    ${getExtensionWhitelistClause(whitelistedExtensions)}
   `,
-    [namespace, currentTime, fromTournamentId, excludedIdsKey]
+    [namespace, currentTime, fromTournamentId, excludedIdsKey, whitelistKey]
   );
   const { data, loading, error, refetch } = useSqlExecute(query);
   return { data: data?.[0]?.count, loading, error, refetch };
@@ -177,15 +207,21 @@ export const useGetEndedTournamentsCount = ({
   currentTime,
   fromTournamentId,
   excludedTournamentIds = [],
+  whitelistedExtensions,
 }: {
   namespace: string;
   currentTime: bigint;
   fromTournamentId?: string;
   excludedTournamentIds?: number[];
+  whitelistedExtensions?: string[];
 }) => {
   const excludedIdsKey = useMemo(
     () => JSON.stringify(excludedTournamentIds),
     [excludedTournamentIds]
+  );
+  const whitelistKey = useMemo(
+    () => JSON.stringify(whitelistedExtensions),
+    [whitelistedExtensions]
   );
   const query = useMemo(
     () => `
@@ -194,8 +230,9 @@ export const useGetEndedTournamentsCount = ({
     WHERE t.'schedule.game.end' <= '${padU64(currentTime)}'
     ${fromTournamentId ? `AND t.id > '${fromTournamentId}'` : ""}
     ${getExcludedTournamentsClause(excludedTournamentIds)}
+    ${getExtensionWhitelistClause(whitelistedExtensions)}
   `,
-    [namespace, currentTime, fromTournamentId, excludedIdsKey]
+    [namespace, currentTime, fromTournamentId, excludedIdsKey, whitelistKey]
   );
   const { data, loading, error, refetch } = useSqlExecute(query);
   return { data: data?.[0]?.count, loading, error, refetch };
@@ -366,6 +403,7 @@ export const useGetTournaments = ({
   tournamentIds,
   fromTournamentId,
   excludedTournamentIds = [],
+  whitelistedExtensions,
   sortBy = "start_time",
   offset = 0,
   limit = 5,
@@ -377,6 +415,7 @@ export const useGetTournaments = ({
   tournamentIds?: string[];
   fromTournamentId?: string;
   excludedTournamentIds?: number[];
+  whitelistedExtensions?: string[];
   currentTime?: bigint;
   sortBy?: string;
   offset?: number;
@@ -394,6 +433,10 @@ export const useGetTournaments = ({
   const excludedIdsKey = useMemo(
     () => JSON.stringify(excludedTournamentIds),
     [excludedTournamentIds]
+  );
+  const whitelistKey = useMemo(
+    () => JSON.stringify(whitelistedExtensions),
+    [whitelistedExtensions]
   );
   const query = useMemo(
     () =>
@@ -442,6 +485,7 @@ export const useGetTournaments = ({
               : ""
           }
           ${getExcludedTournamentsClause(excludedTournamentIds)}
+          ${getExtensionWhitelistClause(whitelistedExtensions)}
       GROUP BY t.id
       ${getSortClause(sortBy)}
       LIMIT ${limit}
@@ -500,6 +544,7 @@ export const useGetTournaments = ({
       tournamentIdsKey,
       fromTournamentId,
       excludedIdsKey,
+      whitelistKey,
     ]
   );
   const { data, loading, error, refetch } = useSqlExecute(query);

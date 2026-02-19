@@ -47,6 +47,7 @@ import {
 import { LoadingSpinner } from "@/components/ui/spinner";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
 import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
+import { getWhitelistedExtensionAddresses } from "@/lib/extensionConfig";
 
 const SORT_OPTIONS = {
   upcoming: [
@@ -143,6 +144,12 @@ const Overview = () => {
     return isMainnet ? padU64(BigInt(STARTING_TOURNAMENT_ID)) : undefined;
   }, [isMainnet]);
 
+  const whitelistedExtensions = useMemo(() => {
+    const chainId = selectedChainConfig?.chainId ?? "";
+    const addressSet = getWhitelistedExtensionAddresses(chainId);
+    return Array.from(addressSet);
+  }, [selectedChainConfig?.chainId]);
+
   const {
     data: upcomingTournamentsCount,
     refetch: refetchUpcomingTournamentsCount,
@@ -150,6 +157,7 @@ const Overview = () => {
     namespace: namespace,
     currentTime: currentTime,
     fromTournamentId: fromTournamentId,
+    whitelistedExtensions,
   });
 
   const { data: liveTournamentsCount } = useGetLiveTournamentsCount({
@@ -157,6 +165,7 @@ const Overview = () => {
     currentTime: currentTime,
     fromTournamentId: fromTournamentId,
     excludedTournamentIds: EXCLUDED_TOURNAMENT_IDS,
+    whitelistedExtensions,
   });
 
   const { data: endedTournamentsCount } = useGetEndedTournamentsCount({
@@ -164,6 +173,7 @@ const Overview = () => {
     currentTime: currentTime,
     fromTournamentId: fromTournamentId,
     excludedTournamentIds: EXCLUDED_TOURNAMENT_IDS,
+    whitelistedExtensions,
   });
 
   const queryAddress = useMemo(() => {
@@ -273,6 +283,7 @@ const Overview = () => {
     sortBy: currentSortBy,
     fromTournamentId: fromTournamentId,
     excludedTournamentIds: EXCLUDED_TOURNAMENT_IDS,
+    whitelistedExtensions,
     // Only activate the query for the appropriate tabs and when we need to fetch
     active: ["upcoming", "live", "ended"].includes(selectedTab) && shouldFetch,
   });
