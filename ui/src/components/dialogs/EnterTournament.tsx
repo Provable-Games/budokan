@@ -457,7 +457,8 @@ export function EnterTournamentDialog({
 
   // Check if user can pay (either directly or via swap)
   const canPay = useMemo(() => {
-    if (!selectedPaymentToken || !entryToken) return false;
+    if (!entryToken) return true;
+    if (!selectedPaymentToken) return false;
 
     const isDirectPayment =
       indexAddress(selectedPaymentToken).toLowerCase() ===

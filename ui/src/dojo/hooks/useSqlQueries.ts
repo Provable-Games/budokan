@@ -1,7 +1,7 @@
 import { useSqlExecute } from "@/lib/dojo/hooks/useSqlExecute";
 import { useMemo } from "react";
 import { BigNumberish } from "starknet";
-import { padU64 } from "@/lib/utils";
+import { padU64, indexAddress, padAddress } from "@/lib/utils";
 import { TOURNAMENT_VERSION_KEY } from "@/lib/constants";
 
 // Helper function to generate SQL exclusion clause for tournament IDs
@@ -24,7 +24,7 @@ const getExtensionWhitelistClause = (
   return `AND (
     t.'entry_requirement' != 'Some'
     OR t.'entry_requirement.Some.entry_requirement_type' != 'extension'
-    OR t.'entry_requirement.Some.entry_requirement_type.extension.address' IN (${whitelistedAddresses.map((a) => `'${a}'`).join(",")})
+    OR t.'entry_requirement.Some.entry_requirement_type.extension.address' IN (${whitelistedAddresses.flatMap((a) => [indexAddress(a), padAddress(a)]).map((a) => `'${a}'`).join(",")})
   )`;
 };
 

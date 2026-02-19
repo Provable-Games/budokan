@@ -122,6 +122,7 @@ const EntryRequirements = ({ form }: StepProps) => {
     if (type === "extension") {
       form.setValue("enableEntryLimit", false);
       form.setValue("gatingOptions.entry_limit", 0);
+      setSelectedPreset("snapshot");
     } else {
       // For non-extension types, enable entry limit by default with a value of 1
       form.setValue("enableEntryLimit", true);
@@ -141,16 +142,20 @@ const EntryRequirements = ({ form }: StepProps) => {
       const extensionAddress = form.watch("gatingOptions.extension.address");
       const extensionConfig = form.watch("gatingOptions.extension.config");
 
+      // Only override preset if there's actual data to detect from
+      if (!extensionAddress && !extensionConfig) return;
+
       if (extensionAddress) {
         const extensionAddresses = getExtensionAddresses(
           selectedChainConfig?.chainId ?? ""
         );
 
         // Check if it's ERC20 balance validator
-        if (extensionAddress === extensionAddresses.erc20BalanceValidator) {
+        const normalizedAddress = indexAddress(extensionAddress);
+        if (normalizedAddress === indexAddress(extensionAddresses.erc20BalanceValidator ?? "")) {
           setSelectedPreset("erc20_balance");
         } else if (
-          extensionAddress === extensionAddresses.opusTrovesValidator
+          normalizedAddress === indexAddress(extensionAddresses.opusTrovesValidator ?? "")
         ) {
           // Check if it's Opus Troves validator
           setSelectedPreset("opus_troves");
@@ -233,7 +238,7 @@ const EntryRequirements = ({ form }: StepProps) => {
                         Whitelist{" "}
                         <span className="hidden sm:inline">Addresses</span>
                       </Button>
-                      {/* Tournament and Extension options temporarily disabled
+                      {/* Extension option temporarily disabled
                       <Button
                         type="button"
                         variant={
@@ -1136,7 +1141,7 @@ const EntryRequirements = ({ form }: StepProps) => {
                                             : ""}{" "}
                                           added
                                         </span>
-                                        <div className="flex flex-row gap-2 w-5/6">
+                                        <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto w-5/6">
                                           {field.value.map((address, index) => (
                                             <div
                                               key={index}
