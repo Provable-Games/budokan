@@ -192,7 +192,7 @@ jobs:
           echo "Tests failed without rate-limit signature. Not retrying."
           exit 1
 
-  ui-lint:
+  client-lint:
     needs: changes
     if: needs.changes.outputs.client_ci == 'true'
     runs-on: ubuntu-latest
@@ -210,8 +210,8 @@ jobs:
       - name: Lint
         run: bun run lint
 
-  ui-build:
-    needs: [changes, ui-lint]
+  client-build:
+    needs: [changes, client-lint]
     if: needs.changes.outputs.client_ci == 'true'
     runs-on: ubuntu-latest
     defaults:
@@ -522,8 +522,8 @@ jobs:
 
           echo "No blocking findings detected"
 
-  claude-review-ui:
-    needs: [changes, ui-lint]
+  claude-review-client:
+    needs: [changes, client-lint]
     if: needs.changes.outputs.client_review == 'true' && needs.changes.outputs.can_run_claude_reviews == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -541,7 +541,7 @@ jobs:
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
-          REVIEW_MARKER: run=${{ github.run_id }} attempt=${{ github.run_attempt }} sha=${{ github.event.pull_request.head.sha }} scope=ui
+          REVIEW_MARKER: run=${{ github.run_id }} attempt=${{ github.run_attempt }} sha=${{ github.event.pull_request.head.sha }} scope=client
         run: |
           {
             cat .github/prompts/client-review.md
@@ -599,7 +599,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           HEADER: "## Claude Review - React/Frontend Review"
-          REVIEW_MARKER: run=${{ github.run_id }} attempt=${{ github.run_attempt }} sha=${{ github.event.pull_request.head.sha }} scope=ui
+          REVIEW_MARKER: run=${{ github.run_id }} attempt=${{ github.run_attempt }} sha=${{ github.event.pull_request.head.sha }} scope=client
         run: |
           MAX_ATTEMPTS=6
           SLEEP_SECONDS=10
@@ -628,7 +628,7 @@ jobs:
           done
 
           if [ -z "$BODY" ]; then
-            echo "::error::Could not find Claude review output for ui"
+            echo "::error::Could not find Claude review output for client"
             exit 1
           fi
 
@@ -639,8 +639,8 @@ jobs:
 
           echo "No blocking findings detected"
 
-  codex-review-ui:
-    needs: [changes, ui-lint]
+  codex-review-client:
+    needs: [changes, client-lint]
     if: needs.changes.outputs.client_review == 'true' && needs.changes.outputs.can_run_ai_reviews == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -1216,15 +1216,15 @@ jobs:
       - changes
       - contracts-lint
       - contracts-test
-      - ui-lint
-      - ui-build
+      - client-lint
+      - client-build
       - indexer-api-lint
       - indexer-build
       - api-build
       - claude-review-contracts
       - codex-review-contracts
-      - claude-review-ui
-      - codex-review-ui
+      - claude-review-client
+      - codex-review-client
       - claude-review-indexer-api
       - codex-review-indexer-api
       - claude-review-general
@@ -1291,13 +1291,13 @@ jobs:
 
             if [ "$CAN_RUN_CLAUDE_REVIEWS" = "true" ]; then
               check_skipped_reviews "$CHANGES_CONTRACTS_REVIEW" "claude-review-contracts" "codex-review-contracts"
-              check_skipped_reviews "$CHANGES_CLIENT_REVIEW" "claude-review-ui" "codex-review-ui"
+              check_skipped_reviews "$CHANGES_CLIENT_REVIEW" "claude-review-client" "codex-review-client"
               check_skipped_reviews "$CHANGES_INDEXER_API_REVIEW" "claude-review-indexer-api" "codex-review-indexer-api"
               check_skipped_reviews "$CHANGES_GENERAL_REVIEW" "claude-review-general" "codex-review-general"
             else
               echo "Skipping Claude review skipped enforcement because Claude reviews are unavailable ($CLAUDE_REVIEWS_BLOCK_REASON)."
               check_skipped_reviews "$CHANGES_CONTRACTS_REVIEW" "codex-review-contracts"
-              check_skipped_reviews "$CHANGES_CLIENT_REVIEW" "codex-review-ui"
+              check_skipped_reviews "$CHANGES_CLIENT_REVIEW" "codex-review-client"
               check_skipped_reviews "$CHANGES_INDEXER_API_REVIEW" "codex-review-indexer-api"
               check_skipped_reviews "$CHANGES_GENERAL_REVIEW" "codex-review-general"
             fi

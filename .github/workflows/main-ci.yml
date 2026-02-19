@@ -148,7 +148,7 @@ jobs:
           echo "Tests failed without rate-limit signature. Not retrying."
           exit 1
 
-  ui-lint:
+  client-lint:
     needs: changes
     if: needs.changes.outputs.client_ci == 'true'
     runs-on: ubuntu-latest
@@ -166,8 +166,8 @@ jobs:
       - name: Lint
         run: bun run lint
 
-  ui-build:
-    needs: [changes, ui-lint]
+  client-build:
+    needs: [changes, client-lint]
     if: needs.changes.outputs.client_ci == 'true'
     runs-on: ubuntu-latest
     defaults:
@@ -254,8 +254,8 @@ jobs:
       - changes
       - contracts-lint
       - contracts-test
-      - ui-lint
-      - ui-build
+      - client-lint
+      - client-build
       - indexer-api-lint
       - indexer-build
       - api-build
