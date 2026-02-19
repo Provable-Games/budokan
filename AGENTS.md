@@ -8,13 +8,13 @@ Budokan is a permissionless, fully on-chain tournament management platform built
 
 ## Development Commands
 
-### UI (React + TypeScript + Vite)
+### Client (React + TypeScript + Vite)
 
 ```bash
-cd ui
-npm run dev      # Start development server
-npm run build    # TypeScript check + production build
-npm run lint     # Run ESLint
+cd client
+bun run dev      # Start development server
+bun run build    # TypeScript check + production build
+bun run lint     # Run ESLint
 ```
 
 ### Contracts (Cairo + Starknet Foundry)
@@ -39,7 +39,7 @@ snforge test -e test_name  # Run a specific test by name
 
 ### Monorepo Structure
 
-- `/ui` - React SPA frontend
+- `/client` - React SPA frontend
 - `/contracts` - Cairo smart contracts (Scarb workspace)
 
 ### Smart Contract Organization (`contracts/src/`)
@@ -53,7 +53,7 @@ snforge test -e test_name  # Run a specific test by name
 - `models/` - Data models (Tournament, Registration, Leaderboard, Prize, etc.)
 - `tests/` - Comprehensive test suite using `snforge`
 
-### UI Organization (`ui/src/`)
+### Client Organization (`client/src/`)
 
 - `containers/` - Page-level components (CreateTournament, Tournament, Play, Overview)
 - `components/` - Reusable React components
@@ -85,7 +85,7 @@ External games integrate via standardized Cairo interfaces:
 
 ## Environment Configuration
 
-Copy `ui/.env.example` to `ui/.env`:
+Copy `client/.env.example` to `client/.env`:
 
 - `VITE_CHAIN_ID`: KATANA_LOCAL, MAINNET, SEPOLIA, or SLOT
 - `VITE_VOYAGER_PROXY_URL`: Voyager API proxy (key hidden server-side)

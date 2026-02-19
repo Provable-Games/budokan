@@ -51,6 +51,9 @@ export default defineConfig({
     assetsInlineLimit: 4096,
     sourcemap: false,
   },
+  optimizeDeps: {
+    exclude: ["@vercel/functions"],
+  },
   server: {
     proxy: {},
   },

@@ -1,0 +1,282 @@
+name: Main CI
+
+on:
+  push:
+    branches: [main, next]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: main-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      contracts: ${{ steps.filter.outputs.contracts }}
+      client_ci: ${{ steps.filter.outputs.client_ci }}
+      indexer_ci: ${{ steps.filter.outputs.indexer_ci }}
+      api: ${{ steps.filter.outputs.api }}
+      indexer_api_ci: ${{ steps.filter.outputs.indexer_api_ci }}
+      infra_ci: ${{ steps.filter.outputs.infra_ci }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            contracts:
+              - "contracts/**"
+              - ".tool-versions"
+            client_ci:
+              - "client/**"
+              - "contracts/packages/**/models/**"
+              - ".tool-versions"
+            indexer_ci:
+              - "indexer/**"
+              - "contracts/packages/**/models/**"
+              - ".tool-versions"
+            api:
+              - "api/**"
+              - ".tool-versions"
+            indexer_api_ci:
+              - "indexer/**"
+              - "api/**"
+              - "contracts/packages/**/models/**"
+              - ".tool-versions"
+            infra_ci:
+              - ".github/workflows/**"
+              - ".github/actions/**"
+              - ".github/prompts/**"
+              - ".github/pull_request_template.md"
+
+  infra-validate:
+    needs: changes
+    if: needs.changes.outputs.infra_ci == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate workflow and action YAML
+        run: |
+          YAML_CLI="yaml@2.8.1"
+
+          for file in .github/workflows/*.yml .github/workflows/*.yaml; do
+            [ -f "$file" ] || continue
+            npx -y "$YAML_CLI" valid < "$file"
+          done
+
+          while IFS= read -r file; do
+            npx -y "$YAML_CLI" valid < "$file"
+          done < <(find .github/actions -type f \( -name "action.yml" -o -name "action.yaml" \) 2>/dev/null)
+
+  contracts-lint:
+    needs: changes
+    if: needs.changes.outputs.contracts == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Scarb
+        uses: software-mansion/setup-scarb@v1
+        with:
+          tool-versions: .tool-versions
+          scarb-lock: Scarb.lock
+          cache: true
+          cache-targets: false
+
+      - name: Scarb fmt
+        run: scarb fmt --check
+
+  contracts-test:
+    needs: [changes, contracts-lint]
+    if: needs.changes.outputs.contracts == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Scarb
+        uses: software-mansion/setup-scarb@v1
+        with:
+          tool-versions: .tool-versions
+          scarb-lock: Scarb.lock
+          cache: true
+          cache-targets: true
+
+      - name: Install Starknet Foundry
+        uses: foundry-rs/setup-snfoundry@v3
+        with:
+          tool-versions: .tool-versions
+
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/index
+            ~/.cargo/git/db
+            ~/.cargo/git/checkouts
+          key: cargo-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Scarb.lock', '.tool-versions') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Run contract tests
+        run: |
+          set -o pipefail
+          LOG_FILE="$RUNNER_TEMP/scarb-test.log"
+          RATE_LIMIT_REGEX="(429|too many requests|rate[ -]?limit)"
+
+          if scarb test 2>&1 | tee "$LOG_FILE"; then
+            exit 0
+          fi
+
+          if grep -Eiq "$RATE_LIMIT_REGEX" "$LOG_FILE"; then
+            echo "Detected RPC rate limiting; waiting 30 seconds before one retry."
+            sleep 30
+            scarb test
+            exit $?
+          fi
+
+          echo "Tests failed without rate-limit signature. Not retrying."
+          exit 1
+
+  client-lint:
+    needs: changes
+    if: needs.changes.outputs.client_ci == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Lint
+        run: bun run lint
+
+  client-build:
+    needs: [changes, client-lint]
+    if: needs.changes.outputs.client_ci == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        run: bun run build
+
+  indexer-api-lint:
+    needs: changes
+    if: needs.changes.outputs.indexer_api_ci == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Lint indexer
+        if: needs.changes.outputs.indexer_ci == 'true'
+        run: |
+          cd indexer
+          npm install
+          npx tsc --noEmit
+
+      - name: Lint api
+        if: needs.changes.outputs.api == 'true'
+        run: |
+          cd api
+          npm install
+          npx tsc --noEmit
+
+  indexer-build:
+    needs: [changes, indexer-api-lint]
+    if: needs.changes.outputs.indexer_ci == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: indexer
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build
+        run: npm run build
+
+  api-build:
+    needs: [changes, indexer-api-lint]
+    if: needs.changes.outputs.api == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build
+        run: npm run build
+
+  main-ci:
+    needs:
+      - changes
+      - contracts-lint
+      - contracts-test
+      - client-lint
+      - client-build
+      - indexer-api-lint
+      - indexer-build
+      - api-build
+      - infra-validate
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate results
+        env:
+          NEEDS_JSON: ${{ toJson(needs) }}
+        run: |
+          FAILED=$(echo "$NEEDS_JSON" | jq -r '
+            to_entries[]
+            | select(.value.result == "failure" or .value.result == "cancelled")
+            | .key
+          ')
+
+          if [ -n "$FAILED" ]; then
+            echo "::error::Failing jobs:"
+            echo "$FAILED"
+            exit 1
+          fi
+
+          echo "All required jobs passed or were skipped"
