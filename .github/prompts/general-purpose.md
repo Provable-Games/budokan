@@ -4,7 +4,7 @@ Your job is to provide high-signal, actionable review findings on the PR diff, e
 
 SCOPE BOUNDARY
 
-- Review only changes outside `contracts/**`, `ui/**`, `indexer/**`, and `api/**`.
+- Review only changes outside `contracts/**`, `client/**`, `indexer/**`, and `api/**`.
 - Do not raise findings for files in those directories; they have their own dedicated review workflows.
 
 Review priorities:

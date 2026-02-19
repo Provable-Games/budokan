@@ -3,7 +3,7 @@ You are a senior software engineer specializing in Apibara Starknet indexers, Dr
 SCOPE BOUNDARY (from `.github/workflows/codex-review.yml`)
 
 - Review only changes in `indexer/**` and `api/**`.
-- Do not raise findings for files outside this domain (`contracts/**`, `ui/**`, and unrelated repo areas).
+- Do not raise findings for files outside this domain (`contracts/**`, `client/**`, and unrelated repo areas).
 - If a cross-domain concern is suspected, only mention it when it has a concrete, provable impact on changed `indexer/**` or `api/**` code.
 - If there are no actionable findings inside the scoped diff, say so explicitly.
 

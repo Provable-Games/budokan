@@ -17,8 +17,8 @@ jobs:
     outputs:
       contracts: ${{ steps.filter.outputs.contracts }}
       contracts_review: ${{ steps.filter.outputs.contracts_review }}
-      ui_ci: ${{ steps.filter.outputs.ui_ci }}
-      ui_review: ${{ steps.filter.outputs.ui_review }}
+      client_ci: ${{ steps.filter.outputs.client_ci }}
+      client_review: ${{ steps.filter.outputs.client_review }}
       indexer_ci: ${{ steps.filter.outputs.indexer_ci }}
       api: ${{ steps.filter.outputs.api }}
       indexer_api_ci: ${{ steps.filter.outputs.indexer_api_ci }}
@@ -40,12 +40,12 @@ jobs:
               - ".tool-versions"
             contracts_review:
               - "contracts/**"
-            ui_ci:
-              - "ui/**"
+            client_ci:
+              - "client/**"
               - "contracts/packages/**/models/**"
               - ".tool-versions"
-            ui_review:
-              - "ui/**"
+            client_review:
+              - "client/**"
             indexer_ci:
               - "indexer/**"
               - "contracts/packages/**/models/**"
@@ -68,7 +68,7 @@ jobs:
             general_review:
               - "**"
               - "!contracts/**"
-              - "!ui/**"
+              - "!client/**"
               - "!indexer/**"
               - "!api/**"
 
@@ -194,11 +194,11 @@ jobs:
 
   ui-lint:
     needs: changes
-    if: needs.changes.outputs.ui_ci == 'true'
+    if: needs.changes.outputs.client_ci == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ui
+        working-directory: client
     steps:
       - uses: actions/checkout@v4
 
@@ -212,11 +212,11 @@ jobs:
 
   ui-build:
     needs: [changes, ui-lint]
-    if: needs.changes.outputs.ui_ci == 'true'
+    if: needs.changes.outputs.client_ci == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ui
+        working-directory: client
     steps:
       - uses: actions/checkout@v4
 
@@ -524,7 +524,7 @@ jobs:
 
   claude-review-ui:
     needs: [changes, ui-lint]
-    if: needs.changes.outputs.ui_review == 'true' && needs.changes.outputs.can_run_claude_reviews == 'true'
+    if: needs.changes.outputs.client_review == 'true' && needs.changes.outputs.can_run_claude_reviews == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -544,7 +544,7 @@ jobs:
           REVIEW_MARKER: run=${{ github.run_id }} attempt=${{ github.run_attempt }} sha=${{ github.event.pull_request.head.sha }} scope=ui
         run: |
           {
-            cat .github/prompts/ui-review.md
+            cat .github/prompts/client-review.md
 
             echo ""
             echo "---"
@@ -552,7 +552,7 @@ jobs:
             echo "This is PR #${{ github.event.pull_request.number }} for ${{ github.repository }}."
             echo ""
             echo "Review ONLY the changes introduced by the PR. Run this command to see the diff:"
-            echo "  git diff ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} -- ui/"
+            echo "  git diff ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} -- client/"
             echo ""
             echo "Pull request title: ${PR_TITLE}"
             echo "Pull request body:"
@@ -641,7 +641,7 @@ jobs:
 
   codex-review-ui:
     needs: [changes, ui-lint]
-    if: needs.changes.outputs.ui_review == 'true' && needs.changes.outputs.can_run_ai_reviews == 'true'
+    if: needs.changes.outputs.client_review == 'true' && needs.changes.outputs.can_run_ai_reviews == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -669,7 +669,7 @@ jobs:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |
           {
-            cat .github/prompts/ui-review.md
+            cat .github/prompts/client-review.md
 
             echo ""
             echo "---"
@@ -677,7 +677,7 @@ jobs:
             echo "This is PR #${{ github.event.pull_request.number }} for ${{ github.repository }}."
             echo ""
             echo "Review ONLY the changes introduced by the PR. Run this command to see the diff:"
-            echo "  git diff ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} -- ui/"
+            echo "  git diff ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} -- client/"
             echo ""
             echo "Pull request title: ${PR_TITLE}"
             echo "Pull request body:"
@@ -1009,9 +1009,9 @@ jobs:
             echo ""
             echo "This is PR #${{ github.event.pull_request.number }} for ${{ github.repository }}."
             echo ""
-            echo "Review ONLY the changes introduced by the PR, with focus on files outside contracts/, ui/, indexer/, and api/."
+            echo "Review ONLY the changes introduced by the PR, with focus on files outside contracts/, client/, indexer/, and api/."
             echo "Run this command to see the targeted diff:"
-            echo "  git diff ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} -- . ':(exclude)contracts/**' ':(exclude)ui/**' ':(exclude)indexer/**' ':(exclude)api/**'"
+            echo "  git diff ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} -- . ':(exclude)contracts/**' ':(exclude)client/**' ':(exclude)indexer/**' ':(exclude)api/**'"
             echo ""
             echo "Pull request title: ${PR_TITLE}"
             echo "Pull request body:"
@@ -1135,9 +1135,9 @@ jobs:
             echo ""
             echo "This is PR #${{ github.event.pull_request.number }} for ${{ github.repository }}."
             echo ""
-            echo "Review ONLY the changes introduced by the PR, with focus on files outside contracts/, ui/, indexer/, and api/."
+            echo "Review ONLY the changes introduced by the PR, with focus on files outside contracts/, client/, indexer/, and api/."
             echo "Run this command to see the targeted diff:"
-            echo "  git diff ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} -- . ':(exclude)contracts/**' ':(exclude)ui/**' ':(exclude)indexer/**' ':(exclude)api/**'"
+            echo "  git diff ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} -- . ':(exclude)contracts/**' ':(exclude)client/**' ':(exclude)indexer/**' ':(exclude)api/**'"
             echo ""
             echo "Pull request title: ${PR_TITLE}"
             echo "Pull request body:"
@@ -1236,7 +1236,7 @@ jobs:
         env:
           NEEDS_JSON: ${{ toJson(needs) }}
           CHANGES_CONTRACTS_REVIEW: ${{ needs.changes.outputs.contracts_review }}
-          CHANGES_UI_REVIEW: ${{ needs.changes.outputs.ui_review }}
+          CHANGES_CLIENT_REVIEW: ${{ needs.changes.outputs.client_review }}
           CHANGES_INDEXER_API_REVIEW: ${{ needs.changes.outputs.indexer_api_review }}
           CHANGES_GENERAL_REVIEW: ${{ needs.changes.outputs.general_review }}
           CAN_RUN_AI_REVIEWS: ${{ needs.changes.outputs.can_run_ai_reviews }}
@@ -1260,7 +1260,7 @@ jobs:
             if [ "$AI_REVIEWS_BLOCK_REASON" = "fork" ] || [ "$AI_REVIEWS_BLOCK_REASON" = "missing_secrets_trusted_bot" ] || [ "$AI_REVIEWS_BLOCK_REASON" = "review_automation_modified" ]; then
               echo "Skipping review-job skipped enforcement because AI reviews are unavailable ($AI_REVIEWS_BLOCK_REASON)."
             elif [ "$AI_REVIEWS_BLOCK_REASON" = "missing_secrets" ]; then
-              if [ "$CHANGES_CONTRACTS_REVIEW" = "true" ] || [ "$CHANGES_UI_REVIEW" = "true" ] || [ "$CHANGES_INDEXER_API_REVIEW" = "true" ] || [ "$CHANGES_GENERAL_REVIEW" = "true" ]; then
+              if [ "$CHANGES_CONTRACTS_REVIEW" = "true" ] || [ "$CHANGES_CLIENT_REVIEW" = "true" ] || [ "$CHANGES_INDEXER_API_REVIEW" = "true" ] || [ "$CHANGES_GENERAL_REVIEW" = "true" ]; then
                 echo "::error::AI review secrets are unavailable for a first-party PR with reviewable changes."
                 echo "::error::Restore CLAUDE_CODE_OAUTH_TOKEN and CODEX_AUTH_DOT_JSON or resolve secret access before merge."
                 exit 1
@@ -1291,13 +1291,13 @@ jobs:
 
             if [ "$CAN_RUN_CLAUDE_REVIEWS" = "true" ]; then
               check_skipped_reviews "$CHANGES_CONTRACTS_REVIEW" "claude-review-contracts" "codex-review-contracts"
-              check_skipped_reviews "$CHANGES_UI_REVIEW" "claude-review-ui" "codex-review-ui"
+              check_skipped_reviews "$CHANGES_CLIENT_REVIEW" "claude-review-ui" "codex-review-ui"
               check_skipped_reviews "$CHANGES_INDEXER_API_REVIEW" "claude-review-indexer-api" "codex-review-indexer-api"
               check_skipped_reviews "$CHANGES_GENERAL_REVIEW" "claude-review-general" "codex-review-general"
             else
               echo "Skipping Claude review skipped enforcement because Claude reviews are unavailable ($CLAUDE_REVIEWS_BLOCK_REASON)."
               check_skipped_reviews "$CHANGES_CONTRACTS_REVIEW" "codex-review-contracts"
-              check_skipped_reviews "$CHANGES_UI_REVIEW" "codex-review-ui"
+              check_skipped_reviews "$CHANGES_CLIENT_REVIEW" "codex-review-ui"
               check_skipped_reviews "$CHANGES_INDEXER_API_REVIEW" "codex-review-indexer-api"
               check_skipped_reviews "$CHANGES_GENERAL_REVIEW" "codex-review-general"
             fi

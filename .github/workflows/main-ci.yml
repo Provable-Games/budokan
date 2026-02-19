@@ -19,7 +19,7 @@ jobs:
       contents: read
     outputs:
       contracts: ${{ steps.filter.outputs.contracts }}
-      ui_ci: ${{ steps.filter.outputs.ui_ci }}
+      client_ci: ${{ steps.filter.outputs.client_ci }}
       indexer_ci: ${{ steps.filter.outputs.indexer_ci }}
       api: ${{ steps.filter.outputs.api }}
       indexer_api_ci: ${{ steps.filter.outputs.indexer_api_ci }}
@@ -36,8 +36,8 @@ jobs:
             contracts:
               - "contracts/**"
               - ".tool-versions"
-            ui_ci:
-              - "ui/**"
+            client_ci:
+              - "client/**"
               - "contracts/packages/**/models/**"
               - ".tool-versions"
             indexer_ci:
@@ -150,11 +150,11 @@ jobs:
 
   ui-lint:
     needs: changes
-    if: needs.changes.outputs.ui_ci == 'true'
+    if: needs.changes.outputs.client_ci == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ui
+        working-directory: client
     steps:
       - uses: actions/checkout@v4
 
@@ -168,11 +168,11 @@ jobs:
 
   ui-build:
     needs: [changes, ui-lint]
-    if: needs.changes.outputs.ui_ci == 'true'
+    if: needs.changes.outputs.client_ci == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ui
+        working-directory: client
     steps:
       - uses: actions/checkout@v4
 

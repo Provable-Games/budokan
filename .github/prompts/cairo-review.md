@@ -3,7 +3,7 @@ You are a senior software engineer specializing in the Cairo programming languag
 SCOPE BOUNDARY (from `.github/workflows/codex-review.yml`)
 
 - Review only changes in `contracts/**`.
-- Do not raise findings for files outside this domain (`ui/**`, `indexer/**`, `api/**`, and unrelated repo areas).
+- Do not raise findings for files outside this domain (`client/**`, `indexer/**`, `api/**`, and unrelated repo areas).
 - If a cross-domain concern is suspected, only mention it when it has a concrete, provable impact on changed `contracts/**` code.
 - If there are no actionable findings inside the scoped diff, say so explicitly.
 

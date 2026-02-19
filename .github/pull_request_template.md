@@ -13,7 +13,7 @@
 <!-- Mark every area touched by this PR. -->
 
 - [ ] `contracts/**` (Cairo/Starknet contracts)
-- [ ] `ui/**` (frontend client)
+- [ ] `client/**` (frontend client)
 - [ ] `indexer/**` (indexer pipeline)
 - [ ] `api/**` (backend/API)
 - [ ] Other (docs/chore/infra only)
@@ -36,7 +36,7 @@
 
 ```bash
 # example:
-# cd ui && bun run lint && bun run build
+# cd client && bun run lint && bun run build
 ```
 
 ### Area-specific verification
@@ -47,10 +47,10 @@
 - [ ] `scarb test` (or targeted tests listed below)
 - [ ] Security-sensitive paths (auth, external calls, arithmetic, state transitions) reviewed
 
-#### If `ui/**` changed
+#### If `client/**` changed
 
-- [ ] `cd ui && bun run lint`
-- [ ] `cd ui && bun run build`
+- [ ] `cd client && bun run lint`
+- [ ] `cd client && bun run build`
 - [ ] Manual smoke test completed for impacted routes/states
 - [ ] Visual evidence attached for UI changes (screenshots/GIF)
 
@@ -113,5 +113,5 @@
 ### Codex review routing reminder
 
 - Cairo review: `contracts/**`
-- Frontend review: `ui/**`
+- Frontend review: `client/**`
 - Indexer/API review: `indexer/**` + `api/**`
