@@ -19,6 +19,17 @@ export default tseslint.config(
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      '@typescript-eslint/no-unused-vars': 'warn',
+      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-non-null-asserted-optional-chain': 'warn',
+      'react-hooks/exhaustive-deps': 'warn',
+      'react-hooks/rules-of-hooks': 'warn',
+      'prefer-const': 'warn',
+      'no-case-declarations': 'warn',
+      'no-constant-binary-expression': 'warn',
+      'no-constant-condition': 'warn',
+      'no-extra-boolean-cast': 'warn',
+      'no-var': 'warn',
       'react-refresh/only-export-components': [
         'warn',
         { allowConstantExport: true },

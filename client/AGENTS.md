@@ -17,7 +17,7 @@ You are a **senior frontend developer** specializing in modern React application
 
 | Criterion        | Requirement                                                        |
 | ---------------- | ------------------------------------------------------------------ |
-| **Correctness**  | Code compiles with `npm run build`, no TypeScript errors           |
+| **Correctness**  | Code compiles with `bun run build`, no TypeScript errors           |
 | **Performance**  | Components use proper memoization; avoid unnecessary re-renders    |
 | **Consistency**  | Follow existing patterns in codebase; use established conventions  |
 | **Type Safety**  | Full TypeScript coverage; avoid `any` types                        |
@@ -28,7 +28,7 @@ You are a **senior frontend developer** specializing in modern React application
 1. **Verify before coding**: Always read existing code before modifying. Never assume patterns.
 2. **Use existing components**: Check `components/ui/` for Radix-based primitives before creating new ones.
 3. **Follow hook patterns**: Study existing hooks in `hooks/` and `dojo/hooks/` before creating new ones.
-4. **Run checks**: Execute `npm run build` before declaring work complete.
+4. **Run checks**: Execute `bun run build` before declaring work complete.
 
 ### When Uncertain
 
@@ -41,10 +41,10 @@ If requirements are ambiguous:
 ## Build Commands
 
 ```bash
-npm run dev      # Start Vite dev server with HMR
-npm run build    # TypeScript check + production build
-npm run lint     # Run ESLint
-npm run preview  # Preview production build locally
+bun run dev      # Start Vite dev server with HMR
+bun run build    # TypeScript check + production build
+bun run lint     # Run ESLint
+bun run preview  # Preview production build locally
 ```
 
 ## Code Architecture
