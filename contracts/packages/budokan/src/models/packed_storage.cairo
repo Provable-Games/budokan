@@ -14,14 +14,20 @@ pub use game_components_metagame::registration::models::{
 use starknet::storage_access::StorePacking;
 
 // Constants for packing/unpacking
+const TWO_POW_1: u128 = 0x2; // 2^1
+const TWO_POW_2: u128 = 0x4; // 2^2
 const TWO_POW_8: u128 = 0x100; // 2^8
 const TWO_POW_16: u128 = 0x10000; // 2^16
 const TWO_POW_24: u128 = 0x1000000; // 2^24
 const TWO_POW_25: u128 = 0x2000000; // 2^25
 const TWO_POW_32: u128 = 0x100000000;
+const TWO_POW_34: u128 = 0x400000000; // 2^34
 const TWO_POW_35: u128 = 0x800000000; // 2^35
+const TWO_POW_59: u128 = 0x800000000000000; // 2^59
 const TWO_POW_64: u128 = 0x10000000000000000;
+const TWO_POW_69: u128 = 0x200000000000000000; // 2^69
 
+const MASK_1: u128 = 0x1; // 1 bit
 const MASK_8: u128 = 0xFF; // 8 bits of 1s
 const MASK_16: u128 = 0xFFFF; // 16 bits of 1s
 const MASK_25: u128 = 0x1FFFFFF; // 25 bits of 1s
@@ -29,42 +35,97 @@ const MASK_32: u128 = 0xffffffff;
 const MASK_35: u128 = 0x7FFFFFFFF; // 35 bits of 1s
 const MASK_64: u128 = 0xffffffffffffffff;
 
-/// Tournament metadata (small fields packed together)
-/// Packs: created_at (u64/35 bits) | settings_id (u32) | soulbound (bool)
-/// Total: 35 + 32 + 1 = 68 bits -> fits in u256
-/// created_at uses 35 bits (valid until year ~3059), also serves as exists check (0 = not exists)
-/// Note: creator_token_id is stored separately as it's a felt252 (251 bits, too large to pack)
+/// TournamentConfig packs schedule delays + flags + created_at into u256.
+/// This replaces BOTH TournamentMeta AND ScheduleStorePacking, saving one storage slot.
+///
+/// Layout (194 bits, fits in u256 via low/high u128 split):
+///
+/// Low u128 (94 bits used):
+///   [0]      paymaster                   (1 bit)
+///   [1]      soulbound                   (1 bit)
+///   [2..33]  settings_id                 (32 bits)
+///   [34..68] created_at                  (35 bits)
+///   [69..93] registration_start_delay    (25 bits)
+///
+/// High u128 (100 bits used):
+///   [0..24]  registration_end_delay      (25 bits)
+///   [25..49] game_start_delay            (25 bits)
+///   [50..74] game_end_delay              (25 bits)
+///   [75..99] submission_duration         (25 bits)
 #[derive(Copy, Drop, Serde)]
-pub struct TournamentMeta {
+pub struct TournamentConfig {
     pub created_at: u64, // 35 bits, 0 = tournament doesn't exist
     pub settings_id: u32, // 32 bits
-    pub soulbound: bool // 1 bit
+    pub soulbound: bool, // 1 bit
+    pub paymaster: bool, // 1 bit
+    pub registration_start_delay: u32, // 25 bits (max ~388 days)
+    pub registration_end_delay: u32, // 25 bits
+    pub game_start_delay: u32, // 25 bits
+    pub game_end_delay: u32, // 25 bits
+    pub submission_duration: u32 // 25 bits
 }
 
-pub impl TournamentMetaStorePacking of StorePacking<TournamentMeta, u256> {
-    fn pack(value: TournamentMeta) -> u256 {
-        let soulbound_u256: u256 = if value.soulbound {
+pub impl TournamentConfigStorePacking of StorePacking<TournamentConfig, u256> {
+    fn pack(value: TournamentConfig) -> u256 {
+        let paymaster_val: u128 = if value.paymaster {
             1
         } else {
             0
         };
-        // Layout: created_at(35) | settings_id(32) | soulbound(1)
-        let packed: u256 = value.created_at.into()
-            + (value.settings_id.into() * TWO_POW_35.into())
-            + (soulbound_u256 * TWO_POW_35.into() * TWO_POW_32.into());
-        packed
+        let soulbound_val: u128 = if value.soulbound {
+            1
+        } else {
+            0
+        };
+
+        // Low u128: paymaster(1) | soulbound(1) | settings_id(32) | created_at(35) |
+        // registration_start_delay(25)
+        let low: u128 = paymaster_val
+            + (soulbound_val * TWO_POW_1)
+            + (value.settings_id.into() * TWO_POW_2)
+            + (value.created_at.into() * TWO_POW_34)
+            + (value.registration_start_delay.into() * TWO_POW_69);
+
+        // High u128: registration_end_delay(25) | game_start_delay(25) | game_end_delay(25) |
+        // submission_duration(25)
+        let high: u128 = value.registration_end_delay.into()
+            + (value.game_start_delay.into() * TWO_POW_25)
+            + (value.game_end_delay.into() * TWO_POW_25 * TWO_POW_25)
+            + (value.submission_duration.into() * TWO_POW_25 * TWO_POW_25 * TWO_POW_25);
+
+        u256 { low, high }
     }
 
-    fn unpack(value: u256) -> TournamentMeta {
-        let mask_35_u256: u256 = MASK_35.into();
-        let two_pow_35_u256: u256 = TWO_POW_35.into();
+    fn unpack(value: u256) -> TournamentConfig {
+        let low = value.low;
+        let high = value.high;
 
-        let created_at: u64 = (value & mask_35_u256).try_into().unwrap();
-        let settings_id: u32 = ((value / two_pow_35_u256) & MASK_32.into()).try_into().unwrap();
-        let soulbound_val = (value / (two_pow_35_u256 * TWO_POW_32.into())) & 1;
-        let soulbound = soulbound_val == 1;
+        let paymaster = (low & MASK_1) == 1;
+        let soulbound = ((low / TWO_POW_1) & MASK_1) == 1;
+        let settings_id: u32 = ((low / TWO_POW_2) & MASK_32).try_into().unwrap();
+        let created_at: u64 = ((low / TWO_POW_34) & MASK_35).try_into().unwrap();
+        let registration_start_delay: u32 = ((low / TWO_POW_69) & MASK_25).try_into().unwrap();
 
-        TournamentMeta { created_at, settings_id, soulbound }
+        let registration_end_delay: u32 = (high & MASK_25).try_into().unwrap();
+        let game_start_delay: u32 = ((high / TWO_POW_25) & MASK_25).try_into().unwrap();
+        let game_end_delay: u32 = ((high / (TWO_POW_25 * TWO_POW_25)) & MASK_25)
+            .try_into()
+            .unwrap();
+        let submission_duration: u32 = ((high / (TWO_POW_25 * TWO_POW_25 * TWO_POW_25)) & MASK_25)
+            .try_into()
+            .unwrap();
+
+        TournamentConfig {
+            created_at,
+            settings_id,
+            soulbound,
+            paymaster,
+            registration_start_delay,
+            registration_end_delay,
+            game_start_delay,
+            game_end_delay,
+            submission_duration,
+        }
     }
 }
 
@@ -102,7 +163,95 @@ pub impl PackedDistributionStorePacking of StorePacking<PackedDistribution, felt
 #[cfg(test)]
 mod tests {
     use starknet::storage_access::StorePacking;
-    use super::{PackedDistribution, PackedDistributionStorePacking};
+    use super::{
+        PackedDistribution, PackedDistributionStorePacking, TournamentConfig,
+        TournamentConfigStorePacking,
+    };
+
+    #[test]
+    fn test_tournament_config_roundtrip() {
+        let original = TournamentConfig {
+            created_at: 1700000000,
+            settings_id: 42,
+            soulbound: true,
+            paymaster: false,
+            registration_start_delay: 100,
+            registration_end_delay: 3600,
+            game_start_delay: 5000,
+            game_end_delay: 7200,
+            submission_duration: 3600,
+        };
+
+        let packed = TournamentConfigStorePacking::pack(original);
+        let unpacked = TournamentConfigStorePacking::unpack(packed);
+
+        assert!(unpacked.created_at == 1700000000, "created_at mismatch");
+        assert!(unpacked.settings_id == 42, "settings_id mismatch");
+        assert!(unpacked.soulbound == true, "soulbound mismatch");
+        assert!(unpacked.paymaster == false, "paymaster mismatch");
+        assert!(unpacked.registration_start_delay == 100, "reg_start_delay mismatch");
+        assert!(unpacked.registration_end_delay == 3600, "reg_end_delay mismatch");
+        assert!(unpacked.game_start_delay == 5000, "game_start_delay mismatch");
+        assert!(unpacked.game_end_delay == 7200, "game_end_delay mismatch");
+        assert!(unpacked.submission_duration == 3600, "submission_duration mismatch");
+    }
+
+    #[test]
+    fn test_tournament_config_max_values() {
+        // Test with max values for each field
+        let original = TournamentConfig {
+            created_at: 0x7FFFFFFFF, // max 35 bits
+            settings_id: 0xFFFFFFFF, // max 32 bits
+            soulbound: true,
+            paymaster: true,
+            registration_start_delay: 0x1FFFFFF, // max 25 bits
+            registration_end_delay: 0x1FFFFFF,
+            game_start_delay: 0x1FFFFFF,
+            game_end_delay: 0x1FFFFFF,
+            submission_duration: 0x1FFFFFF,
+        };
+
+        let packed = TournamentConfigStorePacking::pack(original);
+        let unpacked = TournamentConfigStorePacking::unpack(packed);
+
+        assert!(unpacked.created_at == 0x7FFFFFFFF, "max created_at mismatch");
+        assert!(unpacked.settings_id == 0xFFFFFFFF, "max settings_id mismatch");
+        assert!(unpacked.soulbound == true, "max soulbound mismatch");
+        assert!(unpacked.paymaster == true, "max paymaster mismatch");
+        assert!(unpacked.registration_start_delay == 0x1FFFFFF, "max reg_start mismatch");
+        assert!(unpacked.registration_end_delay == 0x1FFFFFF, "max reg_end mismatch");
+        assert!(unpacked.game_start_delay == 0x1FFFFFF, "max game_start mismatch");
+        assert!(unpacked.game_end_delay == 0x1FFFFFF, "max game_end mismatch");
+        assert!(unpacked.submission_duration == 0x1FFFFFF, "max sub_duration mismatch");
+    }
+
+    #[test]
+    fn test_tournament_config_zero_values() {
+        let original = TournamentConfig {
+            created_at: 0,
+            settings_id: 0,
+            soulbound: false,
+            paymaster: false,
+            registration_start_delay: 0,
+            registration_end_delay: 0,
+            game_start_delay: 0,
+            game_end_delay: 0,
+            submission_duration: 0,
+        };
+
+        let packed = TournamentConfigStorePacking::pack(original);
+        let unpacked = TournamentConfigStorePacking::unpack(packed);
+
+        assert!(unpacked.created_at == 0, "zero created_at mismatch");
+        assert!(unpacked.settings_id == 0, "zero settings_id mismatch");
+        assert!(unpacked.soulbound == false, "zero soulbound mismatch");
+        assert!(unpacked.paymaster == false, "zero paymaster mismatch");
+        assert!(unpacked.registration_start_delay == 0, "zero reg_start mismatch");
+        assert!(unpacked.registration_end_delay == 0, "zero reg_end mismatch");
+        assert!(unpacked.game_start_delay == 0, "zero game_start mismatch");
+        assert!(unpacked.game_end_delay == 0, "zero game_end mismatch");
+        assert!(unpacked.submission_duration == 0, "zero sub_duration mismatch");
+    }
 
     #[test]
     fn test_packed_distribution_roundtrip() {

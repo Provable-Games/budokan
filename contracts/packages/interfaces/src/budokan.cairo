@@ -14,17 +14,13 @@ use starknet::ContractAddress;
 // SCHEDULE MODELS
 // ==============================================
 
-#[derive(Copy, Drop, Serde, PartialEq, starknet::Store)]
+#[derive(Copy, Drop, Serde, PartialEq)]
 pub struct Schedule {
-    pub registration: Option<Period>,
-    pub game: Period,
-    pub submission_duration: u64,
-}
-
-#[derive(Copy, Drop, Serde, PartialEq, starknet::Store)]
-pub struct Period {
-    pub start: u64,
-    pub end: u64,
+    pub registration_start_delay: u32,
+    pub registration_end_delay: u32,
+    pub game_start_delay: u32,
+    pub game_end_delay: u32,
+    pub submission_duration: u32,
 }
 
 #[derive(Copy, Drop, Serde, PartialEq)]
@@ -45,11 +41,11 @@ pub enum Phase {
 pub struct EntryFee {
     pub token_address: ContractAddress,
     pub amount: u128,
+    pub tournament_creator_share: u16,
+    pub game_creator_share: u16,
+    pub refund_share: u16,
     pub distribution: Distribution,
-    pub tournament_creator_share: Option<u16>,
-    pub game_creator_share: Option<u16>,
-    pub refund_share: Option<u16>,
-    pub distribution_positions: Option<u32>,
+    pub distribution_count: u32,
 }
 
 #[derive(Drop, Serde)]
@@ -73,10 +69,12 @@ pub struct Metadata {
 
 #[derive(Drop, Serde)]
 pub struct GameConfig {
-    pub address: ContractAddress,
+    pub game_address: ContractAddress,
     pub settings_id: u32,
     pub soulbound: bool,
-    pub play_url: ByteArray,
+    pub paymaster: bool,
+    pub client_url: Option<ByteArray>,
+    pub renderer: Option<ContractAddress>,
 }
 
 #[derive(Copy, Drop, Serde)]
