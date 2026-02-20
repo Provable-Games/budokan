@@ -74,6 +74,9 @@ pub struct GameConfig {
     pub address: ContractAddress,
     pub settings_id: u32,
     pub soulbound: bool,
+    /// When true, only entries where the game contract reports `game_over(token_id) == true`
+    /// can be finalized onto the leaderboard. When false, all registered entries can be finalized.
+    pub require_game_over: bool,
     pub play_url: ByteArray,
 }
 

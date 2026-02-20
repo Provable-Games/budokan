@@ -272,11 +272,7 @@ pub mod tournament_validator_mock {
             let qualifier_type = self.qualifier_type.read(tournament_id);
 
             if qualifier_type == QUALIFIER_TYPE_WINNERS {
-                // For winners: must have submitted and be on the leaderboard
-                if !registration.has_submitted {
-                    return false;
-                }
-
+                // For winners: must be on the leaderboard (finalized)
                 // Check position provided in qualification
                 if qualification.len() < 3 {
                     return false;

@@ -18,7 +18,13 @@ pub fn test_metadata() -> Metadata {
 }
 
 pub fn test_game_config(game_address: ContractAddress) -> GameConfig {
-    GameConfig { address: game_address, settings_id: 1, soulbound: false, play_url: "" }
+    GameConfig {
+        address: game_address,
+        settings_id: 1,
+        soulbound: false,
+        require_game_over: true,
+        play_url: "",
+    }
 }
 
 pub fn test_schedule() -> Schedule {

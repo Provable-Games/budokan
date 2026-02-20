@@ -173,6 +173,8 @@ pub mod Budokan {
         token_to_entry: Map<(u64, felt252), u32>,
         // Map game_token_id → context_id (tournament_id) for global token lookups
         token_context_id: Map<felt252, u64>,
+        // Count of banned entries per tournament
+        banned_entry_count: Map<u64, u32>,
         // Monotonically increasing nonce for unique token ID generation (used as mint salt)
         mint_nonce: u16,
     }
@@ -560,6 +562,10 @@ pub mod Budokan {
             // Update registration to mark as banned using component
             self.registration.ban_entry(tournament_id, entry_id);
 
+            // Increment banned entry count
+            let current_banned = self.banned_entry_count.entry(tournament_id).read();
+            self.banned_entry_count.entry(tournament_id).write(current_banned + 1);
+
             // Emit native event
             let player_address = IERC721Dispatcher { contract_address: game_token_address }
                 .owner_of(game_token_id.into());
@@ -593,6 +599,18 @@ pub mod Budokan {
             self._assert_tournament_exists(tournament_id);
 
             tournament.schedule.assert_tournament_is_finalized(get_block_timestamp());
+
+            // Assert leaderboard is fully populated before allowing claims
+            let total_entries = self.registration._get_entry_count(tournament_id);
+            let banned_entries = self.banned_entry_count.entry(tournament_id).read();
+            let valid_entries = total_entries - banned_entries;
+            let leaderboard_size = self.leaderboard.get_leaderboard_length(tournament_id);
+            assert!(
+                leaderboard_size == valid_entries,
+                "Budokan: Leaderboard not fully finalized ({}/{})",
+                leaderboard_size,
+                valid_entries,
+            );
 
             match reward_type {
                 RewardType::Prize(prize_type) => {
@@ -758,11 +776,23 @@ pub mod Budokan {
             let ctx_id = self.token_context_id.entry(token_id).read();
             assert!(ctx_id == tournament_id, "Budokan: Token not registered for this tournament");
 
-            // Read score from game contract
+            // Verify token is not banned
+            let entry_id = self.token_to_entry.entry((tournament_id, token_id)).read();
+            let registration = self.registration._get_entry(tournament_id, entry_id);
+            assert!(!registration.is_banned, "Budokan: Banned entry cannot be finalized");
+
+            // Read score and optionally check game_over from game contract
             let game_address = tournament.game_config.address;
             let game_data_dispatcher = IMinigameTokenDataDispatcher {
                 contract_address: game_address,
             };
+
+            if tournament.game_config.require_game_over {
+                assert!(
+                    game_data_dispatcher.game_over(token_id), "Budokan: Game not over for token",
+                );
+            }
+
             let score = game_data_dispatcher.score(token_id);
 
             // Submit score at explicit position via component API (validates ordering)
@@ -833,11 +863,12 @@ pub mod Budokan {
             let play_url = self.tournament_play_url.entry(tournament_id).read();
             let schedule = packed_schedule;
 
-            // Reconstruct game_config (includes soulbound and play_url)
+            // Reconstruct game_config (includes soulbound, require_game_over, and play_url)
             let game_config = GameConfig {
                 address: game_address,
                 settings_id: meta.settings_id,
                 soulbound: meta.soulbound,
+                require_game_over: meta.require_game_over,
                 play_url,
             };
 
@@ -940,9 +971,13 @@ pub mod Budokan {
             let created_at = get_block_timestamp();
             let created_by = get_caller_address();
 
-            // Store packed tournament meta (soulbound is part of game_config)
+            // Store packed tournament meta (soulbound and require_game_over are part of
+            // game_config)
             let meta = TournamentMeta {
-                created_at, settings_id: game_config.settings_id, soulbound: game_config.soulbound,
+                created_at,
+                settings_id: game_config.settings_id,
+                soulbound: game_config.soulbound,
+                require_game_over: game_config.require_game_over,
             };
             self.tournament_meta.entry(tournament_id).write(meta);
 
@@ -1698,32 +1733,6 @@ pub mod Budokan {
             }
         }
 
-        fn _mark_score_submitted(ref self: ContractState, tournament_id: u64, token_id: felt252) {
-            let tournament = self._get_tournament(tournament_id);
-            let game_address = tournament.game_config.address;
-            let entry_id = self.token_to_entry.entry((tournament_id, token_id)).read();
-            self.registration.mark_entry_submitted(tournament_id, entry_id);
-
-            // Emit native event with has_submitted=true
-            let registration = self.registration._get_entry(tournament_id, entry_id);
-            let game_token_address = IMinigameDispatcher { contract_address: game_address }
-                .token_address();
-            let player_address = IERC721Dispatcher { contract_address: game_token_address }
-                .owner_of(token_id.into());
-            self
-                .emit(
-                    events::TournamentRegistration {
-                        tournament_id,
-                        game_token_id: token_id,
-                        game_address,
-                        player_address,
-                        entry_number: registration.entry_id,
-                        has_submitted: registration.has_submitted,
-                        is_banned: registration.is_banned,
-                    },
-                );
-        }
-
         fn _process_entry_requirement(
             ref self: ContractState,
             tournament_id: u64,
@@ -1789,33 +1798,12 @@ pub mod Budokan {
     impl CallbackHooksImpl of MetagameCallbackComponent::MetagameCallbackHooksTrait<ContractState> {
         fn on_score_update(
             ref self: ContractState, token_id: u256, score: u64,
-        ) { // No-op: we only care about final scores via on_game_over
+        ) { // No-op: scores are read directly from game contract during finalization
         }
 
-        fn on_game_over(ref self: ContractState, token_id: u256, final_score: u64) {
-            let token_id_felt: felt252 = token_id.try_into().unwrap();
-
-            // Look up tournament from token
-            let tournament_id = self.token_context_id.entry(token_id_felt).read();
-            assert!(tournament_id != 0, "Budokan: Token not registered for any tournament");
-
-            // Get tournament
-            let tournament = self._get_tournament(tournament_id);
-
-            // Look up registration
-            let entry_id = self.token_to_entry.entry((tournament_id, token_id_felt)).read();
-            let registration = self.registration._get_entry(tournament_id, entry_id);
-
-            // Validate: tournament is in Live phase
-            let schedule = tournament.schedule;
-            let phase = schedule.current_phase(get_block_timestamp());
-            assert!(phase == Phase::Live, "Budokan: Tournament not in live phase");
-
-            // Validate registration (not banned, not already submitted)
-            self.registration.assert_valid_for_submission(@registration, tournament_id);
-
-            // Mark score as submitted (leaderboard is built later via finalize_leaderboard_batch)
-            self._mark_score_submitted(tournament_id, token_id_felt);
+        fn on_game_over(
+            ref self: ContractState, token_id: u256, final_score: u64,
+        ) { // No-op: game_over status is checked directly from game contract during finalization
         }
 
         fn on_objective_complete(ref self: ContractState, token_id: u256) { // No-op for now
