@@ -42,9 +42,7 @@ pub mod Budokan {
     use game_components_interfaces::entry_fee::{
         EntryFee as ComponentEntryFee, EntryFeeConfig, EntryFeeDeposit,
     };
-    use interfaces::entry_requirement_extension::{
-        IEntryRequirementExtensionDispatcher, IEntryRequirementExtensionDispatcherTrait,
-    };
+    use game_components_interfaces::leaderboard::{ILeaderboard, LeaderboardResult};
     use game_components_interfaces::prize::{Prize as PrizeInput, PrizeConfig};
     use game_components_interfaces::registry::{
         IMinigameRegistryDispatcher, IMinigameRegistryDispatcherTrait,
@@ -53,7 +51,6 @@ pub mod Budokan {
     use game_components_metagame::entry_fee::entry_fee::EntryFeeComponent::EntryFeeInternalTrait;
     use game_components_metagame::entry_requirement::entry_requirement::EntryRequirementComponent;
     use game_components_metagame::entry_requirement::entry_requirement::EntryRequirementComponent::EntryRequirementInternalTrait;
-    use game_components_interfaces::leaderboard::{ILeaderboard, LeaderboardResult};
     use game_components_metagame::leaderboard::leaderboard_component::LeaderboardComponent;
     use game_components_metagame::leaderboard::leaderboard_component::LeaderboardComponent::LeaderboardInternalTrait;
     use game_components_metagame::leaderboard::store::Store as LeaderboardStore;
@@ -64,6 +61,9 @@ pub mod Budokan {
     use game_components_utilities::distribution::calculator;
     use game_components_utilities::distribution::models::{
         BASIS_POINTS, DIST_TYPE_CUSTOM, DIST_TYPE_EXPONENTIAL, DIST_TYPE_LINEAR, DIST_TYPE_UNIFORM,
+    };
+    use interfaces::entry_requirement_extension::{
+        IEntryRequirementExtensionDispatcher, IEntryRequirementExtensionDispatcherTrait,
     };
     use openzeppelin_access::ownable::OwnableComponent;
     use openzeppelin_interfaces::erc721::{IERC721Dispatcher, IERC721DispatcherTrait};
@@ -1741,7 +1741,9 @@ pub mod Budokan {
     }
 
     impl CallbackHooksImpl of MetagameCallbackComponent::MetagameCallbackHooksTrait<ContractState> {
-        fn on_score_update(ref self: ContractState, token_id: u256, score: u64) {// No-op: we only care about final scores via on_game_over
+        fn on_score_update(
+            ref self: ContractState, token_id: u256, score: u64,
+        ) { // No-op: we only care about final scores via on_game_over
         }
 
         fn on_game_over(ref self: ContractState, token_id: u256, final_score: u64) {
@@ -1767,9 +1769,7 @@ pub mod Budokan {
             self.registration.assert_valid_for_submission(@registration, tournament_id);
 
             // Submit score to leaderboard (auto-finds correct position)
-            let result = self
-                .leaderboard
-                .submit_score(tournament_id, token_id_felt, final_score);
+            let result = self.leaderboard.submit_score(tournament_id, token_id_felt, final_score);
 
             match result {
                 LeaderboardResult::Success => {
@@ -1786,17 +1786,13 @@ pub mod Budokan {
             }
         }
 
-        fn on_objective_complete(ref self: ContractState, token_id: u256) {// No-op for now
+        fn on_objective_complete(ref self: ContractState, token_id: u256) { // No-op for now
         }
     }
 
     impl LeaderboardHooksImpl of LeaderboardComponent::LeaderboardHooksTrait<ContractState> {
         fn on_score_submitted(
-            ref self: ContractState,
-            context_id: u64,
-            token_id: felt252,
-            score: u64,
-            position: u8,
+            ref self: ContractState, context_id: u64, token_id: felt252, score: u64, position: u8,
         ) {}
 
         fn on_configured(

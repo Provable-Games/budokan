@@ -35,11 +35,11 @@ use game_components_embeddable_game_standard::token::interface::IMinigameTokenMi
 use game_components_interfaces::metagame::{
     IMetagameCallbackDispatcher, IMetagameCallbackDispatcherTrait,
 };
-use interfaces::entry_requirement_extension::IEntryRequirementExtensionDispatcher;
 use game_components_interfaces::prize::{IPrizeDispatcher, IPrizeDispatcherTrait};
 use game_components_interfaces::registration::{
     IRegistrationDispatcher, IRegistrationDispatcherTrait,
 };
+use interfaces::entry_requirement_extension::IEntryRequirementExtensionDispatcher;
 use openzeppelin_interfaces::erc721::{IERC721Dispatcher, IERC721DispatcherTrait};
 use openzeppelin_interfaces::introspection::{ISRC5Dispatcher, ISRC5DispatcherTrait};
 use snforge_std::{
@@ -291,8 +291,7 @@ fn test_create_tournament_registration_period_too_short() {
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
 
     let schedule = custom_schedule(
-        Option::Some(registration_period_too_short()),
-        test_game_period(),
+        Option::Some(registration_period_too_short()), test_game_period(),
     );
 
     let entry_requirement = Option::None;
@@ -321,8 +320,7 @@ fn test_create_tournament_registration_period_too_long() {
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
 
     let schedule = custom_schedule(
-        Option::Some(registration_period_too_long()),
-        test_game_period(),
+        Option::Some(registration_period_too_long()), test_game_period(),
     );
 
     let entry_requirement = Option::None;
@@ -826,9 +824,7 @@ fn test_create_gated_tournament_with_unsettled_tournament() {
         end: time + MIN_REGISTRATION_PERIOD.into() + MIN_TOURNAMENT_LENGTH.into(),
     };
 
-    let schedule = custom_schedule(
-        Option::Some(registration_period), game_period,
-    );
+    let schedule = custom_schedule(Option::Some(registration_period), game_period);
 
     contracts
         .budokan
@@ -882,7 +878,9 @@ fn test_create_tournament_gated_by_multiple_tournaments() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     contracts.minigame.end_game(first_entry_token_id.into(), 10);
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(first_entry_token_id.into(), 10);
     stop_cheat_caller_address(contracts.budokan.contract_address);
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
@@ -902,7 +900,9 @@ fn test_create_tournament_gated_by_multiple_tournaments() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     contracts.minigame.end_game(second_entry_token_id.into(), 20);
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(second_entry_token_id.into(), 20);
     stop_cheat_caller_address(contracts.budokan.contract_address);
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
@@ -1035,7 +1035,9 @@ fn test_create_tournament_gated_by_participants() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(owner_token_id.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
@@ -1661,7 +1663,9 @@ fn test_on_game_over_basic() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(token_id.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
@@ -1711,17 +1715,23 @@ fn test_on_game_over_multiple_players() {
 
     // End games with different scores and trigger callbacks
     contracts.minigame.end_game(token_id2.into(), 50);
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(token_id2.into(), 50);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     contracts.minigame.end_game(token_id1.into(), 100);
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(token_id1.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     contracts.minigame.end_game(token_id3.into(), 75);
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(token_id3.into(), 75);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
@@ -1771,7 +1781,9 @@ fn test_on_game_over_not_live() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(token_id.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 }
@@ -1794,7 +1806,9 @@ fn test_on_game_over_unregistered_token() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(999999.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 }
@@ -1862,7 +1876,9 @@ fn test_on_game_over_already_submitted() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(token_id.into(), 100);
 
     // Try to submit again
@@ -1936,7 +1952,9 @@ fn test_claim_prizes_with_sponsored_prizes() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(entry_token_id.into(), 1);
     stop_cheat_caller_address(contracts.budokan.contract_address);
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
@@ -2025,7 +2043,9 @@ fn test_claim_prizes_prize_already_claimed() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(entry_token_id.into(), 1);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
@@ -2105,7 +2125,9 @@ fn test_state_transitions() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(token_id.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
@@ -2206,10 +2228,14 @@ fn test_tournament_with_partial_submissions() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(token_id1.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(token_id2.into(), 50);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
@@ -2263,7 +2289,9 @@ fn test_create_tournament_gated_by_multiple_tournaments_with_limited_entry() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(first_entry_token_id.into(), 10);
     // Restore caller to owner for subsequent calls
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
@@ -2280,7 +2308,9 @@ fn test_create_tournament_gated_by_multiple_tournaments_with_limited_entry() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, end_time);
 
     contracts.minigame.end_game(second_entry_token_id.into(), 20);
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(second_entry_token_id.into(), 20);
     // Restore caller to owner for subsequent calls
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
@@ -2394,7 +2424,9 @@ fn test_tournament_gated_caller_owns_qualifying_token_different_player() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(first_entry_token_id.into(), 10);
     // Restore caller to owner for subsequent calls
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
@@ -2497,7 +2529,9 @@ fn test_tournament_gated_caller_does_not_own_qualifying_token() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(first_entry_token_id.into(), 10);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
@@ -2742,7 +2776,9 @@ fn test_score_submission_multiple_players() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(entry_token_id_1.into(), 500);
 
     // Player 2 submits with higher score (takes position from player 1)
@@ -3039,10 +3075,14 @@ fn test_prize_refunded_to_sponsor_when_position_exceeds_leaderboard() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(token_id1.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(token_id2.into(), 50);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
@@ -3210,7 +3250,9 @@ fn test_get_leaderboard_after_submissions() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(entry_token_id.into(), 1000);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
@@ -3279,7 +3321,9 @@ fn test_leaderboard_ordering_by_score() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(entry_token_id_1.into(), 500);
 
     // Player 2 submits with higher score, takes position 1
@@ -3543,7 +3587,9 @@ fn test_claim_entry_fee_prizes() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(entry_token_id.into(), 1000);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
@@ -3637,27 +3683,37 @@ fn test_claim_entry_fee_exponential_distribution_five_players() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player1.into(), 5000);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     contracts.minigame.end_game(player2.into(), 4000);
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player2.into(), 4000);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     contracts.minigame.end_game(player3.into(), 3000);
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player3.into(), 3000);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     contracts.minigame.end_game(player4.into(), 2000);
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player4.into(), 2000);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     contracts.minigame.end_game(player5.into(), 1000);
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player5.into(), 1000);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
@@ -3778,7 +3834,9 @@ fn test_registration_has_submitted_flag() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(entry_token_id.into(), 1000);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
@@ -3834,12 +3892,16 @@ fn test_on_game_over_tie_higher_game_id_auto_positioned() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player1.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     // Second player auto-positioned after first (higher game ID loses tie)
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player2.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
@@ -3894,12 +3956,16 @@ fn test_on_game_over_tie_lower_game_id() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player2.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     // Then submit player1 (lower game ID) - should take first place
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player1.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
@@ -3958,15 +4024,21 @@ fn test_on_game_over_tie_higher_game_id_for_lower_position() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(token_id1.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(token_id2.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(token_id3.into(), 50);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
@@ -4032,12 +4104,16 @@ fn test_on_game_over_tie_lower_game_id_for_lower_position() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(token_id2.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     // Submit lower ID - auto-positioned to first place (lower ID wins tie)
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(token_id1.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
@@ -4182,7 +4258,9 @@ fn test_banned_game_id_cannot_on_game_over() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(game_id.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 }
@@ -4386,8 +4464,7 @@ fn test_ban_without_registration_period() {
 
     // Create tournament without registration period but with extension requirement
     let schedule_without_registration = Schedule {
-        registration: Option::None,
-        game: test_game_period(),
+        registration: Option::None, game: test_game_period(),
     };
 
     let extension_config = ExtensionConfig {
@@ -4835,7 +4912,9 @@ fn test_use_host_token_to_qualify_into_tournament_gated_tournament() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(first_entry_token_id.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
@@ -4932,7 +5011,9 @@ fn test_enter_tournament_wrong_submission_type() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(first_entry_token_id.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
@@ -5078,34 +5159,54 @@ fn test_on_game_over_gas_check() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player1.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player2.into(), 90);
     stop_cheat_caller_address(contracts.budokan.contract_address);
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player3.into(), 80);
     stop_cheat_caller_address(contracts.budokan.contract_address);
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player4.into(), 70);
     stop_cheat_caller_address(contracts.budokan.contract_address);
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player5.into(), 60);
     stop_cheat_caller_address(contracts.budokan.contract_address);
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player6.into(), 50);
     stop_cheat_caller_address(contracts.budokan.contract_address);
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player7.into(), 40);
     stop_cheat_caller_address(contracts.budokan.contract_address);
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player8.into(), 30);
     stop_cheat_caller_address(contracts.budokan.contract_address);
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player9.into(), 20);
     stop_cheat_caller_address(contracts.budokan.contract_address);
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player10.into(), 10);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
@@ -5257,27 +5358,37 @@ fn test_claim_tournament_creator_share() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player1.into(), 5000);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     contracts.minigame.end_game(player2.into(), 4000);
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player2.into(), 4000);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     contracts.minigame.end_game(player3.into(), 3000);
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player3.into(), 3000);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     contracts.minigame.end_game(player4.into(), 2000);
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player4.into(), 2000);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     contracts.minigame.end_game(player5.into(), 1000);
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player5.into(), 1000);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
@@ -5381,17 +5492,23 @@ fn test_claim_game_creator_share() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player1.into(), 300);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     contracts.minigame.end_game(player2.into(), 200);
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player2.into(), 200);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     contracts.minigame.end_game(player3.into(), 100);
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player3.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
@@ -5493,7 +5610,9 @@ fn test_claim_refund_share() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player1_token.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
@@ -5604,17 +5723,23 @@ fn test_claim_all_shares_combined() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player1.into(), 300);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     contracts.minigame.end_game(player2.into(), 200);
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player2.into(), 200);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     contracts.minigame.end_game(player3.into(), 100);
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player3.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
@@ -5793,7 +5918,9 @@ fn test_cannot_claim_tournament_creator_share_twice() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player1.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
@@ -5867,7 +5994,9 @@ fn test_cannot_claim_game_creator_share_twice() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player1.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
@@ -5943,7 +6072,9 @@ fn test_cannot_claim_refund_twice() {
     let callback = IMetagameCallbackDispatcher {
         contract_address: contracts.budokan.contract_address,
     };
-    start_cheat_caller_address(contracts.budokan.contract_address, contracts.denshokan.contract_address);
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
     callback.on_game_over(player1_token_id.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
