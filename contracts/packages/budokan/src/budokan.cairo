@@ -204,10 +204,10 @@ pub mod Budokan {
         PrizeEvent: PrizeComponent::Event,
         TournamentCreated: events::TournamentCreated,
         TournamentRegistration: events::TournamentRegistration,
-        LeaderboardUpdated: events::LeaderboardUpdated,
         PrizeAdded: events::PrizeAdded,
         RewardClaimed: events::RewardClaimed,
         QualificationEntriesUpdated: events::QualificationEntriesUpdated,
+        LeaderboardFinalized: events::LeaderboardFinalized,
     }
 
     #[constructor]
@@ -671,6 +671,46 @@ pub mod Budokan {
             // Return prize
             self.prize._get_prize(prize_id)
         }
+
+        /// @notice Finalize a single leaderboard entry after the tournament ends.
+        /// @dev Permissionless. Submits the token at an explicit position with
+        ///      score validation via the leaderboard component.
+        /// @param self A reference to the ContractState object.
+        /// @param tournament_id The tournament ID to finalize.
+        /// @param token_id Token ID to submit to the leaderboard.
+        /// @param position 1-based position in the leaderboard (descending score order).
+        fn finalize_leaderboard_entry(
+            ref self: ContractState, tournament_id: u64, token_id: felt252, position: u32,
+        ) {
+            self._finalize_entry(tournament_id, token_id, position);
+            let total_entries = self.leaderboard.get_leaderboard_length(tournament_id);
+            self.emit(events::LeaderboardFinalized { tournament_id, batch_size: 1, total_entries });
+        }
+
+        /// @notice Builds the leaderboard in batches after the tournament ends.
+        /// @dev Permissionless. Caller provides pre-sorted token_ids (descending score).
+        ///      Each token's score is verified against the game contract.
+        ///      Positions are assigned sequentially from current leaderboard length + 1.
+        ///      Can be called multiple times to finalize in batches.
+        /// @param self A reference to the ContractState object.
+        /// @param tournament_id The tournament ID to finalize.
+        /// @param token_ids Pre-sorted token IDs (descending score order).
+        fn finalize_leaderboard_batch(
+            ref self: ContractState, tournament_id: u64, token_ids: Span<felt252>,
+        ) {
+            let existing_count = self.leaderboard.get_leaderboard_length(tournament_id);
+
+            let mut i: u32 = 0;
+            let batch_size = token_ids.len();
+            while i < batch_size {
+                let position = existing_count + i + 1; // 1-based
+                self._finalize_entry(tournament_id, *token_ids.at(i), position);
+                i += 1;
+            }
+
+            let total_entries = self.leaderboard.get_leaderboard_length(tournament_id);
+            self.emit(events::LeaderboardFinalized { tournament_id, batch_size, total_entries });
+        }
     }
 
     #[generate_trait]
@@ -700,6 +740,40 @@ pub mod Budokan {
                 i += 1;
             }
             result
+        }
+
+        // Finalization operations
+
+        /// @notice Validate and submit a single token to the leaderboard.
+        /// @dev Asserts tournament exists and is finalized, verifies token registration,
+        ///      reads score from game contract, and submits at explicit position.
+        fn _finalize_entry(
+            ref self: ContractState, tournament_id: u64, token_id: felt252, position: u32,
+        ) {
+            self._assert_tournament_exists(tournament_id);
+            let tournament = self._get_tournament(tournament_id);
+            tournament.schedule.assert_tournament_is_finalized(get_block_timestamp());
+
+            // Verify token is registered for this tournament
+            let ctx_id = self.token_context_id.entry(token_id).read();
+            assert!(ctx_id == tournament_id, "Budokan: Token not registered for this tournament");
+
+            // Read score from game contract
+            let game_address = tournament.game_config.address;
+            let game_data_dispatcher = IMinigameTokenDataDispatcher {
+                contract_address: game_address,
+            };
+            let score = game_data_dispatcher.score(token_id);
+
+            // Submit score at explicit position via component API (validates ordering)
+            let result = self.leaderboard.submit_score(tournament_id, token_id, score, position);
+            match result {
+                LeaderboardResult::Success => {},
+                _ => panic!("Budokan: Leaderboard finalization failed"),
+            }
+
+            // Zero token_context_id to prevent duplicate finalization
+            self.token_context_id.entry(token_id).write(0);
         }
 
         // Registration operations
@@ -1052,23 +1126,6 @@ pub mod Budokan {
             IERC721Dispatcher { contract_address }.owner_of(token_id)
         }
 
-        fn _is_top_score(
-            self: @ContractState,
-            game_address: ContractAddress,
-            leaderboard: Span<felt252>,
-            score: u64,
-        ) -> bool {
-            let num_scores = leaderboard.len();
-
-            if num_scores == 0 {
-                return true;
-            }
-
-            let last_place_id: felt252 = *leaderboard.at(num_scores - 1);
-            let last_place_score = self.get_score_for_token_id(game_address, last_place_id);
-            score >= last_place_score
-        }
-
         //
         // ASSERTIONS
         //
@@ -1177,17 +1234,6 @@ pub mod Budokan {
                     );
                 },
             }
-        }
-
-        #[inline(always)]
-        fn _assert_payout_is_top_score(
-            self: @ContractState, payout_position: u8, winner_token_ids: Span<felt252>,
-        ) {
-            assert!(
-                payout_position.into() <= winner_token_ids.len(),
-                "Budokan: Prize payout position {} is not a top score",
-                payout_position,
-            );
         }
 
         fn _assert_gated_type_validates(
@@ -1768,22 +1814,8 @@ pub mod Budokan {
             // Validate registration (not banned, not already submitted)
             self.registration.assert_valid_for_submission(@registration, tournament_id);
 
-            // Submit score to leaderboard (auto-finds correct position)
-            let result = self.leaderboard.submit_score(tournament_id, token_id_felt, final_score);
-
-            match result {
-                LeaderboardResult::Success => {
-                    self._mark_score_submitted(tournament_id, token_id_felt);
-                    let leaderboard = self._get_leaderboard(tournament_id);
-                    self
-                        .emit(
-                            events::LeaderboardUpdated {
-                                tournament_id, token_ids: leaderboard.span(),
-                            },
-                        );
-                },
-                _ => panic!("Budokan: Score submission failed"),
-            }
+            // Mark score as submitted (leaderboard is built later via finalize_leaderboard_batch)
+            self._mark_score_submitted(tournament_id, token_id_felt);
         }
 
         fn on_objective_complete(ref self: ContractState, token_id: u256) { // No-op for now
@@ -1792,7 +1824,7 @@ pub mod Budokan {
 
     impl LeaderboardHooksImpl of LeaderboardComponent::LeaderboardHooksTrait<ContractState> {
         fn on_score_submitted(
-            ref self: ContractState, context_id: u64, token_id: felt252, score: u64, position: u8,
+            ref self: ContractState, context_id: u64, token_id: felt252, score: u64, position: u32,
         ) {}
 
         fn on_configured(

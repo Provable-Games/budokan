@@ -36,13 +36,13 @@ mod tests {
     pub mod constants;
     #[cfg(test)]
     mod helpers;
-    // #[cfg(test)]
-    // mod test_budokan_stress_tests;
     pub mod interfaces;
     #[cfg(test)]
     pub mod setup_denshokan;
     #[cfg(test)]
     mod test_budokan;
+    #[cfg(test)]
+    mod test_budokan_stress_tests;
     #[cfg(test)]
     mod test_distributed_prizes;
     pub mod utils;

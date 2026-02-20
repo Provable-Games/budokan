@@ -13,7 +13,7 @@ use budokan::models::budokan::{Distribution, ERC20Data, PrizeType, RewardType, T
 use budokan::tests::constants::{
     OWNER, TEST_END_TIME, TEST_REGISTRATION_START_TIME, TEST_START_TIME,
 };
-use budokan::tests::helpers::create_basic_tournament;
+use budokan::tests::helpers::{create_basic_tournament, finalize_leaderboard};
 use budokan::tests::interfaces::IERC20MockDispatcherTrait;
 use budokan::tests::mocks::minigame_starknet_mock::IMinigameStarknetMockDispatcherTrait;
 use budokan::tests::test_budokan::setup;
@@ -104,6 +104,14 @@ fn test_distributed_prize_claim_all_positions_filled() {
     callback.on_game_over(token_id2.into(), 50);
     callback.on_game_over(token_id3.into(), 25);
     stop_cheat_caller_address(contracts.budokan.contract_address);
+
+    // Finalize leaderboard (sorted by descending score)
+    finalize_leaderboard(
+        contracts.budokan,
+        tournament.id,
+        array![token_id1, token_id2, token_id3].span(),
+        TEST_END_TIME().into(),
+    );
 
     // Move to finalized
     time = TEST_END_TIME().into();
@@ -252,6 +260,11 @@ fn test_single_prize_without_distribution_works() {
     callback.on_game_over(token_id.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
+    // Finalize leaderboard (sorted by descending score)
+    finalize_leaderboard(
+        contracts.budokan, tournament.id, array![token_id].span(), TEST_END_TIME().into(),
+    );
+
     // Move to finalized
     time = TEST_END_TIME().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
@@ -348,6 +361,14 @@ fn test_distributed_prize_without_position_works() {
     callback.on_game_over(token_id2.into(), 50);
     callback.on_game_over(token_id3.into(), 25);
     stop_cheat_caller_address(contracts.budokan.contract_address);
+
+    // Finalize leaderboard (sorted by descending score)
+    finalize_leaderboard(
+        contracts.budokan,
+        tournament.id,
+        array![token_id1, token_id2, token_id3].span(),
+        TEST_END_TIME().into(),
+    );
 
     // Finalize
     time = TEST_END_TIME().into();
@@ -535,6 +556,14 @@ fn test_distributed_prize_partial_entrants_partial_refund() {
     callback.on_game_over(token_id2.into(), 50);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
+    // Finalize leaderboard (sorted by descending score)
+    finalize_leaderboard(
+        contracts.budokan,
+        tournament.id,
+        array![token_id1, token_id2].span(),
+        TEST_END_TIME().into(),
+    );
+
     // Finalize
     time = TEST_END_TIME().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
@@ -664,6 +693,11 @@ fn test_exponential_100_distribution_with_10_positions() {
     );
     callback.on_game_over(token_id1.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
+
+    // Finalize leaderboard (sorted by descending score)
+    finalize_leaderboard(
+        contracts.budokan, tournament.id, array![token_id1].span(), TEST_END_TIME().into(),
+    );
 
     // Finalize
     time = TEST_END_TIME().into();

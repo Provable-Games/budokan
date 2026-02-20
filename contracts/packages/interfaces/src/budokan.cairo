@@ -136,4 +136,10 @@ pub trait IBudokan<TState> {
         token_type: TokenTypeData,
         position: Option<u32>,
     ) -> PrizeData;
+
+    fn finalize_leaderboard_entry(
+        ref self: TState, tournament_id: u64, token_id: felt252, position: u32,
+    );
+
+    fn finalize_leaderboard_batch(ref self: TState, tournament_id: u64, token_ids: Span<felt252>);
 }
