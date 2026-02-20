@@ -127,7 +127,7 @@ pub trait IBudokan<TState> {
         ref self: TState, tournament_id: u64, game_token_id: felt252, proof: Span<felt252>,
     );
 
-    fn submit_score(ref self: TState, tournament_id: u64, token_id: felt252, position: u8);
+    fn submit_score(ref self: TState, tournament_id: u64, token_id: felt252, position: u32);
 
     fn claim_reward(ref self: TState, tournament_id: u64, reward_type: RewardType);
 

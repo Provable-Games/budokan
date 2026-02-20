@@ -553,7 +553,7 @@ pub mod Budokan {
         }
 
         fn submit_score(
-            ref self: ContractState, tournament_id: u64, token_id: felt252, position: u8,
+            ref self: ContractState, tournament_id: u64, token_id: felt252, position: u32,
         ) {
             // assert tournament exists
             self._assert_tournament_exists(tournament_id);
@@ -573,9 +573,9 @@ pub mod Budokan {
             self._validate_score_submission(@tournament, @registration);
 
             // Submit score using leaderboard component (config is stored in leaderboard)
-            let result = self
-                .leaderboard
-                .submit_score_at(tournament_id, token_id, submitted_score, position);
+            let result = ILeaderboard::submit_score(
+                ref self.leaderboard, tournament_id, token_id, submitted_score, position,
+            );
 
             // Handle result
             match result {
@@ -1784,7 +1784,7 @@ pub mod Budokan {
 
     impl LeaderboardHooksImpl of LeaderboardComponent::LeaderboardHooksTrait<ContractState> {
         fn on_score_submitted(
-            ref self: ContractState, context_id: u64, token_id: felt252, score: u64, position: u8,
+            ref self: ContractState, context_id: u64, token_id: felt252, score: u64, position: u32,
         ) {}
 
         fn on_configured(
