@@ -34,11 +34,11 @@ use core::option::Option;
 use core::serde::Serde;
 use game_components_embeddable_game_standard::metagame::interface::IMETAGAME_ID;
 use game_components_embeddable_game_standard::token::interface::IMinigameTokenMixinDispatcher;
-use game_components_interfaces::entry_validator::IEntryValidatorDispatcher;
 use game_components_interfaces::prize::{IPrizeDispatcher, IPrizeDispatcherTrait};
 use game_components_interfaces::registration::{
     IRegistrationDispatcher, IRegistrationDispatcherTrait,
 };
+use interfaces::entry_requirement_extension::IEntryRequirementExtensionDispatcher;
 use openzeppelin_interfaces::erc721::{IERC721Dispatcher, IERC721DispatcherTrait};
 use openzeppelin_interfaces::introspection::{ISRC5Dispatcher, ISRC5DispatcherTrait};
 use snforge_std::{
@@ -57,7 +57,7 @@ pub struct TestContracts {
     pub erc20: IERC20MockDispatcher,
     pub erc721: IERC721MockDispatcher,
     pub erc721_old: IERC721OldMockDispatcher,
-    pub entry_validator: IEntryValidatorDispatcher,
+    pub entry_validator: IEntryRequirementExtensionDispatcher,
 }
 
 
@@ -147,7 +147,9 @@ pub fn setup() -> TestContracts {
     let erc20 = IERC20MockDispatcher { contract_address: erc20_address };
     let erc721 = IERC721MockDispatcher { contract_address: erc721_address };
     let erc721_old = IERC721OldMockDispatcher { contract_address: erc721_old_address };
-    let entry_validator = IEntryValidatorDispatcher { contract_address: entry_validator_address };
+    let entry_validator = IEntryRequirementExtensionDispatcher {
+        contract_address: entry_validator_address,
+    };
 
     // Mint tokens to OWNER
     let owner = OWNER;

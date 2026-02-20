@@ -41,9 +41,7 @@ pub mod Budokan {
     use game_components_interfaces::entry_fee::{
         EntryFee as ComponentEntryFee, EntryFeeConfig, EntryFeeDeposit,
     };
-    use game_components_interfaces::entry_validator::{
-        IEntryValidatorDispatcher, IEntryValidatorDispatcherTrait,
-    };
+    use game_components_interfaces::leaderboard::{ILeaderboard, LeaderboardResult};
     use game_components_interfaces::prize::{Prize as PrizeInput, PrizeConfig};
     use game_components_interfaces::registry::{
         IMinigameRegistryDispatcher, IMinigameRegistryDispatcherTrait,
@@ -52,8 +50,6 @@ pub mod Budokan {
     use game_components_metagame::entry_fee::entry_fee::EntryFeeComponent::EntryFeeInternalTrait;
     use game_components_metagame::entry_requirement::entry_requirement::EntryRequirementComponent;
     use game_components_metagame::entry_requirement::entry_requirement::EntryRequirementComponent::EntryRequirementInternalTrait;
-    use game_components_metagame::leaderboard::interface::ILeaderboard;
-    use game_components_metagame::leaderboard::leaderboard::leaderboard::LeaderboardResult;
     use game_components_metagame::leaderboard::leaderboard_component::LeaderboardComponent;
     use game_components_metagame::leaderboard::leaderboard_component::LeaderboardComponent::LeaderboardInternalTrait;
     use game_components_metagame::leaderboard::store::Store as LeaderboardStore;
@@ -64,6 +60,9 @@ pub mod Budokan {
     use game_components_utilities::distribution::calculator;
     use game_components_utilities::distribution::models::{
         BASIS_POINTS, DIST_TYPE_CUSTOM, DIST_TYPE_EXPONENTIAL, DIST_TYPE_LINEAR, DIST_TYPE_UNIFORM,
+    };
+    use interfaces::entry_requirement_extension::{
+        IEntryRequirementExtensionDispatcher, IEntryRequirementExtensionDispatcherTrait,
     };
     use openzeppelin_access::ownable::OwnableComponent;
     use openzeppelin_interfaces::erc721::{IERC721Dispatcher, IERC721DispatcherTrait};
@@ -434,7 +433,7 @@ pub mod Budokan {
                         Option::Some(QualificationProof::Extension(proof)) => proof,
                         _ => array![].span(),
                     };
-                    let entry_validator = IEntryValidatorDispatcher {
+                    let entry_validator = IEntryRequirementExtensionDispatcher {
                         contract_address: extension_config.address,
                     };
                     entry_validator
@@ -502,7 +501,7 @@ pub mod Budokan {
             let game_token_address = IMinigameDispatcher { contract_address: game_address }
                 .token_address();
             let game_dispatcher = IERC721Dispatcher { contract_address: game_token_address };
-            let entry_validator_dispatcher = IEntryValidatorDispatcher {
+            let entry_validator_dispatcher = IEntryRequirementExtensionDispatcher {
                 contract_address: extension_address,
             };
 
@@ -576,7 +575,7 @@ pub mod Budokan {
             // Submit score using leaderboard component (config is stored in leaderboard)
             let result = self
                 .leaderboard
-                .submit_score(tournament_id, token_id, submitted_score, position);
+                .submit_score_at(tournament_id, token_id, submitted_score, position);
 
             // Handle result
             match result {
@@ -966,7 +965,7 @@ pub mod Budokan {
             // Configure leaderboard for this tournament
             self
                 .leaderboard
-                ._configure_tournament(
+                ._configure(
                     tournament_id,
                     0xFFFFFFFF_u32, // Unlimited leaderboard (u32::MAX = ~4.3B)
                     false, // Higher scores are better
@@ -1228,13 +1227,13 @@ pub mod Budokan {
         fn _assert_gated_type_validates(
             self: @ContractState, entry_requirement: EntryRequirement, schedule: Schedule,
         ) {
-            // Validate SRC5 interfaces (ERC721 for token, IEntryValidator for extension)
+            // Validate SRC5 interfaces (ERC721 for token, IEntryRequirementExtension for extension)
             self.entry_requirement.assert_valid_entry_requirement(entry_requirement);
 
             // Extension-specific budokan logic: registration_only check and add_config
             if let EntryRequirementType::extension(extension_config) = entry_requirement
                 .entry_requirement_type {
-                let entry_validator_dispatcher = IEntryValidatorDispatcher {
+                let entry_validator_dispatcher = IEntryRequirementExtensionDispatcher {
                     contract_address: extension_config.address,
                 };
                 let registration_only = entry_validator_dispatcher.registration_only();
@@ -1781,5 +1780,27 @@ pub mod Budokan {
                 context: context,
             }
         }
+    }
+
+    impl LeaderboardHooksImpl of LeaderboardComponent::LeaderboardHooksTrait<ContractState> {
+        fn on_score_submitted(
+            ref self: ContractState, context_id: u64, token_id: felt252, score: u64, position: u8,
+        ) {}
+
+        fn on_configured(
+            ref self: ContractState,
+            context_id: u64,
+            max_entries: u32,
+            ascending: bool,
+            game_address: starknet::ContractAddress,
+        ) {}
+
+        fn on_cleared(ref self: ContractState, context_id: u64) {}
+
+        fn on_ownership_transferred(
+            ref self: ContractState,
+            previous_owner: starknet::ContractAddress,
+            new_owner: starknet::ContractAddress,
+        ) {}
     }
 }

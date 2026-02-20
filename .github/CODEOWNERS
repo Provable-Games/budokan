@@ -1,6 +1,0 @@
-# Code Owners for Repository
-# This file defines the default reviewers for pull requests
-
-# Global rule - These users will be automatically requested as reviewers on all PRs
-* @loothero
-* @starknetdev

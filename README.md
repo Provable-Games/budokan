@@ -1,7 +1,7 @@
 # Budokan Tournament Platform
 
 <div align="center">
-  <img src="ui/public/images/banner-1200x630.webp" alt="Budokan - The Onchain Gaming Arena" width="600" />
+  <img src="client/public/images/banner-1200x630.webp" alt="Budokan - The Onchain Gaming Arena" width="600" />
 </div>
 
 A permissionless, fully on-chain tournament management system built on StarkNet. Budokan enables anyone to create, manage, and participate in gaming tournaments with flexible entry requirements, prize distribution, and seamless integration with external game systems.
