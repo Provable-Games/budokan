@@ -12,10 +12,9 @@ use budokan::tests::constants::{
     TEST_REGISTRATION_START_TIME, TEST_START_TIME, TOURNAMENT_DESCRIPTION, TOURNAMENT_NAME,
 };
 use budokan::tests::helpers::{
-    create_basic_tournament, custom_schedule, finalize_leaderboard,
-    registration_open_beyond_tournament_end, registration_period_too_long,
-    registration_period_too_short, test_game_config, test_game_period, test_metadata, test_schedule,
-    test_season_schedule, tournament_too_long,
+    create_basic_tournament, custom_schedule, registration_open_beyond_tournament_end,
+    registration_period_too_long, registration_period_too_short, test_game_config, test_game_period,
+    test_metadata, test_schedule, test_season_schedule, tournament_too_long,
 };
 use budokan::tests::interfaces::{
     IERC20MockDispatcher, IERC20MockDispatcherTrait, IERC721MockDispatcher,
@@ -908,20 +907,6 @@ fn test_create_tournament_gated_by_multiple_tournaments() {
     stop_cheat_caller_address(contracts.budokan.contract_address);
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
 
-    // Finalize leaderboards for both qualifying tournaments
-    finalize_leaderboard(
-        contracts.budokan,
-        first_tournament.id,
-        array![first_entry_token_id].span(),
-        TEST_END_TIME().into(),
-    );
-    finalize_leaderboard(
-        contracts.budokan,
-        second_tournament.id,
-        array![second_entry_token_id].span(),
-        TEST_END_TIME().into(),
-    );
-
     // Settle tournaments
     time = TEST_END_TIME().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
@@ -1684,11 +1669,6 @@ fn test_on_game_over_basic() {
     callback.on_game_over(token_id.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
-    // Finalize leaderboard
-    finalize_leaderboard(
-        contracts.budokan, tournament.id, array![token_id].span(), TEST_END_TIME().into(),
-    );
-
     // Verify leaderboard
     let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
     assert!(leaderboard.len() == 1, "Invalid leaderboard length");
@@ -1755,15 +1735,7 @@ fn test_on_game_over_multiple_players() {
     callback.on_game_over(token_id3.into(), 75);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
-    // Finalize leaderboard (sorted by descending score: 100, 75, 50)
-    finalize_leaderboard(
-        contracts.budokan,
-        tournament.id,
-        array![token_id1, token_id3, token_id2].span(),
-        TEST_END_TIME().into(),
-    );
-
-    // Verify leaderboard sorted by score (highest first)
+    // Verify leaderboard auto-sorted by score (highest first)
     let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
     assert!(leaderboard.len() == 3, "Invalid leaderboard length");
     assert!(*leaderboard.at(0) == token_id1.into(), "Invalid first place");
@@ -1987,11 +1959,6 @@ fn test_claim_prizes_with_sponsored_prizes() {
     stop_cheat_caller_address(contracts.budokan.contract_address);
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
 
-    // Finalize leaderboard
-    finalize_leaderboard(
-        contracts.budokan, tournament.id, array![entry_token_id].span(), TEST_END_TIME().into(),
-    );
-
     // Move to finalized phase
     time = TEST_END_TIME().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
@@ -2081,11 +2048,6 @@ fn test_claim_prizes_prize_already_claimed() {
     );
     callback.on_game_over(entry_token_id.into(), 1);
     stop_cheat_caller_address(contracts.budokan.contract_address);
-
-    // Finalize leaderboard
-    finalize_leaderboard(
-        contracts.budokan, tournament.id, array![entry_token_id].span(), TEST_END_TIME().into(),
-    );
 
     time = TEST_END_TIME().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
@@ -2277,14 +2239,6 @@ fn test_tournament_with_partial_submissions() {
     callback.on_game_over(token_id2.into(), 50);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
-    // Finalize leaderboard (sorted by descending score: 100, 50)
-    finalize_leaderboard(
-        contracts.budokan,
-        tournament.id,
-        array![token_id1, token_id2].span(),
-        TEST_END_TIME().into(),
-    );
-
     // Verify only 2 positions filled
     let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
     assert!(leaderboard.len() == 2, "Leaderboard should have 2 entries");
@@ -2360,20 +2314,6 @@ fn test_create_tournament_gated_by_multiple_tournaments_with_limited_entry() {
     callback.on_game_over(second_entry_token_id.into(), 20);
     // Restore caller to owner for subsequent calls
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
-
-    // Finalize leaderboards for both qualifying tournaments
-    finalize_leaderboard(
-        contracts.budokan,
-        first_tournament.id,
-        array![first_entry_token_id].span(),
-        TEST_END_TIME().into(),
-    );
-    finalize_leaderboard(
-        contracts.budokan,
-        second_tournament.id,
-        array![second_entry_token_id].span(),
-        TEST_END_TIME().into(),
-    );
 
     // Settle tournaments
     let settle_time = TEST_END_TIME().into();
@@ -2491,14 +2431,6 @@ fn test_tournament_gated_caller_owns_qualifying_token_different_player() {
     // Restore caller to owner for subsequent calls
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
 
-    // Finalize leaderboard for qualifying tournament
-    finalize_leaderboard(
-        contracts.budokan,
-        first_tournament.id,
-        array![first_entry_token_id].span(),
-        TEST_END_TIME().into(),
-    );
-
     // Settle first tournament
     let settle_time = TEST_END_TIME().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, settle_time);
@@ -2602,14 +2534,6 @@ fn test_tournament_gated_caller_does_not_own_qualifying_token() {
     );
     callback.on_game_over(first_entry_token_id.into(), 10);
     stop_cheat_caller_address(contracts.budokan.contract_address);
-
-    // Finalize leaderboard for qualifying tournament
-    finalize_leaderboard(
-        contracts.budokan,
-        first_tournament.id,
-        array![first_entry_token_id].span(),
-        TEST_END_TIME().into(),
-    );
 
     // Settle first tournament
     let settled_time = TEST_END_TIME().into();
@@ -3162,14 +3086,6 @@ fn test_prize_refunded_to_sponsor_when_position_exceeds_leaderboard() {
     callback.on_game_over(token_id2.into(), 50);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
-    // Finalize leaderboard (sorted by descending score: 100, 50)
-    finalize_leaderboard(
-        contracts.budokan,
-        tournament.id,
-        array![token_id1, token_id2].span(),
-        TEST_END_TIME().into(),
-    );
-
     // Verify leaderboard has only 2 entries
     let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
     assert!(leaderboard.len() == 2, "Leaderboard should have 2 entries");
@@ -3340,11 +3256,6 @@ fn test_get_leaderboard_after_submissions() {
     callback.on_game_over(entry_token_id.into(), 1000);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
-    // Finalize leaderboard
-    finalize_leaderboard(
-        contracts.budokan, tournament.id, array![entry_token_id].span(), TEST_END_TIME().into(),
-    );
-
     // Get leaderboard
     let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
     assert!(leaderboard.len() == 1, "Leaderboard should have 1 entry");
@@ -3418,14 +3329,6 @@ fn test_leaderboard_ordering_by_score() {
     // Player 2 submits with higher score, takes position 1
     callback.on_game_over(entry_token_id_2.into(), 1000);
     stop_cheat_caller_address(contracts.budokan.contract_address);
-
-    // Finalize leaderboard (sorted by descending score: 1000, 500)
-    finalize_leaderboard(
-        contracts.budokan,
-        tournament.id,
-        array![entry_token_id_2, entry_token_id_1].span(),
-        TEST_END_TIME().into(),
-    );
 
     // Get leaderboard - player 2 should be first (higher score)
     let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
@@ -3690,11 +3593,6 @@ fn test_claim_entry_fee_prizes() {
     callback.on_game_over(entry_token_id.into(), 1000);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
-    // Finalize leaderboard
-    finalize_leaderboard(
-        contracts.budokan, tournament.id, array![entry_token_id].span(), TEST_END_TIME().into(),
-    );
-
     // Move to finalized period
     let finalized_time = TEST_END_TIME().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, finalized_time);
@@ -3818,14 +3716,6 @@ fn test_claim_entry_fee_exponential_distribution_five_players() {
     );
     callback.on_game_over(player5.into(), 1000);
     stop_cheat_caller_address(contracts.budokan.contract_address);
-
-    // Finalize leaderboard (sorted by descending score)
-    finalize_leaderboard(
-        contracts.budokan,
-        tournament.id,
-        array![player1, player2, player3, player4, player5].span(),
-        TEST_END_TIME().into(),
-    );
 
     // Move to finalized period
     let finalized_time = TEST_END_TIME().into();
@@ -4015,11 +3905,6 @@ fn test_on_game_over_tie_higher_game_id_auto_positioned() {
     callback.on_game_over(player2.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
-    // Finalize leaderboard (tie: player1 listed first gets higher position)
-    finalize_leaderboard(
-        contracts.budokan, tournament.id, array![player1, player2].span(), TEST_END_TIME().into(),
-    );
-
     // Verify: player1 (lower ID) is first, player2 (higher ID) is second
     let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
     assert!(*leaderboard.at(0) == player1.into(), "Player1 (lower ID) should be first");
@@ -4083,11 +3968,6 @@ fn test_on_game_over_tie_lower_game_id() {
     );
     callback.on_game_over(player1.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
-
-    // Finalize leaderboard (tie: player1 listed first gets higher position)
-    finalize_leaderboard(
-        contracts.budokan, tournament.id, array![player1, player2].span(), TEST_END_TIME().into(),
-    );
 
     // Get leaderboard - player1 should be first due to lower game ID
     let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
@@ -4161,15 +4041,6 @@ fn test_on_game_over_tie_higher_game_id_for_lower_position() {
     );
     callback.on_game_over(token_id3.into(), 50);
     stop_cheat_caller_address(contracts.budokan.contract_address);
-
-    // Finalize leaderboard (sorted by descending score: 100, 100, 50; ties resolved by array
-    // order)
-    finalize_leaderboard(
-        contracts.budokan,
-        tournament.id,
-        array![token_id1, token_id2, token_id3].span(),
-        TEST_END_TIME().into(),
-    );
 
     // Verify leaderboard
     let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
@@ -4245,14 +4116,6 @@ fn test_on_game_over_tie_lower_game_id_for_lower_position() {
     );
     callback.on_game_over(token_id1.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
-
-    // Finalize leaderboard (tie: player1 listed first gets higher position)
-    finalize_leaderboard(
-        contracts.budokan,
-        tournament.id,
-        array![token_id1, token_id2].span(),
-        TEST_END_TIME().into(),
-    );
 
     // Verify: player1 (lower ID) should be first, player2 (higher ID) second
     let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
@@ -5055,14 +4918,6 @@ fn test_use_host_token_to_qualify_into_tournament_gated_tournament() {
     callback.on_game_over(first_entry_token_id.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
-    // Finalize leaderboard for first tournament
-    finalize_leaderboard(
-        contracts.budokan,
-        first_tournament.id,
-        array![first_entry_token_id].span(),
-        TEST_END_TIME().into(),
-    );
-
     // Settle first tournament
     let settled_time = TEST_END_TIME().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, settled_time);
@@ -5161,14 +5016,6 @@ fn test_enter_tournament_wrong_submission_type() {
     );
     callback.on_game_over(first_entry_token_id.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
-
-    // Finalize leaderboard for first tournament (only first_entry_token_id submitted)
-    finalize_leaderboard(
-        contracts.budokan,
-        first_tournament.id,
-        array![first_entry_token_id].span(),
-        TEST_END_TIME().into(),
-    );
 
     // Settle first tournament
     let settled_time = TEST_END_TIME().into();
@@ -5363,18 +5210,6 @@ fn test_on_game_over_gas_check() {
     callback.on_game_over(player10.into(), 10);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
-    // Finalize leaderboard (sorted by descending score)
-    finalize_leaderboard(
-        contracts.budokan,
-        tournament.id,
-        array![
-            player1, player2, player3, player4, player5, player6, player7, player8, player9,
-            player10,
-        ]
-            .span(),
-        TEST_END_TIME().into(),
-    );
-
     // Roll forward to after game period ends (finalized)
     let finalized_time = TEST_END_TIME().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, finalized_time);
@@ -5557,14 +5392,6 @@ fn test_claim_tournament_creator_share() {
     callback.on_game_over(player5.into(), 1000);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
-    // Finalize leaderboard (sorted by descending score)
-    finalize_leaderboard(
-        contracts.budokan,
-        tournament.id,
-        array![player1, player2, player3, player4, player5].span(),
-        TEST_END_TIME().into(),
-    );
-
     // Move to finalized period
     let finalized_time = TEST_END_TIME().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, finalized_time);
@@ -5685,14 +5512,6 @@ fn test_claim_game_creator_share() {
     callback.on_game_over(player3.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
-    // Finalize leaderboard (sorted by descending score)
-    finalize_leaderboard(
-        contracts.budokan,
-        tournament.id,
-        array![player1, player2, player3].span(),
-        TEST_END_TIME().into(),
-    );
-
     // Move to finalized period
     let finalized_time = TEST_END_TIME().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, finalized_time);
@@ -5796,11 +5615,6 @@ fn test_claim_refund_share() {
     );
     callback.on_game_over(player1_token.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
-
-    // Finalize leaderboard
-    finalize_leaderboard(
-        contracts.budokan, tournament.id, array![player1_token].span(), TEST_END_TIME().into(),
-    );
 
     // Move to finalized period
     let finalized_time = TEST_END_TIME().into();
@@ -5928,14 +5742,6 @@ fn test_claim_all_shares_combined() {
     );
     callback.on_game_over(player3.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
-
-    // Finalize leaderboard (sorted by descending score)
-    finalize_leaderboard(
-        contracts.budokan,
-        tournament.id,
-        array![player1, player2, player3].span(),
-        TEST_END_TIME().into(),
-    );
 
     // Move to finalized period
     let finalized_time = TEST_END_TIME().into();
@@ -6118,11 +5924,6 @@ fn test_cannot_claim_tournament_creator_share_twice() {
     callback.on_game_over(player1.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
-    // Finalize leaderboard
-    finalize_leaderboard(
-        contracts.budokan, tournament.id, array![player1].span(), TEST_END_TIME().into(),
-    );
-
     let finalized_time = TEST_END_TIME().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, finalized_time);
 
@@ -6198,11 +5999,6 @@ fn test_cannot_claim_game_creator_share_twice() {
     );
     callback.on_game_over(player1.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
-
-    // Finalize leaderboard
-    finalize_leaderboard(
-        contracts.budokan, tournament.id, array![player1].span(), TEST_END_TIME().into(),
-    );
 
     let finalized_time = TEST_END_TIME().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, finalized_time);
@@ -6281,11 +6077,6 @@ fn test_cannot_claim_refund_twice() {
     );
     callback.on_game_over(player1_token_id.into(), 100);
     stop_cheat_caller_address(contracts.budokan.contract_address);
-
-    // Finalize leaderboard
-    finalize_leaderboard(
-        contracts.budokan, tournament.id, array![player1_token_id].span(), TEST_END_TIME().into(),
-    );
 
     let finalized_time = TEST_END_TIME().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, finalized_time);

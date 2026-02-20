@@ -92,14 +92,3 @@ pub fn create_basic_tournament(budokan: IBudokanDispatcher, game: ContractAddres
             Option::None,
         )
 }
-
-/// Finalizes the leaderboard for a tournament by advancing time and submitting sorted token_ids.
-pub fn finalize_leaderboard(
-    budokan: IBudokanDispatcher,
-    tournament_id: u64,
-    sorted_token_ids: Span<felt252>,
-    finalized_time: u64,
-) {
-    snforge_std::start_cheat_block_timestamp(budokan.contract_address, finalized_time);
-    budokan.finalize_leaderboard_batch(tournament_id, sorted_token_ids);
-}
