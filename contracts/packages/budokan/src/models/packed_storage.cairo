@@ -129,6 +129,58 @@ pub impl TournamentConfigStorePacking of StorePacking<TournamentConfig, u256> {
     }
 }
 
+/// Individual TournamentConfig unpack helpers.
+/// Extract single fields from packed u256 without full struct unpacking.
+pub fn unpack_paymaster(packed: u256) -> bool {
+    (packed.low & MASK_1) == 1
+}
+
+pub fn unpack_soulbound(packed: u256) -> bool {
+    ((packed.low / TWO_POW_1) & MASK_1) == 1
+}
+
+pub fn unpack_settings_id(packed: u256) -> u32 {
+    ((packed.low / TWO_POW_2) & MASK_32).try_into().unwrap()
+}
+
+pub fn unpack_created_at(packed: u256) -> u64 {
+    ((packed.low / TWO_POW_34) & MASK_35).try_into().unwrap()
+}
+
+pub fn unpack_registration_start_delay(packed: u256) -> u32 {
+    ((packed.low / TWO_POW_69) & MASK_25).try_into().unwrap()
+}
+
+pub fn unpack_registration_end_delay(packed: u256) -> u32 {
+    (packed.high & MASK_25).try_into().unwrap()
+}
+
+pub fn unpack_game_start_delay(packed: u256) -> u32 {
+    ((packed.high / TWO_POW_25) & MASK_25).try_into().unwrap()
+}
+
+pub fn unpack_game_end_delay(packed: u256) -> u32 {
+    ((packed.high / (TWO_POW_25 * TWO_POW_25)) & MASK_25).try_into().unwrap()
+}
+
+pub fn unpack_submission_duration(packed: u256) -> u32 {
+    ((packed.high / (TWO_POW_25 * TWO_POW_25 * TWO_POW_25)) & MASK_25).try_into().unwrap()
+}
+
+/// Grouped helper: returns (created_at, game_start_delay, game_end_delay)
+pub fn unpack_game_schedule(packed: u256) -> (u64, u32, u32) {
+    (unpack_created_at(packed), unpack_game_start_delay(packed), unpack_game_end_delay(packed))
+}
+
+/// Grouped helper: returns (created_at, registration_start_delay, registration_end_delay)
+pub fn unpack_registration_schedule(packed: u256) -> (u64, u32, u32) {
+    (
+        unpack_created_at(packed),
+        unpack_registration_start_delay(packed),
+        unpack_registration_end_delay(packed),
+    )
+}
+
 /// Distribution configuration packed into felt252
 /// Packs: dist_type (8 bits) | dist_param (16 bits) | positions (32 bits)
 /// Total: 8 + 16 + 32 = 56 bits fits in felt252 (251 bits)
@@ -162,10 +214,13 @@ pub impl PackedDistributionStorePacking of StorePacking<PackedDistribution, felt
 
 #[cfg(test)]
 mod tests {
-    use starknet::storage_access::StorePacking;
     use super::{
         PackedDistribution, PackedDistributionStorePacking, TournamentConfig,
-        TournamentConfigStorePacking,
+        TournamentConfigStorePacking, unpack_created_at, unpack_game_end_delay,
+        unpack_game_schedule, unpack_game_start_delay, unpack_paymaster,
+        unpack_registration_end_delay, unpack_registration_schedule,
+        unpack_registration_start_delay, unpack_settings_id, unpack_soulbound,
+        unpack_submission_duration,
     };
 
     #[test]
@@ -294,5 +349,287 @@ mod tests {
         assert!(unpacked.dist_type == 255, "dist_type should be 255");
         assert!(unpacked.dist_param == 65535, "dist_param should be 65535");
         assert!(unpacked.positions == 4294967295, "positions should be max u32");
+    }
+
+    // --- Individual TournamentConfig unpack helper tests ---
+
+    #[test]
+    fn test_unpack_paymaster() {
+        let with_paymaster = TournamentConfigStorePacking::pack(
+            TournamentConfig {
+                created_at: 100,
+                settings_id: 1,
+                soulbound: false,
+                paymaster: true,
+                registration_start_delay: 0,
+                registration_end_delay: 0,
+                game_start_delay: 0,
+                game_end_delay: 0,
+                submission_duration: 0,
+            },
+        );
+        assert!(unpack_paymaster(with_paymaster) == true, "paymaster should be true");
+
+        let without_paymaster = TournamentConfigStorePacking::pack(
+            TournamentConfig {
+                created_at: 100,
+                settings_id: 1,
+                soulbound: false,
+                paymaster: false,
+                registration_start_delay: 0,
+                registration_end_delay: 0,
+                game_start_delay: 0,
+                game_end_delay: 0,
+                submission_duration: 0,
+            },
+        );
+        assert!(unpack_paymaster(without_paymaster) == false, "paymaster should be false");
+    }
+
+    #[test]
+    fn test_unpack_soulbound() {
+        let with_soulbound = TournamentConfigStorePacking::pack(
+            TournamentConfig {
+                created_at: 100,
+                settings_id: 1,
+                soulbound: true,
+                paymaster: false,
+                registration_start_delay: 0,
+                registration_end_delay: 0,
+                game_start_delay: 0,
+                game_end_delay: 0,
+                submission_duration: 0,
+            },
+        );
+        assert!(unpack_soulbound(with_soulbound) == true, "soulbound should be true");
+
+        let without_soulbound = TournamentConfigStorePacking::pack(
+            TournamentConfig {
+                created_at: 100,
+                settings_id: 1,
+                soulbound: false,
+                paymaster: false,
+                registration_start_delay: 0,
+                registration_end_delay: 0,
+                game_start_delay: 0,
+                game_end_delay: 0,
+                submission_duration: 0,
+            },
+        );
+        assert!(unpack_soulbound(without_soulbound) == false, "soulbound should be false");
+    }
+
+    #[test]
+    fn test_unpack_settings_id() {
+        let packed = TournamentConfigStorePacking::pack(
+            TournamentConfig {
+                created_at: 100,
+                settings_id: 12345678,
+                soulbound: true,
+                paymaster: true,
+                registration_start_delay: 500,
+                registration_end_delay: 600,
+                game_start_delay: 700,
+                game_end_delay: 800,
+                submission_duration: 900,
+            },
+        );
+        assert!(unpack_settings_id(packed) == 12345678, "settings_id mismatch");
+    }
+
+    #[test]
+    fn test_unpack_created_at() {
+        let packed = TournamentConfigStorePacking::pack(
+            TournamentConfig {
+                created_at: 1700000000,
+                settings_id: 42,
+                soulbound: false,
+                paymaster: false,
+                registration_start_delay: 100,
+                registration_end_delay: 200,
+                game_start_delay: 300,
+                game_end_delay: 400,
+                submission_duration: 500,
+            },
+        );
+        assert!(unpack_created_at(packed) == 1700000000, "created_at mismatch");
+    }
+
+    #[test]
+    fn test_unpack_registration_start_delay() {
+        let packed = TournamentConfigStorePacking::pack(
+            TournamentConfig {
+                created_at: 100,
+                settings_id: 1,
+                soulbound: false,
+                paymaster: false,
+                registration_start_delay: 86400,
+                registration_end_delay: 0,
+                game_start_delay: 0,
+                game_end_delay: 0,
+                submission_duration: 0,
+            },
+        );
+        assert!(
+            unpack_registration_start_delay(packed) == 86400, "registration_start_delay mismatch",
+        );
+    }
+
+    #[test]
+    fn test_unpack_high_fields() {
+        let packed = TournamentConfigStorePacking::pack(
+            TournamentConfig {
+                created_at: 100,
+                settings_id: 1,
+                soulbound: false,
+                paymaster: false,
+                registration_start_delay: 0,
+                registration_end_delay: 3600,
+                game_start_delay: 5000,
+                game_end_delay: 7200,
+                submission_duration: 1800,
+            },
+        );
+        assert!(unpack_registration_end_delay(packed) == 3600, "registration_end_delay mismatch");
+        assert!(unpack_game_start_delay(packed) == 5000, "game_start_delay mismatch");
+        assert!(unpack_game_end_delay(packed) == 7200, "game_end_delay mismatch");
+        assert!(unpack_submission_duration(packed) == 1800, "submission_duration mismatch");
+    }
+
+    #[test]
+    fn test_unpack_game_schedule() {
+        let packed = TournamentConfigStorePacking::pack(
+            TournamentConfig {
+                created_at: 1700000000,
+                settings_id: 10,
+                soulbound: false,
+                paymaster: false,
+                registration_start_delay: 100,
+                registration_end_delay: 200,
+                game_start_delay: 5000,
+                game_end_delay: 7200,
+                submission_duration: 900,
+            },
+        );
+        let (created_at, game_start, game_end) = unpack_game_schedule(packed);
+        assert!(created_at == 1700000000, "game_schedule created_at mismatch");
+        assert!(game_start == 5000, "game_schedule game_start mismatch");
+        assert!(game_end == 7200, "game_schedule game_end mismatch");
+    }
+
+    #[test]
+    fn test_unpack_registration_schedule() {
+        let packed = TournamentConfigStorePacking::pack(
+            TournamentConfig {
+                created_at: 1700000000,
+                settings_id: 10,
+                soulbound: false,
+                paymaster: false,
+                registration_start_delay: 3600,
+                registration_end_delay: 7200,
+                game_start_delay: 500,
+                game_end_delay: 600,
+                submission_duration: 700,
+            },
+        );
+        let (created_at, reg_start, reg_end) = unpack_registration_schedule(packed);
+        assert!(created_at == 1700000000, "reg_schedule created_at mismatch");
+        assert!(reg_start == 3600, "reg_schedule reg_start mismatch");
+        assert!(reg_end == 7200, "reg_schedule reg_end mismatch");
+    }
+
+    #[test]
+    fn test_individual_unpack_max_values() {
+        let packed = TournamentConfigStorePacking::pack(
+            TournamentConfig {
+                created_at: 0x7FFFFFFFF, // max 35 bits
+                settings_id: 0xFFFFFFFF, // max 32 bits
+                soulbound: true,
+                paymaster: true,
+                registration_start_delay: 0x1FFFFFF, // max 25 bits
+                registration_end_delay: 0x1FFFFFF,
+                game_start_delay: 0x1FFFFFF,
+                game_end_delay: 0x1FFFFFF,
+                submission_duration: 0x1FFFFFF,
+            },
+        );
+        assert!(unpack_paymaster(packed) == true, "max paymaster mismatch");
+        assert!(unpack_soulbound(packed) == true, "max soulbound mismatch");
+        assert!(unpack_settings_id(packed) == 0xFFFFFFFF, "max settings_id mismatch");
+        assert!(unpack_created_at(packed) == 0x7FFFFFFFF, "max created_at mismatch");
+        assert!(
+            unpack_registration_start_delay(packed) == 0x1FFFFFF, "max reg_start_delay mismatch",
+        );
+        assert!(unpack_registration_end_delay(packed) == 0x1FFFFFF, "max reg_end_delay mismatch");
+        assert!(unpack_game_start_delay(packed) == 0x1FFFFFF, "max game_start_delay mismatch");
+        assert!(unpack_game_end_delay(packed) == 0x1FFFFFF, "max game_end_delay mismatch");
+        assert!(
+            unpack_submission_duration(packed) == 0x1FFFFFF, "max submission_duration mismatch",
+        );
+    }
+
+    #[test]
+    fn test_individual_unpack_zero_values() {
+        let packed = TournamentConfigStorePacking::pack(
+            TournamentConfig {
+                created_at: 0,
+                settings_id: 0,
+                soulbound: false,
+                paymaster: false,
+                registration_start_delay: 0,
+                registration_end_delay: 0,
+                game_start_delay: 0,
+                game_end_delay: 0,
+                submission_duration: 0,
+            },
+        );
+        assert!(unpack_paymaster(packed) == false, "zero paymaster mismatch");
+        assert!(unpack_soulbound(packed) == false, "zero soulbound mismatch");
+        assert!(unpack_settings_id(packed) == 0, "zero settings_id mismatch");
+        assert!(unpack_created_at(packed) == 0, "zero created_at mismatch");
+        assert!(unpack_registration_start_delay(packed) == 0, "zero reg_start_delay mismatch");
+        assert!(unpack_registration_end_delay(packed) == 0, "zero reg_end_delay mismatch");
+        assert!(unpack_game_start_delay(packed) == 0, "zero game_start_delay mismatch");
+        assert!(unpack_game_end_delay(packed) == 0, "zero game_end_delay mismatch");
+        assert!(unpack_submission_duration(packed) == 0, "zero submission_duration mismatch");
+    }
+
+    #[test]
+    fn test_individual_unpack_consistency_with_full_unpack() {
+        let original = TournamentConfig {
+            created_at: 1700000000,
+            settings_id: 42,
+            soulbound: true,
+            paymaster: false,
+            registration_start_delay: 100,
+            registration_end_delay: 3600,
+            game_start_delay: 5000,
+            game_end_delay: 7200,
+            submission_duration: 3600,
+        };
+
+        let packed = TournamentConfigStorePacking::pack(original);
+        let full = TournamentConfigStorePacking::unpack(packed);
+
+        assert!(unpack_paymaster(packed) == full.paymaster, "paymaster inconsistent");
+        assert!(unpack_soulbound(packed) == full.soulbound, "soulbound inconsistent");
+        assert!(unpack_settings_id(packed) == full.settings_id, "settings_id inconsistent");
+        assert!(unpack_created_at(packed) == full.created_at, "created_at inconsistent");
+        assert!(
+            unpack_registration_start_delay(packed) == full.registration_start_delay,
+            "reg_start inconsistent",
+        );
+        assert!(
+            unpack_registration_end_delay(packed) == full.registration_end_delay,
+            "reg_end inconsistent",
+        );
+        assert!(
+            unpack_game_start_delay(packed) == full.game_start_delay, "game_start inconsistent",
+        );
+        assert!(unpack_game_end_delay(packed) == full.game_end_delay, "game_end inconsistent");
+        assert!(
+            unpack_submission_duration(packed) == full.submission_duration,
+            "sub_duration inconsistent",
+        );
     }
 }
