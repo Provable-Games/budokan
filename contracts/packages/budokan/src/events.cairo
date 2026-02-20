@@ -36,13 +36,6 @@ pub struct TournamentRegistration {
 }
 
 #[derive(Drop, starknet::Event)]
-pub struct LeaderboardUpdated {
-    #[key]
-    pub tournament_id: u64,
-    pub token_ids: Span<felt252>,
-}
-
-#[derive(Drop, starknet::Event)]
 pub struct PrizeAdded {
     #[key]
     pub tournament_id: u64,
@@ -68,4 +61,12 @@ pub struct QualificationEntriesUpdated {
     pub tournament_id: u64,
     pub qualification_proof: QualificationProof,
     pub entry_count: u32,
+}
+
+#[derive(Drop, starknet::Event)]
+pub struct LeaderboardFinalized {
+    #[key]
+    pub tournament_id: u64,
+    pub batch_size: u32,
+    pub total_entries: u32,
 }
