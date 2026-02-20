@@ -1,6 +1,6 @@
 use budokan::models::budokan::{GameConfig, Metadata, Tournament};
 use budokan::models::constants::{
-    MAX_REGISTRATION_PERIOD, MAX_TOURNAMENT_LENGTH, MIN_REGISTRATION_PERIOD, MIN_SUBMISSION_PERIOD,
+    MAX_REGISTRATION_PERIOD, MAX_TOURNAMENT_LENGTH, MIN_REGISTRATION_PERIOD,
 };
 use budokan::models::schedule::{Period, Schedule};
 use budokan::tests::constants::{
@@ -22,25 +22,15 @@ pub fn test_game_config(game_address: ContractAddress) -> GameConfig {
 }
 
 pub fn test_schedule() -> Schedule {
-    Schedule {
-        registration: Option::Some(test_registration_period()),
-        game: test_game_period(),
-        submission_duration: MIN_SUBMISSION_PERIOD.into(),
-    }
+    Schedule { registration: Option::Some(test_registration_period()), game: test_game_period() }
 }
 
 pub fn test_season_schedule() -> Schedule {
-    Schedule {
-        registration: Option::None,
-        game: test_game_period(),
-        submission_duration: MIN_SUBMISSION_PERIOD.into(),
-    }
+    Schedule { registration: Option::None, game: test_game_period() }
 }
 
-pub fn custom_schedule(
-    registration: Option<Period>, game: Period, submission_duration: u64,
-) -> Schedule {
-    Schedule { registration, game, submission_duration }
+pub fn custom_schedule(registration: Option<Period>, game: Period) -> Schedule {
+    Schedule { registration, game }
 }
 
 pub fn start_time_too_soon() -> Period {
@@ -54,7 +44,6 @@ pub fn tournament_too_long() -> Schedule {
             start: TEST_REGISTRATION_START_TIME().into(),
             end: TEST_REGISTRATION_START_TIME().into() + MAX_TOURNAMENT_LENGTH.into() + 1,
         },
-        MIN_SUBMISSION_PERIOD.into(),
     )
 }
 
@@ -89,9 +78,7 @@ pub fn registration_open_beyond_tournament_end() -> Schedule {
         start: TEST_REGISTRATION_START_TIME().into(), end: TEST_END_TIME().into() + 1,
     };
 
-    custom_schedule(
-        Option::Some(registration_period), tournament_period, MIN_SUBMISSION_PERIOD.into(),
-    )
+    custom_schedule(Option::Some(registration_period), tournament_period)
 }
 
 pub fn create_basic_tournament(budokan: IBudokanDispatcher, game: ContractAddress) -> Tournament {
@@ -105,26 +92,3 @@ pub fn create_basic_tournament(budokan: IBudokanDispatcher, game: ContractAddres
             Option::None,
         )
 }
-// pub fn register_tokens_for_test(
-//     tournament: ITournamentMockDispatcher,
-//     erc20: IERC20MockDispatcher,
-//     erc721: IERC721MockDispatcher,
-// ) {
-//     let tokens = array![
-//         Token {
-//             token: erc20.contract_address,
-//             token_type: TokenType::erc20(ERC20Data { amount: 1 })
-//         },
-//         Token {
-//             token: erc721.contract_address,
-//             token_type: TokenType::erc721(ERC721Data { id: 1 })
-//         },
-//     ];
-
-//     erc20.approve(tournament.contract_address, 1);
-//     erc721.approve(tournament.contract_address, 1);
-
-//     tournament.register_tokens(tokens);
-// }
-
-

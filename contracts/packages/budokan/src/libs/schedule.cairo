@@ -1,6 +1,5 @@
 use budokan::models::constants::{
-    MAX_REGISTRATION_PERIOD, MAX_SUBMISSION_PERIOD, MAX_TOURNAMENT_LENGTH, MIN_REGISTRATION_PERIOD,
-    MIN_SUBMISSION_PERIOD, MIN_TOURNAMENT_LENGTH,
+    MAX_REGISTRATION_PERIOD, MAX_TOURNAMENT_LENGTH, MIN_REGISTRATION_PERIOD, MIN_TOURNAMENT_LENGTH,
 };
 use budokan::models::schedule::{Period, Phase, Schedule};
 
@@ -18,8 +17,6 @@ pub impl ScheduleImpl of ScheduleTrait {
             Phase::Staging
         } else if current_time < self.game.end {
             Phase::Live
-        } else if current_time < self.game.end + self.submission_duration {
-            Phase::Submission
         } else {
             Phase::Finalized
         }
@@ -29,25 +26,18 @@ pub impl ScheduleImpl of ScheduleTrait {
     /// @return bool indicating if the schedule is valid
     fn is_valid(self: Schedule) -> bool {
         let game_valid = self.game.is_valid_game_schedule();
-        let submission_valid = self.is_valid_submission_duration();
         let registration_valid = if let Option::Some(_) = self.registration {
             self.is_valid_registration_schedule()
         } else {
             true
         };
 
-        game_valid && submission_valid && registration_valid
+        game_valid && registration_valid
     }
 
     /// @notice Validates the game period schedule
     fn is_valid_game_schedule(self: Period) -> bool {
         self.ends_after_start() && self.is_min_duration() && self.is_max_duration()
-    }
-
-    /// @notice Checks if the submission duration is valid
-    fn is_valid_submission_duration(self: Schedule) -> bool {
-        self.submission_duration >= MIN_SUBMISSION_PERIOD.into()
-            && self.submission_duration <= MAX_SUBMISSION_PERIOD.into()
     }
 
     /// @notice Validates the registration period schedule
@@ -128,9 +118,6 @@ pub impl ScheduleAssertionsImpl of ScheduleAssertionsTrait {
         // Validate game schedule
         self.game.assert_valid_game_schedule();
 
-        // Validate submission duration
-        self.assert_valid_submission_duration();
-
         // Validate registration if present
         if let Option::Some(_) = self.registration {
             self.assert_valid_registration_schedule();
@@ -147,17 +134,6 @@ pub impl ScheduleAssertionsImpl of ScheduleAssertionsTrait {
         assert!(self.ends_after_start(), "Budokan: Tournament end time must be after start time");
     }
 
-    fn assert_valid_submission_duration(self: Schedule) {
-        assert!(
-            self.is_valid_submission_duration(),
-            "Budokan: Submission duration must be between {} and {}",
-            MIN_SUBMISSION_PERIOD,
-            MAX_SUBMISSION_PERIOD,
-        );
-    }
-
-    /// @notice Asserts that the registration schedule is valid
-    /// @dev This should only be called if registration exists
     fn assert_valid_registration_schedule(self: Schedule) {
         let registration = self.registration.unwrap();
         registration.assert_min_registration_period();
@@ -258,8 +234,8 @@ pub impl ScheduleAssertionsImpl of ScheduleAssertionsTrait {
 #[cfg(test)]
 mod tests {
     use budokan::models::constants::{
-        MAX_REGISTRATION_PERIOD, MAX_SUBMISSION_PERIOD, MAX_TOURNAMENT_LENGTH,
-        MIN_REGISTRATION_PERIOD, MIN_SUBMISSION_PERIOD, MIN_TOURNAMENT_LENGTH,
+        MAX_REGISTRATION_PERIOD, MAX_TOURNAMENT_LENGTH, MIN_REGISTRATION_PERIOD,
+        MIN_TOURNAMENT_LENGTH,
     };
     use core::num::traits::Bounded;
     use super::{Period, Phase, Schedule, ScheduleAssertionsTrait, ScheduleTrait};
@@ -268,9 +244,7 @@ mod tests {
     fn current_phase() {
         // Case 1: No registration period
         let schedule = Schedule {
-            registration: Option::None,
-            game: Period { start: 100, end: 200 },
-            submission_duration: 50,
+            registration: Option::None, game: Period { start: 100, end: 200 },
         };
 
         assert!(
@@ -278,17 +252,13 @@ mod tests {
         );
         assert!(schedule.current_phase(150) == Phase::Live, "Should be Live during game period");
         assert!(
-            schedule.current_phase(220) == Phase::Submission, "Should be Submission after game",
-        );
-        assert!(
-            schedule.current_phase(251) == Phase::Finalized, "Should be Finalized after submission",
+            schedule.current_phase(200) == Phase::Finalized, "Should be Finalized after game end",
         );
 
         // Case 2: With registration period
         let schedule_with_reg = Schedule {
             registration: Option::Some(Period { start: 50, end: 80 }),
             game: Period { start: 100, end: 200 },
-            submission_duration: 50,
         };
 
         assert!(
@@ -308,19 +278,14 @@ mod tests {
             "Should be Live during game period",
         );
         assert!(
-            schedule_with_reg.current_phase(220) == Phase::Submission,
-            "Should be Submission during submission period",
-        );
-        assert!(
-            schedule_with_reg.current_phase(251) == Phase::Finalized,
-            "Should be Finalized after submission period",
+            schedule_with_reg.current_phase(200) == Phase::Finalized,
+            "Should be Finalized after game end",
         );
 
         // Case 3: Edge cases at transition points
         let edge_schedule = Schedule {
             registration: Option::Some(Period { start: 100, end: 200 }),
             game: Period { start: 300, end: 400 },
-            submission_duration: 50,
         };
 
         assert!(
@@ -339,12 +304,8 @@ mod tests {
             edge_schedule.current_phase(300) == Phase::Live, "Should be Live at exact game start",
         );
         assert!(
-            edge_schedule.current_phase(400) == Phase::Submission,
-            "Should be Submission at exact game end",
-        );
-        assert!(
-            edge_schedule.current_phase(450) == Phase::Finalized,
-            "Should be Finalized at exact submission end",
+            edge_schedule.current_phase(400) == Phase::Finalized,
+            "Should be Finalized at exact game end",
         );
 
         // Case 4: Boundary conditions with u64::MAX
@@ -353,7 +314,6 @@ mod tests {
                 Period { start: Bounded::MAX - 100, end: Bounded::MAX - 80 },
             ),
             game: Period { start: Bounded::MAX - 50, end: Bounded::MAX - 20 },
-            submission_duration: 10,
         };
 
         assert!(
@@ -373,10 +333,6 @@ mod tests {
             "Should handle live phase near u64::MAX",
         );
         assert!(
-            max_schedule.current_phase(Bounded::MAX - 15) == Phase::Submission,
-            "Should handle submission near u64::MAX",
-        );
-        assert!(
             max_schedule.current_phase(Bounded::MAX) == Phase::Finalized,
             "Should handle finalized at u64::MAX",
         );
@@ -391,7 +347,6 @@ mod tests {
                 Period { start: 1000, end: 1000 + MIN_REGISTRATION_PERIOD.into() },
             ),
             game: Period { start: 10000, end: 10000 + MIN_TOURNAMENT_LENGTH.into() },
-            submission_duration: MIN_SUBMISSION_PERIOD.into(),
         };
         assert!(valid_schedule.is_valid(), "Should be valid when all conditions met");
 
@@ -399,146 +354,14 @@ mod tests {
         let valid_no_reg = Schedule {
             registration: Option::None,
             game: Period { start: 3000, end: 3000 + MIN_TOURNAMENT_LENGTH.into() },
-            submission_duration: MIN_SUBMISSION_PERIOD.into(),
         };
         assert!(valid_no_reg.is_valid(), "Should be valid without registration");
 
         // Case 3: Invalid game period
         let invalid_game = Schedule {
-            registration: Option::None,
-            game: Period { start: 1000, end: 500 }, // end before start
-            submission_duration: MIN_SUBMISSION_PERIOD.into(),
+            registration: Option::None, game: Period { start: 1000, end: 500 } // end before start
         };
         assert!(!invalid_game.is_valid(), "Should be invalid with invalid game period");
-
-        // Case 4: Invalid submission duration
-        let invalid_submission = Schedule {
-            registration: Option::None,
-            game: Period { start: 3000, end: 3000 + MIN_TOURNAMENT_LENGTH.into() },
-            submission_duration: MIN_SUBMISSION_PERIOD.into() - 1,
-        };
-        assert!(
-            !invalid_submission.is_valid(), "Should be invalid with invalid submission duration",
-        );
-    }
-
-    #[test]
-    fn is_valid_submission_duration() {
-        // Case 1: Valid submission duration at minimum
-        let min_schedule = Schedule {
-            registration: Option::None,
-            game: Period { start: 100, end: 200 },
-            submission_duration: MIN_SUBMISSION_PERIOD.into(),
-        };
-        assert!(
-            min_schedule.is_valid_submission_duration(),
-            "Should be valid at minimum submission duration",
-        );
-
-        // Case 2: Valid submission duration at maximum
-        let max_schedule = Schedule {
-            registration: Option::None,
-            game: Period { start: 100, end: 200 },
-            submission_duration: MAX_SUBMISSION_PERIOD.into(),
-        };
-        assert!(
-            max_schedule.is_valid_submission_duration(),
-            "Should be valid at maximum submission duration",
-        );
-
-        // Case 3: Invalid submission duration below minimum
-        let below_min_schedule = Schedule {
-            registration: Option::None,
-            game: Period { start: 100, end: 200 },
-            submission_duration: MIN_SUBMISSION_PERIOD.into() - 1,
-        };
-        assert!(
-            !below_min_schedule.is_valid_submission_duration(),
-            "Should be invalid below minimum submission duration",
-        );
-
-        // Case 4: Invalid submission duration above maximum
-        let above_max_schedule = Schedule {
-            registration: Option::None,
-            game: Period { start: 100, end: 200 },
-            submission_duration: MAX_SUBMISSION_PERIOD.into() + 1,
-        };
-        assert!(
-            !above_max_schedule.is_valid_submission_duration(),
-            "Should be invalid above maximum submission duration",
-        );
-
-        // Case 5: Valid submission duration in middle of range
-        let mid_schedule = Schedule {
-            registration: Option::None,
-            game: Period { start: 100, end: 200 },
-            submission_duration: (MIN_SUBMISSION_PERIOD.into() + MAX_SUBMISSION_PERIOD.into()) / 2,
-        };
-        assert!(
-            mid_schedule.is_valid_submission_duration(),
-            "Should be valid at middle of submission duration range",
-        );
-    }
-
-    #[test]
-    fn submission_duration_boundary_conditions() {
-        // Case 1: Test at u64 boundaries
-        let max_u64_schedule = Schedule {
-            registration: Option::None,
-            game: Period { start: 100, end: 200 },
-            submission_duration: Bounded::MAX,
-        };
-        assert!(!max_u64_schedule.is_valid_submission_duration(), "Should be invalid at u64::MAX");
-
-        // Case 2: Test at zero
-        let zero_schedule = Schedule {
-            registration: Option::None,
-            game: Period { start: 100, end: 200 },
-            submission_duration: 0,
-        };
-        assert!(!zero_schedule.is_valid_submission_duration(), "Should be invalid at zero");
-
-        // Case 3: Test one below minimum
-        let min_minus_one = Schedule {
-            registration: Option::None,
-            game: Period { start: 100, end: 200 },
-            submission_duration: MIN_SUBMISSION_PERIOD.into() - 1,
-        };
-        assert!(
-            !min_minus_one.is_valid_submission_duration(), "Should be invalid at one below minimum",
-        );
-
-        // Case 4: Test one above maximum
-        let max_plus_one = Schedule {
-            registration: Option::None,
-            game: Period { start: 100, end: 200 },
-            submission_duration: MAX_SUBMISSION_PERIOD.into() + 1,
-        };
-        assert!(
-            !max_plus_one.is_valid_submission_duration(), "Should be invalid at one above maximum",
-        );
-    }
-
-    #[test]
-    #[should_panic(expected: "Budokan: Submission duration must be between")]
-    fn assert_valid_submission_duration_min() {
-        let invalid_schedule = Schedule {
-            registration: Option::None,
-            game: Period { start: 100, end: 200 },
-            submission_duration: MIN_SUBMISSION_PERIOD.into() - 1,
-        };
-        invalid_schedule.assert_valid_submission_duration();
-    }
-
-    #[test]
-    #[should_panic(expected: "Budokan: Submission duration must be between")]
-    fn assert_valid_submission_duration_max() {
-        let invalid_schedule = Schedule {
-            registration: Option::None,
-            game: Period { start: 100, end: 200 },
-            submission_duration: MAX_SUBMISSION_PERIOD.into() + 1,
-        };
-        invalid_schedule.assert_valid_submission_duration();
     }
 
     #[test]
@@ -571,7 +394,6 @@ mod tests {
                 Period { start: 100, end: 100 + MIN_REGISTRATION_PERIOD.into() },
             ),
             game: Period { start: game_start, end: game_end },
-            submission_duration: MIN_SUBMISSION_PERIOD.into(),
         };
         assert!(
             valid_schedule.is_valid_registration_schedule(),
@@ -582,7 +404,6 @@ mod tests {
         let late_reg = Schedule {
             registration: Option::Some(Period { start: game_start + 1, end: game_end }),
             game: Period { start: game_start, end: game_end },
-            submission_duration: MIN_SUBMISSION_PERIOD.into(),
         };
         assert!(
             !late_reg.is_valid_registration_schedule(),
@@ -595,7 +416,6 @@ mod tests {
                 Period { start: 100, end: 100 + MIN_REGISTRATION_PERIOD.into() - 1 },
             ),
             game: Period { start: game_start, end: game_end },
-            submission_duration: MIN_SUBMISSION_PERIOD.into(),
         };
         assert!(
             !short_reg.is_valid_registration_schedule(),
@@ -606,11 +426,7 @@ mod tests {
     #[test]
     fn is_registration_open() {
         // Case 1: No registration period (always open)
-        let no_reg = Schedule {
-            registration: Option::None,
-            game: Period { start: 300, end: 400 },
-            submission_duration: MIN_SUBMISSION_PERIOD.into(),
-        };
+        let no_reg = Schedule { registration: Option::None, game: Period { start: 300, end: 400 } };
         assert!(no_reg.is_registration_open(0), "Should be open with no registration period");
         assert!(no_reg.is_registration_open(500), "Should be open even after game end");
 
@@ -618,7 +434,6 @@ mod tests {
         let with_reg = Schedule {
             registration: Option::Some(Period { start: 100, end: 200 }),
             game: Period { start: 300, end: 400 },
-            submission_duration: MIN_SUBMISSION_PERIOD.into(),
         };
         assert!(!with_reg.is_registration_open(50), "Should be closed before registration");
         assert!(with_reg.is_registration_open(150), "Should be open during registration");
@@ -653,7 +468,6 @@ mod tests {
         let max_schedule = Schedule {
             registration: Option::Some(Period { start: reg_start, end: reg_end }),
             game: Period { start: game_start, end: game_end },
-            submission_duration: MIN_SUBMISSION_PERIOD.into(),
         };
 
         assert!(max_schedule.is_valid(), "Should handle scheduling near u64::MAX");
@@ -679,7 +493,6 @@ mod tests {
                 Period { start: 100, end: game_start + 100 } // Registration ends after game starts
             ),
             game: Period { start: game_start, end: game_end },
-            submission_duration: MIN_SUBMISSION_PERIOD.into(),
         };
         assert!(
             reg_ends_after_game_start.is_valid_registration_schedule(),
@@ -692,7 +505,6 @@ mod tests {
                 Period { start: 100, end: 100 + MAX_REGISTRATION_PERIOD.into() + 1 },
             ),
             game: Period { start: game_start, end: game_end },
-            submission_duration: MIN_SUBMISSION_PERIOD.into(),
         };
         assert!(
             !reg_too_long.is_valid_registration_schedule(),
@@ -708,7 +520,6 @@ mod tests {
                 },
             ),
             game: Period { start: game_start, end: game_end },
-            submission_duration: MIN_SUBMISSION_PERIOD.into(),
         };
         assert!(
             reg_in_past.is_valid_registration_schedule(),
@@ -726,7 +537,6 @@ mod tests {
             game: Period {
                 start: current_time - 1, end: current_time + MIN_TOURNAMENT_LENGTH.into(),
             },
-            submission_duration: MIN_SUBMISSION_PERIOD.into(),
         };
         assert!(game_in_past.is_valid(), "Games can start in past");
 
@@ -737,7 +547,6 @@ mod tests {
                 start: current_time + 100,
                 end: current_time + 100 + MIN_TOURNAMENT_LENGTH.into() - 1,
             },
-            submission_duration: MIN_SUBMISSION_PERIOD.into(),
         };
         assert!(!game_too_short.is_valid(), "Should be invalid when game period is too short");
 
@@ -748,7 +557,6 @@ mod tests {
                 start: current_time + 100,
                 end: current_time + 100 + MAX_TOURNAMENT_LENGTH.into() + 1,
             },
-            submission_duration: MIN_SUBMISSION_PERIOD.into(),
         };
         assert!(!game_too_long.is_valid(), "Should be invalid when game period exceeds maximum");
     }
@@ -759,7 +567,6 @@ mod tests {
         let schedule = Schedule {
             registration: Option::Some(Period { start: 100, end: 200 }),
             game: Period { start: 300, end: 400 },
-            submission_duration: 50,
         };
 
         // Ensure proper phase sequence
@@ -769,10 +576,7 @@ mod tests {
         );
         assert!(schedule.current_phase(250) == Phase::Staging, "Should transition to Staging");
         assert!(schedule.current_phase(350) == Phase::Live, "Should transition to Live");
-        assert!(
-            schedule.current_phase(420) == Phase::Submission, "Should transition to Submission",
-        );
-        assert!(schedule.current_phase(451) == Phase::Finalized, "Should end in Finalized phase");
+        assert!(schedule.current_phase(400) == Phase::Finalized, "Should end in Finalized phase");
 
         // Test no gaps between phases
         assert!(

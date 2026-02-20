@@ -20,6 +20,7 @@ pub mod Budokan {
     use budokan::models::schedule::{Phase, Schedule};
     use budokan_interfaces::budokan::IBudokan;
     use core::num::traits::Zero;
+    use game_components_embeddable_game_standard::metagame::extensions::callback::callback::MetagameCallbackComponent;
     use game_components_embeddable_game_standard::metagame::extensions::context::context::ContextComponent;
     use game_components_embeddable_game_standard::metagame::extensions::context::interface::{
         IMetagameContext, IMetagameContextDetails,
@@ -41,9 +42,7 @@ pub mod Budokan {
     use game_components_interfaces::entry_fee::{
         EntryFee as ComponentEntryFee, EntryFeeConfig, EntryFeeDeposit,
     };
-    use game_components_interfaces::entry_validator::{
-        IEntryValidatorDispatcher, IEntryValidatorDispatcherTrait,
-    };
+    use game_components_interfaces::leaderboard::{ILeaderboard, LeaderboardResult};
     use game_components_interfaces::prize::{Prize as PrizeInput, PrizeConfig};
     use game_components_interfaces::registry::{
         IMinigameRegistryDispatcher, IMinigameRegistryDispatcherTrait,
@@ -52,8 +51,6 @@ pub mod Budokan {
     use game_components_metagame::entry_fee::entry_fee::EntryFeeComponent::EntryFeeInternalTrait;
     use game_components_metagame::entry_requirement::entry_requirement::EntryRequirementComponent;
     use game_components_metagame::entry_requirement::entry_requirement::EntryRequirementComponent::EntryRequirementInternalTrait;
-    use game_components_metagame::leaderboard::interface::ILeaderboard;
-    use game_components_metagame::leaderboard::leaderboard::leaderboard::LeaderboardResult;
     use game_components_metagame::leaderboard::leaderboard_component::LeaderboardComponent;
     use game_components_metagame::leaderboard::leaderboard_component::LeaderboardComponent::LeaderboardInternalTrait;
     use game_components_metagame::leaderboard::store::Store as LeaderboardStore;
@@ -64,6 +61,9 @@ pub mod Budokan {
     use game_components_utilities::distribution::calculator;
     use game_components_utilities::distribution::models::{
         BASIS_POINTS, DIST_TYPE_CUSTOM, DIST_TYPE_EXPONENTIAL, DIST_TYPE_LINEAR, DIST_TYPE_UNIFORM,
+    };
+    use interfaces::entry_requirement_extension::{
+        IEntryRequirementExtensionDispatcher, IEntryRequirementExtensionDispatcherTrait,
     };
     use openzeppelin_access::ownable::OwnableComponent;
     use openzeppelin_interfaces::erc721::{IERC721Dispatcher, IERC721DispatcherTrait};
@@ -80,6 +80,7 @@ pub mod Budokan {
 
     // Components needed: metagame requires SRC5, leaderboard for tournament rankings
     component!(path: MetagameComponent, storage: metagame, event: MetagameEvent);
+    component!(path: MetagameCallbackComponent, storage: callback, event: CallbackEvent);
     component!(path: ContextComponent, storage: context, event: ContextEvent);
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
     component!(path: LeaderboardComponent, storage: leaderboard, event: LeaderboardEvent);
@@ -96,6 +97,11 @@ pub mod Budokan {
     #[abi(embed_v0)]
     impl MetagameImpl = MetagameComponent::MetagameImpl<ContractState>;
     impl MetagameInternalImpl = MetagameComponent::InternalImpl<ContractState>;
+
+    #[abi(embed_v0)]
+    impl MetagameCallbackImpl =
+        MetagameCallbackComponent::MetagameCallbackImpl<ContractState>;
+    impl CallbackInternalImpl = MetagameCallbackComponent::InternalImpl<ContractState>;
 
     impl MetagameInternalContextImpl = ContextComponent::InternalImpl<ContractState>;
 
@@ -124,6 +130,8 @@ pub mod Budokan {
     struct Storage {
         #[substorage(v0)]
         metagame: MetagameComponent::Storage,
+        #[substorage(v0)]
+        callback: MetagameCallbackComponent::Storage,
         #[substorage(v0)]
         context: ContextComponent::Storage,
         #[substorage(v0)]
@@ -175,6 +183,8 @@ pub mod Budokan {
         #[flat]
         MetagameEvent: MetagameComponent::Event,
         #[flat]
+        CallbackEvent: MetagameCallbackComponent::Event,
+        #[flat]
         ContextEvent: ContextComponent::Event,
         #[flat]
         SRC5Event: SRC5Component::Event,
@@ -210,6 +220,9 @@ pub mod Budokan {
         // Initialize metagame component
         self.context.initializer();
         self.metagame.initializer(Option::Some(get_contract_address()), default_token_address);
+
+        // Initialize callback component (registers IMETAGAME_CALLBACK_ID via SRC5)
+        self.callback.initializer();
 
         // Initialize leaderboard component with this contract as owner
         self.leaderboard.initializer(get_contract_address());
@@ -438,7 +451,7 @@ pub mod Budokan {
                         Option::Some(QualificationProof::Extension(proof)) => proof,
                         _ => array![].span(),
                     };
-                    let entry_validator = IEntryValidatorDispatcher {
+                    let entry_validator = IEntryRequirementExtensionDispatcher {
                         contract_address: extension_config.address,
                     };
                     entry_validator
@@ -512,7 +525,7 @@ pub mod Budokan {
             let game_token_address = IMinigameDispatcher { contract_address: game_address }
                 .token_address();
             let game_dispatcher = IERC721Dispatcher { contract_address: game_token_address };
-            let entry_validator_dispatcher = IEntryValidatorDispatcher {
+            let entry_validator_dispatcher = IEntryRequirementExtensionDispatcher {
                 contract_address: extension_address,
             };
 
@@ -562,73 +575,6 @@ pub mod Budokan {
                         is_banned: true,
                     },
                 );
-        }
-
-        /// @title Submit score
-        /// @notice Submits a player's score to the tournament leaderboard.
-        /// @dev Validates tournament phase (must be in Submission period), registration status, and
-        /// leaderboard placement.
-        ///      Position parameter allows players to claim their ranking efficiently.
-        /// @param self A reference to the ContractState object.
-        /// @param tournament_id The tournament ID to submit score for.
-        /// @param token_id The game token ID containing the score.
-        /// @param position The claimed position on the leaderboard (validated against actual
-        /// score).
-        fn submit_score(
-            ref self: ContractState, tournament_id: u64, token_id: felt252, position: u8,
-        ) {
-            // assert tournament exists
-            self._assert_tournament_exists(tournament_id);
-
-            // get tournament
-            let tournament = self._get_tournament(tournament_id);
-
-            // look up entry_id from token_id
-            let entry_id = self.token_to_entry.entry((tournament_id, token_id)).read();
-            let registration = self.registration._get_entry(tournament_id, entry_id);
-
-            // get score for token id
-            let submitted_score = self
-                .get_score_for_token_id(tournament.game_config.address, token_id);
-
-            // validate tournament-specific rules (phase, registration, etc.)
-            self._validate_score_submission(@tournament, @registration);
-
-            // Submit score using leaderboard component (config is stored in leaderboard)
-            let result = self
-                .leaderboard
-                .submit_score(tournament_id, token_id, submitted_score, position);
-
-            // Handle result
-            match result {
-                LeaderboardResult::Success => {
-                    // mark score as submitted
-                    self._mark_score_submitted(tournament_id, token_id);
-
-                    // Emit native event
-                    let leaderboard = self._get_leaderboard(tournament_id);
-                    self
-                        .emit(
-                            events::LeaderboardUpdated {
-                                tournament_id, token_ids: leaderboard.span(),
-                            },
-                        );
-                },
-                LeaderboardResult::InvalidPosition => { panic!("Budokan: Invalid position"); },
-                LeaderboardResult::DuplicateEntry => {
-                    panic!("Budokan: Token already on leaderboard");
-                },
-                LeaderboardResult::ScoreTooLow => {
-                    panic!("Budokan: Score too low for position");
-                },
-                LeaderboardResult::ScoreTooHigh => {
-                    panic!("Budokan: Score too high for position");
-                },
-                LeaderboardResult::LeaderboardFull => { panic!("Budokan: Leaderboard is full"); },
-                LeaderboardResult::InvalidConfig => {
-                    panic!("Budokan: Invalid leaderboard config");
-                },
-            }
         }
 
         /// @title Claim reward
@@ -984,7 +930,7 @@ pub mod Budokan {
             // Configure leaderboard for this tournament
             self
                 .leaderboard
-                ._configure_tournament(
+                ._configure(
                     tournament_id,
                     0xFFFFFFFF_u32, // Unlimited leaderboard (u32::MAX = ~4.3B)
                     false, // Higher scores are better
@@ -1253,7 +1199,7 @@ pub mod Budokan {
             // Extension-specific budokan logic: registration_only check and add_config
             if let EntryRequirementType::extension(extension_config) = entry_requirement
                 .entry_requirement_type {
-                let entry_validator_dispatcher = IEntryValidatorDispatcher {
+                let entry_validator_dispatcher = IEntryRequirementExtensionDispatcher {
                     contract_address: extension_config.address,
                 };
                 let registration_only = entry_validator_dispatcher.registration_only();
@@ -1706,21 +1652,6 @@ pub mod Budokan {
             }
         }
 
-        /// Validates tournament-specific rules for score submission
-        /// Leaderboard position/score validation is handled by game_components_leaderboard
-        fn _validate_score_submission(
-            self: @ContractState, tournament: @TournamentModel, registration: @Registration,
-        ) {
-            let schedule = *tournament.schedule;
-            assert!(
-                schedule.current_phase(get_block_timestamp()) == Phase::Submission,
-                "Budokan: Not in submission period",
-            );
-
-            // Delegate validation to registration component
-            self.registration.assert_valid_for_submission(registration, *tournament.id);
-        }
-
         fn _mark_score_submitted(ref self: ContractState, tournament_id: u64, token_id: felt252) {
             let tournament = self._get_tournament(tournament_id);
             let game_address = tournament.game_config.address;
@@ -1807,5 +1738,77 @@ pub mod Budokan {
                 context: context,
             }
         }
+    }
+
+    impl CallbackHooksImpl of MetagameCallbackComponent::MetagameCallbackHooksTrait<ContractState> {
+        fn on_score_update(
+            ref self: ContractState, token_id: u256, score: u64,
+        ) { // No-op: we only care about final scores via on_game_over
+        }
+
+        fn on_game_over(ref self: ContractState, token_id: u256, final_score: u64) {
+            let token_id_felt: felt252 = token_id.try_into().unwrap();
+
+            // Look up tournament from token
+            let tournament_id = self.token_context_id.entry(token_id_felt).read();
+            assert!(tournament_id != 0, "Budokan: Token not registered for any tournament");
+
+            // Get tournament
+            let tournament = self._get_tournament(tournament_id);
+
+            // Look up registration
+            let entry_id = self.token_to_entry.entry((tournament_id, token_id_felt)).read();
+            let registration = self.registration._get_entry(tournament_id, entry_id);
+
+            // Validate: tournament is in Live phase
+            let schedule = tournament.schedule;
+            let phase = schedule.current_phase(get_block_timestamp());
+            assert!(phase == Phase::Live, "Budokan: Tournament not in live phase");
+
+            // Validate registration (not banned, not already submitted)
+            self.registration.assert_valid_for_submission(@registration, tournament_id);
+
+            // Submit score to leaderboard (auto-finds correct position)
+            let result = self.leaderboard.submit_score(tournament_id, token_id_felt, final_score);
+
+            match result {
+                LeaderboardResult::Success => {
+                    self._mark_score_submitted(tournament_id, token_id_felt);
+                    let leaderboard = self._get_leaderboard(tournament_id);
+                    self
+                        .emit(
+                            events::LeaderboardUpdated {
+                                tournament_id, token_ids: leaderboard.span(),
+                            },
+                        );
+                },
+                _ => panic!("Budokan: Score submission failed"),
+            }
+        }
+
+        fn on_objective_complete(ref self: ContractState, token_id: u256) { // No-op for now
+        }
+    }
+
+    impl LeaderboardHooksImpl of LeaderboardComponent::LeaderboardHooksTrait<ContractState> {
+        fn on_score_submitted(
+            ref self: ContractState, context_id: u64, token_id: felt252, score: u64, position: u8,
+        ) {}
+
+        fn on_configured(
+            ref self: ContractState,
+            context_id: u64,
+            max_entries: u32,
+            ascending: bool,
+            game_address: starknet::ContractAddress,
+        ) {}
+
+        fn on_cleared(ref self: ContractState, context_id: u64) {}
+
+        fn on_ownership_transferred(
+            ref self: ContractState,
+            previous_owner: starknet::ContractAddress,
+            new_owner: starknet::ContractAddress,
+        ) {}
     }
 }

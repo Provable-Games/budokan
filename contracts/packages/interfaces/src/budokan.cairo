@@ -18,7 +18,6 @@ use starknet::ContractAddress;
 pub struct Schedule {
     pub registration: Option<Period>,
     pub game: Period,
-    pub submission_duration: u64,
 }
 
 #[derive(Copy, Drop, Serde, PartialEq, starknet::Store)]
@@ -33,7 +32,6 @@ pub enum Phase {
     Registration,
     Staging,
     Live,
-    Submission,
     Finalized,
 }
 
@@ -128,8 +126,6 @@ pub trait IBudokan<TState> {
     fn ban_entry(
         ref self: TState, tournament_id: u64, game_token_id: felt252, proof: Span<felt252>,
     );
-
-    fn submit_score(ref self: TState, tournament_id: u64, token_id: felt252, position: u8);
 
     fn claim_reward(ref self: TState, tournament_id: u64, reward_type: RewardType);
 

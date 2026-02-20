@@ -9,19 +9,18 @@
 // 3. Refund scenarios (no entrants, partial entrants)
 // 4. Edge cases with distribution_count
 
-use budokan::models::budokan::{
-    Distribution, ERC20Data, EntryFeeRewardType, PrizeType, RewardType, TokenTypeData,
-};
-use budokan::models::constants::MIN_SUBMISSION_PERIOD;
+use budokan::models::budokan::{Distribution, ERC20Data, PrizeType, RewardType, TokenTypeData};
 use budokan::tests::constants::{
-    OWNER, STARTING_BALANCE, TEST_END_TIME, TEST_REGISTRATION_START_TIME,
+    OWNER, TEST_END_TIME, TEST_REGISTRATION_START_TIME, TEST_START_TIME,
 };
 use budokan::tests::helpers::create_basic_tournament;
-use budokan::tests::interfaces::{IERC20MockDispatcher, IERC20MockDispatcherTrait};
+use budokan::tests::interfaces::IERC20MockDispatcherTrait;
 use budokan::tests::mocks::minigame_starknet_mock::IMinigameStarknetMockDispatcherTrait;
 use budokan::tests::test_budokan::setup;
 use budokan_interfaces::budokan::IBudokanDispatcherTrait;
-use game_components_interfaces::prize::IPrizeDispatcherTrait;
+use game_components_embeddable_game_standard::metagame::extensions::callback::interface::{
+    IMetagameCallbackDispatcher, IMetagameCallbackDispatcherTrait,
+};
 use snforge_std::{
     start_cheat_block_timestamp, start_cheat_caller_address, stop_cheat_block_timestamp,
     stop_cheat_caller_address,
@@ -86,23 +85,32 @@ fn test_distributed_prize_claim_all_positions_filled() {
         .budokan
         .enter_tournament(tournament.id, 'player3', owner, Option::None);
 
-    // Move to submission period and submit scores
-    time = TEST_END_TIME().into();
+    // Move to Live phase and end games + submit scores via callback
+    time = TEST_START_TIME().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     contracts.minigame.end_game(token_id1.into(), 100);
     contracts.minigame.end_game(token_id2.into(), 50);
     contracts.minigame.end_game(token_id3.into(), 25);
-    contracts.budokan.submit_score(tournament.id, token_id1, 1);
-    contracts.budokan.submit_score(tournament.id, token_id2, 2);
-    contracts.budokan.submit_score(tournament.id, token_id3, 3);
+
+    let callback = IMetagameCallbackDispatcher {
+        contract_address: contracts.budokan.contract_address,
+    };
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
+    callback.on_game_over(token_id1.into(), 100);
+    callback.on_game_over(token_id2.into(), 50);
+    callback.on_game_over(token_id3.into(), 25);
+    stop_cheat_caller_address(contracts.budokan.contract_address);
 
     // Move to finalized
-    time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD).into();
+    time = TEST_END_TIME().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
+    start_cheat_caller_address(contracts.budokan.contract_address, owner);
     let owner_balance_before = contracts.erc20.balance_of(owner);
 
     // Claim all 3 distributed positions
@@ -228,18 +236,28 @@ fn test_single_prize_without_distribution_works() {
         .budokan
         .enter_tournament(tournament.id, 'player1', owner, Option::None);
 
-    time = TEST_END_TIME().into();
+    // Move to Live phase and end game + submit score via callback
+    time = TEST_START_TIME().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     contracts.minigame.end_game(token_id.into(), 100);
-    contracts.budokan.submit_score(tournament.id, token_id, 1);
+
+    let callback = IMetagameCallbackDispatcher {
+        contract_address: contracts.budokan.contract_address,
+    };
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
+    callback.on_game_over(token_id.into(), 100);
+    stop_cheat_caller_address(contracts.budokan.contract_address);
 
     // Move to finalized
-    time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD).into();
+    time = TEST_END_TIME().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
+    start_cheat_caller_address(contracts.budokan.contract_address, owner);
     let owner_balance_before = contracts.erc20.balance_of(owner);
 
     // Claim as Single prize - should work
@@ -311,22 +329,32 @@ fn test_distributed_prize_without_position_works() {
         .budokan
         .enter_tournament(tournament.id, 'player3', owner, Option::None);
 
-    time = TEST_END_TIME().into();
+    // Move to Live phase and end games + submit scores via callback
+    time = TEST_START_TIME().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     contracts.minigame.end_game(token_id1.into(), 100);
     contracts.minigame.end_game(token_id2.into(), 50);
     contracts.minigame.end_game(token_id3.into(), 25);
-    contracts.budokan.submit_score(tournament.id, token_id1, 1);
-    contracts.budokan.submit_score(tournament.id, token_id2, 2);
-    contracts.budokan.submit_score(tournament.id, token_id3, 3);
+
+    let callback = IMetagameCallbackDispatcher {
+        contract_address: contracts.budokan.contract_address,
+    };
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
+    callback.on_game_over(token_id1.into(), 100);
+    callback.on_game_over(token_id2.into(), 50);
+    callback.on_game_over(token_id3.into(), 25);
+    stop_cheat_caller_address(contracts.budokan.contract_address);
 
     // Finalize
-    time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD).into();
+    time = TEST_END_TIME().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
+    start_cheat_caller_address(contracts.budokan.contract_address, owner);
     let owner_balance_before = contracts.erc20.balance_of(owner);
 
     // Claim as Distributed prize
@@ -397,7 +425,7 @@ fn test_distributed_prize_refund_no_entrants() {
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     // NO ENTRANTS - just wait for tournament to finalize
-    let time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD).into();
+    let time = TEST_END_TIME().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
 
     // Verify leaderboard is empty
@@ -489,24 +517,26 @@ fn test_distributed_prize_partial_entrants_partial_refund() {
         .enter_tournament(tournament.id, 'player2', player2, Option::None);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
-    // Submit scores
-    time = TEST_END_TIME().into();
+    // Move to Live phase and end games + submit scores via callback
+    time = TEST_START_TIME().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     contracts.minigame.end_game(token_id1.into(), 100);
     contracts.minigame.end_game(token_id2.into(), 50);
 
-    start_cheat_caller_address(contracts.budokan.contract_address, owner);
-    contracts.budokan.submit_score(tournament.id, token_id1, 1);
-    stop_cheat_caller_address(contracts.budokan.contract_address);
-
-    start_cheat_caller_address(contracts.budokan.contract_address, player2);
-    contracts.budokan.submit_score(tournament.id, token_id2, 2);
+    let callback = IMetagameCallbackDispatcher {
+        contract_address: contracts.budokan.contract_address,
+    };
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
+    callback.on_game_over(token_id1.into(), 100);
+    callback.on_game_over(token_id2.into(), 50);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     // Finalize
-    time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD).into();
+    time = TEST_END_TIME().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
@@ -619,18 +649,28 @@ fn test_exponential_100_distribution_with_10_positions() {
         .budokan
         .enter_tournament(tournament.id, 'player1', owner, Option::None);
 
-    time = TEST_END_TIME().into();
+    // Move to Live phase and end game + submit score via callback
+    time = TEST_START_TIME().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     contracts.minigame.end_game(token_id1.into(), 100);
-    contracts.budokan.submit_score(tournament.id, token_id1, 1);
+
+    let callback = IMetagameCallbackDispatcher {
+        contract_address: contracts.budokan.contract_address,
+    };
+    start_cheat_caller_address(
+        contracts.budokan.contract_address, contracts.denshokan.contract_address,
+    );
+    callback.on_game_over(token_id1.into(), 100);
+    stop_cheat_caller_address(contracts.budokan.contract_address);
 
     // Finalize
-    time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD).into();
+    time = TEST_END_TIME().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
+    start_cheat_caller_address(contracts.budokan.contract_address, owner);
     let owner_balance_before = contracts.erc20.balance_of(owner);
     let sponsor_balance_before = contracts.erc20.balance_of(sponsor);
 
@@ -734,7 +774,7 @@ fn test_distributed_prize_payout_index_zero_fails() {
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     // Finalize
-    let time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD).into();
+    let time = TEST_END_TIME().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
 
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
@@ -784,7 +824,7 @@ fn test_distributed_prize_beyond_distribution_count_fails() {
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     // Finalize
-    let time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD).into();
+    let time = TEST_END_TIME().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
 
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
@@ -834,7 +874,7 @@ fn test_distributed_prize_double_claim_fails() {
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     // Finalize
-    let time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD).into();
+    let time = TEST_END_TIME().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
 
     start_cheat_caller_address(contracts.budokan.contract_address, owner);

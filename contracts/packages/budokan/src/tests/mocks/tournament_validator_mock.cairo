@@ -37,12 +37,12 @@ pub mod tournament_validator_mock {
     use game_components_interfaces::registration::{
         IRegistrationDispatcher, IRegistrationDispatcherTrait,
     };
-    use game_components_metagame::entry_requirement::entry_validator::EntryValidatorComponent;
-    use game_components_metagame::entry_requirement::entry_validator::EntryValidatorComponent::{
-        EntryValidator, InternalTrait as EntryValidatorInternalTrait,
+    use interfaces::entry_requirement_extension::{
+        IENTRY_REQUIREMENT_EXTENSION_ID, IEntryRequirementExtension,
     };
     use openzeppelin_interfaces::erc721::{IERC721Dispatcher, IERC721DispatcherTrait};
     use openzeppelin_introspection::src5::SRC5Component;
+    use openzeppelin_introspection::src5::SRC5Component::InternalTrait as SRC5InternalTrait;
     use starknet::ContractAddress;
     use starknet::storage::{
         Map, MutableVecTrait, StorageMapReadAccess, StorageMapWriteAccess, StoragePathEntry,
@@ -50,13 +50,7 @@ pub mod tournament_validator_mock {
     };
     use super::{QUALIFIER_TYPE_PARTICIPANTS, QUALIFIER_TYPE_WINNERS};
 
-    component!(path: EntryValidatorComponent, storage: entry_validator, event: EntryValidatorEvent);
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
-
-    #[abi(embed_v0)]
-    impl EntryValidatorImpl =
-        EntryValidatorComponent::EntryValidatorImpl<ContractState>;
-    impl EntryValidatorInternalImpl = EntryValidatorComponent::InternalImpl<ContractState>;
 
     #[abi(embed_v0)]
     impl SRC5Impl = SRC5Component::SRC5Impl<ContractState>;
@@ -64,11 +58,13 @@ pub mod tournament_validator_mock {
     #[storage]
     struct Storage {
         #[substorage(v0)]
-        entry_validator: EntryValidatorComponent::Storage,
-        #[substorage(v0)]
         src5: SRC5Component::Storage,
         /// The Budokan contract address
         budokan_address: ContractAddress,
+        /// Owner address (the metagame/budokan contract)
+        owner_address: ContractAddress,
+        /// Registration only flag
+        registration_only: bool,
         /// Qualifier type per tournament (0 = participants, 1 = winners)
         qualifier_type: Map<u64, felt252>,
         /// Qualifying tournament IDs per tournament
@@ -83,8 +79,6 @@ pub mod tournament_validator_mock {
     #[derive(Drop, starknet::Event)]
     enum Event {
         #[flat]
-        EntryValidatorEvent: EntryValidatorComponent::Event,
-        #[flat]
         SRC5Event: SRC5Component::Event,
     }
 
@@ -93,12 +87,22 @@ pub mod tournament_validator_mock {
         ref self: ContractState, budokan_address: ContractAddress, registration_only: bool,
     ) {
         self.budokan_address.write(budokan_address);
-        self.entry_validator.initializer(budokan_address, registration_only);
+        self.owner_address.write(budokan_address);
+        self.registration_only.write(registration_only);
+        self.src5.register_interface(IENTRY_REQUIREMENT_EXTENSION_ID);
     }
 
-    // Implement the EntryValidator trait for the contract
-    impl EntryValidatorImplInternal of EntryValidator<ContractState> {
-        fn validate_entry(
+    #[abi(embed_v0)]
+    impl EntryValidatorImpl of IEntryRequirementExtension<ContractState> {
+        fn owner_address(self: @ContractState) -> ContractAddress {
+            self.owner_address.read()
+        }
+
+        fn registration_only(self: @ContractState) -> bool {
+            self.registration_only.read()
+        }
+
+        fn valid_entry(
             self: @ContractState,
             context_id: u64,
             player_address: ContractAddress,
@@ -107,7 +111,7 @@ pub mod tournament_validator_mock {
             self.validate_entry_internal(context_id, player_address, qualification)
         }
 
-        fn should_ban_entry(
+        fn should_ban(
             self: @ContractState,
             context_id: u64,
             game_token_id: felt252,
@@ -167,20 +171,20 @@ pub mod tournament_validator_mock {
             };
         }
 
-        fn on_entry_added(
+        fn add_entry(
             ref self: ContractState,
             context_id: u64,
             game_token_id: felt252,
             player_address: ContractAddress,
             qualification: Span<felt252>,
         ) {
-            // Track entry count (component already tracks game_token_ids)
+            // Track entry count
             let key = (context_id, player_address);
             let current_entries = self.tournament_entries.read(key);
             self.tournament_entries.write(key, current_entries + 1);
         }
 
-        fn on_entry_removed(
+        fn remove_entry(
             ref self: ContractState,
             context_id: u64,
             game_token_id: felt252,
