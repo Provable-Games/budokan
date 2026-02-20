@@ -231,7 +231,7 @@ pub mod tournament_validator_mock {
 
             // Get the qualifying tournament to find the game address
             let qualifying_tournament = budokan.tournament(qualifying_tournament_id);
-            let game_address = qualifying_tournament.game_config.address;
+            let game_address = qualifying_tournament.game_config.game_address;
 
             // Check registration exists - use entry count to find the entry
             let entry_count = registration_dispatcher.get_entry_count(qualifying_tournament_id);

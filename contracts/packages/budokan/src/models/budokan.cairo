@@ -3,8 +3,8 @@
 // Re-export all public API types from budokan_interfaces::budokan
 pub use budokan_interfaces::budokan::{
     Distribution, ERC20Data, ERC721Data, EntryFee, EntryFeeRewardType, EntryRequirement,
-    EntryRequirementType, ExtensionConfig, GameConfig, Metadata, NFTQualification, Period, Phase,
-    PrizeData, PrizeType, QualificationProof, RewardType, Schedule, TokenTypeData, Tournament,
+    EntryRequirementType, ExtensionConfig, GameConfig, Metadata, Phase, PrizeData, PrizeType,
+    QualificationProof, RewardType, Schedule, TokenTypeData, Tournament,
 };
 
 // Re-export internal types from component packages

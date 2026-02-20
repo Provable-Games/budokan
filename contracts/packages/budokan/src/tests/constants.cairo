@@ -1,4 +1,6 @@
-use budokan::models::constants::{MIN_REGISTRATION_PERIOD, MIN_TOURNAMENT_LENGTH};
+use budokan::models::constants::{
+    MIN_REGISTRATION_PERIOD, MIN_SUBMISSION_PERIOD, MIN_TOURNAMENT_LENGTH,
+};
 use starknet::ContractAddress;
 
 pub const ADMIN: ContractAddress = 'ADMIN'.try_into().unwrap();
@@ -45,18 +47,27 @@ pub fn SETTINGS_DESCRIPTION() -> ByteArray {
 
 pub const STARTING_BALANCE: u256 = 1000000000000000000000;
 
-pub fn TEST_REGISTRATION_START_TIME() -> u64 {
-    1
+/// Registration start delay (offset from created_at)
+pub fn TEST_REGISTRATION_START_DELAY() -> u32 {
+    100
 }
 
-pub fn TEST_REGISTRATION_END_TIME() -> u64 {
-    TEST_REGISTRATION_START_TIME() + MIN_REGISTRATION_PERIOD
+/// Registration end delay (duration of registration period)
+pub fn TEST_REGISTRATION_END_DELAY() -> u32 {
+    MIN_REGISTRATION_PERIOD
 }
 
-pub fn TEST_START_TIME() -> u64 {
-    1 + MIN_REGISTRATION_PERIOD
+/// Game start delay (offset from created_at)
+pub fn TEST_GAME_START_DELAY() -> u32 {
+    100 + MIN_REGISTRATION_PERIOD + 100
 }
 
-pub fn TEST_END_TIME() -> u64 {
-    TEST_START_TIME() + MIN_TOURNAMENT_LENGTH
+/// Game end delay (duration of game period)
+pub fn TEST_GAME_END_DELAY() -> u32 {
+    MIN_TOURNAMENT_LENGTH
+}
+
+/// Submission duration
+pub fn TEST_SUBMISSION_DURATION() -> u32 {
+    MIN_SUBMISSION_PERIOD
 }

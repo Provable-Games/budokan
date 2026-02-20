@@ -1,11 +1,12 @@
 use budokan::models::budokan::{GameConfig, Metadata, Tournament};
 use budokan::models::constants::{
-    MAX_REGISTRATION_PERIOD, MAX_TOURNAMENT_LENGTH, MIN_REGISTRATION_PERIOD,
+    MIN_REGISTRATION_PERIOD, MIN_SUBMISSION_PERIOD, MIN_TOURNAMENT_LENGTH,
 };
-use budokan::models::schedule::{Period, Schedule};
+use budokan::models::schedule::Schedule;
 use budokan::tests::constants::{
-    OWNER, TEST_END_TIME, TEST_REGISTRATION_END_TIME, TEST_REGISTRATION_START_TIME, TEST_START_TIME,
-    TOURNAMENT_DESCRIPTION, TOURNAMENT_NAME,
+    OWNER, TEST_GAME_END_DELAY, TEST_GAME_START_DELAY, TEST_REGISTRATION_END_DELAY,
+    TEST_REGISTRATION_START_DELAY, TEST_SUBMISSION_DURATION, TOURNAMENT_DESCRIPTION,
+    TOURNAMENT_NAME,
 };
 use budokan_interfaces::budokan::{IBudokanDispatcher, IBudokanDispatcherTrait};
 use starknet::ContractAddress;
@@ -18,67 +19,34 @@ pub fn test_metadata() -> Metadata {
 }
 
 pub fn test_game_config(game_address: ContractAddress) -> GameConfig {
-    GameConfig { address: game_address, settings_id: 1, soulbound: false, play_url: "" }
+    GameConfig {
+        game_address,
+        settings_id: 1,
+        soulbound: false,
+        paymaster: false,
+        client_url: Option::None,
+        renderer: Option::None,
+    }
 }
 
 pub fn test_schedule() -> Schedule {
-    Schedule { registration: Option::Some(test_registration_period()), game: test_game_period() }
+    Schedule {
+        registration_start_delay: TEST_REGISTRATION_START_DELAY(),
+        registration_end_delay: TEST_REGISTRATION_END_DELAY(),
+        game_start_delay: TEST_GAME_START_DELAY(),
+        game_end_delay: TEST_GAME_END_DELAY(),
+        submission_duration: TEST_SUBMISSION_DURATION(),
+    }
 }
 
 pub fn test_season_schedule() -> Schedule {
-    Schedule { registration: Option::None, game: test_game_period() }
-}
-
-pub fn custom_schedule(registration: Option<Period>, game: Period) -> Schedule {
-    Schedule { registration, game }
-}
-
-pub fn start_time_too_soon() -> Period {
-    Period { start: 0, end: TEST_REGISTRATION_END_TIME().into() }
-}
-
-pub fn tournament_too_long() -> Schedule {
-    custom_schedule(
-        Option::None,
-        Period {
-            start: TEST_REGISTRATION_START_TIME().into(),
-            end: TEST_REGISTRATION_START_TIME().into() + MAX_TOURNAMENT_LENGTH.into() + 1,
-        },
-    )
-}
-
-pub fn registration_period_too_short() -> Period {
-    Period {
-        start: TEST_REGISTRATION_START_TIME().into(),
-        end: TEST_REGISTRATION_START_TIME().into() + MIN_REGISTRATION_PERIOD.into() - 1,
+    Schedule {
+        registration_start_delay: 0,
+        registration_end_delay: 0,
+        game_start_delay: 0,
+        game_end_delay: MIN_TOURNAMENT_LENGTH,
+        submission_duration: MIN_SUBMISSION_PERIOD,
     }
-}
-
-pub fn registration_period_too_long() -> Period {
-    Period {
-        start: TEST_REGISTRATION_START_TIME().into(),
-        end: TEST_REGISTRATION_START_TIME().into() + MAX_REGISTRATION_PERIOD.into() + 1,
-    }
-}
-
-pub fn test_registration_period() -> Period {
-    Period {
-        start: TEST_REGISTRATION_START_TIME().into(), end: TEST_REGISTRATION_END_TIME().into(),
-    }
-}
-
-pub fn test_game_period() -> Period {
-    Period { start: TEST_START_TIME().into(), end: TEST_END_TIME().into() }
-}
-
-pub fn registration_open_beyond_tournament_end() -> Schedule {
-    let tournament_period = Period { start: TEST_START_TIME().into(), end: TEST_END_TIME().into() };
-
-    let registration_period = Period {
-        start: TEST_REGISTRATION_START_TIME().into(), end: TEST_END_TIME().into() + 1,
-    };
-
-    custom_schedule(Option::Some(registration_period), tournament_period)
 }
 
 pub fn create_basic_tournament(budokan: IBudokanDispatcher, game: ContractAddress) -> Tournament {

@@ -10,32 +10,14 @@ use starknet::ContractAddress;
 /// Validates that entry fee shares don't exceed 100% (BASIS_POINTS)
 /// Returns true if valid, false otherwise
 pub fn validate_entry_fee_shares(
-    tournament_creator_share: Option<u16>,
-    game_creator_share: Option<u16>,
-    refund_share: Option<u16>,
+    tournament_creator_share: u16, game_creator_share: u16, refund_share: u16,
 ) -> bool {
-    let mut total_shares: u16 = 0;
-
-    if let Option::Some(share) = tournament_creator_share {
-        total_shares += share;
-    }
-
-    if let Option::Some(share) = game_creator_share {
-        total_shares += share;
-    }
-
-    if let Option::Some(share) = refund_share {
-        total_shares += share;
-    }
-
-    total_shares <= BASIS_POINTS
+    tournament_creator_share + game_creator_share + refund_share <= BASIS_POINTS
 }
 
 /// Asserts that entry fee shares don't exceed 100%
 pub fn assert_valid_entry_fee_shares(
-    tournament_creator_share: Option<u16>,
-    game_creator_share: Option<u16>,
-    refund_share: Option<u16>,
+    tournament_creator_share: u16, game_creator_share: u16, refund_share: u16,
 ) {
     assert!(
         validate_entry_fee_shares(tournament_creator_share, game_creator_share, refund_share),
@@ -95,26 +77,24 @@ mod tests {
     #[test]
     fn test_validate_entry_fee_shares_valid() {
         // 50% + 30% + 20% = 100%
-        assert!(
-            validate_entry_fee_shares(Option::Some(5000), Option::Some(3000), Option::Some(2000)),
-        );
+        assert!(validate_entry_fee_shares(5000, 3000, 2000));
     }
 
     #[test]
     fn test_validate_entry_fee_shares_under_100() {
         // 30% + 20% = 50%
-        assert!(validate_entry_fee_shares(Option::Some(3000), Option::Some(2000), Option::None));
+        assert!(validate_entry_fee_shares(3000, 2000, 0));
     }
 
     #[test]
     fn test_validate_entry_fee_shares_exceeds_100() {
         // 60% + 50% = 110%
-        assert!(!validate_entry_fee_shares(Option::Some(6000), Option::Some(5000), Option::None));
+        assert!(!validate_entry_fee_shares(6000, 5000, 0));
     }
 
     #[test]
-    fn test_validate_entry_fee_shares_all_none() {
-        assert!(validate_entry_fee_shares(Option::None, Option::None, Option::None));
+    fn test_validate_entry_fee_shares_all_zero() {
+        assert!(validate_entry_fee_shares(0, 0, 0));
     }
 
     #[test]
