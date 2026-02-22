@@ -35,10 +35,10 @@ const MASK_32: u128 = 0xffffffff;
 const MASK_35: u128 = 0x7FFFFFFFF; // 35 bits of 1s
 const MASK_64: u128 = 0xffffffffffffffff;
 
-/// TournamentConfig packs schedule delays + flags + created_at into u256.
-/// This replaces BOTH TournamentMeta AND ScheduleStorePacking, saving one storage slot.
+/// TournamentConfig packs schedule delays + flags + created_at into felt252 (1 storage slot).
+/// This replaces BOTH TournamentMeta AND ScheduleStorePacking.
 ///
-/// Layout (194 bits, fits in u256 via low/high u128 split):
+/// Layout (194 bits total, fits in felt252's 251-bit capacity):
 ///
 /// Low u128 (94 bits used):
 ///   [0]      paymaster                   (1 bit)
@@ -65,8 +65,8 @@ pub struct TournamentConfig {
     pub submission_duration: u32 // 25 bits
 }
 
-pub impl TournamentConfigStorePacking of StorePacking<TournamentConfig, u256> {
-    fn pack(value: TournamentConfig) -> u256 {
+pub impl TournamentConfigStorePacking of StorePacking<TournamentConfig, felt252> {
+    fn pack(value: TournamentConfig) -> felt252 {
         let paymaster_val: u128 = if value.paymaster {
             1
         } else {
@@ -93,12 +93,15 @@ pub impl TournamentConfigStorePacking of StorePacking<TournamentConfig, u256> {
             + (value.game_end_delay.into() * TWO_POW_25 * TWO_POW_25)
             + (value.submission_duration.into() * TWO_POW_25 * TWO_POW_25 * TWO_POW_25);
 
-        u256 { low, high }
+        // 194 bits fits in felt252 (251 bits), safe to convert
+        let packed_u256 = u256 { low, high };
+        packed_u256.try_into().unwrap()
     }
 
-    fn unpack(value: u256) -> TournamentConfig {
-        let low = value.low;
-        let high = value.high;
+    fn unpack(value: felt252) -> TournamentConfig {
+        let value_u256: u256 = value.into();
+        let low = value_u256.low;
+        let high = value_u256.high;
 
         let paymaster = (low & MASK_1) == 1;
         let soulbound = ((low / TWO_POW_1) & MASK_1) == 1;
@@ -130,50 +133,59 @@ pub impl TournamentConfigStorePacking of StorePacking<TournamentConfig, u256> {
 }
 
 /// Individual TournamentConfig unpack helpers.
-/// Extract single fields from packed u256 without full struct unpacking.
-pub fn unpack_paymaster(packed: u256) -> bool {
+/// Extract single fields from packed felt252 without full struct unpacking.
+pub fn unpack_paymaster(packed: felt252) -> bool {
+    let packed: u256 = packed.into();
     (packed.low & MASK_1) == 1
 }
 
-pub fn unpack_soulbound(packed: u256) -> bool {
+pub fn unpack_soulbound(packed: felt252) -> bool {
+    let packed: u256 = packed.into();
     ((packed.low / TWO_POW_1) & MASK_1) == 1
 }
 
-pub fn unpack_settings_id(packed: u256) -> u32 {
+pub fn unpack_settings_id(packed: felt252) -> u32 {
+    let packed: u256 = packed.into();
     ((packed.low / TWO_POW_2) & MASK_32).try_into().unwrap()
 }
 
-pub fn unpack_created_at(packed: u256) -> u64 {
+pub fn unpack_created_at(packed: felt252) -> u64 {
+    let packed: u256 = packed.into();
     ((packed.low / TWO_POW_34) & MASK_35).try_into().unwrap()
 }
 
-pub fn unpack_registration_start_delay(packed: u256) -> u32 {
+pub fn unpack_registration_start_delay(packed: felt252) -> u32 {
+    let packed: u256 = packed.into();
     ((packed.low / TWO_POW_69) & MASK_25).try_into().unwrap()
 }
 
-pub fn unpack_registration_end_delay(packed: u256) -> u32 {
+pub fn unpack_registration_end_delay(packed: felt252) -> u32 {
+    let packed: u256 = packed.into();
     (packed.high & MASK_25).try_into().unwrap()
 }
 
-pub fn unpack_game_start_delay(packed: u256) -> u32 {
+pub fn unpack_game_start_delay(packed: felt252) -> u32 {
+    let packed: u256 = packed.into();
     ((packed.high / TWO_POW_25) & MASK_25).try_into().unwrap()
 }
 
-pub fn unpack_game_end_delay(packed: u256) -> u32 {
+pub fn unpack_game_end_delay(packed: felt252) -> u32 {
+    let packed: u256 = packed.into();
     ((packed.high / (TWO_POW_25 * TWO_POW_25)) & MASK_25).try_into().unwrap()
 }
 
-pub fn unpack_submission_duration(packed: u256) -> u32 {
+pub fn unpack_submission_duration(packed: felt252) -> u32 {
+    let packed: u256 = packed.into();
     ((packed.high / (TWO_POW_25 * TWO_POW_25 * TWO_POW_25)) & MASK_25).try_into().unwrap()
 }
 
 /// Grouped helper: returns (created_at, game_start_delay, game_end_delay)
-pub fn unpack_game_schedule(packed: u256) -> (u64, u32, u32) {
+pub fn unpack_game_schedule(packed: felt252) -> (u64, u32, u32) {
     (unpack_created_at(packed), unpack_game_start_delay(packed), unpack_game_end_delay(packed))
 }
 
 /// Grouped helper: returns (created_at, registration_start_delay, registration_end_delay)
-pub fn unpack_registration_schedule(packed: u256) -> (u64, u32, u32) {
+pub fn unpack_registration_schedule(packed: felt252) -> (u64, u32, u32) {
     (
         unpack_created_at(packed),
         unpack_registration_start_delay(packed),
@@ -631,5 +643,98 @@ mod tests {
             unpack_submission_duration(packed) == full.submission_duration,
             "sub_duration inconsistent",
         );
+    }
+
+    // =====================================================================
+    // Gas benchmarks: full unpack vs selective unpack for each optimized path
+    // =====================================================================
+    // Compare l2_gas in test output to measure savings.
+    // Each test uses the same packed value to ensure fair comparison.
+
+    fn _bench_packed() -> felt252 {
+        TournamentConfigStorePacking::pack(
+            TournamentConfig {
+                created_at: 1700000000,
+                settings_id: 42,
+                soulbound: true,
+                paymaster: false,
+                registration_start_delay: 3600,
+                registration_end_delay: 7200,
+                game_start_delay: 14400,
+                game_end_delay: 86400,
+                submission_duration: 3600,
+            },
+        )
+    }
+
+    // --- current_phase: full unpack (needs all 5 schedule fields + created_at) ---
+    #[test]
+    fn bench_current_phase_full_unpack() {
+        let packed = _bench_packed();
+        let config = TournamentConfigStorePacking::unpack(packed);
+        // Use all schedule fields + created_at (same as current_phase does)
+        let _ = config.registration_start_delay
+            + config.registration_end_delay
+            + config.game_start_delay
+            + config.game_end_delay
+            + config.submission_duration;
+        let _ = config.created_at;
+    }
+
+    // --- add_prize: full unpack vs unpack_game_schedule (3 fields) ---
+    #[test]
+    fn bench_add_prize_full_unpack() {
+        let packed = _bench_packed();
+        let config = TournamentConfigStorePacking::unpack(packed);
+        let _ = config.created_at;
+        let _ = config.game_start_delay;
+        let _ = config.game_end_delay;
+    }
+
+    #[test]
+    fn bench_add_prize_selective_unpack() {
+        let packed = _bench_packed();
+        let (created_at, game_start_delay, game_end_delay) = unpack_game_schedule(packed);
+        let _ = created_at;
+        let _ = game_start_delay;
+        let _ = game_end_delay;
+    }
+
+    // --- ban_entry: full unpack vs 4 individual helpers ---
+    #[test]
+    fn bench_ban_entry_full_unpack() {
+        let packed = _bench_packed();
+        let config = TournamentConfigStorePacking::unpack(packed);
+        let _ = config.created_at;
+        let _ = config.registration_start_delay;
+        let _ = config.registration_end_delay;
+        let _ = config.game_start_delay;
+    }
+
+    #[test]
+    fn bench_ban_entry_selective_unpack() {
+        let packed = _bench_packed();
+        let _ = unpack_created_at(packed);
+        let _ = unpack_registration_start_delay(packed);
+        let _ = unpack_registration_end_delay(packed);
+        let _ = unpack_game_start_delay(packed);
+    }
+
+    // --- submit_score: full unpack (needs all schedule fields for phase check) ---
+    // submit_score uses full unpack same as current_phase, so same as bench_current_phase_full_unpack.
+    // The savings come from avoiding a second _get_tournament call in _mark_score_submitted.
+    // We benchmark the _mark_score_submitted path: full unpack just for game_address vs passing it.
+    #[test]
+    fn bench_mark_submitted_full_unpack() {
+        let packed = _bench_packed();
+        // Simulates what old _mark_score_submitted did: full unpack just to get one field
+        let config = TournamentConfigStorePacking::unpack(packed);
+        let _ = config.settings_id; // stand-in for game_address (not in packed config)
+    }
+
+    #[test]
+    fn bench_mark_submitted_no_unpack() {
+        // New path: game_address passed as parameter, no unpack needed at all
+        let _game_address: felt252 = 0x1234;
     }
 }

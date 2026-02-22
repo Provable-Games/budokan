@@ -15,7 +15,8 @@ pub mod Budokan {
     use budokan::models::constants::GAME_CREATOR_TOKEN_ID;
     use budokan::models::packed_storage::{
         PackedDistribution, PackedDistributionStorePacking, TournamentConfig,
-        TournamentConfigStorePacking,
+        TournamentConfigStorePacking, unpack_created_at, unpack_game_schedule,
+        unpack_game_start_delay, unpack_registration_end_delay, unpack_registration_start_delay,
     };
     use budokan::models::schedule::{Phase, Schedule};
     use budokan_interfaces::budokan::IBudokan;
@@ -147,8 +148,8 @@ pub mod Budokan {
         // Tournament base data
         tournament_created_by: Map<u64, ContractAddress>,
         tournament_config: Map<
-            u64, TournamentConfig,
-        >, // Packed: delays + flags + created_at + settings_id
+            u64, felt252,
+        >, // Packed felt252: delays + flags + created_at + settings_id
         tournament_creator_token_id: Map<u64, felt252>,
         tournament_game_address: Map<u64, ContractAddress>,
         tournament_metadata: Map<u64, Metadata>,
@@ -266,8 +267,16 @@ pub mod Budokan {
         }
 
         fn current_phase(self: @ContractState, tournament_id: u64) -> Phase {
-            let tournament = self._get_tournament(tournament_id);
-            tournament.schedule.current_phase(tournament.created_at, get_block_timestamp())
+            let packed = self.tournament_config.entry(tournament_id).read();
+            let config = TournamentConfigStorePacking::unpack(packed);
+            let schedule = Schedule {
+                registration_start_delay: config.registration_start_delay,
+                registration_end_delay: config.registration_end_delay,
+                game_start_delay: config.game_start_delay,
+                game_end_delay: config.game_end_delay,
+                submission_duration: config.submission_duration,
+            };
+            schedule.current_phase(config.created_at, get_block_timestamp())
         }
 
         fn create_tournament(
@@ -465,13 +474,15 @@ pub mod Budokan {
             game_token_id: felt252,
             proof: Span<felt252>,
         ) {
-            let tournament = self._get_tournament(tournament_id);
-
             // Assert tournament exists
             self._assert_tournament_exists(tournament_id);
 
+            // Read packed config (1 SLOAD) + game_address (1 SLOAD) + entry_requirement (1 SLOAD)
+            let packed = self.tournament_config.entry(tournament_id).read();
+            let game_address = self.tournament_game_address.entry(tournament_id).read();
+
             // Ensure tournament has an extension entry requirement
-            let entry_requirement = tournament.entry_requirement;
+            let entry_requirement = self.entry_requirement._get_entry_requirement(tournament_id);
             assert!(entry_requirement.is_some(), "Budokan: No entry requirement set");
 
             let extension_config = match entry_requirement.unwrap().entry_requirement_type {
@@ -483,11 +494,14 @@ pub mod Budokan {
 
             // Can only ban from registration start up until game starts
             let current_time = get_block_timestamp();
-            if tournament.schedule.has_registration() {
-                let reg_start: u64 = tournament.created_at
-                    + tournament.schedule.registration_start_delay.into();
-                let game_start: u64 = tournament.created_at
-                    + tournament.schedule.game_start_delay.into();
+            let created_at = unpack_created_at(packed);
+            let registration_start_delay = unpack_registration_start_delay(packed);
+            let registration_end_delay = unpack_registration_end_delay(packed);
+            let game_start_delay = unpack_game_start_delay(packed);
+            let has_registration = registration_start_delay > 0 || registration_end_delay > 0;
+            if has_registration {
+                let reg_start: u64 = created_at + registration_start_delay.into();
+                let game_start: u64 = created_at + game_start_delay.into();
                 assert!(
                     current_time >= reg_start && current_time < game_start,
                     "Budokan: Can only ban from registration start until game starts",
@@ -495,9 +509,6 @@ pub mod Budokan {
             } else {
                 panic!("Budokan: Can only ban tournaments with registration period set");
             }
-
-            // Validate and potentially ban the provided game token ID
-            let game_address = tournament.game_config.game_address;
             let game_token_address = IMinigameDispatcher { contract_address: game_address }
                 .token_address();
             let game_dispatcher = IERC721Dispatcher { contract_address: game_token_address };
@@ -558,19 +569,30 @@ pub mod Budokan {
             // assert tournament exists
             self._assert_tournament_exists(tournament_id);
 
-            // get tournament
-            let tournament = self._get_tournament(tournament_id);
+            // Read packed config (1 SLOAD) + game_address (1 SLOAD)
+            let packed = self.tournament_config.entry(tournament_id).read();
+            let config = TournamentConfigStorePacking::unpack(packed);
+            let game_address = self.tournament_game_address.entry(tournament_id).read();
 
             // look up entry_id from token_id
             let entry_id = self.token_to_entry.entry((tournament_id, token_id)).read();
             let registration = self.registration._get_entry(tournament_id, entry_id);
 
             // get score for token id
-            let submitted_score = self
-                .get_score_for_token_id(tournament.game_config.game_address, token_id);
+            let submitted_score = self.get_score_for_token_id(game_address, token_id);
 
             // validate tournament-specific rules (phase, registration, etc.)
-            self._validate_score_submission(@tournament, @registration);
+            let schedule = Schedule {
+                registration_start_delay: config.registration_start_delay,
+                registration_end_delay: config.registration_end_delay,
+                game_start_delay: config.game_start_delay,
+                game_end_delay: config.game_end_delay,
+                submission_duration: config.submission_duration,
+            };
+            self
+                ._validate_score_submission(
+                    tournament_id, schedule, config.created_at, @registration,
+                );
 
             // Submit score using leaderboard component (config is stored in leaderboard)
             let result = ILeaderboard::submit_score(
@@ -581,7 +603,7 @@ pub mod Budokan {
             match result {
                 LeaderboardResult::Success => {
                     // mark score as submitted
-                    self._mark_score_submitted(tournament_id, token_id);
+                    self._mark_score_submitted(tournament_id, token_id, game_address);
 
                     // Emit native event
                     let leaderboard = self._get_leaderboard(tournament_id);
@@ -640,12 +662,14 @@ pub mod Budokan {
             token_type: TokenTypeData,
             position: Option<u32>,
         ) -> PrizeData {
-            let tournament = self._get_tournament(tournament_id);
-
             // assert tournament exists
             self._assert_tournament_exists(tournament_id);
 
-            tournament.schedule.assert_game_is_active(tournament.created_at, get_block_timestamp());
+            // Read packed config (1 SLOAD) and extract only game schedule fields
+            let packed = self.tournament_config.entry(tournament_id).read();
+            let (created_at, game_start_delay, game_end_delay) = unpack_game_schedule(packed);
+            let game_end: u64 = created_at + game_start_delay.into() + game_end_delay.into();
+            assert!(game_end > get_block_timestamp(), "Budokan: Tournament has ended");
 
             // Validate that position and distribution are mutually exclusive
             if position.is_some() {
@@ -742,8 +766,10 @@ pub mod Budokan {
         // Tournament operations - reading from packed storage
         #[inline(always)]
         fn _get_tournament(self: @ContractState, tournament_id: u64) -> TournamentModel {
-            // Read packed config (replaces both tournament_meta and tournament_schedule)
-            let config = self.tournament_config.entry(tournament_id).read();
+            // Read packed config felt252 and unpack
+            let config = TournamentConfigStorePacking::unpack(
+                self.tournament_config.entry(tournament_id).read(),
+            );
 
             // Read other fields
             let created_by = self.tournament_created_by.entry(tournament_id).read();
@@ -886,7 +912,10 @@ pub mod Budokan {
                 game_end_delay: schedule.game_end_delay,
                 submission_duration: schedule.submission_duration,
             };
-            self.tournament_config.entry(tournament_id).write(config);
+            self
+                .tournament_config
+                .entry(tournament_id)
+                .write(TournamentConfigStorePacking::pack(config));
 
             // Store creator_token_id separately (felt252, too large for packed storage)
             self.tournament_creator_token_id.entry(tournament_id).write(creator_token_id);
@@ -1681,22 +1710,27 @@ pub mod Budokan {
 
         /// Validates tournament-specific rules for score submission
         fn _validate_score_submission(
-            self: @ContractState, tournament: @TournamentModel, registration: @Registration,
+            self: @ContractState,
+            tournament_id: u64,
+            schedule: Schedule,
+            created_at: u64,
+            registration: @Registration,
         ) {
-            let schedule = *tournament.schedule;
-            let created_at = *tournament.created_at;
             assert!(
                 schedule.current_phase(created_at, get_block_timestamp()) == Phase::Submission,
                 "Budokan: Not in submission period",
             );
 
             // Delegate validation to registration component
-            self.registration.assert_valid_for_submission(registration, *tournament.id);
+            self.registration.assert_valid_for_submission(registration, tournament_id);
         }
 
-        fn _mark_score_submitted(ref self: ContractState, tournament_id: u64, token_id: felt252) {
-            let tournament = self._get_tournament(tournament_id);
-            let game_address = tournament.game_config.game_address;
+        fn _mark_score_submitted(
+            ref self: ContractState,
+            tournament_id: u64,
+            token_id: felt252,
+            game_address: ContractAddress,
+        ) {
             let entry_id = self.token_to_entry.entry((tournament_id, token_id)).read();
             self.registration.mark_entry_submitted(tournament_id, entry_id);
 
