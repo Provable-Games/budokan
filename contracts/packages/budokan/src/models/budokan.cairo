@@ -11,10 +11,10 @@ pub use budokan_interfaces::budokan::{
 pub use game_components_interfaces::entry_fee::{AdditionalShare};
 pub use game_components_interfaces::entry_requirement::QualificationEntries;
 pub use game_components_interfaces::registration::Registration;
-pub use game_components_metagame::entry_fee::models::EntryFeeClaimType;
+pub use game_components_metagame::entry_fee::structs::EntryFeeClaimType;
 /// Storage format for entry fees (used internally by components)
 /// This is an alias to the entry_fee component's EntryFeeConfig type
-pub use game_components_metagame::entry_fee::models::EntryFeeConfig as StoredEntryFee;
+pub use game_components_metagame::entry_fee::structs::EntryFeeConfig as StoredEntryFee;
 
 // Internal storage types (not part of public API)
 #[derive(Drop, Serde)]
