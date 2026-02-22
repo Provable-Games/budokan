@@ -721,7 +721,8 @@ mod tests {
     }
 
     // --- submit_score: full unpack (needs all schedule fields for phase check) ---
-    // submit_score uses full unpack same as current_phase, so same as bench_current_phase_full_unpack.
+    // submit_score uses full unpack same as current_phase, so same as
+    // bench_current_phase_full_unpack.
     // The savings come from avoiding a second _get_tournament call in _mark_score_submitted.
     // We benchmark the _mark_score_submitted path: full unpack just for game_address vs passing it.
     #[test]
