@@ -3,8 +3,8 @@
 pub mod budokan;
 pub mod events;
 
-// Models (types)
-pub mod models {
+// Structs (types)
+pub mod structs {
     pub mod budokan;
     pub mod constants;
     pub mod lifecycle;
