@@ -9,10 +9,10 @@
 // 3. Refund scenarios (no entrants, partial entrants)
 // 4. Edge cases with distribution_count
 
-use budokan::models::budokan::{
+use budokan::structs::budokan::{
     Distribution, ERC20Data, EntryFeeRewardType, PrizeType, RewardType, TokenTypeData,
 };
-use budokan::models::constants::MIN_SUBMISSION_PERIOD;
+use budokan::structs::constants::MIN_SUBMISSION_PERIOD;
 use budokan::tests::constants::{
     OWNER, STARTING_BALANCE, TEST_GAME_END_DELAY, TEST_GAME_START_DELAY,
     TEST_REGISTRATION_START_DELAY, TEST_SUBMISSION_DURATION,

@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: UNLICENSED
 
-use budokan::models::budokan::{
+use budokan::structs::budokan::{
     Distribution, ERC20Data, ERC721Data, EntryFee, EntryFeeRewardType, EntryRequirement,
     EntryRequirementType, ExtensionConfig, GameConfig, PrizeType, QualificationProof, RewardType,
     TokenTypeData,
 };
-use budokan::models::constants::{
+use budokan::structs::constants::{
     MAX_REGISTRATION_PERIOD, MAX_SUBMISSION_PERIOD, MAX_TOURNAMENT_LENGTH, MIN_REGISTRATION_PERIOD,
     MIN_SUBMISSION_PERIOD, MIN_TOURNAMENT_LENGTH,
 };
-use budokan::models::schedule::{Phase, Schedule};
+use budokan::structs::schedule::{Phase, Schedule};
 use budokan::tests::constants::{
     OWNER, STARTING_BALANCE, TEST_GAME_END_DELAY, TEST_GAME_START_DELAY,
     TEST_REGISTRATION_END_DELAY, TEST_REGISTRATION_START_DELAY, TEST_SUBMISSION_DURATION,

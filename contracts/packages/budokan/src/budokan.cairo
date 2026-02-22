@@ -6,19 +6,19 @@ pub mod Budokan {
     use budokan::libs::schedule::{
         ScheduleAssertionsImpl, ScheduleAssertionsTrait, ScheduleImpl, ScheduleTrait,
     };
-    use budokan::models::budokan::{
+    use budokan::structs::budokan::{
         AdditionalShare, Distribution, EntryFee, EntryFeeClaimType, EntryFeeRewardType,
         EntryRequirement, EntryRequirementType, GameConfig, Metadata, PrizeData, PrizeType,
         QualificationEntries, QualificationProof, Registration, RewardType, TokenTypeData,
         Tournament as TournamentModel,
     };
-    use budokan::models::constants::GAME_CREATOR_TOKEN_ID;
-    use budokan::models::packed_storage::{
+    use budokan::structs::constants::GAME_CREATOR_TOKEN_ID;
+    use budokan::structs::packed_storage::{
         PackedDistribution, PackedDistributionStorePacking, TournamentConfig,
         TournamentConfigStorePacking, unpack_created_at, unpack_game_schedule,
         unpack_game_start_delay, unpack_registration_end_delay, unpack_registration_start_delay,
     };
-    use budokan::models::schedule::{Phase, Schedule};
+    use budokan::structs::schedule::{Phase, Schedule};
     use budokan_interfaces::budokan::IBudokan;
     use core::num::traits::Zero;
     use game_components_embeddable_game_standard::metagame::extensions::context::context::ContextComponent;

@@ -1,4 +1,4 @@
-use budokan::models::constants::{
+use budokan::structs::constants::{
     MIN_REGISTRATION_PERIOD, MIN_SUBMISSION_PERIOD, MIN_TOURNAMENT_LENGTH,
 };
 use starknet::ContractAddress;

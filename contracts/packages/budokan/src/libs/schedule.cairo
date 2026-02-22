@@ -1,8 +1,8 @@
-use budokan::models::constants::{
+use budokan::structs::constants::{
     MAX_REGISTRATION_PERIOD, MAX_SUBMISSION_PERIOD, MAX_TOURNAMENT_LENGTH, MIN_REGISTRATION_PERIOD,
     MIN_SUBMISSION_PERIOD, MIN_TOURNAMENT_LENGTH,
 };
-use budokan::models::schedule::{Phase, Schedule};
+use budokan::structs::schedule::{Phase, Schedule};
 
 #[generate_trait]
 pub impl ScheduleImpl of ScheduleTrait {
@@ -202,7 +202,7 @@ pub impl ScheduleAssertionsImpl of ScheduleAssertionsTrait {
 
 #[cfg(test)]
 mod tests {
-    use budokan::models::constants::{
+    use budokan::structs::constants::{
         MAX_REGISTRATION_PERIOD, MAX_SUBMISSION_PERIOD, MAX_TOURNAMENT_LENGTH,
         MIN_REGISTRATION_PERIOD, MIN_SUBMISSION_PERIOD, MIN_TOURNAMENT_LENGTH,
     };
