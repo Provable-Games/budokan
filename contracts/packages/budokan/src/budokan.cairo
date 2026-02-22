@@ -47,19 +47,19 @@ pub mod Budokan {
     use game_components_interfaces::registry::{
         IMinigameRegistryDispatcher, IMinigameRegistryDispatcherTrait,
     };
-    use game_components_metagame::entry_fee::entry_fee::EntryFeeComponent;
-    use game_components_metagame::entry_fee::entry_fee::EntryFeeComponent::EntryFeeInternalTrait;
-    use game_components_metagame::entry_requirement::entry_requirement::EntryRequirementComponent;
-    use game_components_metagame::entry_requirement::entry_requirement::EntryRequirementComponent::EntryRequirementInternalTrait;
+    use game_components_metagame::entry_fee::entry_fee_component::EntryFeeComponent;
+    use game_components_metagame::entry_fee::entry_fee_component::EntryFeeComponent::EntryFeeInternalTrait;
+    use game_components_metagame::entry_requirement::entry_requirement_component::EntryRequirementComponent;
+    use game_components_metagame::entry_requirement::entry_requirement_component::EntryRequirementComponent::EntryRequirementInternalTrait;
     use game_components_metagame::leaderboard::leaderboard_component::LeaderboardComponent;
     use game_components_metagame::leaderboard::leaderboard_component::LeaderboardComponent::LeaderboardInternalTrait;
     use game_components_metagame::leaderboard::store::Store as LeaderboardStore;
-    use game_components_metagame::prize::prize::PrizeComponent;
-    use game_components_metagame::prize::prize::PrizeComponent::PrizeInternalTrait;
-    use game_components_metagame::registration::registration::RegistrationComponent;
-    use game_components_metagame::registration::registration::RegistrationComponent::RegistrationInternalTrait;
+    use game_components_metagame::prize::prize_component::PrizeComponent;
+    use game_components_metagame::prize::prize_component::PrizeComponent::PrizeInternalTrait;
+    use game_components_metagame::registration::registration_component::RegistrationComponent;
+    use game_components_metagame::registration::registration_component::RegistrationComponent::RegistrationInternalTrait;
     use game_components_utilities::distribution::calculator;
-    use game_components_utilities::distribution::models::{
+    use game_components_utilities::distribution::structs::{
         BASIS_POINTS, DIST_TYPE_CUSTOM, DIST_TYPE_EXPONENTIAL, DIST_TYPE_LINEAR, DIST_TYPE_UNIFORM,
     };
     use interfaces::entry_requirement_extension::{
