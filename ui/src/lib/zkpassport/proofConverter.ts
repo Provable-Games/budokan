@@ -198,6 +198,20 @@ function parseExpectedProofLength(error: unknown): number | undefined {
 }
 
 /**
+ * Strips the length prefix that `garaga.getZKHonkCallData()` prepends.
+ *
+ * Garaga returns `[N, elem0, elem1, ..., elemN-1]` where `N` is the count
+ * of remaining elements. Starknet's `CallData.compile()` adds its own
+ * serialization prefix, so we must strip the garaga one first.
+ */
+export function stripGaragaLengthPrefix(calldata: bigint[]): bigint[] {
+  if (calldata.length > 0 && calldata[0] === BigInt(calldata.length - 1)) {
+    return calldata.slice(1);
+  }
+  return calldata;
+}
+
+/**
  * Extracts a nullifier from a 256-bit unique identifier string.
  * Splits into [low_128, high_128] for Starknet u256 representation.
  */
@@ -434,10 +448,13 @@ export async function buildQualification(
     }
   }
 
+  // Strip the length prefix that garaga prepends before building qualification
+  const strippedCalldata = stripGaragaLengthPrefix(garagaCalldata);
+
   // Build final qualification: [nullifier_low, nullifier_high, ...garaga_calldata]
   return [
     nullifierLow,
     nullifierHigh,
-    ...garagaCalldata.map((v: bigint) => v.toString()),
+    ...strippedCalldata.map((v: bigint) => v.toString()),
   ];
 }
