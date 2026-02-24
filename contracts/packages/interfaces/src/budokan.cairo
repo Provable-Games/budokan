@@ -34,6 +34,16 @@ pub enum Phase {
 }
 
 // ==============================================
+// LEADERBOARD CONFIG
+// ==============================================
+
+#[derive(Copy, Drop, Serde, PartialEq)]
+pub struct LeaderboardConfig {
+    pub ascending: bool, // true = lower scores better, false = higher scores better
+    pub game_must_be_over: bool // true = game_over() must return true before score submission
+}
+
+// ==============================================
 // BUDOKAN CORE MODELS
 // ==============================================
 
@@ -59,6 +69,7 @@ pub struct Tournament {
     pub game_config: GameConfig,
     pub entry_fee: Option<EntryFee>,
     pub entry_requirement: Option<EntryRequirement>,
+    pub leaderboard_config: LeaderboardConfig,
 }
 
 #[derive(Clone, Drop, Serde, starknet::Store)]
@@ -113,6 +124,7 @@ pub trait IBudokan<TState> {
         game_config: GameConfig,
         entry_fee: Option<EntryFee>,
         entry_requirement: Option<EntryRequirement>,
+        leaderboard_config: LeaderboardConfig,
     ) -> Tournament;
 
     fn enter_tournament(
