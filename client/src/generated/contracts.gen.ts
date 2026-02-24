@@ -752,7 +752,7 @@ export function setupWorld(provider: DojoProvider, namespace: string) {
         {
           contractName: "tournament_mock",
           entrypoint: "enter_tournament",
-          calldata: [tournamentId, playerName, playerAddress, qualification],
+          calldata: [tournamentId, playerName, playerAddress, qualification, 0, 0],
         },
         namespace
       );

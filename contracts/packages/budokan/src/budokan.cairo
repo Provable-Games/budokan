@@ -165,8 +165,6 @@ pub mod Budokan {
         token_to_entry: Map<(u64, felt252), u32>,
         // Map game_token_id → context_id (tournament_id) for global token lookups
         token_context_id: Map<felt252, u64>,
-        // Monotonically increasing nonce for unique token ID generation (used as mint salt)
-        mint_nonce: u16,
     }
 
     #[event]
@@ -288,6 +286,8 @@ pub mod Budokan {
             entry_fee: Option<EntryFee>,
             entry_requirement: Option<EntryRequirement>,
             leaderboard_config: LeaderboardConfig,
+            salt: u16,
+            metadata_value: u16,
         ) -> TournamentModel {
             schedule.assert_is_valid();
             self._assert_valid_game_config(@game_config);
@@ -328,7 +328,9 @@ pub mod Budokan {
                     Option::None, // renderer_address
                     creator_rewards_address,
                     false, // soulbound
-                    false // paymaster
+                    false, // paymaster
+                    salt,
+                    metadata_value,
                 );
 
             self
@@ -350,6 +352,8 @@ pub mod Budokan {
             player_name: felt252,
             player_address: ContractAddress,
             qualification: Option<QualificationProof>,
+            salt: u16,
+            metadata_value: u16,
         ) -> (felt252, u32) {
             let tournament = self._get_tournament(tournament_id);
 
@@ -432,7 +436,9 @@ pub mod Budokan {
                     renderer,
                     mint_to_address, // to
                     tournament.game_config.soulbound, // soulbound
-                    tournament.game_config.paymaster // paymaster
+                    tournament.game_config.paymaster, // paymaster
+                    salt,
+                    metadata_value,
                 );
 
             // For extension-based entry requirements, register the entry with the extension
@@ -1330,11 +1336,9 @@ pub mod Budokan {
             to: ContractAddress,
             soulbound: bool,
             paymaster: bool,
+            salt: u16,
+            metadata: u16,
         ) -> felt252 {
-            // Increment mint nonce for unique token IDs
-            let nonce = self.mint_nonce.read();
-            self.mint_nonce.write(nonce + 1);
-
             let game_dispatcher = IMinigameDispatcher { contract_address: game_address };
             let game_token_address = game_dispatcher.token_address();
             IMinigameTokenDispatcher { contract_address: game_token_address }
@@ -1351,8 +1355,8 @@ pub mod Budokan {
                     to,
                     soulbound,
                     paymaster,
-                    nonce, // salt - unique per mint
-                    0_u16 // metadata
+                    salt,
+                    metadata,
                 )
         }
 

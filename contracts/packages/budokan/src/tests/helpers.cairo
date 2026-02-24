@@ -54,6 +54,12 @@ pub fn test_leaderboard_config() -> LeaderboardConfig {
 }
 
 pub fn create_basic_tournament(budokan: IBudokanDispatcher, game: ContractAddress) -> Tournament {
+    create_basic_tournament_with_salt(budokan, game, 0)
+}
+
+pub fn create_basic_tournament_with_salt(
+    budokan: IBudokanDispatcher, game: ContractAddress, salt: u16,
+) -> Tournament {
     budokan
         .create_tournament(
             OWNER,
@@ -63,5 +69,7 @@ pub fn create_basic_tournament(budokan: IBudokanDispatcher, game: ContractAddres
             Option::None,
             Option::None,
             test_leaderboard_config(),
+            salt,
+            0,
         )
 }
