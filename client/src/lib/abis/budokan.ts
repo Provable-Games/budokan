@@ -798,6 +798,14 @@ const BUDOKAN_ABI = [
             name: "entry_requirement",
             type: "core::option::Option::<budokan_entry_requirement::models::EntryRequirement>",
           },
+          {
+            name: "salt",
+            type: "core::integer::u16",
+          },
+          {
+            name: "metadata_value",
+            type: "core::integer::u16",
+          },
         ],
         outputs: [
           {
@@ -825,6 +833,14 @@ const BUDOKAN_ABI = [
           {
             name: "qualification",
             type: "core::option::Option::<budokan_entry_requirement::models::QualificationProof>",
+          },
+          {
+            name: "salt",
+            type: "core::integer::u16",
+          },
+          {
+            name: "metadata_value",
+            type: "core::integer::u16",
           },
         ],
         outputs: [

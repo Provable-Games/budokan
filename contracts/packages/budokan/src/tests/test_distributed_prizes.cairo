@@ -79,13 +79,13 @@ fn test_distributed_prize_claim_all_positions_filled() {
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
     let (token_id1, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 1, 0);
     let (token_id2, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player2', owner, Option::None);
+        .enter_tournament(tournament.id, 'player2', owner, Option::None, 2, 0);
     let (token_id3, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player3', owner, Option::None);
+        .enter_tournament(tournament.id, 'player3', owner, Option::None, 3, 0);
 
     // Move to submission period (game end)
     time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
@@ -227,7 +227,7 @@ fn test_single_prize_without_distribution_works() {
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
     let (token_id, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 1, 0);
 
     // Move to submission (game end)
     time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
@@ -305,13 +305,13 @@ fn test_distributed_prize_without_position_works() {
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
     let (token_id1, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 1, 0);
     let (token_id2, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player2', owner, Option::None);
+        .enter_tournament(tournament.id, 'player2', owner, Option::None, 2, 0);
     let (token_id3, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player3', owner, Option::None);
+        .enter_tournament(tournament.id, 'player3', owner, Option::None, 3, 0);
 
     time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
@@ -483,13 +483,13 @@ fn test_distributed_prize_partial_entrants_partial_refund() {
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
     let (token_id1, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 1, 0);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     start_cheat_caller_address(contracts.budokan.contract_address, player2);
     let (token_id2, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player2', player2, Option::None);
+        .enter_tournament(tournament.id, 'player2', player2, Option::None, 2, 0);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     // Submit scores
@@ -618,7 +618,7 @@ fn test_exponential_100_distribution_with_10_positions() {
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
     let (token_id1, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 1, 0);
 
     time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);

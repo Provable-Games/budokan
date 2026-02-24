@@ -125,6 +125,8 @@ pub trait IBudokan<TState> {
         entry_fee: Option<EntryFee>,
         entry_requirement: Option<EntryRequirement>,
         leaderboard_config: LeaderboardConfig,
+        salt: u16,
+        metadata_value: u16,
     ) -> Tournament;
 
     fn enter_tournament(
@@ -133,6 +135,8 @@ pub trait IBudokan<TState> {
         player_name: felt252,
         player_address: ContractAddress,
         qualification: Option<QualificationProof>,
+        salt: u16,
+        metadata_value: u16,
     ) -> (felt252, u32);
 
     fn ban_entry(

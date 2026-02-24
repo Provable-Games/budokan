@@ -87,6 +87,8 @@ export const useSystemCalls = () => {
         player_name,
         player_address,
         qualification,
+        0, // salt
+        0, // metadata_value
       ]);
       let calls: { contractAddress: string; entrypoint: string; calldata: any }[] = [];
 
@@ -513,6 +515,8 @@ export const useSystemCalls = () => {
         tournament.entry_requirement,
         tournament.soulbound,
         tournament.play_url,
+        0, // salt
+        0, // metadata_value
       ]);
 
       let calls = [];
@@ -645,6 +649,8 @@ export const useSystemCalls = () => {
           tournament.entry_requirement,
           tournament.soulbound,
           tournament.play_url,
+          0, // salt
+          0, // metadata_value
         ]),
       };
 
