@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 use budokan_interfaces::budokan::{
-    EntryFee, EntryRequirement, GameConfig, Metadata, QualificationProof, RewardType, Schedule,
-    TokenTypeData,
+    EntryFee, EntryRequirement, GameConfig, LeaderboardConfig, Metadata, QualificationProof,
+    RewardType, Schedule, TokenTypeData,
 };
 use starknet::ContractAddress;
 
@@ -20,6 +20,7 @@ pub struct TournamentCreated {
     pub game_config: GameConfig,
     pub entry_fee: Option<EntryFee>,
     pub entry_requirement: Option<EntryRequirement>,
+    pub leaderboard_config: LeaderboardConfig,
 }
 
 #[derive(Drop, starknet::Event)]

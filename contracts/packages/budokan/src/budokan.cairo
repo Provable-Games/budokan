@@ -8,9 +8,9 @@ pub mod Budokan {
     };
     use budokan::structs::budokan::{
         AdditionalShare, Distribution, EntryFee, EntryFeeClaimType, EntryFeeRewardType,
-        EntryRequirement, EntryRequirementType, GameConfig, Metadata, PrizeData, PrizeType,
-        QualificationEntries, QualificationProof, Registration, RewardType, TokenTypeData,
-        Tournament as TournamentModel,
+        EntryRequirement, EntryRequirementType, GameConfig, LeaderboardConfig, Metadata, PrizeData,
+        PrizeType, QualificationEntries, QualificationProof, Registration, RewardType,
+        TokenTypeData, Tournament as TournamentModel,
     };
     use budokan::structs::constants::GAME_CREATOR_TOKEN_ID;
     use budokan::structs::packed_storage::{
@@ -287,6 +287,7 @@ pub mod Budokan {
             game_config: GameConfig,
             entry_fee: Option<EntryFee>,
             entry_requirement: Option<EntryRequirement>,
+            leaderboard_config: LeaderboardConfig,
         ) -> TournamentModel {
             schedule.assert_is_valid();
             self._assert_valid_game_config(@game_config);
@@ -339,6 +340,7 @@ pub mod Budokan {
                     entry_fee,
                     distribution,
                     entry_requirement,
+                    leaderboard_config,
                 )
         }
 
@@ -580,6 +582,14 @@ pub mod Budokan {
 
             // get score for token id
             let submitted_score = self.get_score_for_token_id(game_address, token_id);
+
+            // If game_must_be_over is set, verify the game is finished before accepting score
+            if config.game_must_be_over {
+                let game_dispatcher = IMinigameTokenDataDispatcher {
+                    contract_address: game_address,
+                };
+                assert(game_dispatcher.game_over(token_id), 'Budokan: Game not over');
+            }
 
             // validate tournament-specific rules (phase, registration, etc.)
             let schedule = Schedule {
@@ -868,6 +878,11 @@ pub mod Budokan {
             // Read creator_token_id from separate storage (too large for packed storage)
             let creator_token_id = self.tournament_creator_token_id.entry(tournament_id).read();
 
+            // Reconstruct LeaderboardConfig from packed storage
+            let leaderboard_config = LeaderboardConfig {
+                ascending: config.ascending, game_must_be_over: config.game_must_be_over,
+            };
+
             // Return reconstructed tournament model
             TournamentModel {
                 id: tournament_id,
@@ -879,6 +894,7 @@ pub mod Budokan {
                 game_config,
                 entry_fee,
                 entry_requirement,
+                leaderboard_config,
             }
         }
 
@@ -892,6 +908,7 @@ pub mod Budokan {
             entry_fee: Option<EntryFee>,
             distribution: Distribution,
             entry_requirement: Option<EntryRequirement>,
+            leaderboard_config: LeaderboardConfig,
         ) -> TournamentModel {
             // Increment total tournaments
             let tournament_id = self.total_tournaments.read() + 1;
@@ -911,6 +928,8 @@ pub mod Budokan {
                 game_start_delay: schedule.game_start_delay,
                 game_end_delay: schedule.game_end_delay,
                 submission_duration: schedule.submission_duration,
+                ascending: leaderboard_config.ascending,
+                game_must_be_over: leaderboard_config.game_must_be_over,
             };
             self
                 .tournament_config
@@ -997,7 +1016,7 @@ pub mod Budokan {
                 ._configure(
                     tournament_id,
                     0xFFFFFFFF_u32, // Unlimited leaderboard (u32::MAX = ~4.3B)
-                    false, // Higher scores are better
+                    leaderboard_config.ascending,
                     game_config.game_address,
                 );
 
@@ -1015,6 +1034,7 @@ pub mod Budokan {
                         game_config,
                         entry_fee,
                         entry_requirement,
+                        leaderboard_config,
                     },
                 );
 

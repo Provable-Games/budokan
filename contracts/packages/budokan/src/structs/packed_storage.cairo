@@ -26,6 +26,8 @@ const TWO_POW_35: u128 = 0x800000000; // 2^35
 const TWO_POW_59: u128 = 0x800000000000000; // 2^59
 const TWO_POW_64: u128 = 0x10000000000000000;
 const TWO_POW_69: u128 = 0x200000000000000000; // 2^69
+const TWO_POW_100: u128 = 0x10000000000000000000000000; // 2^100
+const TWO_POW_101: u128 = 0x20000000000000000000000000; // 2^101
 
 const MASK_1: u128 = 0x1; // 1 bit
 const MASK_8: u128 = 0xFF; // 8 bits of 1s
@@ -38,7 +40,7 @@ const MASK_64: u128 = 0xffffffffffffffff;
 /// TournamentConfig packs schedule delays + flags + created_at into felt252 (1 storage slot).
 /// This replaces BOTH TournamentMeta AND ScheduleStorePacking.
 ///
-/// Layout (194 bits total, fits in felt252's 251-bit capacity):
+/// Layout (196 bits total, fits in felt252's 251-bit capacity):
 ///
 /// Low u128 (94 bits used):
 ///   [0]      paymaster                   (1 bit)
@@ -47,11 +49,13 @@ const MASK_64: u128 = 0xffffffffffffffff;
 ///   [34..68] created_at                  (35 bits)
 ///   [69..93] registration_start_delay    (25 bits)
 ///
-/// High u128 (100 bits used):
+/// High u128 (102 bits used):
 ///   [0..24]  registration_end_delay      (25 bits)
 ///   [25..49] game_start_delay            (25 bits)
 ///   [50..74] game_end_delay              (25 bits)
 ///   [75..99] submission_duration         (25 bits)
+///   [100]    ascending                   (1 bit)
+///   [101]    game_must_be_over           (1 bit)
 #[derive(Copy, Drop, Serde)]
 pub struct TournamentConfig {
     pub created_at: u64, // 35 bits, 0 = tournament doesn't exist
@@ -62,7 +66,9 @@ pub struct TournamentConfig {
     pub registration_end_delay: u32, // 25 bits
     pub game_start_delay: u32, // 25 bits
     pub game_end_delay: u32, // 25 bits
-    pub submission_duration: u32 // 25 bits
+    pub submission_duration: u32, // 25 bits
+    pub ascending: bool, // 1 bit
+    pub game_must_be_over: bool // 1 bit
 }
 
 pub impl TournamentConfigStorePacking of StorePacking<TournamentConfig, felt252> {
@@ -86,14 +92,27 @@ pub impl TournamentConfigStorePacking of StorePacking<TournamentConfig, felt252>
             + (value.created_at.into() * TWO_POW_34)
             + (value.registration_start_delay.into() * TWO_POW_69);
 
+        let ascending_val: u128 = if value.ascending {
+            1
+        } else {
+            0
+        };
+        let game_must_be_over_val: u128 = if value.game_must_be_over {
+            1
+        } else {
+            0
+        };
+
         // High u128: registration_end_delay(25) | game_start_delay(25) | game_end_delay(25) |
-        // submission_duration(25)
+        // submission_duration(25) | ascending(1) | game_must_be_over(1)
         let high: u128 = value.registration_end_delay.into()
             + (value.game_start_delay.into() * TWO_POW_25)
             + (value.game_end_delay.into() * TWO_POW_25 * TWO_POW_25)
-            + (value.submission_duration.into() * TWO_POW_25 * TWO_POW_25 * TWO_POW_25);
+            + (value.submission_duration.into() * TWO_POW_25 * TWO_POW_25 * TWO_POW_25)
+            + (ascending_val * TWO_POW_100)
+            + (game_must_be_over_val * TWO_POW_101);
 
-        // 194 bits fits in felt252 (251 bits), safe to convert
+        // 196 bits fits in felt252 (251 bits), safe to convert
         let packed_u256 = u256 { low, high };
         packed_u256.try_into().unwrap()
     }
@@ -117,6 +136,8 @@ pub impl TournamentConfigStorePacking of StorePacking<TournamentConfig, felt252>
         let submission_duration: u32 = ((high / (TWO_POW_25 * TWO_POW_25 * TWO_POW_25)) & MASK_25)
             .try_into()
             .unwrap();
+        let ascending = ((high / TWO_POW_100) & MASK_1) == 1;
+        let game_must_be_over = ((high / TWO_POW_101) & MASK_1) == 1;
 
         TournamentConfig {
             created_at,
@@ -128,6 +149,8 @@ pub impl TournamentConfigStorePacking of StorePacking<TournamentConfig, felt252>
             game_start_delay,
             game_end_delay,
             submission_duration,
+            ascending,
+            game_must_be_over,
         }
     }
 }
@@ -179,6 +202,16 @@ pub fn unpack_submission_duration(packed: felt252) -> u32 {
     ((packed.high / (TWO_POW_25 * TWO_POW_25 * TWO_POW_25)) & MASK_25).try_into().unwrap()
 }
 
+pub fn unpack_ascending(packed: felt252) -> bool {
+    let packed: u256 = packed.into();
+    ((packed.high / TWO_POW_100) & MASK_1) == 1
+}
+
+pub fn unpack_game_must_be_over(packed: felt252) -> bool {
+    let packed: u256 = packed.into();
+    ((packed.high / TWO_POW_101) & MASK_1) == 1
+}
+
 /// Grouped helper: returns (created_at, game_start_delay, game_end_delay)
 pub fn unpack_game_schedule(packed: felt252) -> (u64, u32, u32) {
     (unpack_created_at(packed), unpack_game_start_delay(packed), unpack_game_end_delay(packed))
@@ -228,8 +261,8 @@ pub impl PackedDistributionStorePacking of StorePacking<PackedDistribution, felt
 mod tests {
     use super::{
         PackedDistribution, PackedDistributionStorePacking, TournamentConfig,
-        TournamentConfigStorePacking, unpack_created_at, unpack_game_end_delay,
-        unpack_game_schedule, unpack_game_start_delay, unpack_paymaster,
+        TournamentConfigStorePacking, unpack_ascending, unpack_created_at, unpack_game_end_delay,
+        unpack_game_must_be_over, unpack_game_schedule, unpack_game_start_delay, unpack_paymaster,
         unpack_registration_end_delay, unpack_registration_schedule,
         unpack_registration_start_delay, unpack_settings_id, unpack_soulbound,
         unpack_submission_duration,
@@ -247,6 +280,8 @@ mod tests {
             game_start_delay: 5000,
             game_end_delay: 7200,
             submission_duration: 3600,
+            ascending: false,
+            game_must_be_over: false,
         };
 
         let packed = TournamentConfigStorePacking::pack(original);
@@ -261,6 +296,8 @@ mod tests {
         assert!(unpacked.game_start_delay == 5000, "game_start_delay mismatch");
         assert!(unpacked.game_end_delay == 7200, "game_end_delay mismatch");
         assert!(unpacked.submission_duration == 3600, "submission_duration mismatch");
+        assert!(unpacked.ascending == false, "ascending mismatch");
+        assert!(unpacked.game_must_be_over == false, "game_must_be_over mismatch");
     }
 
     #[test]
@@ -276,6 +313,8 @@ mod tests {
             game_start_delay: 0x1FFFFFF,
             game_end_delay: 0x1FFFFFF,
             submission_duration: 0x1FFFFFF,
+            ascending: true,
+            game_must_be_over: true,
         };
 
         let packed = TournamentConfigStorePacking::pack(original);
@@ -290,6 +329,8 @@ mod tests {
         assert!(unpacked.game_start_delay == 0x1FFFFFF, "max game_start mismatch");
         assert!(unpacked.game_end_delay == 0x1FFFFFF, "max game_end mismatch");
         assert!(unpacked.submission_duration == 0x1FFFFFF, "max sub_duration mismatch");
+        assert!(unpacked.ascending == true, "max ascending mismatch");
+        assert!(unpacked.game_must_be_over == true, "max game_must_be_over mismatch");
     }
 
     #[test]
@@ -304,6 +345,8 @@ mod tests {
             game_start_delay: 0,
             game_end_delay: 0,
             submission_duration: 0,
+            ascending: false,
+            game_must_be_over: false,
         };
 
         let packed = TournamentConfigStorePacking::pack(original);
@@ -318,6 +361,8 @@ mod tests {
         assert!(unpacked.game_start_delay == 0, "zero game_start mismatch");
         assert!(unpacked.game_end_delay == 0, "zero game_end mismatch");
         assert!(unpacked.submission_duration == 0, "zero sub_duration mismatch");
+        assert!(unpacked.ascending == false, "zero ascending mismatch");
+        assert!(unpacked.game_must_be_over == false, "zero game_must_be_over mismatch");
     }
 
     #[test]
@@ -378,6 +423,8 @@ mod tests {
                 game_start_delay: 0,
                 game_end_delay: 0,
                 submission_duration: 0,
+                ascending: false,
+                game_must_be_over: false,
             },
         );
         assert!(unpack_paymaster(with_paymaster) == true, "paymaster should be true");
@@ -393,6 +440,8 @@ mod tests {
                 game_start_delay: 0,
                 game_end_delay: 0,
                 submission_duration: 0,
+                ascending: false,
+                game_must_be_over: false,
             },
         );
         assert!(unpack_paymaster(without_paymaster) == false, "paymaster should be false");
@@ -411,6 +460,8 @@ mod tests {
                 game_start_delay: 0,
                 game_end_delay: 0,
                 submission_duration: 0,
+                ascending: false,
+                game_must_be_over: false,
             },
         );
         assert!(unpack_soulbound(with_soulbound) == true, "soulbound should be true");
@@ -426,6 +477,8 @@ mod tests {
                 game_start_delay: 0,
                 game_end_delay: 0,
                 submission_duration: 0,
+                ascending: false,
+                game_must_be_over: false,
             },
         );
         assert!(unpack_soulbound(without_soulbound) == false, "soulbound should be false");
@@ -444,6 +497,8 @@ mod tests {
                 game_start_delay: 700,
                 game_end_delay: 800,
                 submission_duration: 900,
+                ascending: false,
+                game_must_be_over: false,
             },
         );
         assert!(unpack_settings_id(packed) == 12345678, "settings_id mismatch");
@@ -462,6 +517,8 @@ mod tests {
                 game_start_delay: 300,
                 game_end_delay: 400,
                 submission_duration: 500,
+                ascending: false,
+                game_must_be_over: false,
             },
         );
         assert!(unpack_created_at(packed) == 1700000000, "created_at mismatch");
@@ -480,6 +537,8 @@ mod tests {
                 game_start_delay: 0,
                 game_end_delay: 0,
                 submission_duration: 0,
+                ascending: false,
+                game_must_be_over: false,
             },
         );
         assert!(
@@ -500,6 +559,8 @@ mod tests {
                 game_start_delay: 5000,
                 game_end_delay: 7200,
                 submission_duration: 1800,
+                ascending: false,
+                game_must_be_over: false,
             },
         );
         assert!(unpack_registration_end_delay(packed) == 3600, "registration_end_delay mismatch");
@@ -521,6 +582,8 @@ mod tests {
                 game_start_delay: 5000,
                 game_end_delay: 7200,
                 submission_duration: 900,
+                ascending: false,
+                game_must_be_over: false,
             },
         );
         let (created_at, game_start, game_end) = unpack_game_schedule(packed);
@@ -542,6 +605,8 @@ mod tests {
                 game_start_delay: 500,
                 game_end_delay: 600,
                 submission_duration: 700,
+                ascending: false,
+                game_must_be_over: false,
             },
         );
         let (created_at, reg_start, reg_end) = unpack_registration_schedule(packed);
@@ -563,6 +628,8 @@ mod tests {
                 game_start_delay: 0x1FFFFFF,
                 game_end_delay: 0x1FFFFFF,
                 submission_duration: 0x1FFFFFF,
+                ascending: true,
+                game_must_be_over: true,
             },
         );
         assert!(unpack_paymaster(packed) == true, "max paymaster mismatch");
@@ -578,6 +645,8 @@ mod tests {
         assert!(
             unpack_submission_duration(packed) == 0x1FFFFFF, "max submission_duration mismatch",
         );
+        assert!(unpack_ascending(packed) == true, "max ascending mismatch");
+        assert!(unpack_game_must_be_over(packed) == true, "max game_must_be_over mismatch");
     }
 
     #[test]
@@ -593,6 +662,8 @@ mod tests {
                 game_start_delay: 0,
                 game_end_delay: 0,
                 submission_duration: 0,
+                ascending: false,
+                game_must_be_over: false,
             },
         );
         assert!(unpack_paymaster(packed) == false, "zero paymaster mismatch");
@@ -604,6 +675,8 @@ mod tests {
         assert!(unpack_game_start_delay(packed) == 0, "zero game_start_delay mismatch");
         assert!(unpack_game_end_delay(packed) == 0, "zero game_end_delay mismatch");
         assert!(unpack_submission_duration(packed) == 0, "zero submission_duration mismatch");
+        assert!(unpack_ascending(packed) == false, "zero ascending mismatch");
+        assert!(unpack_game_must_be_over(packed) == false, "zero game_must_be_over mismatch");
     }
 
     #[test]
@@ -618,6 +691,8 @@ mod tests {
             game_start_delay: 5000,
             game_end_delay: 7200,
             submission_duration: 3600,
+            ascending: true,
+            game_must_be_over: false,
         };
 
         let packed = TournamentConfigStorePacking::pack(original);
@@ -643,6 +718,87 @@ mod tests {
             unpack_submission_duration(packed) == full.submission_duration,
             "sub_duration inconsistent",
         );
+        assert!(unpack_ascending(packed) == full.ascending, "ascending inconsistent");
+        assert!(
+            unpack_game_must_be_over(packed) == full.game_must_be_over,
+            "game_must_be_over inconsistent",
+        );
+    }
+
+    #[test]
+    fn test_unpack_ascending() {
+        let with_ascending = TournamentConfigStorePacking::pack(
+            TournamentConfig {
+                created_at: 100,
+                settings_id: 1,
+                soulbound: false,
+                paymaster: false,
+                registration_start_delay: 0,
+                registration_end_delay: 0,
+                game_start_delay: 0,
+                game_end_delay: 0,
+                submission_duration: 0,
+                ascending: true,
+                game_must_be_over: false,
+            },
+        );
+        assert!(unpack_ascending(with_ascending) == true, "ascending should be true");
+
+        let without_ascending = TournamentConfigStorePacking::pack(
+            TournamentConfig {
+                created_at: 100,
+                settings_id: 1,
+                soulbound: false,
+                paymaster: false,
+                registration_start_delay: 0,
+                registration_end_delay: 0,
+                game_start_delay: 0,
+                game_end_delay: 0,
+                submission_duration: 0,
+                ascending: false,
+                game_must_be_over: false,
+            },
+        );
+        assert!(unpack_ascending(without_ascending) == false, "ascending should be false");
+    }
+
+    #[test]
+    fn test_unpack_game_must_be_over() {
+        let with_gmbo = TournamentConfigStorePacking::pack(
+            TournamentConfig {
+                created_at: 100,
+                settings_id: 1,
+                soulbound: false,
+                paymaster: false,
+                registration_start_delay: 0,
+                registration_end_delay: 0,
+                game_start_delay: 0,
+                game_end_delay: 0,
+                submission_duration: 0,
+                ascending: false,
+                game_must_be_over: true,
+            },
+        );
+        assert!(unpack_game_must_be_over(with_gmbo) == true, "game_must_be_over should be true");
+
+        let without_gmbo = TournamentConfigStorePacking::pack(
+            TournamentConfig {
+                created_at: 100,
+                settings_id: 1,
+                soulbound: false,
+                paymaster: false,
+                registration_start_delay: 0,
+                registration_end_delay: 0,
+                game_start_delay: 0,
+                game_end_delay: 0,
+                submission_duration: 0,
+                ascending: false,
+                game_must_be_over: false,
+            },
+        );
+        assert!(
+            unpack_game_must_be_over(without_gmbo) == false, "game_must_be_over should be false",
+        );
     }
 
     // =====================================================================
@@ -663,6 +819,8 @@ mod tests {
                 game_start_delay: 14400,
                 game_end_delay: 86400,
                 submission_duration: 3600,
+                ascending: false,
+                game_must_be_over: false,
             },
         )
     }

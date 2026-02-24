@@ -1,4 +1,4 @@
-use budokan::structs::budokan::{GameConfig, Metadata, Tournament};
+use budokan::structs::budokan::{GameConfig, LeaderboardConfig, Metadata, Tournament};
 use budokan::structs::constants::{
     MIN_REGISTRATION_PERIOD, MIN_SUBMISSION_PERIOD, MIN_TOURNAMENT_LENGTH,
 };
@@ -49,6 +49,10 @@ pub fn test_season_schedule() -> Schedule {
     }
 }
 
+pub fn test_leaderboard_config() -> LeaderboardConfig {
+    LeaderboardConfig { ascending: false, game_must_be_over: false }
+}
+
 pub fn create_basic_tournament(budokan: IBudokanDispatcher, game: ContractAddress) -> Tournament {
     budokan
         .create_tournament(
@@ -58,5 +62,6 @@ pub fn create_basic_tournament(budokan: IBudokanDispatcher, game: ContractAddres
             test_game_config(game),
             Option::None,
             Option::None,
+            test_leaderboard_config(),
         )
 }
