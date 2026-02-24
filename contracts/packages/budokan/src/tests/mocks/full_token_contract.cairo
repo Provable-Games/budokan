@@ -11,13 +11,13 @@ use game_components_embeddable_game_standard::minigame::structs::GameDetail;
 use game_components_embeddable_game_standard::registry::interface::{
     IMinigameRegistryDispatcher, IMinigameRegistryDispatcherTrait,
 };
-use game_components_embeddable_game_standard::token::core::core_token::CoreTokenComponent;
 use game_components_embeddable_game_standard::token::extensions::context::context::ContextComponent;
 use game_components_embeddable_game_standard::token::extensions::minter::minter::MinterComponent;
 use game_components_embeddable_game_standard::token::extensions::objectives::objectives::ObjectivesComponent;
 use game_components_embeddable_game_standard::token::extensions::renderer::renderer::RendererComponent;
 use game_components_embeddable_game_standard::token::extensions::settings::settings::SettingsComponent;
 use game_components_embeddable_game_standard::token::structs::TokenMetadata;
+use game_components_embeddable_game_standard::token::token_component::CoreTokenComponent;
 use game_components_utilities::utils::renderer::{create_custom_metadata, create_default_svg};
 use openzeppelin_interfaces::erc2981::IERC2981;
 use openzeppelin_interfaces::erc721::IERC721Metadata;

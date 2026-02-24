@@ -43,8 +43,8 @@ pub mod metagame_starknet_mock {
     use game_components_embeddable_game_standard::metagame::extensions::context::structs::{
         GameContext, GameContextDetails,
     };
-    use game_components_embeddable_game_standard::metagame::metagame::MetagameComponent;
-    use game_components_embeddable_game_standard::metagame::metagame::MetagameComponent::InternalTrait as MetagameInternalTrait;
+    use game_components_embeddable_game_standard::metagame::metagame_component::MetagameComponent;
+    use game_components_embeddable_game_standard::metagame::metagame_component::MetagameComponent::InternalTrait as MetagameInternalTrait;
     use openzeppelin_introspection::src5::SRC5Component;
     use starknet::ContractAddress;
     use starknet::storage::{
@@ -58,8 +58,8 @@ pub mod metagame_starknet_mock {
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
 
     impl CallbackHooksImpl of MetagameCallbackComponent::MetagameCallbackHooksTrait<ContractState> {
-        fn on_score_update(ref self: ContractState, token_id: u256, score: u64) {
-            self.cb_score_update_count.write(self.cb_score_update_count.read() + 1);
+        fn on_game_action(ref self: ContractState, token_id: u256, score: u64) {
+            self.cb_game_action_count.write(self.cb_game_action_count.read() + 1);
             self.cb_last_token_id.write(token_id);
             self.cb_last_score.write(score);
         }
@@ -104,7 +104,7 @@ pub mod metagame_starknet_mock {
         token_context_name: Map<(felt252, u32), ByteArray>,
         token_context_value: Map<(felt252, u32), ByteArray>,
         token_context_exists: Map<felt252, bool>,
-        cb_score_update_count: u32,
+        cb_game_action_count: u32,
         cb_game_over_count: u32,
         cb_objective_complete_count: u32,
         cb_last_token_id: u256,

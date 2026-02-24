@@ -28,7 +28,7 @@ pub mod Budokan {
     use game_components_embeddable_game_standard::metagame::extensions::context::structs::{
         GameContext, GameContextDetails,
     };
-    use game_components_embeddable_game_standard::metagame::metagame::MetagameComponent;
+    use game_components_embeddable_game_standard::metagame::metagame_component::MetagameComponent;
     use game_components_embeddable_game_standard::minigame::extensions::settings::interface::{
         IMinigameSettingsDispatcher, IMinigameSettingsDispatcherTrait,
     };
@@ -36,7 +36,7 @@ pub mod Budokan {
         IMINIGAME_ID, IMinigameDispatcher, IMinigameDispatcherTrait, IMinigameTokenDataDispatcher,
         IMinigameTokenDataDispatcherTrait,
     };
-    use game_components_embeddable_game_standard::token::core::interface::{
+    use game_components_embeddable_game_standard::token::interface::{
         IMinigameTokenDispatcher, IMinigameTokenDispatcherTrait,
     };
     use game_components_interfaces::entry_fee::{
