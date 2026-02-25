@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: UNLICENSED
 
+use budokan::mocks::minigame_starknet_mock::{
+    IMinigameStarknetMockDispatcher, IMinigameStarknetMockDispatcherTrait,
+};
+use budokan::mocks::tournament_validator_mock::{
+    QUALIFIER_TYPE_PARTICIPANTS, QUALIFIER_TYPE_WINNERS,
+};
 use budokan::structs::budokan::{
     Distribution, ERC20Data, ERC721Data, EntryFee, EntryFeeRewardType, EntryRequirement,
     EntryRequirementType, ExtensionConfig, GameConfig, LeaderboardConfig, PrizeType,
@@ -22,12 +28,6 @@ use budokan::tests::helpers::{
 use budokan::tests::interfaces::{
     IERC20MockDispatcher, IERC20MockDispatcherTrait, IERC721MockDispatcher,
     IERC721MockDispatcherTrait, IERC721OldMockDispatcher,
-};
-use budokan::tests::mocks::minigame_starknet_mock::{
-    IMinigameStarknetMockDispatcher, IMinigameStarknetMockDispatcherTrait,
-};
-use budokan::tests::mocks::tournament_validator_mock::{
-    QUALIFIER_TYPE_PARTICIPANTS, QUALIFIER_TYPE_WINNERS,
 };
 use budokan::tests::setup_denshokan;
 use budokan_interfaces::budokan::{IBudokanDispatcher, IBudokanDispatcherTrait};

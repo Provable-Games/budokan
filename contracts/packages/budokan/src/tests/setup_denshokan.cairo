@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 
-use budokan::tests::mocks::minigame_starknet_mock::{
+use budokan::mocks::minigame_starknet_mock::{
     IMinigameStarknetMockDispatcher, IMinigameStarknetMockInitDispatcher,
     IMinigameStarknetMockInitDispatcherTrait,
 };

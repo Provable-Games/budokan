@@ -1,0 +1,29 @@
+[package]
+name = "budokan_viewer"
+version.workspace = true
+edition.workspace = true
+cairo-version.workspace = true
+
+[dependencies]
+starknet.workspace = true
+budokan_interfaces = { path = "../interfaces" }
+game_components_interfaces.workspace = true
+openzeppelin_access.workspace = true
+openzeppelin_interfaces.workspace = true
+openzeppelin_upgrades.workspace = true
+
+[dev-dependencies]
+snforge_std.workspace = true
+budokan = { path = "../budokan" }
+game_components_embeddable_game_standard.workspace = true
+
+[[target.starknet-contract]]
+sierra = true
+casm = true
+build-external-contracts = [
+    "budokan::budokan::Budokan",
+    "budokan::mocks::minigame_starknet_mock::minigame_starknet_mock",
+    "budokan::mocks::minigame_registry_contract::MinigameRegistryContract",
+    "budokan::mocks::full_token_contract::FullTokenContract",
+    "budokan::mocks::erc20_mock::erc20_mock",
+]

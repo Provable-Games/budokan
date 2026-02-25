@@ -2,6 +2,7 @@
 members = [
     "contracts/packages/interfaces",
     "contracts/packages/budokan",
+    "contracts/packages/viewer",
 ]
 
 [workspace.package]
