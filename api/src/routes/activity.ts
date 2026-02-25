@@ -30,7 +30,7 @@ app.get("/", async (c) => {
         .select()
         .from(tournamentEvents)
         .where(where)
-        .orderBy(desc(tournamentEvents.createdAt))
+        .orderBy(desc(tournamentEvents.blockNumber))
         .limit(limit)
         .offset(offset),
       db
@@ -41,15 +41,13 @@ app.get("/", async (c) => {
 
     return c.json({
       data: rows.map((ev) => ({
-        id: ev.id,
         eventType: ev.eventType,
         tournamentId: ev.tournamentId?.toString() ?? null,
         playerAddress: ev.playerAddress,
-        gameAddress: ev.gameAddress,
         txHash: ev.txHash,
-        blockNumber: ev.blockNumber?.toString() ?? null,
+        blockNumber: ev.blockNumber.toString(),
+        eventIndex: ev.eventIndex,
         data: ev.data,
-        createdAt: ev.createdAt.toISOString(),
       })),
       pagination: {
         total: countResult[0]?.count ?? 0,
@@ -78,10 +76,7 @@ app.get("/stats", async (c) => {
           totalTournaments: 0,
           totalRegistrations: 0,
           totalPrizes: 0,
-          totalRewardsClaimed: 0,
-          uniquePlayers: 0,
-          uniqueGames: 0,
-          updatedAt: null,
+          totalSubmissions: 0,
         },
       });
     }
@@ -92,10 +87,7 @@ app.get("/stats", async (c) => {
         totalTournaments: s.totalTournaments,
         totalRegistrations: s.totalRegistrations,
         totalPrizes: s.totalPrizes,
-        totalRewardsClaimed: s.totalRewardsClaimed,
-        uniquePlayers: s.uniquePlayers,
-        uniqueGames: s.uniqueGames,
-        updatedAt: s.updatedAt.toISOString(),
+        totalSubmissions: s.totalSubmissions,
       },
     });
   } catch (err) {

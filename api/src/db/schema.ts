@@ -1,216 +1,182 @@
+/**
+ * API Database Schema
+ *
+ * This schema MUST match the indexer's canonical schema (indexer/src/lib/schema.ts).
+ * The indexer creates and populates all tables; the API is a read-only layer.
+ */
+
 import {
   pgTable,
-  text,
-  integer,
   bigint,
+  integer,
+  text,
   boolean,
-  timestamp,
   jsonb,
-  uniqueIndex,
   index,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 
-// ─── tournaments ──────────────────────────────────────────────────────────────
-// Core tournament definitions indexed from on-chain TournamentCreated events.
-
+// ---------------------------------------------------------------------------
+// tournaments
+// ---------------------------------------------------------------------------
 export const tournaments = pgTable(
   "tournaments",
   {
-    id: bigint("id", { mode: "bigint" }).primaryKey(),
+    tournamentId: bigint("tournament_id", { mode: "bigint" }).primaryKey(),
     gameAddress: text("game_address").notNull(),
-    creator: text("creator").notNull(),
+    createdAt: bigint("created_at", { mode: "bigint" }),
+    createdBy: text("created_by"),
     creatorTokenId: text("creator_token_id"),
-    name: text("name").notNull(),
-    description: text("description").notNull().default(""),
-
-    // Schedule: raw delay values (seconds from created_at)
-    registrationStartDelay: integer("registration_start_delay"),
-    registrationEndDelay: integer("registration_end_delay"),
-    gameStartDelay: integer("game_start_delay"),
-    gameEndDelay: integer("game_end_delay"),
-    submissionDuration: integer("submission_duration").notNull().default(0),
-
-    // Computed absolute timestamps (Unix seconds, derived from created_at + delay)
-    createdAtOnchain: bigint("created_at_onchain", { mode: "bigint" }),
-    registrationStartTime: bigint("registration_start_time", { mode: "bigint" }),
-    registrationEndTime: bigint("registration_end_time", { mode: "bigint" }),
-    gameStartTime: bigint("game_start_time", { mode: "bigint" }),
-    gameEndTime: bigint("game_end_time", { mode: "bigint" }),
-    submissionEndTime: bigint("submission_end_time", { mode: "bigint" }),
-
-    // Game config
-    settingsId: integer("settings_id"),
-    soulbound: boolean("soulbound").notNull().default(false),
-    paymaster: boolean("paymaster").notNull().default(false),
-    clientUrl: text("client_url"),
-    renderer: text("renderer"),
-
-    // Leaderboard config
-    leaderboardAscending: boolean("leaderboard_ascending").notNull().default(false),
-    leaderboardGameMustBeOver: boolean("leaderboard_game_must_be_over").notNull().default(false),
-
-    // Entry fee summary fields
-    entryFeeToken: text("entry_fee_token"),
-    entryFeeAmount: bigint("entry_fee_amount", { mode: "bigint" }),
-    hasEntryRequirement: boolean("has_entry_requirement").notNull().default(false),
-
-    // Full structured data as JSONB
+    name: text("name"),
+    description: text("description"),
     schedule: jsonb("schedule"),
     gameConfig: jsonb("game_config"),
     entryFee: jsonb("entry_fee"),
     entryRequirement: jsonb("entry_requirement"),
     leaderboardConfig: jsonb("leaderboard_config"),
-
-    createdAt: timestamp("created_at").notNull().defaultNow(),
-    metadata: jsonb("metadata"),
+    entryCount: integer("entry_count").default(0),
+    prizeCount: integer("prize_count").default(0),
+    submissionCount: integer("submission_count").default(0),
+    createdAtBlock: bigint("created_at_block", { mode: "bigint" }),
+    txHash: text("tx_hash"),
   },
   (table) => ({
     gameAddressIdx: index("tournaments_game_address_idx").on(table.gameAddress),
-    creatorIdx: index("tournaments_creator_idx").on(table.creator),
-    gameStartTimeIdx: index("tournaments_game_start_time_idx").on(table.gameStartTime),
-    gameEndTimeIdx: index("tournaments_game_end_time_idx").on(table.gameEndTime),
-    createdAtIdx: index("tournaments_created_at_idx").on(table.createdAt),
-  })
+    createdByIdx: index("tournaments_created_by_idx").on(table.createdBy),
+  }),
 );
 
-// ─── registrations ────────────────────────────────────────────────────────────
-// One row per player per tournament, written on TournamentRegistration event.
-
+// ---------------------------------------------------------------------------
+// registrations  (PK: tournament_id + game_token_id)
+// ---------------------------------------------------------------------------
 export const registrations = pgTable(
   "registrations",
   {
-    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
     tournamentId: bigint("tournament_id", { mode: "bigint" }).notNull(),
     gameTokenId: bigint("game_token_id", { mode: "bigint" }).notNull(),
-    gameAddress: text("game_address").notNull(),
-    playerAddress: text("player_address").notNull(),
-    entryNumber: integer("entry_number").notNull(),
-    hasSubmitted: boolean("has_submitted").notNull().default(false),
-    isBanned: boolean("is_banned").notNull().default(false),
-    registeredAt: timestamp("registered_at").notNull().defaultNow(),
+    gameAddress: text("game_address"),
+    playerAddress: text("player_address"),
+    entryNumber: integer("entry_number"),
+    hasSubmitted: boolean("has_submitted").default(false),
+    isBanned: boolean("is_banned").default(false),
   },
   (table) => ({
-    tournamentPlayerUniqueIdx: uniqueIndex("registrations_tournament_player_idx").on(
+    pk: primaryKey({ columns: [table.tournamentId, table.gameTokenId] }),
+    tournamentIdIdx: index("registrations_tournament_id_idx").on(
       table.tournamentId,
-      table.gameTokenId
     ),
-    tournamentIdIdx: index("registrations_tournament_id_idx").on(table.tournamentId),
-    playerAddressIdx: index("registrations_player_address_idx").on(table.playerAddress),
-    gameAddressIdx: index("registrations_game_address_idx").on(table.gameAddress),
-  })
+    playerAddressIdx: index("registrations_player_address_idx").on(
+      table.playerAddress,
+    ),
+  }),
 );
 
-// ─── leaderboards ─────────────────────────────────────────────────────────────
-// Leaderboard entries updated on LeaderboardUpdated event.
-
+// ---------------------------------------------------------------------------
+// leaderboards  (PK: tournament_id + position)
+// ---------------------------------------------------------------------------
 export const leaderboards = pgTable(
   "leaderboards",
   {
-    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
     tournamentId: bigint("tournament_id", { mode: "bigint" }).notNull(),
+    position: integer("position").notNull(),
     tokenId: bigint("token_id", { mode: "bigint" }).notNull(),
-    rank: integer("rank").notNull(),
-    score: bigint("score", { mode: "bigint" }),
-    updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (table) => ({
-    tournamentRankUniqueIdx: uniqueIndex("leaderboards_tournament_token_idx").on(
+    pk: primaryKey({ columns: [table.tournamentId, table.position] }),
+    tournamentIdIdx: index("leaderboards_tournament_id_idx").on(
       table.tournamentId,
-      table.tokenId
     ),
-    tournamentIdIdx: index("leaderboards_tournament_id_idx").on(table.tournamentId),
-    rankIdx: index("leaderboards_rank_idx").on(table.rank),
-  })
+  }),
 );
 
-// ─── prizes ───────────────────────────────────────────────────────────────────
-// Prize metadata from PrizeAdded events.
-
+// ---------------------------------------------------------------------------
+// prizes
+// ---------------------------------------------------------------------------
 export const prizes = pgTable(
   "prizes",
   {
-    id: bigint("id", { mode: "bigint" }).primaryKey(),
+    prizeId: bigint("prize_id", { mode: "bigint" }).primaryKey(),
     tournamentId: bigint("tournament_id", { mode: "bigint" }).notNull(),
-    payoutPosition: integer("payout_position").notNull(),
-    tokenAddress: text("token_address").notNull(),
-    tokenType: text("token_type").notNull(), // "erc20" | "erc721"
-    tokenAmount: bigint("token_amount", { mode: "bigint" }),
-    tokenId: bigint("token_id", { mode: "bigint" }),
-    sponsorAddress: text("sponsor_address").notNull(),
-    createdAt: timestamp("created_at").notNull().defaultNow(),
+    payoutPosition: integer("payout_position"),
+    tokenAddress: text("token_address"),
+    tokenType: jsonb("token_type"),
+    sponsorAddress: text("sponsor_address"),
+    createdAtBlock: bigint("created_at_block", { mode: "bigint" }),
+    txHash: text("tx_hash"),
   },
   (table) => ({
     tournamentIdIdx: index("prizes_tournament_id_idx").on(table.tournamentId),
-    sponsorIdx: index("prizes_sponsor_address_idx").on(table.sponsorAddress),
-  })
+  }),
 );
 
-// ─── rewards ──────────────────────────────────────────────────────────────────
-// Reward claims from RewardClaimed events.
-
-export const rewards = pgTable(
-  "rewards",
+// ---------------------------------------------------------------------------
+// reward_claims  (PK: tournament_id + tx_hash)
+// ---------------------------------------------------------------------------
+export const rewardClaims = pgTable(
+  "reward_claims",
   {
-    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
     tournamentId: bigint("tournament_id", { mode: "bigint" }).notNull(),
-    rewardType: text("reward_type").notNull(),
-    claimed: boolean("claimed").notNull().default(false),
-    claimedAt: timestamp("claimed_at"),
-    metadata: jsonb("metadata"),
+    rewardType: jsonb("reward_type"),
+    claimed: boolean("claimed").default(false),
+    createdAtBlock: bigint("created_at_block", { mode: "bigint" }),
+    txHash: text("tx_hash").notNull(),
   },
   (table) => ({
-    tournamentIdIdx: index("rewards_tournament_id_idx").on(table.tournamentId),
-    rewardTypeIdx: index("rewards_reward_type_idx").on(table.rewardType),
-  })
+    pk: primaryKey({ columns: [table.tournamentId, table.txHash] }),
+    tournamentIdIdx: index("reward_claims_tournament_id_idx").on(
+      table.tournamentId,
+    ),
+  }),
 );
 
-// ─── tournament_events ──────────────────────────────────────────────────────
-// Raw event log from all indexed tournament-related events.
+// ---------------------------------------------------------------------------
+// qualification_entries  (PK: tournament_id + tx_hash)
+// ---------------------------------------------------------------------------
+export const qualificationEntries = pgTable(
+  "qualification_entries",
+  {
+    tournamentId: bigint("tournament_id", { mode: "bigint" }).notNull(),
+    qualificationProof: jsonb("qualification_proof"),
+    entryCount: integer("entry_count"),
+    createdAtBlock: bigint("created_at_block", { mode: "bigint" }),
+    txHash: text("tx_hash").notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.tournamentId, table.txHash] }),
+    tournamentIdIdx: index("qualification_entries_tournament_id_idx").on(
+      table.tournamentId,
+    ),
+  }),
+);
 
+// ---------------------------------------------------------------------------
+// platform_stats  (singleton-ish table keyed by a text key)
+// ---------------------------------------------------------------------------
+export const platformStats = pgTable("platform_stats", {
+  key: text("key").primaryKey(),
+  totalTournaments: integer("total_tournaments").default(0),
+  totalPrizes: integer("total_prizes").default(0),
+  totalRegistrations: integer("total_registrations").default(0),
+  totalSubmissions: integer("total_submissions").default(0),
+});
+
+// ---------------------------------------------------------------------------
+// tournament_events  (PK: block_number + tx_hash + event_index)
+// ---------------------------------------------------------------------------
 export const tournamentEvents = pgTable(
   "tournament_events",
   {
-    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
     eventType: text("event_type").notNull(),
     tournamentId: bigint("tournament_id", { mode: "bigint" }),
     playerAddress: text("player_address"),
-    gameAddress: text("game_address"),
-    txHash: text("tx_hash"),
-    blockNumber: bigint("block_number", { mode: "bigint" }),
     data: jsonb("data"),
-    createdAt: timestamp("created_at").notNull().defaultNow(),
+    blockNumber: bigint("block_number", { mode: "bigint" }).notNull(),
+    txHash: text("tx_hash").notNull(),
+    eventIndex: integer("event_index").notNull(),
   },
   (table) => ({
-    eventTypeIdx: index("tournament_events_event_type_idx").on(table.eventType),
-    tournamentIdIdx: index("tournament_events_tournament_id_idx").on(table.tournamentId),
-    playerAddressIdx: index("tournament_events_player_address_idx").on(table.playerAddress),
-    gameAddressIdx: index("tournament_events_game_address_idx").on(table.gameAddress),
-    createdAtIdx: index("tournament_events_created_at_idx").on(table.createdAt),
-  })
+    pk: primaryKey({
+      columns: [table.blockNumber, table.txHash, table.eventIndex],
+    }),
+  }),
 );
-
-// ─── platform_stats ─────────────────────────────────────────────────────────
-// Aggregate platform-level statistics, updated by the indexer.
-
-export const platformStats = pgTable("platform_stats", {
-  key: text("key").primaryKey(), // e.g. "global"
-  totalTournaments: integer("total_tournaments").notNull().default(0),
-  totalRegistrations: integer("total_registrations").notNull().default(0),
-  totalPrizes: integer("total_prizes").notNull().default(0),
-  totalRewardsClaimed: integer("total_rewards_claimed").notNull().default(0),
-  uniquePlayers: integer("unique_players").notNull().default(0),
-  uniqueGames: integer("unique_games").notNull().default(0),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
-
-// ─── game_stats ─────────────────────────────────────────────────────────────
-// Aggregate statistics per game address, updated by the indexer.
-
-export const gameStats = pgTable("game_stats", {
-  gameAddress: text("game_address").primaryKey(),
-  totalTournaments: integer("total_tournaments").notNull().default(0),
-  totalRegistrations: integer("total_registrations").notNull().default(0),
-  totalPrizes: integer("total_prizes").notNull().default(0),
-  uniquePlayers: integer("unique_players").notNull().default(0),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
