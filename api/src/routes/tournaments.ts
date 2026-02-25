@@ -16,6 +16,13 @@ import {
 
 const app = new Hono();
 
+// SQL helpers for computing absolute timestamps from created_at + schedule delays
+const gameStartTime = sql`(${tournaments.createdAt} + (${tournaments.schedule}->>'game_start_delay')::bigint)`;
+const gameEndTime = sql`(${tournaments.createdAt} + (${tournaments.schedule}->>'game_end_delay')::bigint)`;
+const regStartTime = sql`(${tournaments.createdAt} + (${tournaments.schedule}->>'registration_start_delay')::bigint)`;
+const regEndTime = sql`(${tournaments.createdAt} + (${tournaments.schedule}->>'registration_end_delay')::bigint)`;
+const submissionEndTime = sql`(${tournaments.createdAt} + (${tournaments.schedule}->>'game_end_delay')::bigint + (${tournaments.schedule}->>'submission_duration')::bigint)`;
+
 // ─── GET / ── List tournaments ──────────────────────────────────────────────
 // Query params: game_address, creator, phase, limit, offset
 app.get("/", async (c) => {
@@ -28,48 +35,46 @@ app.get("/", async (c) => {
 
     const conditions = [];
     if (gameAddress) conditions.push(eq(tournaments.gameAddress, gameAddress));
-    if (creator) conditions.push(eq(tournaments.creator, creator));
+    if (creator) conditions.push(eq(tournaments.createdBy, creator));
 
-    // Phase filtering based on calculated schedule times
+    // Phase filtering based on Unix-second timestamps computed from created_at + delays
     if (phase) {
-      const now = sql`NOW()`;
+      const now = sql`EXTRACT(EPOCH FROM NOW())::bigint`;
       switch (phase) {
         case "scheduled":
-          // Before registration starts (or before game starts if no registration)
           conditions.push(
-            sql`COALESCE(${tournaments.registrationStartTime}, ${tournaments.gameStartTime}) > ${now}`
+            sql`COALESCE(${regStartTime}, ${gameStartTime}) > ${now}`
           );
           break;
         case "registration":
           conditions.push(
-            sql`${tournaments.registrationStartTime} IS NOT NULL
-              AND ${tournaments.registrationStartTime} <= ${now}
-              AND ${tournaments.registrationEndTime} > ${now}`
+            sql`${regStartTime} IS NOT NULL
+              AND ${regStartTime} <= ${now}
+              AND ${regEndTime} > ${now}`
           );
           break;
         case "staging":
-          // Between registration end and game start
           conditions.push(
-            sql`${tournaments.registrationEndTime} IS NOT NULL
-              AND ${tournaments.registrationEndTime} <= ${now}
-              AND ${tournaments.gameStartTime} > ${now}`
+            sql`${regEndTime} IS NOT NULL
+              AND ${regEndTime} <= ${now}
+              AND ${gameStartTime} > ${now}`
           );
           break;
         case "live":
           conditions.push(
-            sql`${tournaments.gameStartTime} <= ${now}
-              AND ${tournaments.gameEndTime} > ${now}`
+            sql`${gameStartTime} <= ${now}
+              AND ${gameEndTime} > ${now}`
           );
           break;
         case "submission":
           conditions.push(
-            sql`${tournaments.gameEndTime} <= ${now}
-              AND ${tournaments.gameEndTime} + (${tournaments.submissionDuration} * INTERVAL '1 second') > ${now}`
+            sql`${gameEndTime} <= ${now}
+              AND ${submissionEndTime} > ${now}`
           );
           break;
         case "finalized":
           conditions.push(
-            sql`${tournaments.gameEndTime} + (${tournaments.submissionDuration} * INTERVAL '1 second') <= ${now}`
+            sql`${submissionEndTime} <= ${now}`
           );
           break;
       }
@@ -118,7 +123,7 @@ app.get("/:id", async (c) => {
         db
           .select()
           .from(tournaments)
-          .where(eq(tournaments.id, tournamentId))
+          .where(eq(tournaments.tournamentId, tournamentId))
           .limit(1),
         db
           .select({ count: sql<number>`count(*)::int` })
@@ -132,7 +137,7 @@ app.get("/:id", async (c) => {
           .select()
           .from(leaderboards)
           .where(eq(leaderboards.tournamentId, tournamentId))
-          .orderBy(asc(leaderboards.rank))
+          .orderBy(asc(leaderboards.position))
           .limit(50),
       ]);
 
@@ -170,7 +175,7 @@ app.get("/:id/leaderboard", async (c) => {
         .select()
         .from(leaderboards)
         .where(eq(leaderboards.tournamentId, tournamentId))
-        .orderBy(asc(leaderboards.rank))
+        .orderBy(asc(leaderboards.position))
         .limit(limit)
         .offset(offset),
       db
@@ -290,42 +295,36 @@ app.get("/:id/prizes", async (c) => {
 
 function serializeTournament(t: typeof tournaments.$inferSelect) {
   return {
-    id: t.id.toString(),
+    id: t.tournamentId.toString(),
     gameAddress: t.gameAddress,
-    creator: t.creator,
-    creatorTokenId: t.creatorTokenId?.toString() ?? null,
+    createdBy: t.createdBy,
+    creatorTokenId: t.creatorTokenId ?? null,
     name: t.name,
     description: t.description,
-    registrationStartTime: t.registrationStartTime?.toISOString() ?? null,
-    registrationEndTime: t.registrationEndTime?.toISOString() ?? null,
-    gameStartTime: t.gameStartTime.toISOString(),
-    gameEndTime: t.gameEndTime.toISOString(),
-    submissionDuration: t.submissionDuration,
-    settingsId: t.settingsId,
-    soulbound: t.soulbound,
-    playUrl: t.playUrl,
-    entryFeeToken: t.entryFeeToken,
-    entryFeeAmount: t.entryFeeAmount?.toString() ?? null,
-    hasEntryRequirement: t.hasEntryRequirement,
-    createdAt: t.createdAt.toISOString(),
-    metadata: t.metadata,
+    schedule: t.schedule,
+    gameConfig: t.gameConfig,
+    entryFee: t.entryFee,
+    entryRequirement: t.entryRequirement,
+    leaderboardConfig: t.leaderboardConfig,
+    entryCount: t.entryCount,
+    prizeCount: t.prizeCount,
+    submissionCount: t.submissionCount,
+    createdAt: t.createdAt?.toString() ?? null,
+    createdAtBlock: t.createdAtBlock?.toString() ?? null,
+    txHash: t.txHash,
   };
 }
 
 function serializeLeaderboardEntry(entry: typeof leaderboards.$inferSelect) {
   return {
-    id: entry.id,
     tournamentId: entry.tournamentId.toString(),
     tokenId: entry.tokenId.toString(),
-    rank: entry.rank,
-    score: entry.score?.toString() ?? null,
-    updatedAt: entry.updatedAt.toISOString(),
+    position: entry.position,
   };
 }
 
 function serializeRegistration(r: typeof registrations.$inferSelect) {
   return {
-    id: r.id,
     tournamentId: r.tournamentId.toString(),
     gameTokenId: r.gameTokenId.toString(),
     gameAddress: r.gameAddress,
@@ -333,21 +332,19 @@ function serializeRegistration(r: typeof registrations.$inferSelect) {
     entryNumber: r.entryNumber,
     hasSubmitted: r.hasSubmitted,
     isBanned: r.isBanned,
-    registeredAt: r.registeredAt.toISOString(),
   };
 }
 
 function serializePrize(p: typeof prizes.$inferSelect) {
   return {
-    id: p.id.toString(),
+    prizeId: p.prizeId.toString(),
     tournamentId: p.tournamentId.toString(),
     payoutPosition: p.payoutPosition,
     tokenAddress: p.tokenAddress,
     tokenType: p.tokenType,
-    tokenAmount: p.tokenAmount?.toString() ?? null,
-    tokenId: p.tokenId?.toString() ?? null,
     sponsorAddress: p.sponsorAddress,
-    createdAt: p.createdAt.toISOString(),
+    createdAtBlock: p.createdAtBlock?.toString() ?? null,
+    txHash: p.txHash,
   };
 }
 

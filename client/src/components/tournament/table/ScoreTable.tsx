@@ -260,7 +260,7 @@ const ScoreTable = ({
                       usernames={usernames}
                       isStarted={isStarted}
                       isEnded={isEnded}
-                      gameAddress={tournamentModel?.game_config.address}
+                      gameAddress={tournamentModel?.game_config.game_address}
                       setSelectedPlayer={setSelectedPlayer}
                       setIsMobileDialogOpen={setIsMobileDialogOpen}
                     />
@@ -296,7 +296,7 @@ const ScoreTable = ({
         ownerAddress={ownerAddresses?.[selectedPlayer?.index ?? 0]}
         isStarted={isStarted}
         isEnded={isEnded}
-        gameAddress={tournamentModel?.game_config.address}
+        gameAddress={tournamentModel?.game_config.game_address}
       />
 
       {/* Table dialog for scores */}

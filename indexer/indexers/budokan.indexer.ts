@@ -6,7 +6,7 @@ import {
   drizzleStorage,
   useDrizzleStorage,
 } from "@apibara/plugin-drizzle";
-import { sql } from "drizzle-orm";
+import { sql, eq, and } from "drizzle-orm";
 import type { ApibaraRuntimeConfig } from "apibara/types";
 
 import {
@@ -69,9 +69,13 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
         indexerName: "budokan-indexer",
         idColumn: {
           tournaments: "tournament_id",
+          registrations: "id",
+          leaderboards: "id",
           prizes: "prize_id",
+          reward_claims: "id",
+          qualification_entries: "id",
           platform_stats: "key",
-          "*": "id",
+          tournament_events: "id",
         },
         migrate: { migrationsFolder: "./drizzle" },
       }),
@@ -140,6 +144,9 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
       // Leaderboard updates need special handling (delete+insert per tournament)
       const leaderboardUpdates = new Map<bigint, bigint[]>();
 
+      // Track affected tournament IDs for idempotent counter recomputation
+      const affectedTournamentIds = new Set<bigint>();
+
       // Track stats deltas for this block
       let newTournaments = 0;
       let newRegistrations = 0;
@@ -173,6 +180,7 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
               gameConfig: decoded.gameConfig,
               entryFee: decoded.entryFee,
               entryRequirement: decoded.entryRequirement,
+              leaderboardConfig: decoded.leaderboardConfig,
               createdAtBlock: blockNumber,
               txHash,
             });
@@ -182,8 +190,8 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
               tournamentId: decoded.tournamentId,
               data: JSON.parse(stringifyWithBigInt(decoded)),
               blockNumber,
-              txHash,
-              eventIndex: eventIdx,
+              txHash: txHash!,
+              eventIndex: eventIdx!,
             });
 
             newTournaments++;
@@ -220,9 +228,11 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
               playerAddress: decoded.playerAddress,
               data: JSON.parse(stringifyWithBigInt(decoded)),
               blockNumber,
-              txHash,
-              eventIndex: eventIdx,
+              txHash: txHash!,
+              eventIndex: eventIdx!,
             });
+
+            affectedTournamentIds.add(decoded.tournamentId);
 
             // Track as new registration only if not a ban/submission update
             if (!decoded.isBanned && !decoded.hasSubmitted) {
@@ -259,8 +269,8 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
               tournamentId: decoded.tournamentId,
               data: JSON.parse(stringifyWithBigInt(decoded)),
               blockNumber,
-              txHash,
-              eventIndex: eventIdx,
+              txHash: txHash!,
+              eventIndex: eventIdx!,
             });
           } catch (err) {
             logger.warn(
@@ -295,10 +305,11 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
               tournamentId: decoded.tournamentId,
               data: JSON.parse(stringifyWithBigInt(decoded)),
               blockNumber,
-              txHash,
-              eventIndex: eventIdx,
+              txHash: txHash!,
+              eventIndex: eventIdx!,
             });
 
+            affectedTournamentIds.add(decoded.tournamentId);
             newPrizes++;
           } catch (err) {
             logger.warn(
@@ -322,7 +333,8 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
               rewardType: decoded.rewardType,
               claimed: decoded.claimed,
               createdAtBlock: blockNumber,
-              txHash,
+              txHash: txHash!,
+              eventIndex: eventIdx!,
             });
 
             eventLogRows.push({
@@ -330,8 +342,8 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
               tournamentId: decoded.tournamentId,
               data: JSON.parse(stringifyWithBigInt(decoded)),
               blockNumber,
-              txHash,
-              eventIndex: eventIdx,
+              txHash: txHash!,
+              eventIndex: eventIdx!,
             });
           } catch (err) {
             logger.warn(
@@ -355,7 +367,8 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
               qualificationProof: decoded.qualificationProof,
               entryCount: decoded.entryCount,
               createdAtBlock: blockNumber,
-              txHash,
+              txHash: txHash!,
+              eventIndex: eventIdx!,
             });
 
             eventLogRows.push({
@@ -363,8 +376,8 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
               tournamentId: decoded.tournamentId,
               data: JSON.parse(stringifyWithBigInt(decoded)),
               blockNumber,
-              txHash,
-              eventIndex: eventIdx,
+              txHash: txHash!,
+              eventIndex: eventIdx!,
             });
           } catch (err) {
             logger.warn(
@@ -411,24 +424,26 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
         );
       }
 
-      // Leaderboard updates: replace entire leaderboard per tournament
+      // Leaderboard updates: replace entire leaderboard per tournament (atomic)
       for (const [tournamentId, tokenIds] of leaderboardUpdates) {
-        // Delete existing leaderboard rows for this tournament
-        await db
-          .delete(leaderboards)
-          .where(sql`${leaderboards.tournamentId} = ${tournamentId}`);
+        await db.transaction(async (tx) => {
+          // Delete existing leaderboard rows for this tournament
+          await tx
+            .delete(leaderboards)
+            .where(sql`${leaderboards.tournamentId} = ${tournamentId}`);
 
-        // Insert new leaderboard rows
-        if (tokenIds.length > 0) {
-          const leaderboardRows: (typeof leaderboards.$inferInsert)[] =
-            tokenIds.map((tokenId, index) => ({
-              tournamentId,
-              position: index + 1,
-              tokenId,
-            }));
+          // Insert new leaderboard rows
+          if (tokenIds.length > 0) {
+            const leaderboardRows: (typeof leaderboards.$inferInsert)[] =
+              tokenIds.map((tokenId, index) => ({
+                tournamentId,
+                position: index + 1,
+                tokenId,
+              }));
 
-          await db.insert(leaderboards).values(leaderboardRows);
-        }
+            await tx.insert(leaderboards).values(leaderboardRows);
+          }
+        });
         logger.info(
           `  Rebuilt leaderboard for tournament ${tournamentId} (${tokenIds.length} entries)`,
         );
@@ -450,25 +465,12 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
       }
 
       if (qualificationEntryRows.length > 0) {
-        // Upsert qualification entries since entry_count gets updated
-        for (const row of qualificationEntryRows) {
-          await db
-            .insert(qualificationEntries)
-            .values(row)
-            .onConflictDoUpdate({
-              target: [
-                qualificationEntries.tournamentId,
-                qualificationEntries.qualificationProof,
-              ],
-              set: {
-                entryCount: row.entryCount,
-                createdAtBlock: row.createdAtBlock,
-                txHash: row.txHash,
-              },
-            });
-        }
+        await db
+          .insert(qualificationEntries)
+          .values(qualificationEntryRows)
+          .onConflictDoNothing();
         logger.info(
-          `  Upserted ${qualificationEntryRows.length} qualification entry/entries`,
+          `  Inserted ${qualificationEntryRows.length} qualification entry/entries`,
         );
       }
 
@@ -480,62 +482,38 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
       }
 
       // -------------------------------------------------------------------
-      // Update tournament counters for registrations/submissions
+      // Recompute tournament counters from source tables (idempotent)
       // -------------------------------------------------------------------
 
-      // Track entry_count and submission_count increments per tournament
-      const tournamentEntryDeltas = new Map<
-        bigint,
-        { entries: number; submissions: number }
-      >();
+      for (const tid of affectedTournamentIds) {
+        const [entryCount] = await db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(registrations)
+          .where(eq(registrations.tournamentId, tid));
 
-      for (const row of registrationRows) {
-        if (!tournamentEntryDeltas.has(row.tournamentId)) {
-          tournamentEntryDeltas.set(row.tournamentId, {
-            entries: 0,
-            submissions: 0,
-          });
-        }
-        const delta = tournamentEntryDeltas.get(row.tournamentId)!;
-        // Only count as new entry if not a ban/submission update
-        if (!row.isBanned && !row.hasSubmitted) {
-          delta.entries++;
-        }
-        if (row.hasSubmitted) {
-          delta.submissions++;
-        }
-      }
+        const [submissionCount] = await db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(registrations)
+          .where(
+            and(
+              eq(registrations.tournamentId, tid),
+              eq(registrations.hasSubmitted, true),
+            ),
+          );
 
-      // Track prize_count increments per tournament
-      const tournamentPrizeDeltas = new Map<bigint, number>();
-      for (const row of prizeRows) {
-        tournamentPrizeDeltas.set(
-          row.tournamentId,
-          (tournamentPrizeDeltas.get(row.tournamentId) ?? 0) + 1,
-        );
-      }
+        const [prizeCount] = await db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(prizes)
+          .where(eq(prizes.tournamentId, tid));
 
-      // Apply entry/submission count updates
-      for (const [tid, delta] of tournamentEntryDeltas) {
-        if (delta.entries > 0 || delta.submissions > 0) {
-          await db
-            .update(tournaments)
-            .set({
-              entryCount: sql`${tournaments.entryCount} + ${delta.entries}`,
-              submissionCount: sql`${tournaments.submissionCount} + ${delta.submissions}`,
-            })
-            .where(sql`${tournaments.tournamentId} = ${tid}`);
-        }
-      }
-
-      // Apply prize count updates
-      for (const [tid, count] of tournamentPrizeDeltas) {
         await db
           .update(tournaments)
           .set({
-            prizeCount: sql`${tournaments.prizeCount} + ${count}`,
+            entryCount: entryCount.count,
+            submissionCount: submissionCount.count,
+            prizeCount: prizeCount.count,
           })
-          .where(sql`${tournaments.tournamentId} = ${tid}`);
+          .where(eq(tournaments.tournamentId, tid));
       }
 
       // -------------------------------------------------------------------

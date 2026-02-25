@@ -652,13 +652,13 @@ const TournamentConfirmation = ({
                                       <div className="flex flex-row items-center gap-2">
                                         <TokenGameIcon
                                           image={getGameImage(
-                                            tournament.game_config.address
+                                            tournament.game_config.game_address
                                           )}
                                         />
                                         {gameData.find(
                                           (game) =>
                                             game.contract_address ===
-                                            tournament.game_config.address
+                                            tournament.game_config.game_address
                                         )?.name ?? ""}
                                       </div>
                                     </td>

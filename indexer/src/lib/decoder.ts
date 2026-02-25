@@ -22,7 +22,7 @@
  * The struct's own #[key] fields follow at keys[1+].
  *
  * Events indexed:
- * - TournamentCreated: keys=[selector, tournament_id, game_address], data=[created_at, created_by, creator_token_id, ...complex serde data]
+ * - TournamentCreated: keys=[selector, tournament_id, game_address], data=[created_at, created_by, creator_token_id(felt252), ...complex serde data, ...serde(LeaderboardConfig)]
  * - TournamentRegistration: keys=[selector, tournament_id, game_token_id], data=[game_address, player_address, entry_number, has_submitted, is_banned]
  * - LeaderboardUpdated: keys=[selector, tournament_id], data=[...serde(Span<u64>)]
  * - PrizeAdded: keys=[selector, tournament_id, prize_id], data=[payout_position, token_address, ...serde(TokenTypeData), sponsor_address]
@@ -78,7 +78,10 @@ export function getEventSelectors(): EventSelectors {
  * Convert a hex string to bigint. Returns 0n for falsy inputs.
  */
 export function hexToBigInt(hex: string | undefined | null): bigint {
-  if (!hex) return 0n;
+  if (!hex || hex === "0x") return 0n;
+  if (!/^0x[0-9a-fA-F]+$/.test(hex)) {
+    throw new Error(`Invalid hex value: ${hex}`);
+  }
   return BigInt(hex);
 }
 
@@ -139,7 +142,7 @@ export function decodeByteArray(
     // Each chunk is 31 bytes (248 bits), stored in felt252
     const hex = chunk.toString(16).padStart(62, "0"); // 31 bytes = 62 hex chars
     for (let j = 0; j < 62; j += 2) {
-      const charCode = parseInt(hex.substr(j, 2), 16);
+      const charCode = parseInt(hex.substring(j, j + 2), 16);
       if (charCode > 0) result += String.fromCharCode(charCode);
     }
     idx++;
@@ -152,7 +155,7 @@ export function decodeByteArray(
   if (pendingWordLen > 0) {
     const hex = pendingWord.toString(16).padStart(pendingWordLen * 2, "0");
     for (let i = 0; i < hex.length; i += 2) {
-      const charCode = parseInt(hex.substr(i, 2), 16);
+      const charCode = parseInt(hex.substring(i, i + 2), 16);
       if (charCode > 0) result += String.fromCharCode(charCode);
     }
   }
@@ -178,7 +181,7 @@ export interface DecodedTournamentCreated {
   gameAddress: string;
   createdAt: bigint;
   createdBy: string;
-  creatorTokenId: bigint;
+  creatorTokenId: string;
   /** Decoded tournament name (felt252 short string) */
   name: string;
   /** Decoded tournament description (ByteArray) */
@@ -191,6 +194,8 @@ export interface DecodedTournamentCreated {
   entryFee: Record<string, unknown> | null;
   /** Raw data elements for entry requirement (complex Serde, Option) */
   entryRequirement: Record<string, unknown> | null;
+  /** Leaderboard configuration */
+  leaderboardConfig: Record<string, unknown>;
 }
 
 export interface DecodedTournamentRegistration {
@@ -234,63 +239,89 @@ export interface DecodedQualificationEntriesUpdated {
 // ---------------------------------------------------------------------------
 
 /**
- * Decode an Option<Period> from data starting at idx.
- * Cairo Serde for Option: variant_index (0=None, 1=Some), then T if Some.
- * Period = { start: u64, end: u64 }
- *
- * Returns the decoded value and how many felt252 elements were consumed.
- */
-function decodeOptionPeriod(
-  data: readonly string[],
-  idx: number,
-): { value: { start: string; end: string } | null; consumed: number } {
-  const variant = Number(hexToBigInt(data[idx]));
-  if (variant === 0) {
-    return { value: null, consumed: 1 };
-  }
-  // variant === 1 (Some)
-  const start = hexToBigInt(data[idx + 1]).toString();
-  const end = hexToBigInt(data[idx + 2]).toString();
-  return { value: { start, end }, consumed: 3 };
-}
-
-/**
  * Decode Schedule from data starting at idx.
- * Schedule = { registration: Option<Period>, game: Period, submission_duration: u64 }
+ * Schedule = { registration_start_delay: u32, registration_end_delay: u32,
+ *              game_start_delay: u32, game_end_delay: u32, submission_duration: u32 }
+ * Always consumes 5 felt252 elements.
  */
 function decodeSchedule(
   data: readonly string[],
   idx: number,
 ): { value: Record<string, unknown>; consumed: number } {
-  let consumed = 0;
-
-  // registration: Option<Period>
-  const registration = decodeOptionPeriod(data, idx + consumed);
-  consumed += registration.consumed;
-
-  // game: Period { start: u64, end: u64 }
-  const gameStart = hexToBigInt(data[idx + consumed]).toString();
-  consumed++;
-  const gameEnd = hexToBigInt(data[idx + consumed]).toString();
-  consumed++;
-
-  // submission_duration: u64
-  const submissionDuration = hexToBigInt(data[idx + consumed]).toString();
-  consumed++;
+  const registrationStartDelay = Number(hexToBigInt(data[idx]));
+  const registrationEndDelay = Number(hexToBigInt(data[idx + 1]));
+  const gameStartDelay = Number(hexToBigInt(data[idx + 2]));
+  const gameEndDelay = Number(hexToBigInt(data[idx + 3]));
+  const submissionDuration = Number(hexToBigInt(data[idx + 4]));
 
   return {
     value: {
-      registration: registration.value,
-      game: { start: gameStart, end: gameEnd },
+      registration_start_delay: registrationStartDelay,
+      registration_end_delay: registrationEndDelay,
+      game_start_delay: gameStartDelay,
+      game_end_delay: gameEndDelay,
       submission_duration: submissionDuration,
     },
-    consumed,
+    consumed: 5,
   };
 }
 
 /**
+ * Decode LeaderboardConfig from data starting at idx.
+ * LeaderboardConfig = { ascending: bool, game_must_be_over: bool }
+ * Always consumes 2 felt252 elements.
+ */
+function decodeLeaderboardConfig(
+  data: readonly string[],
+  idx: number,
+): { value: Record<string, unknown>; consumed: number } {
+  const ascending = decodeBool(data[idx]);
+  const gameMustBeOver = decodeBool(data[idx + 1]);
+
+  return {
+    value: {
+      ascending,
+      game_must_be_over: gameMustBeOver,
+    },
+    consumed: 2,
+  };
+}
+
+/**
+ * Decode an Option<ByteArray> from data starting at idx.
+ * Option variant (0=None, 1=Some), then ByteArray if Some.
+ */
+function decodeOptionByteArray(
+  data: readonly string[],
+  idx: number,
+): { value: string | null; consumed: number } {
+  const variant = Number(hexToBigInt(data[idx]));
+  if (variant === 0) {
+    return { value: null, consumed: 1 };
+  }
+  const byteArray = decodeByteArray(data, idx + 1);
+  return { value: byteArray.value, consumed: 1 + byteArray.consumed };
+}
+
+/**
+ * Decode an Option<ContractAddress> from data starting at idx.
+ * Option variant (0=None, 1=Some), then felt252 if Some.
+ */
+function decodeOptionAddress(
+  data: readonly string[],
+  idx: number,
+): { value: string | null; consumed: number } {
+  const variant = Number(hexToBigInt(data[idx]));
+  if (variant === 0) {
+    return { value: null, consumed: 1 };
+  }
+  return { value: feltToHex(data[idx + 1]), consumed: 2 };
+}
+
+/**
  * Decode GameConfig from data starting at idx.
- * GameConfig = { address: ContractAddress, settings_id: u32, soulbound: bool, play_url: ByteArray }
+ * GameConfig = { game_address: ContractAddress, settings_id: u32, soulbound: bool,
+ *                paymaster: bool, client_url: Option<ByteArray>, renderer: Option<ContractAddress> }
  */
 function decodeGameConfig(
   data: readonly string[],
@@ -298,8 +329,8 @@ function decodeGameConfig(
 ): { value: Record<string, unknown>; consumed: number } {
   let consumed = 0;
 
-  // address: ContractAddress
-  const address = feltToHex(data[idx + consumed]);
+  // game_address: ContractAddress
+  const gameAddress = feltToHex(data[idx + consumed]);
   consumed++;
 
   // settings_id: u32
@@ -310,16 +341,26 @@ function decodeGameConfig(
   const soulbound = decodeBool(data[idx + consumed]);
   consumed++;
 
-  // play_url: ByteArray
-  const playUrl = decodeByteArray(data, idx + consumed);
-  consumed += playUrl.consumed;
+  // paymaster: bool
+  const paymaster = decodeBool(data[idx + consumed]);
+  consumed++;
+
+  // client_url: Option<ByteArray>
+  const clientUrl = decodeOptionByteArray(data, idx + consumed);
+  consumed += clientUrl.consumed;
+
+  // renderer: Option<ContractAddress>
+  const renderer = decodeOptionAddress(data, idx + consumed);
+  consumed += renderer.consumed;
 
   return {
     value: {
-      address,
+      game_address: gameAddress,
       settings_id: settingsId,
       soulbound,
-      play_url: playUrl.value,
+      paymaster,
+      client_url: clientUrl.value,
+      renderer: renderer.value,
     },
     consumed,
   };
@@ -370,11 +411,11 @@ function decodeDistribution(
  * EntryFee = {
  *   token_address: ContractAddress,
  *   amount: u128,
+ *   tournament_creator_share: u16,
+ *   game_creator_share: u16,
+ *   refund_share: u16,
  *   distribution: Distribution,
- *   tournament_creator_share: Option<u16>,
- *   game_creator_share: Option<u16>,
- *   refund_share: Option<u16>,
- *   distribution_positions: Option<u32>,
+ *   distribution_count: u32,
  * }
  */
 function decodeOptionEntryFee(
@@ -396,55 +437,35 @@ function decodeOptionEntryFee(
   const amount = hexToBigInt(data[idx + consumed]).toString();
   consumed++;
 
+  // tournament_creator_share: u16 (plain, not Option)
+  const tournamentCreatorShare = Number(hexToBigInt(data[idx + consumed]));
+  consumed++;
+
+  // game_creator_share: u16 (plain, not Option)
+  const gameCreatorShare = Number(hexToBigInt(data[idx + consumed]));
+  consumed++;
+
+  // refund_share: u16 (plain, not Option)
+  const refundShare = Number(hexToBigInt(data[idx + consumed]));
+  consumed++;
+
   // distribution: Distribution (enum)
   const distribution = decodeDistribution(data, idx + consumed);
   consumed += distribution.consumed;
 
-  // tournament_creator_share: Option<u16>
-  const tcsVariant = Number(hexToBigInt(data[idx + consumed]));
+  // distribution_count: u32 (plain, not Option)
+  const distributionCount = Number(hexToBigInt(data[idx + consumed]));
   consumed++;
-  let tournamentCreatorShare: number | null = null;
-  if (tcsVariant === 1) {
-    tournamentCreatorShare = Number(hexToBigInt(data[idx + consumed]));
-    consumed++;
-  }
-
-  // game_creator_share: Option<u16>
-  const gcsVariant = Number(hexToBigInt(data[idx + consumed]));
-  consumed++;
-  let gameCreatorShare: number | null = null;
-  if (gcsVariant === 1) {
-    gameCreatorShare = Number(hexToBigInt(data[idx + consumed]));
-    consumed++;
-  }
-
-  // refund_share: Option<u16>
-  const rsVariant = Number(hexToBigInt(data[idx + consumed]));
-  consumed++;
-  let refundShare: number | null = null;
-  if (rsVariant === 1) {
-    refundShare = Number(hexToBigInt(data[idx + consumed]));
-    consumed++;
-  }
-
-  // distribution_positions: Option<u32>
-  const dpVariant = Number(hexToBigInt(data[idx + consumed]));
-  consumed++;
-  let distributionPositions: number | null = null;
-  if (dpVariant === 1) {
-    distributionPositions = Number(hexToBigInt(data[idx + consumed]));
-    consumed++;
-  }
 
   return {
     value: {
       token_address: tokenAddress,
       amount,
-      distribution: distribution.value,
       tournament_creator_share: tournamentCreatorShare,
       game_creator_share: gameCreatorShare,
       refund_share: refundShare,
-      distribution_positions: distributionPositions,
+      distribution: distribution.value,
+      distribution_count: distributionCount,
     },
     consumed,
   };
@@ -602,7 +623,7 @@ function decodeTokenTypeData(
  *   Position(u32) |
  *   TournamentCreator |
  *   GameCreator |
- *   Refund(u64)
+ *   Refund(felt252)
  */
 function decodeRewardType(
   data: readonly string[],
@@ -684,8 +705,8 @@ function decodeRewardType(
         };
       }
       case 3: {
-        // Refund(u64)
-        const tokenId = hexToBigInt(data[idx + consumed]).toString();
+        // Refund(felt252)
+        const tokenId = feltToHex(data[idx + consumed]);
         consumed++;
         return {
           value: {
@@ -763,12 +784,13 @@ function decodeQualificationProof(
  *
  * Layout:
  *   keys:  [selector, tournament_id, game_address]
- *   data:  [created_at, created_by, creator_token_id,
+ *   data:  [created_at, created_by, creator_token_id(felt252),
  *           ...serde(Metadata { name: felt252, description: ByteArray }),
  *           ...serde(Schedule),
  *           ...serde(GameConfig),
  *           ...serde(Option<EntryFee>),
- *           ...serde(Option<EntryRequirement>)]
+ *           ...serde(Option<EntryRequirement>),
+ *           ...serde(LeaderboardConfig)]
  */
 export function decodeTournamentCreated(
   keys: readonly string[],
@@ -787,8 +809,8 @@ export function decodeTournamentCreated(
   const createdBy = feltToHex(data[idx]);
   idx++;
 
-  // creator_token_id: u64
-  const creatorTokenId = hexToBigInt(data[idx]);
+  // creator_token_id: felt252
+  const creatorTokenId = feltToHex(data[idx]);
   idx++;
 
   // Metadata { name: felt252, description: ByteArray }
@@ -811,6 +833,10 @@ export function decodeTournamentCreated(
 
   // Option<EntryRequirement>
   const entryRequirement = decodeOptionEntryRequirement(data, idx);
+  idx += entryRequirement.consumed;
+
+  // LeaderboardConfig
+  const leaderboardConfig = decodeLeaderboardConfig(data, idx);
 
   return {
     tournamentId,
@@ -824,6 +850,7 @@ export function decodeTournamentCreated(
     gameConfig: gameConfig.value,
     entryFee: entryFee.value,
     entryRequirement: entryRequirement.value,
+    leaderboardConfig: leaderboardConfig.value,
   };
 }
 

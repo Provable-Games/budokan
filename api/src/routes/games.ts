@@ -5,7 +5,6 @@ import {
   tournaments,
   registrations,
   prizes,
-  gameStats,
 } from "../db/schema.js";
 import {
   isValidAddress,
@@ -29,7 +28,7 @@ app.get("/:address/tournaments", async (c) => {
     const offset = parseOffset(c.req.query("offset"));
 
     const conditions = [eq(tournaments.gameAddress, gameAddress)];
-    if (creator) conditions.push(eq(tournaments.creator, creator));
+    if (creator) conditions.push(eq(tournaments.createdBy, creator));
 
     const where = and(...conditions);
 
@@ -49,25 +48,23 @@ app.get("/:address/tournaments", async (c) => {
 
     return c.json({
       data: rows.map((t) => ({
-        id: t.id.toString(),
+        id: t.tournamentId.toString(),
         gameAddress: t.gameAddress,
-        creator: t.creator,
-        creatorTokenId: t.creatorTokenId?.toString() ?? null,
+        createdBy: t.createdBy,
+        creatorTokenId: t.creatorTokenId ?? null,
         name: t.name,
         description: t.description,
-        registrationStartTime: t.registrationStartTime?.toISOString() ?? null,
-        registrationEndTime: t.registrationEndTime?.toISOString() ?? null,
-        gameStartTime: t.gameStartTime.toISOString(),
-        gameEndTime: t.gameEndTime.toISOString(),
-        submissionDuration: t.submissionDuration,
-        settingsId: t.settingsId,
-        soulbound: t.soulbound,
-        playUrl: t.playUrl,
-        entryFeeToken: t.entryFeeToken,
-        entryFeeAmount: t.entryFeeAmount?.toString() ?? null,
-        hasEntryRequirement: t.hasEntryRequirement,
-        createdAt: t.createdAt.toISOString(),
-        metadata: t.metadata,
+        schedule: t.schedule,
+        gameConfig: t.gameConfig,
+        entryFee: t.entryFee,
+        entryRequirement: t.entryRequirement,
+        leaderboardConfig: t.leaderboardConfig,
+        entryCount: t.entryCount,
+        prizeCount: t.prizeCount,
+        submissionCount: t.submissionCount,
+        createdAt: t.createdAt?.toString() ?? null,
+        createdAtBlock: t.createdAtBlock?.toString() ?? null,
+        txHash: t.txHash,
       })),
       pagination: {
         total: countResult[0]?.count ?? 0,
@@ -89,28 +86,7 @@ app.get("/:address/stats", async (c) => {
       return c.json({ error: "Invalid game address" }, 400);
     }
 
-    // First try the materialized stats table
-    const statsRows = await db
-      .select()
-      .from(gameStats)
-      .where(eq(gameStats.gameAddress, gameAddress))
-      .limit(1);
-
-    if (statsRows.length > 0) {
-      const s = statsRows[0];
-      return c.json({
-        data: {
-          gameAddress: s.gameAddress,
-          totalTournaments: s.totalTournaments,
-          totalRegistrations: s.totalRegistrations,
-          totalPrizes: s.totalPrizes,
-          uniquePlayers: s.uniquePlayers,
-          updatedAt: s.updatedAt.toISOString(),
-        },
-      });
-    }
-
-    // Fallback: compute stats on the fly
+    // Compute stats on the fly from source tables
     const [tournamentCount, registrationCount, prizeCount, playerCount] =
       await Promise.all([
         db
@@ -124,7 +100,7 @@ app.get("/:address/stats", async (c) => {
         db.execute(sql`
           SELECT count(*)::int AS count
           FROM prizes p
-          INNER JOIN tournaments t ON t.id = p.tournament_id
+          INNER JOIN tournaments t ON t.tournament_id = p.tournament_id
           WHERE t.game_address = ${gameAddress}
         `),
         db
@@ -140,7 +116,6 @@ app.get("/:address/stats", async (c) => {
         totalRegistrations: registrationCount[0]?.count ?? 0,
         totalPrizes: (prizeCount.rows as Array<{ count: number }>)[0]?.count ?? 0,
         uniquePlayers: playerCount[0]?.count ?? 0,
-        updatedAt: null,
       },
     });
   } catch (err) {

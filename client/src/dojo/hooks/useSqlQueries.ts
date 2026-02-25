@@ -4,6 +4,10 @@ import { BigNumberish } from "starknet";
 import { padU64, indexAddress, padAddress } from "@/lib/utils";
 import { TOURNAMENT_VERSION_KEY } from "@/lib/constants";
 
+// Reusable SQL expressions for game schedule timestamps
+const GAME_START_TIME_SQL = `(CAST(t.created_at AS INTEGER) + CAST(t.'schedule.game_start_delay' AS INTEGER))`;
+const GAME_END_TIME_SQL = `(CAST(t.created_at AS INTEGER) + CAST(t.'schedule.game_end_delay' AS INTEGER))`;
+
 // Helper function to generate SQL exclusion clause for tournament IDs
 const getExcludedTournamentsClause = (excludedIds: number[]): string => {
   if (!excludedIds || excludedIds.length === 0) return "";
@@ -153,7 +157,7 @@ export const useGetUpcomingTournamentsCount = ({
     () => `
     SELECT COUNT(*) as count
     FROM '${namespace}-Tournament' t
-    WHERE t.'schedule.game.start' > '${padU64(currentTime)}'
+    WHERE ${GAME_START_TIME_SQL} > ${currentTime}
     ${fromTournamentId ? `AND t.id > '${fromTournamentId}'` : ""}
     ${getExcludedTournamentsClause(excludedTournamentIds)}
     ${getExtensionWhitelistClause(whitelistedExtensions)}
@@ -189,9 +193,8 @@ export const useGetLiveTournamentsCount = ({
     () => `
     SELECT COUNT(*) as count
     FROM '${namespace}-Tournament' t
-    WHERE (t.'schedule.game.start' <= '${padU64(
-      currentTime
-    )}' AND t.'schedule.game.end' > '${padU64(currentTime)}')
+    WHERE ${GAME_START_TIME_SQL} <= ${currentTime}
+    AND ${GAME_END_TIME_SQL} > ${currentTime}
     ${fromTournamentId ? `AND t.id > '${fromTournamentId}'` : ""}
     ${getExcludedTournamentsClause(excludedTournamentIds)}
     ${getExtensionWhitelistClause(whitelistedExtensions)}
@@ -227,7 +230,7 @@ export const useGetEndedTournamentsCount = ({
     () => `
     SELECT COUNT(*) as count
     FROM '${namespace}-Tournament' t
-    WHERE t.'schedule.game.end' <= '${padU64(currentTime)}'
+    WHERE ${GAME_END_TIME_SQL} <= ${currentTime}
     ${fromTournamentId ? `AND t.id > '${fromTournamentId}'` : ""}
     ${getExcludedTournamentsClause(excludedTournamentIds)}
     ${getExtensionWhitelistClause(whitelistedExtensions)}
@@ -317,9 +320,8 @@ export const useGetMyLiveTournamentsCount = ({
       JOIN '${namespace}-Tournament' t
         ON rt.tournament_id = t.id
           ${fromTournamentId ? `AND t.id > '${fromTournamentId}'` : ""}
-          AND (t.'schedule.game.start' <= '${padU64(
-            currentTime
-          )}' AND t.'schedule.game.end' > '${padU64(currentTime)}')
+          AND ${GAME_START_TIME_SQL} <= ${currentTime}
+          AND ${GAME_END_TIME_SQL} > ${currentTime}
     )
     SELECT COUNT(DISTINCT tournament_id) as count
     FROM filtered_tournaments
@@ -348,15 +350,13 @@ const getTournamentWhereClause = (
 
   switch (status) {
     case "upcoming":
-      whereClause = `WHERE t.'schedule.game.start' > '${padU64(currentTime)}'`;
+      whereClause = `WHERE ${GAME_START_TIME_SQL} > ${currentTime}`;
       break;
     case "live":
-      whereClause = `WHERE t.'schedule.game.start' <= '${padU64(
-        currentTime
-      )}' AND t.'schedule.game.end' > '${padU64(currentTime)}'`;
+      whereClause = `WHERE ${GAME_START_TIME_SQL} <= ${currentTime} AND ${GAME_END_TIME_SQL} > ${currentTime}`;
       break;
     case "ended":
-      whereClause = `WHERE t.'schedule.game.end' <= '${padU64(currentTime)}'`;
+      whereClause = `WHERE ${GAME_END_TIME_SQL} <= ${currentTime}`;
       break;
     case "all":
       whereClause = "WHERE 1=1"; // Use a true condition to make it easier to add more conditions
@@ -380,9 +380,9 @@ const getTournamentWhereClause = (
 const getSortClause = (sort: string) => {
   switch (sort) {
     case "start_time":
-      return `ORDER BY t.'schedule.game.start' ASC`;
+      return `ORDER BY ${GAME_START_TIME_SQL} ASC`;
     case "end_time":
-      return `ORDER BY t.'schedule.game.end' ASC`;
+      return `ORDER BY ${GAME_END_TIME_SQL} ASC`;
     case "pot_size":
       // You might need to adjust this based on your actual prize calculation
       return `ORDER BY entry_count DESC`;
@@ -391,7 +391,7 @@ const getSortClause = (sort: string) => {
     case "winners":
       return `ORDER BY t.'winners_count' DESC`;
     default:
-      return `ORDER BY t.'schedule.game.start' ASC`;
+      return `ORDER BY ${GAME_START_TIME_SQL} ASC`;
   }
 };
 
@@ -479,7 +479,7 @@ export const useGetTournaments = ({
       )}
           ${
             gameFilters.length > 0
-              ? `AND t.'game_config.address' IN (${gameFilters
+              ? `AND t.'game_config.game_address' IN (${gameFilters
                   .map((address) => `'${address}'`)
                   .join(",")})`
               : ""
@@ -688,7 +688,7 @@ export const useGetMyTournaments = ({
       ${fromTournamentId ? `AND t.id > '${fromTournamentId}'` : ""}
       ${
         gameFilters.length > 0
-          ? `AND t.'game_config.address' IN (${gameFilters
+          ? `AND t.'game_config.game_address' IN (${gameFilters
               .map((address) => `'${address}'`)
               .join(",")})`
           : ""
@@ -1317,8 +1317,8 @@ export const useGetTournamentRewardClaimsAggregations = ({
             THEN 1 ELSE 0
           END
           +
-          -- Count distribution positions from distribution_positions field
-          COALESCE(CAST("entry_fee.Some.distribution_positions.Some" AS INTEGER), 0)
+          -- Count distribution positions from distribution_count field
+          COALESCE(CAST("entry_fee.Some.distribution_count" AS INTEGER), 0)
          FROM '${namespace}-Tournament'
          WHERE id = '${padU64(BigInt(tournamentId))}'
         ), 0) as entry_fee_count,

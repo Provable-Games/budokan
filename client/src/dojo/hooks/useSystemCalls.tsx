@@ -75,9 +75,9 @@ export const useSystemCalls = () => {
     prizeTotalUsd: number,
     prependCalls?: { contractAddress: string; entrypoint: string; calldata: string[] }[]
   ) => {
-    const startsIn =
-      Number(tournamentModel.schedule.game.start) - Date.now() / 1000;
-    const game = getGameName(tournamentModel.game_config.address);
+    const gameStartTime = Number(tournamentModel.created_at) + Number(tournamentModel.schedule.game_start_delay);
+    const startsIn = gameStartTime - Date.now() / 1000;
+    const game = getGameName(tournamentModel.game_config.game_address);
 
     const budokanContract = initializeBudokanContract();
 
@@ -504,7 +504,7 @@ export const useSystemCalls = () => {
     duration: number
   ) => {
     const budokanContract = initializeBudokanContract();
-    const game = getGameName(tournament.game_config.address);
+    const game = getGameName(tournament.game_config.game_address);
     try {
       const call = budokanContract.populate("create_tournament", [
         address!,
@@ -513,8 +513,7 @@ export const useSystemCalls = () => {
         tournament.game_config,
         tournament.entry_fee,
         tournament.entry_requirement,
-        tournament.soulbound,
-        tournament.play_url,
+        tournament.leaderboard_config,
         0, // salt
         0, // metadata_value
       ]);
@@ -607,7 +606,7 @@ export const useSystemCalls = () => {
           game,
           hasEntryFee: tournament.entry_fee.isSome(),
           entryFeeUsdCost: entryFeeUsdCost,
-          startsIn: Number(tournament.schedule.game.start) - Date.now() / 1000,
+          startsIn: Number(tournament.created_at) + Number(tournament.schedule.game_start_delay) - Date.now() / 1000,
           duration,
         });
       }
@@ -624,7 +623,7 @@ export const useSystemCalls = () => {
     duration: number,
     batchSize: number = 50
   ) => {
-    const game = getGameName(tournament.game_config.address);
+    const game = getGameName(tournament.game_config.game_address);
     try {
       // Manually convert description to ByteArray to avoid stack overflow
       const descriptionByteArray = byteArray.byteArrayFromString(
@@ -647,8 +646,7 @@ export const useSystemCalls = () => {
           tournament.game_config,
           tournament.entry_fee,
           tournament.entry_requirement,
-          tournament.soulbound,
-          tournament.play_url,
+          tournament.leaderboard_config,
           0, // salt
           0, // metadata_value
         ]),
@@ -778,7 +776,7 @@ export const useSystemCalls = () => {
           game,
           hasEntryFee: tournament.entry_fee.isSome(),
           entryFeeUsdCost: entryFeeUsdCost,
-          startsIn: Number(tournament.schedule.game.start) - Date.now() / 1000,
+          startsIn: Number(tournament.created_at) + Number(tournament.schedule.game_start_delay) - Date.now() / 1000,
           duration,
         });
       }

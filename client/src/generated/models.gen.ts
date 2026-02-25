@@ -143,19 +143,27 @@ export type DistributionEnum = CairoCustomEnum;
 export interface EntryFee {
   token_address: string;
   amount: BigNumberish;
+  tournament_creator_share: BigNumberish;
+  game_creator_share: BigNumberish;
+  refund_share: BigNumberish;
   distribution: DistributionEnum;
-  tournament_creator_share: CairoOption<BigNumberish>;
-  game_creator_share: CairoOption<BigNumberish>;
-  refund_share: CairoOption<BigNumberish>;
-  distribution_positions: CairoOption<BigNumberish>;
+  distribution_count: BigNumberish;
 }
 
 // Type definition for `tournaments::components::models::tournament::GameConfig` struct
 export interface GameConfig {
-  address: string;
+  game_address: string;
   settings_id: BigNumberish;
   soulbound: boolean;
-  play_url: string;
+  paymaster: boolean;
+  client_url: CairoOption<string>;
+  renderer: CairoOption<string>;
+}
+
+// Type definition for `tournaments::components::models::tournament::LeaderboardConfig` struct
+export interface LeaderboardConfig {
+  ascending: boolean;
+  game_must_be_over: boolean;
 }
 
 // Type definition for `tournaments::components::models::tournament::Leaderboard` struct
@@ -173,12 +181,6 @@ export interface LeaderboardValue {
 export interface Metadata {
   name: BigNumberish;
   description: string;
-}
-
-// Type definition for `tournaments::components::models::tournament::Period` struct
-export interface Period {
-  start: BigNumberish;
-  end: BigNumberish;
 }
 
 // Type definition for `tournaments::components::models::tournament::PlatformMetrics` struct
@@ -249,8 +251,10 @@ export interface RegistrationValue {
 
 // Type definition for `tournaments::components::models::tournament::Schedule` struct
 export interface Schedule {
-  registration: CairoOption<Period>;
-  game: Period;
+  registration_start_delay: BigNumberish;
+  registration_end_delay: BigNumberish;
+  game_start_delay: BigNumberish;
+  game_end_delay: BigNumberish;
   submission_duration: BigNumberish;
 }
 
@@ -273,8 +277,7 @@ export interface Tournament {
   game_config: GameConfig;
   entry_fee: CairoOption<EntryFee>;
   entry_requirement: CairoOption<EntryRequirement>;
-  soulbound: boolean;
-  play_url: string;
+  leaderboard_config: LeaderboardConfig;
 }
 
 // Type definition for `tournaments::components::models::tournament::TournamentConfig` struct
@@ -309,8 +312,7 @@ export interface TournamentValue {
   game_config: GameConfig;
   entry_fee: CairoOption<EntryFee>;
   entry_requirement: CairoOption<EntryRequirement>;
-  soulbound: boolean;
-  play_url: string;
+  leaderboard_config: LeaderboardConfig;
 }
 
 export type EntryRequirement = {
@@ -424,8 +426,8 @@ export interface SchemaType extends ISchemaType {
     GameConfig: WithFieldOrder<GameConfig>;
     Leaderboard: WithFieldOrder<Leaderboard>;
     LeaderboardValue: WithFieldOrder<LeaderboardValue>;
+    LeaderboardConfig: WithFieldOrder<LeaderboardConfig>;
     Metadata: WithFieldOrder<Metadata>;
-    Period: WithFieldOrder<Period>;
     PlatformMetrics: WithFieldOrder<PlatformMetrics>;
     PlatformMetricsValue: WithFieldOrder<PlatformMetricsValue>;
     Prize: WithFieldOrder<Prize>;
@@ -593,37 +595,40 @@ export const schemaTemplate: {
     fieldOrder: [
       "token_address",
       "amount",
-      "distribution",
       "tournament_creator_share",
       "game_creator_share",
       "refund_share",
-      "distribution_positions",
+      "distribution",
+      "distribution_count",
     ],
     token_address: "",
     amount: 0,
+    tournament_creator_share: 0,
+    game_creator_share: 0,
+    refund_share: 0,
     distribution: new CairoCustomEnum({
       Linear: undefined,
-      Exponential: 10, // Default weight 10 = 1.0
+      Exponential: 10,
       Uniform: undefined,
       Custom: undefined,
     }),
-    tournament_creator_share: new CairoOption(CairoOptionVariant.None),
-    game_creator_share: new CairoOption(CairoOptionVariant.None),
-    refund_share: new CairoOption(CairoOptionVariant.None),
-    distribution_positions: new CairoOption(CairoOptionVariant.None),
+    distribution_count: 0,
   },
   GameConfig: {
     fieldOrder: [
-      "address",
+      "game_address",
       "settings_id",
-      "prize_spots",
       "soulbound",
-      "play_url",
+      "paymaster",
+      "client_url",
+      "renderer",
     ],
-    address: "",
+    game_address: "",
     settings_id: 0,
     soulbound: false,
-    play_url: "",
+    paymaster: false,
+    client_url: new CairoOption(CairoOptionVariant.None),
+    renderer: new CairoOption(CairoOptionVariant.None),
   },
   Leaderboard: {
     fieldOrder: ["tournament_id", "token_ids"],
@@ -634,15 +639,15 @@ export const schemaTemplate: {
     fieldOrder: ["token_ids"],
     token_ids: [0],
   },
+  LeaderboardConfig: {
+    fieldOrder: ["ascending", "game_must_be_over"],
+    ascending: false,
+    game_must_be_over: false,
+  },
   Metadata: {
     fieldOrder: ["name", "description"],
     name: 0,
     description: "",
-  },
-  Period: {
-    fieldOrder: ["start", "end"],
-    start: 0,
-    end: 0,
   },
   PlatformMetrics: {
     fieldOrder: ["key", "total_tournaments"],
@@ -734,9 +739,17 @@ export const schemaTemplate: {
     has_submitted: false,
   },
   Schedule: {
-    fieldOrder: ["registration", "game", "submission_duration"],
-    registration: new CairoOption(CairoOptionVariant.None),
-    game: { start: 0, end: 0 },
+    fieldOrder: [
+      "registration_start_delay",
+      "registration_end_delay",
+      "game_start_delay",
+      "game_end_delay",
+      "submission_duration",
+    ],
+    registration_start_delay: 0,
+    registration_end_delay: 0,
+    game_start_delay: 0,
+    game_end_delay: 0,
     submission_duration: 0,
   },
   TokenValue: {
@@ -757,8 +770,7 @@ export const schemaTemplate: {
       "game_config",
       "entry_fee",
       "entry_requirement",
-      "soulbound",
-      "play_url",
+      "leaderboard_config",
     ],
     id: 0,
     created_at: 0,
@@ -766,20 +778,26 @@ export const schemaTemplate: {
     creator_token_id: 0,
     metadata: { name: 0, description: "" },
     schedule: {
-      registration: new CairoOption(CairoOptionVariant.None),
-      game: { start: 0, end: 0 },
+      registration_start_delay: 0,
+      registration_end_delay: 0,
+      game_start_delay: 0,
+      game_end_delay: 0,
       submission_duration: 0,
     },
     game_config: {
-      address: "",
+      game_address: "",
       settings_id: 0,
       soulbound: false,
-      play_url: "",
+      paymaster: false,
+      client_url: new CairoOption(CairoOptionVariant.None),
+      renderer: new CairoOption(CairoOptionVariant.None),
     },
     entry_fee: new CairoOption(CairoOptionVariant.None),
     entry_requirement: new CairoOption(CairoOptionVariant.None),
-    soulbound: false,
-    play_url: "",
+    leaderboard_config: {
+      ascending: false,
+      game_must_be_over: false,
+    },
   },
   TournamentConfig: {
     fieldOrder: ["key", "safe_mode", "test_mode"],
@@ -809,8 +827,7 @@ export const schemaTemplate: {
       "game_config",
       "entry_fee",
       "entry_requirement",
-      "soulbound",
-      "play_url",
+      "leaderboard_config",
     ],
     creator: "",
     metadata: {
@@ -818,20 +835,26 @@ export const schemaTemplate: {
       description: "",
     },
     schedule: {
-      registration: new CairoOption(CairoOptionVariant.None),
-      game: { start: 0, end: 0 },
+      registration_start_delay: 0,
+      registration_end_delay: 0,
+      game_start_delay: 0,
+      game_end_delay: 0,
       submission_duration: 0,
     },
     game_config: {
-      address: "",
+      game_address: "",
       settings_id: 0,
       soulbound: false,
-      play_url: "",
+      paymaster: false,
+      client_url: new CairoOption(CairoOptionVariant.None),
+      renderer: new CairoOption(CairoOptionVariant.None),
     },
     entry_fee: new CairoOption(CairoOptionVariant.None),
     entry_requirement: new CairoOption(CairoOptionVariant.None),
-    soulbound: false,
-    play_url: "",
+    leaderboard_config: {
+      ascending: false,
+      game_must_be_over: false,
+    },
   },
 };
 
@@ -858,8 +881,8 @@ export function getModelsMapping(namespace: string) {
     GameConfig: `${namespace}-GameConfig` as const,
     Leaderboard: `${namespace}-Leaderboard` as const,
     LeaderboardValue: `${namespace}-LeaderboardValue` as const,
+    LeaderboardConfig: `${namespace}-LeaderboardConfig` as const,
     Metadata: `${namespace}-Metadata` as const,
-    Period: `${namespace}-Period` as const,
     PlatformMetrics: `${namespace}-PlatformMetrics` as const,
     PlatformMetricsValue: `${namespace}-PlatformMetricsValue` as const,
     Prize: `${namespace}-Prize` as const,

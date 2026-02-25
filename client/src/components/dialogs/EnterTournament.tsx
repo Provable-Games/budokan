@@ -51,7 +51,7 @@ import {
 } from "@/dojo/hooks/useSqlQueries";
 import { useGameTokens } from "metagame-sdk";
 import { useDojo } from "@/context/dojo";
-import { processQualificationProof } from "@/lib/utils/formatting";
+import { processQualificationProof, computeAbsoluteTimes } from "@/lib/utils/formatting";
 import { getTokenLogoUrl, getTokenDecimals } from "@/lib/tokensMeta";
 import { LoadingSpinner } from "@/components/ui/spinner";
 import {
@@ -801,7 +801,7 @@ export function EnterTournamentDialog({
   }, [manualTokenId, open, requirementVariant, ownedTokenIds]);
 
   const requiredTournamentGameAddresses = tournamentsData.map((tournament) =>
-    indexAddress(tournament.game_config?.address ?? ""),
+    indexAddress(tournament.game_config?.game_address ?? ""),
   );
 
   const { games } = useGameTokens({
@@ -896,9 +896,9 @@ export function EnterTournamentDialog({
         const leaderboardTournament = tournamentsData.find(
           (tournament) => tournament.id === leaderboardTournamentId,
         );
-        const leaderboardTournamentFinalizedTime =
-          BigInt(leaderboardTournament?.schedule.game.end ?? 0n) +
-          BigInt(leaderboardTournament?.schedule.submission_duration ?? 0n);
+        const leaderboardTournamentFinalizedTime = leaderboardTournament
+          ? BigInt(computeAbsoluteTimes(leaderboardTournament.created_at, leaderboardTournament.schedule).submissionEndTime)
+          : 0n;
         const hasLeaderboardTournamentFinalized =
           leaderboardTournamentFinalizedTime < currentTime;
 
@@ -1386,13 +1386,13 @@ export function EnterTournamentDialog({
   // Shares are now in basis points (10000 = 100%) to allow 2 decimal precision
 
   const creatorShare = Number(
-    tournamentModel?.entry_fee.Some?.tournament_creator_share.Some ?? 0n,
+    tournamentModel?.entry_fee.Some?.tournament_creator_share ?? 0,
   );
   const gameShare = Number(
-    tournamentModel?.entry_fee.Some?.game_creator_share.Some ?? 0n,
+    tournamentModel?.entry_fee.Some?.game_creator_share ?? 0,
   );
   const refundShare = Number(
-    tournamentModel?.entry_fee.Some?.refund_share.Some ?? 0n,
+    tournamentModel?.entry_fee.Some?.refund_share ?? 0,
   );
   const prizePoolShare = 10000 - creatorShare - gameShare - refundShare;
 
@@ -1758,10 +1758,7 @@ export function EnterTournamentDialog({
                     <div className="flex flex-col gap-2 px-4">
                       {validatorTournaments.map((tournament) => {
                         const tournamentFinalizedTime =
-                          BigInt(tournament?.schedule.game.end ?? 0n) +
-                          BigInt(
-                            tournament?.schedule.submission_duration ?? 0n,
-                          );
+                          BigInt(computeAbsoluteTimes(tournament.created_at, tournament.schedule).submissionEndTime);
                         const hasTournamentFinalized =
                           tournamentFinalizedTime < currentTime;
                         return (

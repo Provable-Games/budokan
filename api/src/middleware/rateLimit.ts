@@ -34,12 +34,41 @@ if (cleanupTimer.unref) {
  *
  * When the limit is exceeded the middleware responds with 429 Too Many Requests.
  */
+// Comma-separated list of trusted proxy IPs/CIDRs.
+// When set, x-forwarded-for / x-real-ip headers are only trusted from these sources.
+const TRUSTED_PROXIES = new Set(
+  (process.env.TRUSTED_PROXIES ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean),
+);
+
+function getClientIp(c: Context): string {
+  // Only trust proxy headers when TRUSTED_PROXIES is configured
+  // and the direct connection comes from a trusted source.
+  if (TRUSTED_PROXIES.size > 0) {
+    const connectingIp = c.env?.remoteAddr ?? "unknown";
+    if (TRUSTED_PROXIES.has(connectingIp)) {
+      return (
+        c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
+        c.req.header("x-real-ip") ??
+        connectingIp
+      );
+    }
+    return connectingIp;
+  }
+
+  // No trusted proxies configured — use headers as best-effort fallback
+  return (
+    c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
+    c.req.header("x-real-ip") ??
+    "unknown"
+  );
+}
+
 export function rateLimit(maxRequests: number) {
   return async (c: Context, next: Next) => {
-    const ip =
-      c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
-      c.req.header("x-real-ip") ??
-      "unknown";
+    const ip = getClientIp(c);
 
     const key = `${ip}:${maxRequests}`;
     const now = Date.now();

@@ -10,7 +10,7 @@ const CHANNEL_MAP: Record<string, string> = {
   registrations: "registration_updates",
   leaderboards: "leaderboard_updates",
   prizes: "prize_updates",
-  rewards: "reward_updates",
+  rewards: "reward_claim_updates",
 };
 
 const VALID_CHANNELS = new Set(Object.values(CHANNEL_MAP));

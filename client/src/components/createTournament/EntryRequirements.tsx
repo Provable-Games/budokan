@@ -28,7 +28,7 @@ import {
   useGetTournaments,
   useGetTournamentsCount,
 } from "@/dojo/hooks/useSqlQueries";
-import { processTournamentFromSql } from "@/lib/utils/formatting";
+import { processTournamentFromSql, computeAbsoluteTimes } from "@/lib/utils/formatting";
 import { processPrizesFromSql } from "@/lib/utils/formatting";
 import Pagination from "@/components/table/Pagination";
 import {
@@ -802,20 +802,15 @@ const EntryRequirements = ({ form }: StepProps) => {
                                       {tournamentsData?.length > 0 ? (
                                         tournamentsData.map(
                                           (tournament, index) => {
+                                            const tAbsTimes = computeAbsoluteTimes(tournament?.tournament.created_at, tournament?.tournament.schedule);
                                             const isStarted =
-                                              Number(
-                                                tournament?.tournament.schedule
-                                                  .game.start
-                                              ) <
+                                              tAbsTimes.gameStartTime <
                                               Number(
                                                 BigInt(Date.now()) / 1000n
                                               );
 
                                             const isEnded =
-                                              Number(
-                                                tournament.tournament.schedule
-                                                  .game.end
-                                              ) <
+                                              tAbsTimes.gameEndTime <
                                               Number(
                                                 BigInt(Date.now()) / 1000n
                                               );
@@ -827,7 +822,7 @@ const EntryRequirements = ({ form }: StepProps) => {
                                               (game) =>
                                                 game.contract_address ===
                                                 tournament.tournament
-                                                  .game_config.address
+                                                  .game_config.game_address
                                             )?.name;
                                             // const processedPrizes =
                                             //   processPrizesFromSql(
@@ -908,7 +903,7 @@ const EntryRequirements = ({ form }: StepProps) => {
                                                             tournament
                                                               .tournament
                                                               .game_config
-                                                              .address
+                                                              .game_address
                                                           )}
                                                         />
                                                       </div>

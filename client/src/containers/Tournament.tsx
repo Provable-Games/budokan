@@ -29,6 +29,7 @@ import {
   expandDistributedPrizes,
   processPrizeFromSql,
   getClaimablePrizes,
+  computeAbsoluteTimes,
 } from "@/lib/utils/formatting";
 import { EnterTournamentDialog } from "@/components/dialogs/EnterTournament";
 import ScoreTable from "@/components/tournament/table/ScoreTable";
@@ -211,10 +212,10 @@ const Tournament = () => {
     };
   }, [id, tournamentsCount]);
 
-  // Get leaderboard size from distribution_positions if specified, otherwise use entry count
+  // Get leaderboard size from distribution_count if specified, otherwise use entry count
   const leaderboardSize =
-    tournamentModel?.entry_fee?.Some?.distribution_positions?.isSome()
-      ? Number(tournamentModel.entry_fee.Some.distribution_positions.Some)
+    Number(tournamentModel?.entry_fee?.Some?.distribution_count ?? 0) > 0
+      ? Number(tournamentModel!.entry_fee.Some!.distribution_count)
       : Number(entryCountModel?.count ?? 0);
 
   // Fetch registration data to check for banned entries
@@ -277,7 +278,7 @@ const Tournament = () => {
     tournamentCreatorShare.length +
     gameCreatorShare.length;
 
-  const gameAddress = tournamentModel?.game_config?.address;
+  const gameAddress = tournamentModel?.game_config?.game_address;
   const gameName = gameData.find(
     (game) => game.contract_address === gameAddress,
   )?.name;
@@ -321,11 +322,12 @@ const Tournament = () => {
   }, [tournamentModel?.metadata.description]);
 
   const durationSeconds = Number(
-    BigInt(tournamentModel?.schedule?.game?.end ?? 0n) -
-      BigInt(tournamentModel?.schedule?.game?.start ?? 0n),
+    BigInt(tournamentModel?.schedule?.game_end_delay ?? 0n) -
+      BigInt(tournamentModel?.schedule?.game_start_delay ?? 0n),
   );
 
-  const registrationType = tournamentModel?.schedule.registration.isNone()
+  const registrationType = Number(tournamentModel?.schedule?.registration_start_delay ?? 0) === 0
+      && Number(tournamentModel?.schedule?.registration_end_delay ?? 0) === 0
     ? "open"
     : "fixed";
 
@@ -692,23 +694,24 @@ const Tournament = () => {
       )
     : undefined;
 
+  const absoluteTimes = tournamentModel
+    ? computeAbsoluteTimes(tournamentModel.created_at, tournamentModel.schedule)
+    : null;
+
   const isStarted =
-    Number(tournamentModel?.schedule.game.start) <
+    (absoluteTimes?.gameStartTime ?? Infinity) <
     Number(BigInt(Date.now()) / 1000n);
 
   const isEnded =
-    Number(tournamentModel?.schedule.game.end) <
+    (absoluteTimes?.gameEndTime ?? Infinity) <
     Number(BigInt(Date.now()) / 1000n);
 
   const isSubmitted =
-    Number(
-      BigInt(tournamentModel?.schedule.game.end ?? 0n) +
-        BigInt(tournamentModel?.schedule.submission_duration ?? 0n),
-    ) < Number(BigInt(Date.now()) / 1000n);
+    (absoluteTimes?.submissionEndTime ?? Infinity) < Number(BigInt(Date.now()) / 1000n);
 
   // Detect preparation period (break between registration end and tournament start)
-  const registrationEndTime = tournamentModel?.schedule.registration?.Some?.end;
-  const tournamentStartTime = tournamentModel?.schedule.game.start;
+  const registrationEndTime = absoluteTimes?.registrationEndTime;
+  const tournamentStartTime = absoluteTimes?.gameStartTime;
   const now = Number(BigInt(Date.now()) / 1000n);
   const hasPreparationPeriod =
     registrationEndTime &&
@@ -1029,27 +1032,22 @@ const Tournament = () => {
                 />
               ) : isInPreparationPeriod ? (
                 <Countdown
-                  targetTimestamp={Number(tournamentModel?.schedule.game.start)}
+                  targetTimestamp={absoluteTimes?.gameStartTime ?? 0}
                   label="Starts In"
                 />
               ) : !isStarted ? (
                 <Countdown
-                  targetTimestamp={Number(tournamentModel?.schedule.game.start)}
+                  targetTimestamp={absoluteTimes?.gameStartTime ?? 0}
                   label="Starts In"
                 />
               ) : !isEnded ? (
                 <Countdown
-                  targetTimestamp={Number(tournamentModel?.schedule.game.end)}
+                  targetTimestamp={absoluteTimes?.gameEndTime ?? 0}
                   label="Ends In"
                 />
               ) : !isSubmitted ? (
                 <Countdown
-                  targetTimestamp={Number(
-                    BigInt(tournamentModel?.schedule.game.end ?? 0n) +
-                      BigInt(
-                        tournamentModel?.schedule.submission_duration ?? 0n,
-                      ),
-                  )}
+                  targetTimestamp={absoluteTimes?.submissionEndTime ?? 0}
                   label="Submission Ends In"
                 />
               ) : (
@@ -1136,17 +1134,13 @@ const Tournament = () => {
               <TournamentTimeline
                 type={registrationType}
                 createdTime={Number(tournamentModel?.created_at ?? 0)}
-                startTime={Number(tournamentModel?.schedule.game.start ?? 0)}
+                startTime={absoluteTimes?.gameStartTime ?? 0}
                 duration={durationSeconds ?? 0}
                 submissionPeriod={Number(
                   tournamentModel?.schedule.submission_duration ?? 0,
                 )}
-                registrationStartTime={Number(
-                  tournamentModel?.schedule.registration.Some?.start ?? 0,
-                )}
-                registrationEndTime={Number(
-                  tournamentModel?.schedule.registration.Some?.end ?? 0,
-                )}
+                registrationStartTime={absoluteTimes?.registrationStartTime ?? 0}
+                registrationEndTime={absoluteTimes?.registrationEndTime ?? 0}
                 pulse={true}
               />
             </div>
@@ -1179,7 +1173,7 @@ const Tournament = () => {
             />
             <MyEntries
               tournamentId={tournamentModel?.id}
-              gameAddress={tournamentModel?.game_config?.address}
+              gameAddress={tournamentModel?.game_config?.game_address}
               tournamentModel={tournamentModel}
               totalEntryCount={entryCount}
               banRefreshTrigger={banRefreshTrigger}

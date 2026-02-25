@@ -4,7 +4,6 @@ import { db } from "../db/client.js";
 import {
   tournaments,
   registrations,
-  prizes,
 } from "../db/schema.js";
 import {
   isValidAddress,
@@ -32,7 +31,7 @@ app.get("/:address/tournaments", async (c) => {
           tournament: tournaments,
         })
         .from(registrations)
-        .innerJoin(tournaments, eq(registrations.tournamentId, tournaments.id))
+        .innerJoin(tournaments, eq(registrations.tournamentId, tournaments.tournamentId))
         .where(eq(registrations.playerAddress, address))
         .orderBy(desc(tournaments.createdAt))
         .limit(limit)
@@ -46,22 +45,19 @@ app.get("/:address/tournaments", async (c) => {
     return c.json({
       data: rows.map((row) => ({
         registration: {
-          id: row.registration.id,
           tournamentId: row.registration.tournamentId.toString(),
           gameTokenId: row.registration.gameTokenId.toString(),
           gameAddress: row.registration.gameAddress,
           entryNumber: row.registration.entryNumber,
           hasSubmitted: row.registration.hasSubmitted,
           isBanned: row.registration.isBanned,
-          registeredAt: row.registration.registeredAt.toISOString(),
         },
         tournament: {
-          id: row.tournament.id.toString(),
+          id: row.tournament.tournamentId.toString(),
           name: row.tournament.name,
           gameAddress: row.tournament.gameAddress,
-          gameStartTime: row.tournament.gameStartTime.toISOString(),
-          gameEndTime: row.tournament.gameEndTime.toISOString(),
-          createdAt: row.tournament.createdAt.toISOString(),
+          createdAt: row.tournament.createdAt?.toString() ?? null,
+          schedule: row.tournament.schedule,
         },
       })),
       pagination: {
@@ -106,7 +102,7 @@ app.get("/:address/stats", async (c) => {
         INNER JOIN registrations r ON r.tournament_id = lb.tournament_id
           AND r.game_token_id = lb.token_id
         WHERE r.player_address = ${address}
-          AND lb.rank <= p.payout_position
+          AND lb.position <= p.payout_position
       `),
     ]);
 

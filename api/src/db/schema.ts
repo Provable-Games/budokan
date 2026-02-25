@@ -1,188 +1,216 @@
+/**
+ * API Database Schema
+ *
+ * This schema MUST match the indexer's canonical schema (indexer/src/lib/schema.ts).
+ * The indexer creates and populates all tables; the API is a read-only layer.
+ *
+ * Design notes:
+ * - Composite PKs enforce domain uniqueness (e.g., one registration per token per tournament)
+ * - Auto-increment `id` columns on composite-PK tables serve as the Apibara drizzle storage
+ *   plugin's idColumn for cursor-based invalidation during chain reorgs.
+ */
+
 import {
   pgTable,
-  text,
-  integer,
+  serial,
   bigint,
+  integer,
+  text,
   boolean,
-  timestamp,
   jsonb,
-  uniqueIndex,
   index,
+  unique,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 
-// ─── tournaments ──────────────────────────────────────────────────────────────
-// Core tournament definitions indexed from on-chain TournamentCreated events.
-
+// ---------------------------------------------------------------------------
+// tournaments
+// ---------------------------------------------------------------------------
 export const tournaments = pgTable(
   "tournaments",
   {
-    id: bigint("id", { mode: "bigint" }).primaryKey(),
+    tournamentId: bigint("tournament_id", { mode: "bigint" }).primaryKey(),
     gameAddress: text("game_address").notNull(),
-    creator: text("creator").notNull(),
-    creatorTokenId: bigint("creator_token_id", { mode: "bigint" }),
-    name: text("name").notNull(),
-    description: text("description").notNull().default(""),
-    registrationStartTime: timestamp("registration_start_time"),
-    registrationEndTime: timestamp("registration_end_time"),
-    gameStartTime: timestamp("game_start_time").notNull(),
-    gameEndTime: timestamp("game_end_time").notNull(),
-    submissionDuration: integer("submission_duration").notNull().default(0),
-    settingsId: integer("settings_id"),
-    soulbound: boolean("soulbound").notNull().default(false),
-    playUrl: text("play_url"),
-    entryFeeToken: text("entry_fee_token"),
-    entryFeeAmount: bigint("entry_fee_amount", { mode: "bigint" }),
-    hasEntryRequirement: boolean("has_entry_requirement").notNull().default(false),
-    createdAt: timestamp("created_at").notNull().defaultNow(),
-    metadata: jsonb("metadata"),
+    createdAt: bigint("created_at", { mode: "bigint" }),
+    createdBy: text("created_by"),
+    creatorTokenId: text("creator_token_id"),
+    name: text("name"),
+    description: text("description"),
+    schedule: jsonb("schedule"),
+    gameConfig: jsonb("game_config"),
+    entryFee: jsonb("entry_fee"),
+    entryRequirement: jsonb("entry_requirement"),
+    leaderboardConfig: jsonb("leaderboard_config"),
+    entryCount: integer("entry_count").default(0),
+    prizeCount: integer("prize_count").default(0),
+    submissionCount: integer("submission_count").default(0),
+    createdAtBlock: bigint("created_at_block", { mode: "bigint" }),
+    txHash: text("tx_hash"),
   },
   (table) => ({
     gameAddressIdx: index("tournaments_game_address_idx").on(table.gameAddress),
-    creatorIdx: index("tournaments_creator_idx").on(table.creator),
-    gameStartTimeIdx: index("tournaments_game_start_time_idx").on(table.gameStartTime),
-    gameEndTimeIdx: index("tournaments_game_end_time_idx").on(table.gameEndTime),
-    createdAtIdx: index("tournaments_created_at_idx").on(table.createdAt),
-  })
+    createdByIdx: index("tournaments_created_by_idx").on(table.createdBy),
+  }),
 );
 
-// ─── registrations ────────────────────────────────────────────────────────────
-// One row per player per tournament, written on TournamentRegistration event.
-
+// ---------------------------------------------------------------------------
+// registrations
+// Domain key: (tournament_id, game_token_id)
+// Surrogate id for Apibara cursor invalidation
+// ---------------------------------------------------------------------------
 export const registrations = pgTable(
   "registrations",
   {
-    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    id: serial("id").notNull(),
     tournamentId: bigint("tournament_id", { mode: "bigint" }).notNull(),
     gameTokenId: bigint("game_token_id", { mode: "bigint" }).notNull(),
-    gameAddress: text("game_address").notNull(),
-    playerAddress: text("player_address").notNull(),
-    entryNumber: integer("entry_number").notNull(),
-    hasSubmitted: boolean("has_submitted").notNull().default(false),
-    isBanned: boolean("is_banned").notNull().default(false),
-    registeredAt: timestamp("registered_at").notNull().defaultNow(),
+    gameAddress: text("game_address"),
+    playerAddress: text("player_address"),
+    entryNumber: integer("entry_number"),
+    hasSubmitted: boolean("has_submitted").default(false),
+    isBanned: boolean("is_banned").default(false),
   },
   (table) => ({
-    tournamentPlayerUniqueIdx: uniqueIndex("registrations_tournament_player_idx").on(
+    pk: primaryKey({ columns: [table.tournamentId, table.gameTokenId] }),
+    tournamentIdIdx: index("registrations_tournament_id_idx").on(
       table.tournamentId,
-      table.gameTokenId
     ),
-    tournamentIdIdx: index("registrations_tournament_id_idx").on(table.tournamentId),
-    playerAddressIdx: index("registrations_player_address_idx").on(table.playerAddress),
-    gameAddressIdx: index("registrations_game_address_idx").on(table.gameAddress),
-  })
+    playerAddressIdx: index("registrations_player_address_idx").on(
+      table.playerAddress,
+    ),
+    idIdx: unique("registrations_id_unique").on(table.id),
+  }),
 );
 
-// ─── leaderboards ─────────────────────────────────────────────────────────────
-// Leaderboard entries updated on LeaderboardUpdated event.
-
+// ---------------------------------------------------------------------------
+// leaderboards
+// Domain key: (tournament_id, position)
+// Surrogate id for Apibara cursor invalidation
+// ---------------------------------------------------------------------------
 export const leaderboards = pgTable(
   "leaderboards",
   {
-    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    id: serial("id").notNull(),
     tournamentId: bigint("tournament_id", { mode: "bigint" }).notNull(),
+    position: integer("position").notNull(),
     tokenId: bigint("token_id", { mode: "bigint" }).notNull(),
-    rank: integer("rank").notNull(),
-    score: bigint("score", { mode: "bigint" }),
-    updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (table) => ({
-    tournamentRankUniqueIdx: uniqueIndex("leaderboards_tournament_token_idx").on(
+    pk: primaryKey({ columns: [table.tournamentId, table.position] }),
+    tournamentIdIdx: index("leaderboards_tournament_id_idx").on(
       table.tournamentId,
-      table.tokenId
     ),
-    tournamentIdIdx: index("leaderboards_tournament_id_idx").on(table.tournamentId),
-    rankIdx: index("leaderboards_rank_idx").on(table.rank),
-  })
+    idIdx: unique("leaderboards_id_unique").on(table.id),
+  }),
 );
 
-// ─── prizes ───────────────────────────────────────────────────────────────────
-// Prize metadata from PrizeAdded events.
-
+// ---------------------------------------------------------------------------
+// prizes
+// ---------------------------------------------------------------------------
 export const prizes = pgTable(
   "prizes",
   {
-    id: bigint("id", { mode: "bigint" }).primaryKey(),
+    prizeId: bigint("prize_id", { mode: "bigint" }).primaryKey(),
     tournamentId: bigint("tournament_id", { mode: "bigint" }).notNull(),
-    payoutPosition: integer("payout_position").notNull(),
-    tokenAddress: text("token_address").notNull(),
-    tokenType: text("token_type").notNull(), // "erc20" | "erc721"
-    tokenAmount: bigint("token_amount", { mode: "bigint" }),
-    tokenId: bigint("token_id", { mode: "bigint" }),
-    sponsorAddress: text("sponsor_address").notNull(),
-    createdAt: timestamp("created_at").notNull().defaultNow(),
+    payoutPosition: integer("payout_position"),
+    tokenAddress: text("token_address"),
+    tokenType: jsonb("token_type"),
+    sponsorAddress: text("sponsor_address"),
+    createdAtBlock: bigint("created_at_block", { mode: "bigint" }),
+    txHash: text("tx_hash"),
   },
   (table) => ({
     tournamentIdIdx: index("prizes_tournament_id_idx").on(table.tournamentId),
-    sponsorIdx: index("prizes_sponsor_address_idx").on(table.sponsorAddress),
-  })
+  }),
 );
 
-// ─── rewards ──────────────────────────────────────────────────────────────────
-// Reward claims from RewardClaimed events.
-
-export const rewards = pgTable(
-  "rewards",
+// ---------------------------------------------------------------------------
+// reward_claims
+// Domain key: (tournament_id, tx_hash, event_index)
+//   event_index discriminates multiple claims within one transaction
+// Surrogate id for Apibara cursor invalidation
+// ---------------------------------------------------------------------------
+export const rewardClaims = pgTable(
+  "reward_claims",
   {
-    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    id: serial("id").notNull(),
     tournamentId: bigint("tournament_id", { mode: "bigint" }).notNull(),
-    rewardType: text("reward_type").notNull(),
-    claimed: boolean("claimed").notNull().default(false),
-    claimedAt: timestamp("claimed_at"),
-    metadata: jsonb("metadata"),
+    rewardType: jsonb("reward_type"),
+    claimed: boolean("claimed").default(false),
+    createdAtBlock: bigint("created_at_block", { mode: "bigint" }),
+    txHash: text("tx_hash").notNull(),
+    eventIndex: integer("event_index").notNull(),
   },
   (table) => ({
-    tournamentIdIdx: index("rewards_tournament_id_idx").on(table.tournamentId),
-    rewardTypeIdx: index("rewards_reward_type_idx").on(table.rewardType),
-  })
+    pk: primaryKey({
+      columns: [table.tournamentId, table.txHash, table.eventIndex],
+    }),
+    tournamentIdIdx: index("reward_claims_tournament_id_idx").on(
+      table.tournamentId,
+    ),
+    idIdx: unique("reward_claims_id_unique").on(table.id),
+  }),
 );
 
-// ─── tournament_events ──────────────────────────────────────────────────────
-// Raw event log from all indexed tournament-related events.
+// ---------------------------------------------------------------------------
+// qualification_entries
+// Domain key: (tournament_id, tx_hash, event_index)
+//   event_index discriminates multiple updates within one transaction
+// Surrogate id for Apibara cursor invalidation
+// ---------------------------------------------------------------------------
+export const qualificationEntries = pgTable(
+  "qualification_entries",
+  {
+    id: serial("id").notNull(),
+    tournamentId: bigint("tournament_id", { mode: "bigint" }).notNull(),
+    qualificationProof: jsonb("qualification_proof"),
+    entryCount: integer("entry_count"),
+    createdAtBlock: bigint("created_at_block", { mode: "bigint" }),
+    txHash: text("tx_hash").notNull(),
+    eventIndex: integer("event_index").notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({
+      columns: [table.tournamentId, table.txHash, table.eventIndex],
+    }),
+    tournamentIdIdx: index("qualification_entries_tournament_id_idx").on(
+      table.tournamentId,
+    ),
+    idIdx: unique("qualification_entries_id_unique").on(table.id),
+  }),
+);
 
+// ---------------------------------------------------------------------------
+// platform_stats  (singleton-ish table keyed by a text key)
+// ---------------------------------------------------------------------------
+export const platformStats = pgTable("platform_stats", {
+  key: text("key").primaryKey(),
+  totalTournaments: integer("total_tournaments").default(0),
+  totalPrizes: integer("total_prizes").default(0),
+  totalRegistrations: integer("total_registrations").default(0),
+  totalSubmissions: integer("total_submissions").default(0),
+});
+
+// ---------------------------------------------------------------------------
+// tournament_events  (PK: block_number + tx_hash + event_index)
+// Surrogate id for Apibara cursor invalidation
+// ---------------------------------------------------------------------------
 export const tournamentEvents = pgTable(
   "tournament_events",
   {
-    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    id: serial("id").notNull(),
     eventType: text("event_type").notNull(),
     tournamentId: bigint("tournament_id", { mode: "bigint" }),
     playerAddress: text("player_address"),
-    gameAddress: text("game_address"),
-    txHash: text("tx_hash"),
-    blockNumber: bigint("block_number", { mode: "bigint" }),
     data: jsonb("data"),
-    createdAt: timestamp("created_at").notNull().defaultNow(),
+    blockNumber: bigint("block_number", { mode: "bigint" }).notNull(),
+    txHash: text("tx_hash").notNull(),
+    eventIndex: integer("event_index").notNull(),
   },
   (table) => ({
-    eventTypeIdx: index("tournament_events_event_type_idx").on(table.eventType),
-    tournamentIdIdx: index("tournament_events_tournament_id_idx").on(table.tournamentId),
-    playerAddressIdx: index("tournament_events_player_address_idx").on(table.playerAddress),
-    gameAddressIdx: index("tournament_events_game_address_idx").on(table.gameAddress),
-    createdAtIdx: index("tournament_events_created_at_idx").on(table.createdAt),
-  })
+    pk: primaryKey({
+      columns: [table.blockNumber, table.txHash, table.eventIndex],
+    }),
+    idIdx: unique("tournament_events_id_unique").on(table.id),
+  }),
 );
-
-// ─── platform_stats ─────────────────────────────────────────────────────────
-// Aggregate platform-level statistics, updated by the indexer.
-
-export const platformStats = pgTable("platform_stats", {
-  key: text("key").primaryKey(), // e.g. "global"
-  totalTournaments: integer("total_tournaments").notNull().default(0),
-  totalRegistrations: integer("total_registrations").notNull().default(0),
-  totalPrizes: integer("total_prizes").notNull().default(0),
-  totalRewardsClaimed: integer("total_rewards_claimed").notNull().default(0),
-  uniquePlayers: integer("unique_players").notNull().default(0),
-  uniqueGames: integer("unique_games").notNull().default(0),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
-
-// ─── game_stats ─────────────────────────────────────────────────────────────
-// Aggregate statistics per game address, updated by the indexer.
-
-export const gameStats = pgTable("game_stats", {
-  gameAddress: text("game_address").primaryKey(),
-  totalTournaments: integer("total_tournaments").notNull().default(0),
-  totalRegistrations: integer("total_registrations").notNull().default(0),
-  totalPrizes: integer("total_prizes").notNull().default(0),
-  uniquePlayers: integer("unique_players").notNull().default(0),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
