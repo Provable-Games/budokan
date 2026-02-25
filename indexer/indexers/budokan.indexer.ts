@@ -69,13 +69,13 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
         indexerName: "budokan-indexer",
         idColumn: {
           tournaments: "tournament_id",
-          registrations: "tournament_id",
-          leaderboards: "tournament_id",
+          registrations: "id",
+          leaderboards: "id",
           prizes: "prize_id",
-          reward_claims: "tournament_id",
-          qualification_entries: "tournament_id",
+          reward_claims: "id",
+          qualification_entries: "id",
           platform_stats: "key",
-          tournament_events: "block_number",
+          tournament_events: "id",
         },
         migrate: { migrationsFolder: "./drizzle" },
       }),
@@ -334,6 +334,7 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
               claimed: decoded.claimed,
               createdAtBlock: blockNumber,
               txHash: txHash!,
+              eventIndex: eventIdx!,
             });
 
             eventLogRows.push({
@@ -367,6 +368,7 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
               entryCount: decoded.entryCount,
               createdAtBlock: blockNumber,
               txHash: txHash!,
+              eventIndex: eventIdx!,
             });
 
             eventLogRows.push({

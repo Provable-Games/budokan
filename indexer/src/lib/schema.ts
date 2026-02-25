@@ -6,6 +6,12 @@
  * - Fast client queries (indexed for common access patterns)
  * - Real-time updates via PostgreSQL NOTIFY triggers
  *
+ * Design notes:
+ * - Composite PKs enforce domain uniqueness (e.g., one registration per token per tournament)
+ * - Auto-increment `id` columns on composite-PK tables serve as the Apibara drizzle storage
+ *   plugin's idColumn for cursor-based invalidation during chain reorgs. Without a unique
+ *   per-row identifier, the plugin cannot target individual rows for deletion.
+ *
  * Tables:
  * 1. tournaments - Tournament definitions from TournamentCreated events
  * 2. registrations - Player registrations from TournamentRegistration events
@@ -19,12 +25,14 @@
 
 import {
   pgTable,
+  serial,
   bigint,
   integer,
   text,
   boolean,
   jsonb,
   index,
+  unique,
   primaryKey,
 } from "drizzle-orm/pg-core";
 
@@ -59,11 +67,14 @@ export const tournaments = pgTable(
 );
 
 // ---------------------------------------------------------------------------
-// registrations  (PK: tournament_id + game_token_id)
+// registrations
+// Domain key: (tournament_id, game_token_id)
+// Surrogate id for Apibara cursor invalidation
 // ---------------------------------------------------------------------------
 export const registrations = pgTable(
   "registrations",
   {
+    id: serial("id").notNull(),
     tournamentId: bigint("tournament_id", { mode: "bigint" }).notNull(),
     gameTokenId: bigint("game_token_id", { mode: "bigint" }).notNull(),
     gameAddress: text("game_address"),
@@ -80,15 +91,19 @@ export const registrations = pgTable(
     playerAddressIdx: index("registrations_player_address_idx").on(
       table.playerAddress,
     ),
+    idIdx: unique("registrations_id_unique").on(table.id),
   }),
 );
 
 // ---------------------------------------------------------------------------
-// leaderboards  (PK: tournament_id + position)
+// leaderboards
+// Domain key: (tournament_id, position)
+// Surrogate id for Apibara cursor invalidation
 // ---------------------------------------------------------------------------
 export const leaderboards = pgTable(
   "leaderboards",
   {
+    id: serial("id").notNull(),
     tournamentId: bigint("tournament_id", { mode: "bigint" }).notNull(),
     position: integer("position").notNull(),
     tokenId: bigint("token_id", { mode: "bigint" }).notNull(),
@@ -98,6 +113,7 @@ export const leaderboards = pgTable(
     tournamentIdIdx: index("leaderboards_tournament_id_idx").on(
       table.tournamentId,
     ),
+    idIdx: unique("leaderboards_id_unique").on(table.id),
   }),
 );
 
@@ -122,42 +138,58 @@ export const prizes = pgTable(
 );
 
 // ---------------------------------------------------------------------------
-// reward_claims  (PK: tournament_id + tx_hash)
+// reward_claims
+// Domain key: (tournament_id, tx_hash, event_index)
+//   event_index discriminates multiple claims within one transaction
+// Surrogate id for Apibara cursor invalidation
 // ---------------------------------------------------------------------------
 export const rewardClaims = pgTable(
   "reward_claims",
   {
+    id: serial("id").notNull(),
     tournamentId: bigint("tournament_id", { mode: "bigint" }).notNull(),
     rewardType: jsonb("reward_type"),
     claimed: boolean("claimed").default(false),
     createdAtBlock: bigint("created_at_block", { mode: "bigint" }),
     txHash: text("tx_hash").notNull(),
+    eventIndex: integer("event_index").notNull(),
   },
   (table) => ({
-    pk: primaryKey({ columns: [table.tournamentId, table.txHash] }),
+    pk: primaryKey({
+      columns: [table.tournamentId, table.txHash, table.eventIndex],
+    }),
     tournamentIdIdx: index("reward_claims_tournament_id_idx").on(
       table.tournamentId,
     ),
+    idIdx: unique("reward_claims_id_unique").on(table.id),
   }),
 );
 
 // ---------------------------------------------------------------------------
-// qualification_entries  (PK: tournament_id + tx_hash)
+// qualification_entries
+// Domain key: (tournament_id, tx_hash, event_index)
+//   event_index discriminates multiple updates within one transaction
+// Surrogate id for Apibara cursor invalidation
 // ---------------------------------------------------------------------------
 export const qualificationEntries = pgTable(
   "qualification_entries",
   {
+    id: serial("id").notNull(),
     tournamentId: bigint("tournament_id", { mode: "bigint" }).notNull(),
     qualificationProof: jsonb("qualification_proof"),
     entryCount: integer("entry_count"),
     createdAtBlock: bigint("created_at_block", { mode: "bigint" }),
     txHash: text("tx_hash").notNull(),
+    eventIndex: integer("event_index").notNull(),
   },
   (table) => ({
-    pk: primaryKey({ columns: [table.tournamentId, table.txHash] }),
+    pk: primaryKey({
+      columns: [table.tournamentId, table.txHash, table.eventIndex],
+    }),
     tournamentIdIdx: index("qualification_entries_tournament_id_idx").on(
       table.tournamentId,
     ),
+    idIdx: unique("qualification_entries_id_unique").on(table.id),
   }),
 );
 
@@ -174,10 +206,14 @@ export const platformStats = pgTable("platform_stats", {
 
 // ---------------------------------------------------------------------------
 // tournament_events  (PK: block_number + tx_hash + event_index)
+// The PK is already globally unique per event, so it doubles as idColumn.
+// Surrogate id added for Apibara cursor invalidation (simpler than
+// composite column tracking).
 // ---------------------------------------------------------------------------
 export const tournamentEvents = pgTable(
   "tournament_events",
   {
+    id: serial("id").notNull(),
     eventType: text("event_type").notNull(),
     tournamentId: bigint("tournament_id", { mode: "bigint" }),
     playerAddress: text("player_address"),
@@ -190,5 +226,6 @@ export const tournamentEvents = pgTable(
     pk: primaryKey({
       columns: [table.blockNumber, table.txHash, table.eventIndex],
     }),
+    idIdx: unique("tournament_events_id_unique").on(table.id),
   }),
 );
