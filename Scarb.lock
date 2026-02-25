@@ -83,6 +83,7 @@ dependencies = [
  "budokan_interfaces",
  "game_components_embeddable_game_standard",
  "game_components_interfaces",
+ "game_components_test_common",
  "openzeppelin_access",
  "openzeppelin_interfaces",
  "openzeppelin_upgrades",

@@ -9,7 +9,6 @@
 // 3. Refund scenarios (no entrants, partial entrants)
 // 4. Edge cases with distribution_count
 
-use budokan::mocks::minigame_starknet_mock::IMinigameStarknetMockDispatcherTrait;
 use budokan::structs::budokan::{
     Distribution, ERC20Data, EntryFeeRewardType, PrizeType, RewardType, TokenTypeData,
 };
@@ -23,6 +22,7 @@ use budokan::tests::interfaces::{IERC20MockDispatcher, IERC20MockDispatcherTrait
 use budokan::tests::test_budokan::setup;
 use budokan_interfaces::budokan::IBudokanDispatcherTrait;
 use game_components_interfaces::prize::IPrizeDispatcherTrait;
+use game_components_test_common::mocks::minigame_mock::IMinigameMockDispatcherTrait;
 use snforge_std::{
     start_cheat_block_timestamp, start_cheat_caller_address, stop_cheat_block_timestamp,
     stop_cheat_caller_address,

@@ -16,14 +16,15 @@ openzeppelin_upgrades.workspace = true
 snforge_std.workspace = true
 budokan = { path = "../budokan" }
 game_components_embeddable_game_standard.workspace = true
+game_components_test_common.workspace = true
 
 [[target.starknet-contract]]
 sierra = true
 casm = true
 build-external-contracts = [
     "budokan::budokan::Budokan",
-    "budokan::mocks::minigame_starknet_mock::minigame_starknet_mock",
-    "budokan::mocks::minigame_registry_contract::MinigameRegistryContract",
-    "budokan::mocks::full_token_contract::FullTokenContract",
+    "game_components_test_common::mocks::minigame_mock::minigame_mock",
+    "game_components_test_common::examples::minigame_registry_contract::MinigameRegistryContract",
+    "game_components_test_common::examples::full_token_contract::FullTokenContract",
     "budokan::mocks::erc20_mock::erc20_mock",
 ]

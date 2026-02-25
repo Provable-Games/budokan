@@ -1,8 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
 
-use budokan::mocks::minigame_starknet_mock::{
-    IMinigameStarknetMockDispatcher, IMinigameStarknetMockDispatcherTrait,
-};
 use budokan::mocks::tournament_validator_mock::{
     QUALIFIER_TYPE_PARTICIPANTS, QUALIFIER_TYPE_WINNERS,
 };
@@ -39,6 +36,9 @@ use game_components_interfaces::prize::{IPrizeDispatcher, IPrizeDispatcherTrait}
 use game_components_interfaces::registration::{
     IRegistrationDispatcher, IRegistrationDispatcherTrait,
 };
+use game_components_test_common::mocks::minigame_mock::{
+    IMinigameMockDispatcher, IMinigameMockDispatcherTrait,
+};
 use interfaces::entry_requirement_extension::IEntryRequirementExtensionDispatcher;
 use openzeppelin_interfaces::erc721::{IERC721Dispatcher, IERC721DispatcherTrait};
 use openzeppelin_interfaces::introspection::{ISRC5Dispatcher, ISRC5DispatcherTrait};
@@ -53,7 +53,7 @@ pub struct TestContracts {
     pub budokan: IBudokanDispatcher,
     pub prize: IPrizeDispatcher,
     pub registration: IRegistrationDispatcher,
-    pub minigame: IMinigameStarknetMockDispatcher,
+    pub minigame: IMinigameMockDispatcher,
     pub denshokan: IMinigameTokenMixinDispatcher,
     pub erc20: IERC20MockDispatcher,
     pub erc721: IERC721MockDispatcher,

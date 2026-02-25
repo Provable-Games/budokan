@@ -1,4 +1,3 @@
-use budokan::mocks::minigame_starknet_mock::IMinigameStarknetMockDispatcherTrait;
 use budokan::structs::constants::{
     MIN_REGISTRATION_PERIOD, MIN_SUBMISSION_PERIOD, MIN_TOURNAMENT_LENGTH,
 };
@@ -7,6 +6,7 @@ use budokan_interfaces::budokan::{
     Schedule,
 };
 use budokan_interfaces::viewer::IBudokanViewerDispatcherTrait;
+use game_components_test_common::mocks::minigame_mock::IMinigameMockDispatcherTrait;
 use snforge_std::{
     start_cheat_block_timestamp, start_cheat_caller_address, stop_cheat_caller_address,
 };

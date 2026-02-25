@@ -8,7 +8,12 @@ edition.workspace = true
 [[target.starknet-contract]]
 sierra = true
 casm = true
-build-external-contracts = []
+build-external-contracts = [
+    "game_components_test_common::mocks::minigame_mock::minigame_mock",
+    "game_components_test_common::mocks::metagame_mock::metagame_mock",
+    "game_components_test_common::examples::full_token_contract::FullTokenContract",
+    "game_components_test_common::examples::minigame_registry_contract::MinigameRegistryContract",
+]
 
 [cairo]
 sierra-replace-ids = true

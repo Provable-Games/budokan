@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: UNLICENSED
 
-use budokan::mocks::minigame_starknet_mock::{
-    IMinigameStarknetMockDispatcher, IMinigameStarknetMockInitDispatcher,
-    IMinigameStarknetMockInitDispatcherTrait,
-};
 use core::serde::Serde;
 use game_components_embeddable_game_standard::minigame::interface::IMinigameDispatcher;
 use game_components_embeddable_game_standard::registry::interface::IMinigameRegistryDispatcher;
 use game_components_embeddable_game_standard::token::interface::IMinigameTokenMixinDispatcher;
+use game_components_test_common::mocks::minigame_mock::{
+    IMinigameMockDispatcher, IMinigameMockInitDispatcher, IMinigameMockInitDispatcherTrait,
+};
 use openzeppelin_interfaces::erc721::ERC721ABIDispatcher;
 use openzeppelin_interfaces::introspection::ISRC5Dispatcher;
 use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
@@ -29,7 +28,7 @@ pub fn GAME_CREATOR_ADDR() -> ContractAddress {
 #[derive(Drop)]
 pub struct TestContracts {
     pub denshokan: IMinigameTokenMixinDispatcher,
-    pub minigame_mock: IMinigameStarknetMockDispatcher,
+    pub minigame_mock: IMinigameMockDispatcher,
 }
 
 //
@@ -37,16 +36,16 @@ pub struct TestContracts {
 //
 
 pub fn deploy_mock_game() -> (
-    IMinigameDispatcher, IMinigameStarknetMockInitDispatcher, IMinigameStarknetMockDispatcher,
+    IMinigameDispatcher, IMinigameMockInitDispatcher, IMinigameMockDispatcher,
 ) {
-    let contract_class = declare("minigame_starknet_mock")
+    let contract_class = declare("minigame_mock")
         .expect('declare minigame failed')
         .contract_class();
     let (contract_address, _) = contract_class.deploy(@array![]).expect('deploy minigame failed');
 
     let minigame_dispatcher = IMinigameDispatcher { contract_address };
-    let minigame_init_dispatcher = IMinigameStarknetMockInitDispatcher { contract_address };
-    let minigame_mock_dispatcher = IMinigameStarknetMockDispatcher { contract_address };
+    let minigame_init_dispatcher = IMinigameMockInitDispatcher { contract_address };
+    let minigame_mock_dispatcher = IMinigameMockDispatcher { contract_address };
     (minigame_dispatcher, minigame_init_dispatcher, minigame_mock_dispatcher)
 }
 

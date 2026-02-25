@@ -1,7 +1,3 @@
-use budokan::mocks::minigame_starknet_mock::{
-    IMinigameStarknetMockDispatcher, IMinigameStarknetMockDispatcherTrait,
-    IMinigameStarknetMockInitDispatcher, IMinigameStarknetMockInitDispatcherTrait,
-};
 use budokan_interfaces::budokan::IBudokanDispatcher;
 use budokan_interfaces::viewer::IBudokanViewerDispatcher;
 use core::serde::Serde;
@@ -10,6 +6,10 @@ use game_components_embeddable_game_standard::registry::interface::IMinigameRegi
 use game_components_embeddable_game_standard::token::interface::IMinigameTokenMixinDispatcher;
 use game_components_interfaces::prize::IPrizeDispatcher;
 use game_components_interfaces::registration::IRegistrationDispatcher;
+use game_components_test_common::mocks::minigame_mock::{
+    IMinigameMockDispatcher, IMinigameMockDispatcherTrait, IMinigameMockInitDispatcher,
+    IMinigameMockInitDispatcherTrait,
+};
 use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
 use starknet::ContractAddress;
 
@@ -39,7 +39,7 @@ pub struct ViewerTestContracts {
     pub budokan: IBudokanDispatcher,
     pub prize: IPrizeDispatcher,
     pub registration: IRegistrationDispatcher,
-    pub minigame: IMinigameStarknetMockDispatcher,
+    pub minigame: IMinigameMockDispatcher,
     pub denshokan: IMinigameTokenMixinDispatcher,
 }
 
@@ -48,17 +48,17 @@ pub struct ViewerTestContracts {
 // ================================================================================================
 
 fn deploy_mock_game() -> (
-    IMinigameDispatcher, IMinigameStarknetMockInitDispatcher, IMinigameStarknetMockDispatcher,
+    IMinigameDispatcher, IMinigameMockInitDispatcher, IMinigameMockDispatcher,
 ) {
-    let contract_class = declare("minigame_starknet_mock")
+    let contract_class = declare("minigame_mock")
         .expect('declare minigame failed')
         .contract_class();
     let (contract_address, _) = contract_class.deploy(@array![]).expect('deploy minigame failed');
 
     (
         IMinigameDispatcher { contract_address },
-        IMinigameStarknetMockInitDispatcher { contract_address },
-        IMinigameStarknetMockDispatcher { contract_address },
+        IMinigameMockInitDispatcher { contract_address },
+        IMinigameMockDispatcher { contract_address },
     )
 }
 
