@@ -30,9 +30,9 @@ app.get("/", async (c) => {
     if (gameAddress) conditions.push(eq(tournaments.gameAddress, gameAddress));
     if (creator) conditions.push(eq(tournaments.creator, creator));
 
-    // Phase filtering based on calculated schedule times
+    // Phase filtering based on Unix-second timestamps
     if (phase) {
-      const now = sql`NOW()`;
+      const now = sql`EXTRACT(EPOCH FROM NOW())::bigint`;
       switch (phase) {
         case "scheduled":
           // Before registration starts (or before game starts if no registration)
@@ -64,12 +64,12 @@ app.get("/", async (c) => {
         case "submission":
           conditions.push(
             sql`${tournaments.gameEndTime} <= ${now}
-              AND ${tournaments.gameEndTime} + (${tournaments.submissionDuration} * INTERVAL '1 second') > ${now}`
+              AND ${tournaments.submissionEndTime} > ${now}`
           );
           break;
         case "finalized":
           conditions.push(
-            sql`${tournaments.gameEndTime} + (${tournaments.submissionDuration} * INTERVAL '1 second') <= ${now}`
+            sql`${tournaments.submissionEndTime} <= ${now}`
           );
           break;
       }
@@ -293,20 +293,35 @@ function serializeTournament(t: typeof tournaments.$inferSelect) {
     id: t.id.toString(),
     gameAddress: t.gameAddress,
     creator: t.creator,
-    creatorTokenId: t.creatorTokenId?.toString() ?? null,
+    creatorTokenId: t.creatorTokenId ?? null,
     name: t.name,
     description: t.description,
-    registrationStartTime: t.registrationStartTime?.toISOString() ?? null,
-    registrationEndTime: t.registrationEndTime?.toISOString() ?? null,
-    gameStartTime: t.gameStartTime.toISOString(),
-    gameEndTime: t.gameEndTime.toISOString(),
+    registrationStartDelay: t.registrationStartDelay,
+    registrationEndDelay: t.registrationEndDelay,
+    gameStartDelay: t.gameStartDelay,
+    gameEndDelay: t.gameEndDelay,
     submissionDuration: t.submissionDuration,
+    createdAtOnchain: t.createdAtOnchain?.toString() ?? null,
+    registrationStartTime: t.registrationStartTime?.toString() ?? null,
+    registrationEndTime: t.registrationEndTime?.toString() ?? null,
+    gameStartTime: t.gameStartTime?.toString() ?? null,
+    gameEndTime: t.gameEndTime?.toString() ?? null,
+    submissionEndTime: t.submissionEndTime?.toString() ?? null,
     settingsId: t.settingsId,
     soulbound: t.soulbound,
-    playUrl: t.playUrl,
+    paymaster: t.paymaster,
+    clientUrl: t.clientUrl,
+    renderer: t.renderer,
+    leaderboardAscending: t.leaderboardAscending,
+    leaderboardGameMustBeOver: t.leaderboardGameMustBeOver,
     entryFeeToken: t.entryFeeToken,
     entryFeeAmount: t.entryFeeAmount?.toString() ?? null,
     hasEntryRequirement: t.hasEntryRequirement,
+    schedule: t.schedule,
+    gameConfig: t.gameConfig,
+    entryFee: t.entryFee,
+    entryRequirement: t.entryRequirement,
+    leaderboardConfig: t.leaderboardConfig,
     createdAt: t.createdAt.toISOString(),
     metadata: t.metadata,
   };

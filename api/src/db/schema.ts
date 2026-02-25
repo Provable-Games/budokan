@@ -19,20 +19,48 @@ export const tournaments = pgTable(
     id: bigint("id", { mode: "bigint" }).primaryKey(),
     gameAddress: text("game_address").notNull(),
     creator: text("creator").notNull(),
-    creatorTokenId: bigint("creator_token_id", { mode: "bigint" }),
+    creatorTokenId: text("creator_token_id"),
     name: text("name").notNull(),
     description: text("description").notNull().default(""),
-    registrationStartTime: timestamp("registration_start_time"),
-    registrationEndTime: timestamp("registration_end_time"),
-    gameStartTime: timestamp("game_start_time").notNull(),
-    gameEndTime: timestamp("game_end_time").notNull(),
+
+    // Schedule: raw delay values (seconds from created_at)
+    registrationStartDelay: integer("registration_start_delay"),
+    registrationEndDelay: integer("registration_end_delay"),
+    gameStartDelay: integer("game_start_delay"),
+    gameEndDelay: integer("game_end_delay"),
     submissionDuration: integer("submission_duration").notNull().default(0),
+
+    // Computed absolute timestamps (Unix seconds, derived from created_at + delay)
+    createdAtOnchain: bigint("created_at_onchain", { mode: "bigint" }),
+    registrationStartTime: bigint("registration_start_time", { mode: "bigint" }),
+    registrationEndTime: bigint("registration_end_time", { mode: "bigint" }),
+    gameStartTime: bigint("game_start_time", { mode: "bigint" }),
+    gameEndTime: bigint("game_end_time", { mode: "bigint" }),
+    submissionEndTime: bigint("submission_end_time", { mode: "bigint" }),
+
+    // Game config
     settingsId: integer("settings_id"),
     soulbound: boolean("soulbound").notNull().default(false),
-    playUrl: text("play_url"),
+    paymaster: boolean("paymaster").notNull().default(false),
+    clientUrl: text("client_url"),
+    renderer: text("renderer"),
+
+    // Leaderboard config
+    leaderboardAscending: boolean("leaderboard_ascending").notNull().default(false),
+    leaderboardGameMustBeOver: boolean("leaderboard_game_must_be_over").notNull().default(false),
+
+    // Entry fee summary fields
     entryFeeToken: text("entry_fee_token"),
     entryFeeAmount: bigint("entry_fee_amount", { mode: "bigint" }),
     hasEntryRequirement: boolean("has_entry_requirement").notNull().default(false),
+
+    // Full structured data as JSONB
+    schedule: jsonb("schedule"),
+    gameConfig: jsonb("game_config"),
+    entryFee: jsonb("entry_fee"),
+    entryRequirement: jsonb("entry_requirement"),
+    leaderboardConfig: jsonb("leaderboard_config"),
+
     createdAt: timestamp("created_at").notNull().defaultNow(),
     metadata: jsonb("metadata"),
   },

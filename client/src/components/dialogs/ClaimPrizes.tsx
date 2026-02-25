@@ -82,8 +82,8 @@ export function ClaimPrizesDialog({
     []) as RewardClaim[];
 
   const leaderboardSize =
-    tournamentModel?.entry_fee?.Some?.distribution_positions?.isSome()
-      ? Number(tournamentModel.entry_fee.Some.distribution_positions.Some)
+    Number(tournamentModel?.entry_fee?.Some?.distribution_count ?? 0) > 0
+      ? Number(tournamentModel!.entry_fee.Some!.distribution_count)
       : entryCount;
 
   // Calculate entry fee prizes based on tournament settings

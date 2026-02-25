@@ -42,9 +42,9 @@ export function SubmitScoresDialog({
   } | null>(null);
   const tournamentAddress = selectedChainConfig.budokanAddress!;
 
-  // Calculate leaderboard size from entry fee distribution positions, or default to 10
-  const leaderboardSize = tournamentModel?.entry_fee && 'Some' in tournamentModel.entry_fee && tournamentModel.entry_fee.Some?.distribution_positions && 'Some' in tournamentModel.entry_fee.Some.distribution_positions
-    ? Number(tournamentModel.entry_fee.Some.distribution_positions.Some)
+  // Calculate leaderboard size from entry fee distribution count, or default to 10
+  const leaderboardSize = tournamentModel?.entry_fee && 'Some' in tournamentModel.entry_fee && Number(tournamentModel.entry_fee.Some?.distribution_count ?? 0) > 0
+    ? Number(tournamentModel.entry_fee.Some!.distribution_count)
     : 10;
 
   // Fetch extra games beyond leaderboard size to account for banned entries

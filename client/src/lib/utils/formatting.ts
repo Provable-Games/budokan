@@ -22,6 +22,21 @@ import {
 import { PositionPrizes, TokenPrizes } from "@/lib/types";
 import { TokenPrices } from "@/hooks/useEkuboPrices";
 import { getExtensionProof } from "@/lib/extensionConfig";
+import type { Schedule } from "@/generated/models.gen";
+
+/**
+ * Compute absolute timestamps from a tournament's created_at and delay-based schedule.
+ */
+export function computeAbsoluteTimes(createdAt: BigNumberish, schedule: Schedule) {
+  const base = Number(createdAt);
+  return {
+    registrationStartTime: base + Number(schedule.registration_start_delay),
+    registrationEndTime: base + Number(schedule.registration_end_delay),
+    gameStartTime: base + Number(schedule.game_start_delay),
+    gameEndTime: base + Number(schedule.game_end_delay),
+    submissionEndTime: base + Number(schedule.game_end_delay) + Number(schedule.submission_duration),
+  };
+}
 
 export const processTournamentData = (
   formData: TournamentFormData,
@@ -29,7 +44,11 @@ export const processTournamentData = (
   tournamentCount: number,
   tournamentValidatorAddress?: string
 ): Tournament => {
-  const startTimestamp = Math.floor(
+  // All schedule fields are now delays (seconds from created_at).
+  // The contract computes absolute times as created_at + delay.
+  const now = Math.floor(Date.now() / 1000);
+
+  const gameStartTimestamp = Math.floor(
     Date.UTC(
       formData.startTime.getUTCFullYear(),
       formData.startTime.getUTCMonth(),
@@ -40,15 +59,16 @@ export const processTournamentData = (
     ) / 1000
   );
 
-  // End time is start time + duration in seconds
-  const endTimestamp = startTimestamp + formData.duration;
+  // Delays relative to "now" (will be relative to created_at on-chain)
+  const gameStartDelay = Math.max(0, gameStartTimestamp - now);
+  const gameEndDelay = gameStartDelay + formData.duration;
 
-  // Calculate registration times for fixed tournaments
-  let registrationStartTimestamp = Math.floor(Date.now() / 1000) + 60;
-  let registrationEndTimestamp = startTimestamp;
+  // Registration delays
+  let registrationStartDelay = 60; // default: 1 minute after creation
+  let registrationEndDelay = gameStartDelay; // default: registration ends when game starts
 
   if (formData.type === "fixed" && formData.registrationStartTime) {
-    registrationStartTimestamp = Math.floor(
+    const regStartTimestamp = Math.floor(
       Date.UTC(
         formData.registrationStartTime.getUTCFullYear(),
         formData.registrationStartTime.getUTCMonth(),
@@ -58,10 +78,11 @@ export const processTournamentData = (
         formData.registrationStartTime.getUTCSeconds()
       ) / 1000
     );
+    registrationStartDelay = Math.max(0, regStartTimestamp - now);
   }
 
   if (formData.type === "fixed" && formData.registrationEndTime) {
-    registrationEndTimestamp = Math.floor(
+    const regEndTimestamp = Math.floor(
       Date.UTC(
         formData.registrationEndTime.getUTCFullYear(),
         formData.registrationEndTime.getUTCMonth(),
@@ -71,6 +92,7 @@ export const processTournamentData = (
         formData.registrationEndTime.getUTCSeconds()
       ) / 1000
     );
+    registrationEndDelay = Math.max(0, regEndTimestamp - now);
   }
 
   // Process entry requirement based on type and requirement
@@ -171,24 +193,21 @@ export const processTournamentData = (
       description: formData.description,
     },
     schedule: {
-      registration:
-        formData.type === "fixed"
-          ? new CairoOption(CairoOptionVariant.Some, {
-              start: registrationStartTimestamp,
-              end: registrationEndTimestamp,
-            })
-          : new CairoOption(CairoOptionVariant.None),
-      game: {
-        start: startTimestamp,
-        end: endTimestamp,
-      },
+      registration_start_delay: registrationStartDelay,
+      registration_end_delay: registrationEndDelay,
+      game_start_delay: gameStartDelay,
+      game_end_delay: gameEndDelay,
       submission_duration: Number(formData.submissionPeriod),
     },
     game_config: {
-      address: addAddressPadding(formData.game),
+      game_address: addAddressPadding(formData.game),
       settings_id: formData.settings,
       soulbound: formData.soulbound,
-      play_url: formData.play_url || "",
+      paymaster: false,
+      client_url: formData.play_url
+        ? new CairoOption(CairoOptionVariant.Some, formData.play_url)
+        : new CairoOption(CairoOptionVariant.None),
+      renderer: new CairoOption(CairoOptionVariant.None),
     },
     entry_fee: formData.enableEntryFees
       ? new CairoOption(CairoOptionVariant.Some, {
@@ -199,10 +218,18 @@ export const processTournamentData = (
                 10 ** (formData.entryFees?.tokenDecimals || 18)
             )
           ),
+          tournament_creator_share: Math.round(
+            (formData.entryFees?.creatorFeePercentage ?? 0) * 100
+          ),
+          game_creator_share: Math.round(
+            (formData.entryFees?.gameFeePercentage ?? 1) * 100
+          ),
+          refund_share: Math.round(
+            (formData.entryFees?.refundSharePercentage ?? 0) * 100
+          ),
           distribution: (() => {
             const distributionType = formData.entryFees?.distributionType ?? "exponential";
             const weight = formData.entryFees?.distributionWeight ?? 1;
-            // Weight is scaled by 10 for the contract (e.g., 1.0 in UI = 10 in contract)
             const scaledWeight = Math.round(weight * 10);
 
             if (distributionType === "linear") {
@@ -220,7 +247,6 @@ export const processTournamentData = (
                 Custom: undefined,
               });
             } else {
-              // uniform
               return new CairoCustomEnum({
                 Linear: undefined,
                 Exponential: undefined,
@@ -229,42 +255,16 @@ export const processTournamentData = (
               });
             }
           })(),
-          tournament_creator_share:
-            (formData.entryFees?.creatorFeePercentage ?? 0) > 0
-              ? new CairoOption(
-                  CairoOptionVariant.Some,
-                  Math.round(
-                    (formData.entryFees?.creatorFeePercentage ?? 0) * 100
-                  ) // Convert to basis points
-                )
-              : new CairoOption(CairoOptionVariant.None),
-          game_creator_share: new CairoOption(
-            CairoOptionVariant.Some,
-            Math.round((formData.entryFees?.gameFeePercentage ?? 1) * 100) // Convert to basis points (default 1%)
-          ),
-          refund_share:
-            (formData.entryFees?.refundSharePercentage ?? 0) > 0
-              ? new CairoOption(
-                  CairoOptionVariant.Some,
-                  Math.round(
-                    (formData.entryFees?.refundSharePercentage ?? 0) * 100
-                  ) // Convert to basis points
-                )
-              : new CairoOption(CairoOptionVariant.None),
-          distribution_positions:
-            formData.entryFees?.prizePoolPayoutCount
-              ? new CairoOption(
-                  CairoOptionVariant.Some,
-                  formData.entryFees.prizePoolPayoutCount
-                )
-              : new CairoOption(CairoOptionVariant.None),
+          distribution_count: formData.entryFees?.prizePoolPayoutCount ?? 0,
         })
       : new CairoOption(CairoOptionVariant.None),
     entry_requirement: formData.enableGating
       ? new CairoOption(CairoOptionVariant.Some, entryRequirement)
       : new CairoOption(CairoOptionVariant.None),
-    soulbound: false,
-    play_url: "",
+    leaderboard_config: {
+      ascending: false,
+      game_must_be_over: false,
+    },
   };
 };
 
@@ -404,8 +404,8 @@ export const extractEntryFeePrizes = (
 
   // Get distribution positions from entry fee if not provided
   const winnersCount = distributionPositions ??
-    (entryFee.Some?.distribution_positions?.isSome()
-      ? Number(entryFee.Some.distribution_positions.Some)
+    (Number(entryFee.Some?.distribution_count ?? 0) > 0
+      ? Number(entryFee.Some?.distribution_count)
       : 3);
 
   if (totalFeeAmount === 0n) {
@@ -416,8 +416,8 @@ export const extractEntryFeePrizes = (
     };
   }
 
-  const gameCreatorShareAmount = entryFee.Some?.game_creator_share?.isSome()
-    ? (totalFeeAmount * BigInt(entryFee?.Some.game_creator_share?.Some!)) / 10000n
+  const gameCreatorShareAmount = Number(entryFee.Some?.game_creator_share ?? 0) > 0
+    ? (totalFeeAmount * BigInt(entryFee?.Some?.game_creator_share ?? 0)) / 10000n
     : 0n;
 
   const gameCreatorShare = gameCreatorShareAmount > 0n
@@ -441,8 +441,8 @@ export const extractEntryFeePrizes = (
       ]
     : [];
 
-  const tournamentCreatorShareAmount = entryFee.Some?.tournament_creator_share?.isSome()
-    ? (totalFeeAmount * BigInt(entryFee?.Some.tournament_creator_share?.Some!)) / 10000n
+  const tournamentCreatorShareAmount = Number(entryFee.Some?.tournament_creator_share ?? 0) > 0
+    ? (totalFeeAmount * BigInt(entryFee?.Some?.tournament_creator_share ?? 0)) / 10000n
     : 0n;
 
   const tournamentCreatorShare = tournamentCreatorShareAmount > 0n
@@ -504,15 +504,9 @@ export const extractEntryFeePrizes = (
 
     // Calculate actual prize pool after fees
     // Shares are in basis points (10000 = 100%)
-    const creatorSharePercent = entryFee.Some?.tournament_creator_share?.isSome()
-      ? Number(entryFee.Some.tournament_creator_share.Some)
-      : 0;
-    const gameSharePercent = entryFee.Some?.game_creator_share?.isSome()
-      ? Number(entryFee.Some.game_creator_share.Some)
-      : 0;
-    const refundSharePercent = entryFee.Some?.refund_share?.isSome()
-      ? Number(entryFee.Some.refund_share.Some)
-      : 0;
+    const creatorSharePercent = Number(entryFee.Some?.tournament_creator_share ?? 0);
+    const gameSharePercent = Number(entryFee.Some?.game_creator_share ?? 0);
+    const refundSharePercent = Number(entryFee.Some?.refund_share ?? 0);
 
     const prizePoolPercent = 10000 - creatorSharePercent - gameSharePercent - refundSharePercent;
     const prizePoolAmount = (totalFeeAmount * BigInt(prizePoolPercent)) / 10000n;
@@ -971,8 +965,8 @@ export const calculatePaidPlaces = (
   const positions = new Set<number>();
 
   // Add entry fee distribution positions
-  if (entryFee?.isSome() && entryFee.Some?.distribution_positions?.isSome()) {
-    const distributionCount = Number(entryFee.Some.distribution_positions.Some);
+  if (entryFee?.isSome() && Number(entryFee.Some?.distribution_count ?? 0) > 0) {
+    const distributionCount = Number(entryFee.Some?.distribution_count);
     for (let i = 1; i <= distributionCount; i++) {
       positions.add(i);
     }
@@ -1152,67 +1146,44 @@ export const processTournamentFromSql = (tournament: any): Tournament => {
       description: tournament["metadata.description"],
     },
     schedule: {
-      registration:
-        tournament["schedule.registration"] === "Some"
-          ? new CairoOption(CairoOptionVariant.Some, {
-              start: tournament["schedule.registration.Some.start"],
-              end: tournament["schedule.registration.Some.end"],
-            })
-          : new CairoOption(CairoOptionVariant.None),
-      game: {
-        start: tournament["schedule.game.start"],
-        end: tournament["schedule.game.end"],
-      },
-      submission_duration: tournament["schedule.submission_duration"],
+      registration_start_delay: tournament["schedule.registration_start_delay"] ?? 0,
+      registration_end_delay: tournament["schedule.registration_end_delay"] ?? 0,
+      game_start_delay: tournament["schedule.game_start_delay"] ?? 0,
+      game_end_delay: tournament["schedule.game_end_delay"] ?? 0,
+      submission_duration: tournament["schedule.submission_duration"] ?? 0,
     },
     game_config: {
-      address: tournament["game_config.address"],
+      game_address: tournament["game_config.game_address"],
       settings_id: tournament["game_config.settings_id"],
       soulbound: tournament["game_config.soulbound"] ?? false,
-      play_url: tournament["game_config.play_url"] ?? "",
+      paymaster: tournament["game_config.paymaster"] ?? false,
+      client_url: tournament["game_config.client_url"] === "Some"
+        ? new CairoOption(CairoOptionVariant.Some, tournament["game_config.client_url.Some"] ?? "")
+        : new CairoOption(CairoOptionVariant.None),
+      renderer: tournament["game_config.renderer"] === "Some"
+        ? new CairoOption(CairoOptionVariant.Some, tournament["game_config.renderer.Some"] ?? "")
+        : new CairoOption(CairoOptionVariant.None),
     },
     entry_fee:
       tournament["entry_fee"] === "Some"
         ? new CairoOption(CairoOptionVariant.Some, {
             token_address: tournament["entry_fee.Some.token_address"],
             amount: tournament["entry_fee.Some.amount"],
+            tournament_creator_share: tournament["entry_fee.Some.tournament_creator_share"] ?? 0,
+            game_creator_share: tournament["entry_fee.Some.game_creator_share"] ?? 0,
+            refund_share: tournament["entry_fee.Some.refund_share"] ?? 0,
             distribution: parseDistribution(tournament),
-            tournament_creator_share:
-              tournament["entry_fee.Some.tournament_creator_share"] === "Some"
-                ? new CairoOption(
-                    CairoOptionVariant.Some,
-                    tournament["entry_fee.Some.tournament_creator_share.Some"]
-                  )
-                : new CairoOption(CairoOptionVariant.None),
-            game_creator_share:
-              tournament["entry_fee.Some.game_creator_share"] === "Some"
-                ? new CairoOption(
-                    CairoOptionVariant.Some,
-                    tournament["entry_fee.Some.game_creator_share.Some"]
-                  )
-                : new CairoOption(CairoOptionVariant.None),
-            refund_share:
-              tournament["entry_fee.Some.refund_share"] === "Some"
-                ? new CairoOption(
-                    CairoOptionVariant.Some,
-                    tournament["entry_fee.Some.refund_share.Some"]
-                  )
-                : new CairoOption(CairoOptionVariant.None),
-            distribution_positions:
-              tournament["entry_fee.Some.distribution_positions"] === "Some"
-                ? new CairoOption(
-                    CairoOptionVariant.Some,
-                    tournament["entry_fee.Some.distribution_positions.Some"]
-                  )
-                : new CairoOption(CairoOptionVariant.None),
+            distribution_count: tournament["entry_fee.Some.distribution_count"] ?? 0,
           })
         : new CairoOption(CairoOptionVariant.None),
     entry_requirement:
       tournament["entry_requirement"] === "Some"
         ? new CairoOption(CairoOptionVariant.Some, entryRequirement)
         : new CairoOption(CairoOptionVariant.None),
-    soulbound: tournament.soulbound ?? false,
-    play_url: tournament.play_url ?? "",
+    leaderboard_config: {
+      ascending: tournament["leaderboard_config.ascending"] ?? false,
+      game_must_be_over: tournament["leaderboard_config.game_must_be_over"] ?? false,
+    },
   };
 };
 

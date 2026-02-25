@@ -715,8 +715,9 @@ export function setupWorld(provider: DojoProvider, namespace: string) {
     metadata: models.Metadata,
     schedule: models.Schedule,
     gameConfig: models.GameConfig,
-    entryFee: CairoOption<models.Period>,
-    entryRequirement: CairoOption<models.Period>
+    entryFee: CairoOption<models.EntryFee>,
+    entryRequirement: CairoOption<models.EntryRequirement>,
+    leaderboardConfig: models.LeaderboardConfig
   ) => {
     try {
       return await provider.execute(
@@ -730,6 +731,7 @@ export function setupWorld(provider: DojoProvider, namespace: string) {
             gameConfig,
             entryFee,
             entryRequirement,
+            leaderboardConfig,
           ],
         },
         namespace
@@ -744,7 +746,7 @@ export function setupWorld(provider: DojoProvider, namespace: string) {
     tournamentId: BigNumberish,
     playerName: BigNumberish,
     playerAddress: string,
-    qualification: CairoOption<models.Period>
+    qualification: CairoOption<models.QualificationProof>
   ) => {
     try {
       return await provider.execute(

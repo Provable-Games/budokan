@@ -58,6 +58,7 @@ import { useEffect } from "react";
 import { indexAddress } from "@/lib/utils";
 import { getTokenDecimals } from "@/lib/tokensMeta";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
+import { computeAbsoluteTimes } from "@/lib/utils/formatting";
 
 // Helper component for Entry Limit display with info tooltip
 const EntryLimitInfo = ({ limit }: { limit: number }) => (
@@ -906,9 +907,9 @@ const EntryRequirements = ({
                   </TableHeader>
                   <TableBody>
                     {validatorTournaments.map((tournament, index) => {
-                      const tournamentEnd = tournament.schedule.game.end;
+                      const absoluteTimes = computeAbsoluteTimes(tournament.created_at, tournament.schedule);
                       const tournamentEnded =
-                        BigInt(tournamentEnd) < BigInt(Date.now()) / 1000n;
+                        BigInt(absoluteTimes.gameEndTime) < BigInt(Date.now()) / 1000n;
                       return (
                         <TableRow
                           key={index}

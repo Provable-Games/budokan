@@ -173,6 +173,7 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
               gameConfig: decoded.gameConfig,
               entryFee: decoded.entryFee,
               entryRequirement: decoded.entryRequirement,
+              leaderboardConfig: decoded.leaderboardConfig,
               createdAtBlock: blockNumber,
               txHash,
             });

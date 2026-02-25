@@ -10,6 +10,7 @@ import { useDojo } from "@/context/dojo";
 import {
   groupPrizesByTokens,
   extractEntryFeePrizes,
+  computeAbsoluteTimes,
 } from "@/lib/utils/formatting";
 import { TabType } from "@/components/overview/TournamentTabs";
 import {
@@ -69,10 +70,10 @@ export const TournamentCard = ({
     (t) => indexAddress(t.token_address) === indexAddress(entryFeeToken ?? ""),
   )?.symbol;
 
-  // Use distribution_positions from entry fee if available, otherwise use entry count
+  // Use distribution_count from entry fee if available, otherwise use entry count
   const leaderboardSize =
-    tournament?.entry_fee?.Some?.distribution_positions?.isSome()
-      ? Number(tournament.entry_fee.Some.distribution_positions.Some)
+    Number(tournament?.entry_fee?.Some?.distribution_count ?? 0) > 0
+      ? Number(tournament!.entry_fee.Some!.distribution_count)
       : entryCount;
 
   const { distributionPrizes } = extractEntryFeePrizes(
@@ -124,24 +125,22 @@ export const TournamentCard = ({
   }, [groupedPrizes, tokens, selectedChainConfig.chainId]);
 
 
-  const startDate = new Date(Number(tournament.schedule.game.start) * 1000);
+  const absoluteTimes = computeAbsoluteTimes(tournament.created_at, tournament.schedule);
+  const startDate = new Date(absoluteTimes.gameStartTime * 1000);
   const currentDate = new Date();
   const currentTimestamp = Math.floor(currentDate.getTime() / 1000);
 
   // Determine tournament status based on schedule
-  const registrationStart = tournament?.schedule?.registration?.isSome()
-    ? Number(tournament.schedule.registration.Some?.start)
+  const registrationStart = absoluteTimes.registrationStartTime > Number(tournament.created_at)
+    ? absoluteTimes.registrationStartTime
     : null;
-  const registrationEnd = tournament?.schedule?.registration?.isSome()
-    ? Number(tournament.schedule.registration.Some?.end)
+  const registrationEnd = absoluteTimes.registrationEndTime > Number(tournament.created_at)
+    ? absoluteTimes.registrationEndTime
     : null;
-  const gameStart = Number(tournament?.schedule?.game?.start ?? 0);
-  const gameEnd = Number(tournament?.schedule?.game?.end ?? 0);
-  const submissionDuration = tournament?.schedule?.submission_duration
-    ? Number(tournament.schedule.submission_duration)
-    : null;
-  const submissionEnd = submissionDuration
-    ? gameEnd + submissionDuration
+  const gameStart = absoluteTimes.gameStartTime;
+  const gameEnd = absoluteTimes.gameEndTime;
+  const submissionEnd = Number(tournament.schedule.submission_duration) > 0
+    ? absoluteTimes.submissionEndTime
     : null;
 
   const getTournamentStatus = () => {
@@ -183,7 +182,7 @@ export const TournamentCard = ({
 
   const tournamentStatus = getTournamentStatus();
 
-  const gameAddress = tournament.game_config.address;
+  const gameAddress = tournament.game_config.game_address;
   const gameName = gameData.find(
     (game) => game.contract_address === gameAddress,
   )?.name;
