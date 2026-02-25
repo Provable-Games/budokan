@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 pub mod budokan;
+pub mod events;
 
-// Models (types)
-pub mod models {
+// Structs (types)
+pub mod structs {
     pub mod budokan;
     pub mod constants;
     pub mod lifecycle;
@@ -26,6 +27,10 @@ mod tests {
         pub mod erc20_mock;
         pub mod erc721_mock;
         pub mod erc721_old_mock;
+        pub mod full_token_contract;
+        pub mod metagame_starknet_mock;
+        pub mod minigame_registry_contract;
+        pub mod minigame_starknet_mock;
         pub mod tournament_validator_mock;
     }
     pub mod constants;

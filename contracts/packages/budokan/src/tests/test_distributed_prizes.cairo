@@ -9,19 +9,20 @@
 // 3. Refund scenarios (no entrants, partial entrants)
 // 4. Edge cases with distribution_count
 
-use budokan::models::budokan::{
+use budokan::structs::budokan::{
     Distribution, ERC20Data, EntryFeeRewardType, PrizeType, RewardType, TokenTypeData,
 };
-use budokan::models::constants::MIN_SUBMISSION_PERIOD;
+use budokan::structs::constants::MIN_SUBMISSION_PERIOD;
 use budokan::tests::constants::{
-    OWNER, STARTING_BALANCE, TEST_END_TIME, TEST_REGISTRATION_START_TIME,
+    OWNER, STARTING_BALANCE, TEST_GAME_END_DELAY, TEST_GAME_START_DELAY,
+    TEST_REGISTRATION_START_DELAY, TEST_SUBMISSION_DURATION,
 };
 use budokan::tests::helpers::create_basic_tournament;
 use budokan::tests::interfaces::{IERC20MockDispatcher, IERC20MockDispatcherTrait};
+use budokan::tests::mocks::minigame_starknet_mock::IMinigameStarknetMockDispatcherTrait;
 use budokan::tests::test_budokan::setup;
 use budokan_interfaces::budokan::IBudokanDispatcherTrait;
-use budokan_interfaces::prize::IPrizeDispatcherTrait;
-use game_components_test_starknet::minigame::mocks::minigame_starknet_mock::IMinigameStarknetMockDispatcherTrait;
+use game_components_interfaces::prize::IPrizeDispatcherTrait;
 use snforge_std::{
     start_cheat_block_timestamp, start_cheat_caller_address, stop_cheat_block_timestamp,
     stop_cheat_caller_address,
@@ -66,40 +67,40 @@ fn test_distributed_prize_claim_all_positions_filled() {
                     distribution_count: Option::Some(3),
                 },
             ),
-            Option::None, // No position = distributed prize
+            Option::None // No position = distributed prize
         );
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
-    // Enter 3 players
-    let mut time = TEST_REGISTRATION_START_TIME().into();
+    // Enter 3 players - warp to registration period
+    let mut time: u64 = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
     let (token_id1, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 1, 0);
     let (token_id2, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player2', owner, Option::None);
+        .enter_tournament(tournament.id, 'player2', owner, Option::None, 2, 0);
     let (token_id3, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player3', owner, Option::None);
+        .enter_tournament(tournament.id, 'player3', owner, Option::None, 3, 0);
 
-    // Move to submission period and submit scores
-    time = TEST_END_TIME().into();
+    // Move to submission period (game end)
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
-    contracts.minigame.end_game(token_id1, 100);
-    contracts.minigame.end_game(token_id2, 50);
-    contracts.minigame.end_game(token_id3, 25);
+    contracts.minigame.end_game(token_id1.into(), 100);
+    contracts.minigame.end_game(token_id2.into(), 50);
+    contracts.minigame.end_game(token_id3.into(), 25);
     contracts.budokan.submit_score(tournament.id, token_id1, 1);
     contracts.budokan.submit_score(tournament.id, token_id2, 2);
     contracts.budokan.submit_score(tournament.id, token_id3, 3);
 
     // Move to finalized
-    time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD).into();
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY() + TEST_SUBMISSION_DURATION()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
@@ -135,7 +136,9 @@ fn test_distributed_prize_claim_all_positions_filled() {
 
 /// Test that adding prize with BOTH position AND distribution is now REJECTED
 /// This is the fix for the bug where conflicting configs were previously allowed
-#[should_panic(expected: "Budokan: Cannot set position for distributed prize (position and distribution are mutually exclusive)")]
+#[should_panic(
+    expected: "Budokan: Cannot set position for distributed prize (position and distribution are mutually exclusive)",
+)]
 #[test]
 fn test_conflicting_config_position_and_distribution_rejected() {
     let contracts = setup();
@@ -172,7 +175,7 @@ fn test_conflicting_config_position_and_distribution_rejected() {
                     distribution_count: Option::Some(10),
                 },
             ),
-            Option::Some(1), // Position set - should be rejected!
+            Option::Some(1) // Position set - should be rejected!
         );
 }
 
@@ -212,29 +215,30 @@ fn test_single_prize_without_distribution_works() {
                     distribution_count: Option::None,
                 },
             ),
-            Option::Some(1), // Position 1
+            Option::Some(1) // Position 1
         );
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
-    // Enter tournament and submit score
-    let mut time = TEST_REGISTRATION_START_TIME().into();
+    // Enter tournament and submit score - warp to registration
+    let mut time: u64 = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
     let (token_id, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 1, 0);
 
-    time = TEST_END_TIME().into();
+    // Move to submission (game end)
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
-    contracts.minigame.end_game(token_id, 100);
+    contracts.minigame.end_game(token_id.into(), 100);
     contracts.budokan.submit_score(tournament.id, token_id, 1);
 
     // Move to finalized
-    time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD).into();
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY() + TEST_SUBMISSION_DURATION()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
@@ -289,39 +293,39 @@ fn test_distributed_prize_without_position_works() {
                     distribution_count: Option::Some(3),
                 },
             ),
-            Option::None, // No position = Distributed prize
+            Option::None // No position = Distributed prize
         );
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
-    // Enter 3 players
-    let mut time = TEST_REGISTRATION_START_TIME().into();
+    // Enter 3 players - warp to registration
+    let mut time: u64 = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
     let (token_id1, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 1, 0);
     let (token_id2, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player2', owner, Option::None);
+        .enter_tournament(tournament.id, 'player2', owner, Option::None, 2, 0);
     let (token_id3, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player3', owner, Option::None);
+        .enter_tournament(tournament.id, 'player3', owner, Option::None, 3, 0);
 
-    time = TEST_END_TIME().into();
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
-    contracts.minigame.end_game(token_id1, 100);
-    contracts.minigame.end_game(token_id2, 50);
-    contracts.minigame.end_game(token_id3, 25);
+    contracts.minigame.end_game(token_id1.into(), 100);
+    contracts.minigame.end_game(token_id2.into(), 50);
+    contracts.minigame.end_game(token_id3.into(), 25);
     contracts.budokan.submit_score(tournament.id, token_id1, 1);
     contracts.budokan.submit_score(tournament.id, token_id2, 2);
     contracts.budokan.submit_score(tournament.id, token_id3, 3);
 
     // Finalize
-    time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD).into();
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY() + TEST_SUBMISSION_DURATION()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
@@ -395,7 +399,8 @@ fn test_distributed_prize_refund_no_entrants() {
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     // NO ENTRANTS - just wait for tournament to finalize
-    let time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD).into();
+    let time: u64 = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY() + TEST_SUBMISSION_DURATION())
+        .into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
 
     // Verify leaderboard is empty
@@ -471,29 +476,29 @@ fn test_distributed_prize_partial_entrants_partial_refund() {
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     // Only 2 entrants (less than distribution_count of 5)
-    let mut time = TEST_REGISTRATION_START_TIME().into();
+    let mut time: u64 = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
     let (token_id1, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 1, 0);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     start_cheat_caller_address(contracts.budokan.contract_address, player2);
     let (token_id2, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player2', player2, Option::None);
+        .enter_tournament(tournament.id, 'player2', player2, Option::None, 2, 0);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     // Submit scores
-    time = TEST_END_TIME().into();
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
-    contracts.minigame.end_game(token_id1, 100);
-    contracts.minigame.end_game(token_id2, 50);
+    contracts.minigame.end_game(token_id1.into(), 100);
+    contracts.minigame.end_game(token_id2.into(), 50);
 
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
     contracts.budokan.submit_score(tournament.id, token_id1, 1);
@@ -504,7 +509,7 @@ fn test_distributed_prize_partial_entrants_partial_refund() {
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     // Finalize
-    time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD).into();
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY() + TEST_SUBMISSION_DURATION()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
@@ -566,8 +571,6 @@ fn test_distributed_prize_partial_entrants_partial_refund() {
 // ==================== Exponential Distribution Tests ====================
 
 /// Test Exponential(100) distribution - the exact config from the reported bug
-/// IMPORTANT: This test reveals that Exponential(100) is SO steep that positions 7-10
-/// round to 0 tokens and CANNOT be claimed. This is a significant finding.
 #[test]
 fn test_exponential_100_distribution_with_10_positions() {
     let contracts = setup();
@@ -608,24 +611,24 @@ fn test_exponential_100_distribution_with_10_positions() {
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     // Enter only 1 player (to test refund for positions 2-10)
-    let mut time = TEST_REGISTRATION_START_TIME().into();
+    let mut time: u64 = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
     let (token_id1, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 1, 0);
 
-    time = TEST_END_TIME().into();
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
-    contracts.minigame.end_game(token_id1, 100);
+    contracts.minigame.end_game(token_id1.into(), 100);
     contracts.budokan.submit_score(tournament.id, token_id1, 1);
 
     // Finalize
-    time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD).into();
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY() + TEST_SUBMISSION_DURATION()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
@@ -633,9 +636,6 @@ fn test_exponential_100_distribution_with_10_positions() {
     let sponsor_balance_before = contracts.erc20.balance_of(sponsor);
 
     // Claim positions 1-6 (positions 7-10 have 0 tokens due to steep distribution)
-    // With Exponential(100), the distribution is so steep that positions 7-10
-    // round to 0 basis points and CANNOT be claimed (will panic with "0 tokens to claim")
-    // This means some tokens will be STUCK in the contract!
     contracts
         .budokan
         .claim_reward(tournament.id, RewardType::Prize(PrizeType::Distributed((prize.id, 1))));
@@ -654,7 +654,6 @@ fn test_exponential_100_distribution_with_10_positions() {
     contracts
         .budokan
         .claim_reward(tournament.id, RewardType::Prize(PrizeType::Distributed((prize.id, 6))));
-    // Positions 7-10 would fail with "Position X has 0 tokens to claim"
 
     let owner_balance_after = contracts.erc20.balance_of(owner);
     let sponsor_balance_after = contracts.erc20.balance_of(sponsor);
@@ -662,24 +661,15 @@ fn test_exponential_100_distribution_with_10_positions() {
     let owner_received = owner_balance_after - owner_balance_before;
     let sponsor_refunded = sponsor_balance_after - sponsor_balance_before;
 
-    // With Exponential(100) = weight 10.0, position 1 should get ~67% of total
-    // So winner should get roughly 67000 tokens
     assert!(
         owner_received >= 60000 && owner_received <= 70000,
         "Position 1 should receive ~67% with Exponential(100)",
     );
 
-    // Sponsor should get refund for positions 2-6 (since position is empty)
-    // Note: Positions 7-10 have 0 tokens and cannot be claimed, so some tokens are stuck!
     assert!(sponsor_refunded > 0, "Sponsor should receive some refund for empty positions 2-6");
 
-    // The dust handling redistributes any rounding remainder to position 1,
-    // so even though positions 7-10 have 0 share, the total from positions 1-6
-    // should equal the full prize amount (dust goes to position 1)
     let total_claimed = owner_received + sponsor_refunded;
 
-    // Verify that positions 1-6 received the full prize amount
-    // (positions 7-10 have 0 share but dust handling gives their portion to position 1)
     assert!(
         total_claimed >= (prize_amount - 10).into() && total_claimed <= prize_amount.into(),
         "Total claimed should equal prize amount due to dust handling",
@@ -732,7 +722,8 @@ fn test_distributed_prize_payout_index_zero_fails() {
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     // Finalize
-    let time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD).into();
+    let time: u64 = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY() + TEST_SUBMISSION_DURATION())
+        .into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
 
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
@@ -774,7 +765,7 @@ fn test_distributed_prize_beyond_distribution_count_fails() {
                 ERC20Data {
                     amount: prize_amount,
                     distribution: Option::Some(Distribution::Linear(10)),
-                    distribution_count: Option::Some(10), // Only 10 positions
+                    distribution_count: Option::Some(10) // Only 10 positions
                 },
             ),
             Option::None,
@@ -782,7 +773,8 @@ fn test_distributed_prize_beyond_distribution_count_fails() {
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     // Finalize
-    let time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD).into();
+    let time: u64 = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY() + TEST_SUBMISSION_DURATION())
+        .into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
 
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
@@ -832,7 +824,8 @@ fn test_distributed_prize_double_claim_fails() {
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     // Finalize
-    let time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD).into();
+    let time: u64 = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY() + TEST_SUBMISSION_DURATION())
+        .into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
 
     start_cheat_caller_address(contracts.budokan.contract_address, owner);

@@ -30,15 +30,19 @@ pub trait ITournamentValidatorMock<TState> {
 
 #[starknet::contract]
 pub mod tournament_validator_mock {
-    use budokan_entry_requirement::entry_validator::EntryValidatorComponent;
-    use budokan_entry_requirement::entry_validator::EntryValidatorComponent::{
-        EntryValidator, InternalTrait as EntryValidatorInternalTrait,
-    };
     use budokan_interfaces::budokan::{IBudokanDispatcher, IBudokanDispatcherTrait};
-    use budokan_interfaces::registration::{IRegistrationDispatcher, IRegistrationDispatcherTrait};
-    use game_components_minigame::interface::{IMinigameDispatcher, IMinigameDispatcherTrait};
+    use game_components_embeddable_game_standard::minigame::interface::{
+        IMinigameDispatcher, IMinigameDispatcherTrait,
+    };
+    use game_components_interfaces::registration::{
+        IRegistrationDispatcher, IRegistrationDispatcherTrait,
+    };
+    use interfaces::entry_requirement_extension::{
+        IENTRY_REQUIREMENT_EXTENSION_ID, IEntryRequirementExtension,
+    };
     use openzeppelin_interfaces::erc721::{IERC721Dispatcher, IERC721DispatcherTrait};
     use openzeppelin_introspection::src5::SRC5Component;
+    use openzeppelin_introspection::src5::SRC5Component::InternalTrait as SRC5InternalTrait;
     use starknet::ContractAddress;
     use starknet::storage::{
         Map, MutableVecTrait, StorageMapReadAccess, StorageMapWriteAccess, StoragePathEntry,
@@ -46,13 +50,7 @@ pub mod tournament_validator_mock {
     };
     use super::{QUALIFIER_TYPE_PARTICIPANTS, QUALIFIER_TYPE_WINNERS};
 
-    component!(path: EntryValidatorComponent, storage: entry_validator, event: EntryValidatorEvent);
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
-
-    #[abi(embed_v0)]
-    impl EntryValidatorImpl =
-        EntryValidatorComponent::EntryValidatorImpl<ContractState>;
-    impl EntryValidatorInternalImpl = EntryValidatorComponent::InternalImpl<ContractState>;
 
     #[abi(embed_v0)]
     impl SRC5Impl = SRC5Component::SRC5Impl<ContractState>;
@@ -60,12 +58,13 @@ pub mod tournament_validator_mock {
     #[storage]
     struct Storage {
         #[substorage(v0)]
-        entry_validator: EntryValidatorComponent::Storage,
-        #[substorage(v0)]
         src5: SRC5Component::Storage,
         /// The Budokan contract address
-        #[allow(starknet::colliding_storage_paths)]
         budokan_address: ContractAddress,
+        /// Owner address (the metagame/budokan contract)
+        owner_address: ContractAddress,
+        /// Registration only flag
+        registration_only: bool,
         /// Qualifier type per tournament (0 = participants, 1 = winners)
         qualifier_type: Map<u64, felt252>,
         /// Qualifying tournament IDs per tournament
@@ -80,8 +79,6 @@ pub mod tournament_validator_mock {
     #[derive(Drop, starknet::Event)]
     enum Event {
         #[flat]
-        EntryValidatorEvent: EntryValidatorComponent::Event,
-        #[flat]
         SRC5Event: SRC5Component::Event,
     }
 
@@ -90,50 +87,60 @@ pub mod tournament_validator_mock {
         ref self: ContractState, budokan_address: ContractAddress, registration_only: bool,
     ) {
         self.budokan_address.write(budokan_address);
-        self.entry_validator.initializer(budokan_address, registration_only);
+        self.owner_address.write(budokan_address);
+        self.registration_only.write(registration_only);
+        self.src5.register_interface(IENTRY_REQUIREMENT_EXTENSION_ID);
     }
 
-    // Implement the EntryValidator trait for the contract
-    impl EntryValidatorImplInternal of EntryValidator<ContractState> {
-        fn validate_entry(
+    #[abi(embed_v0)]
+    impl EntryValidatorImpl of IEntryRequirementExtension<ContractState> {
+        fn owner_address(self: @ContractState) -> ContractAddress {
+            self.owner_address.read()
+        }
+
+        fn registration_only(self: @ContractState) -> bool {
+            self.registration_only.read()
+        }
+
+        fn valid_entry(
             self: @ContractState,
-            tournament_id: u64,
+            context_id: u64,
             player_address: ContractAddress,
             qualification: Span<felt252>,
         ) -> bool {
-            self.validate_entry_internal(tournament_id, player_address, qualification)
+            self.validate_entry_internal(context_id, player_address, qualification)
         }
 
-        fn should_ban_entry(
+        fn should_ban(
             self: @ContractState,
-            tournament_id: u64,
-            game_token_id: u64,
+            context_id: u64,
+            game_token_id: felt252,
             current_owner: ContractAddress,
             qualification: Span<felt252>,
         ) -> bool {
             // Check if the current owner still has valid entry based on qualifying tournament
             // If not, this entry should be banned
-            !self.validate_entry_internal(tournament_id, current_owner, qualification)
+            !self.validate_entry_internal(context_id, current_owner, qualification)
         }
 
         fn entries_left(
             self: @ContractState,
-            tournament_id: u64,
+            context_id: u64,
             player_address: ContractAddress,
             qualification: Span<felt252>,
         ) -> Option<u8> {
-            let entry_limit = self.tournament_entry_limit.read(tournament_id);
+            let entry_limit = self.tournament_entry_limit.read(context_id);
             if entry_limit == 0 {
                 return Option::None; // Unlimited entries
             }
-            let key = (tournament_id, player_address);
+            let key = (context_id, player_address);
             let current_entries = self.tournament_entries.read(key);
             let remaining_entries = entry_limit - current_entries;
             return Option::Some(remaining_entries);
         }
 
         fn add_config(
-            ref self: ContractState, tournament_id: u64, entry_limit: u8, config: Span<felt252>,
+            ref self: ContractState, context_id: u64, entry_limit: u8, config: Span<felt252>,
         ) {
             // config[0]: qualifier_type (0 = participants, 1 = winners)
             // config[1..]: qualifying tournament IDs
@@ -148,11 +155,11 @@ pub mod tournament_validator_mock {
                 "Invalid qualifier type",
             );
 
-            self.qualifier_type.write(tournament_id, qualifier_type);
-            self.tournament_entry_limit.write(tournament_id, entry_limit);
+            self.qualifier_type.write(context_id, qualifier_type);
+            self.tournament_entry_limit.write(context_id, entry_limit);
 
             // Store qualifying tournament IDs
-            let mut vec = self.qualifying_tournament_ids.entry(tournament_id);
+            let mut vec = self.qualifying_tournament_ids.entry(context_id);
             let mut i: u32 = 1;
             loop {
                 if i >= config.len() {
@@ -164,28 +171,28 @@ pub mod tournament_validator_mock {
             };
         }
 
-        fn on_entry_added(
+        fn add_entry(
             ref self: ContractState,
-            tournament_id: u64,
-            game_token_id: u64,
+            context_id: u64,
+            game_token_id: felt252,
             player_address: ContractAddress,
             qualification: Span<felt252>,
         ) {
-            // Track entry count (component already tracks game_token_ids)
-            let key = (tournament_id, player_address);
+            // Track entry count
+            let key = (context_id, player_address);
             let current_entries = self.tournament_entries.read(key);
             self.tournament_entries.write(key, current_entries + 1);
         }
 
-        fn on_entry_removed(
+        fn remove_entry(
             ref self: ContractState,
-            tournament_id: u64,
-            game_token_id: u64,
+            context_id: u64,
+            game_token_id: felt252,
             player_address: ContractAddress,
             qualification: Span<felt252>,
         ) {
             // Decrement entry count
-            let key = (tournament_id, player_address);
+            let key = (context_id, player_address);
             let current_entries = self.tournament_entries.read(key);
             if current_entries > 0 {
                 self.tournament_entries.write(key, current_entries - 1);
@@ -209,7 +216,7 @@ pub mod tournament_validator_mock {
             }
 
             let qualifying_tournament_id: u64 = (*qualification.at(0)).try_into().unwrap();
-            let token_id: u64 = (*qualification.at(1)).try_into().unwrap();
+            let token_id: felt252 = *qualification.at(1);
 
             // Check if qualifying tournament is in the valid set
             if !self.is_qualifying_tournament(tournament_id, qualifying_tournament_id) {
@@ -224,12 +231,31 @@ pub mod tournament_validator_mock {
 
             // Get the qualifying tournament to find the game address
             let qualifying_tournament = budokan.tournament(qualifying_tournament_id);
-            let game_address = qualifying_tournament.game_config.address;
+            let game_address = qualifying_tournament.game_config.game_address;
 
-            // Check registration exists
-            let registration = registration_dispatcher.get_registration(game_address, token_id);
-            if registration.entry_number == 0
-                || registration.context_id != qualifying_tournament_id {
+            // Check registration exists - use entry count to find the entry
+            let entry_count = registration_dispatcher.get_entry_count(qualifying_tournament_id);
+            if entry_count == 0 {
+                return false;
+            }
+
+            // Search entries to find one matching this token_id
+            let mut found = false;
+            let mut registration = registration_dispatcher.get_entry(qualifying_tournament_id, 1);
+            let mut i: u32 = 1;
+            loop {
+                if i > entry_count {
+                    break;
+                }
+                let entry = registration_dispatcher.get_entry(qualifying_tournament_id, i);
+                if entry.game_token_id == token_id {
+                    registration = entry;
+                    found = true;
+                    break;
+                }
+                i += 1;
+            }
+            if !found || registration.context_id != qualifying_tournament_id {
                 return false;
             }
 

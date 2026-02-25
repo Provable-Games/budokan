@@ -1,4 +1,4 @@
-use budokan::models::lifecycle::Lifecycle;
+use budokan::structs::lifecycle::Lifecycle;
 
 #[generate_trait]
 pub impl LifecycleImpl of LifecycleTrait {
@@ -66,7 +66,7 @@ pub impl LifecycleAssertionsImpl of LifecycleAssertionsTrait {
 
 #[cfg(test)]
 mod tests {
-    use budokan::models::lifecycle::Lifecycle;
+    use budokan::structs::lifecycle::Lifecycle;
     use core::num::traits::Bounded;
     use super::{LifecycleAssertionsTrait, LifecycleTrait};
 
