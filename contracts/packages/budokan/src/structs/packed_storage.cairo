@@ -73,6 +73,13 @@ pub struct TournamentConfig {
 
 pub impl TournamentConfigStorePacking of StorePacking<TournamentConfig, felt252> {
     fn pack(value: TournamentConfig) -> felt252 {
+        // Validate 25-bit delay fields fit within their allocated bit ranges
+        assert!(value.registration_start_delay.into() <= MASK_25, "reg_start_delay > 25-bit max");
+        assert!(value.registration_end_delay.into() <= MASK_25, "reg_end_delay > 25-bit max");
+        assert!(value.game_start_delay.into() <= MASK_25, "game_start_delay > 25-bit max");
+        assert!(value.game_end_delay.into() <= MASK_25, "game_end_delay > 25-bit max");
+        assert!(value.submission_duration.into() <= MASK_25, "submission_dur > 25-bit max");
+
         let paymaster_val: u128 = if value.paymaster {
             1
         } else {

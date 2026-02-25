@@ -78,7 +78,10 @@ export function getEventSelectors(): EventSelectors {
  * Convert a hex string to bigint. Returns 0n for falsy inputs.
  */
 export function hexToBigInt(hex: string | undefined | null): bigint {
-  if (!hex) return 0n;
+  if (!hex || hex === "0x") return 0n;
+  if (!/^0x[0-9a-fA-F]+$/.test(hex)) {
+    throw new Error(`Invalid hex value: ${hex}`);
+  }
   return BigInt(hex);
 }
 
@@ -139,7 +142,7 @@ export function decodeByteArray(
     // Each chunk is 31 bytes (248 bits), stored in felt252
     const hex = chunk.toString(16).padStart(62, "0"); // 31 bytes = 62 hex chars
     for (let j = 0; j < 62; j += 2) {
-      const charCode = parseInt(hex.substr(j, 2), 16);
+      const charCode = parseInt(hex.substring(j, j + 2), 16);
       if (charCode > 0) result += String.fromCharCode(charCode);
     }
     idx++;
@@ -152,7 +155,7 @@ export function decodeByteArray(
   if (pendingWordLen > 0) {
     const hex = pendingWord.toString(16).padStart(pendingWordLen * 2, "0");
     for (let i = 0; i < hex.length; i += 2) {
-      const charCode = parseInt(hex.substr(i, 2), 16);
+      const charCode = parseInt(hex.substring(i, i + 2), 16);
       if (charCode > 0) result += String.fromCharCode(charCode);
     }
   }

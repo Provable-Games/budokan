@@ -48,7 +48,6 @@ DECLARE
   payload jsonb;
 BEGIN
   payload := jsonb_build_object(
-    'id',              NEW.id,
     'tournament_id',   NEW.tournament_id,
     'game_token_id',   NEW.game_token_id,
     'game_address',    NEW.game_address,
@@ -83,7 +82,6 @@ DECLARE
   payload jsonb;
 BEGIN
   payload := jsonb_build_object(
-    'id',            NEW.id,
     'tournament_id', NEW.tournament_id,
     'position',      NEW.position,
     'token_id',      NEW.token_id
@@ -137,7 +135,6 @@ DECLARE
   payload jsonb;
 BEGIN
   payload := jsonb_build_object(
-    'id',              NEW.id,
     'tournament_id',   NEW.tournament_id,
     'reward_type',     NEW.reward_type,
     'claimed',         NEW.claimed,

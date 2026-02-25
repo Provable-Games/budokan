@@ -282,13 +282,13 @@ snforge test             # Run all Cairo tests
 snforge test -e test_name  # Run a specific test by name
 ```
 
-### UI (React + TypeScript + Vite)
+### Client (React + TypeScript + Vite)
 
 ```bash
-cd ui
-npm run dev      # Start development server
-npm run build    # TypeScript check + production build
-npm run lint     # Run ESLint
+cd client
+bun run dev      # Start development server
+bun run build    # TypeScript check + production build
+bun run lint     # Run ESLint
 ```
 
 ### Tool Versions

@@ -19,14 +19,13 @@
 
 import {
   pgTable,
-  uuid,
   bigint,
   integer,
   text,
   boolean,
   jsonb,
   index,
-  unique,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------------------
@@ -60,12 +59,11 @@ export const tournaments = pgTable(
 );
 
 // ---------------------------------------------------------------------------
-// registrations
+// registrations  (PK: tournament_id + game_token_id)
 // ---------------------------------------------------------------------------
 export const registrations = pgTable(
   "registrations",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
     tournamentId: bigint("tournament_id", { mode: "bigint" }).notNull(),
     gameTokenId: bigint("game_token_id", { mode: "bigint" }).notNull(),
     gameAddress: text("game_address"),
@@ -75,37 +73,30 @@ export const registrations = pgTable(
     isBanned: boolean("is_banned").default(false),
   },
   (table) => ({
+    pk: primaryKey({ columns: [table.tournamentId, table.gameTokenId] }),
     tournamentIdIdx: index("registrations_tournament_id_idx").on(
       table.tournamentId,
     ),
     playerAddressIdx: index("registrations_player_address_idx").on(
       table.playerAddress,
     ),
-    uniqueRegistration: unique("registrations_unique").on(
-      table.tournamentId,
-      table.gameTokenId,
-    ),
   }),
 );
 
 // ---------------------------------------------------------------------------
-// leaderboards
+// leaderboards  (PK: tournament_id + position)
 // ---------------------------------------------------------------------------
 export const leaderboards = pgTable(
   "leaderboards",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
     tournamentId: bigint("tournament_id", { mode: "bigint" }).notNull(),
     position: integer("position").notNull(),
     tokenId: bigint("token_id", { mode: "bigint" }).notNull(),
   },
   (table) => ({
+    pk: primaryKey({ columns: [table.tournamentId, table.position] }),
     tournamentIdIdx: index("leaderboards_tournament_id_idx").on(
       table.tournamentId,
-    ),
-    uniquePosition: unique("leaderboards_unique_position").on(
-      table.tournamentId,
-      table.position,
     ),
   }),
 );
@@ -131,19 +122,19 @@ export const prizes = pgTable(
 );
 
 // ---------------------------------------------------------------------------
-// reward_claims
+// reward_claims  (PK: tournament_id + tx_hash)
 // ---------------------------------------------------------------------------
 export const rewardClaims = pgTable(
   "reward_claims",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
     tournamentId: bigint("tournament_id", { mode: "bigint" }).notNull(),
     rewardType: jsonb("reward_type"),
     claimed: boolean("claimed").default(false),
     createdAtBlock: bigint("created_at_block", { mode: "bigint" }),
-    txHash: text("tx_hash"),
+    txHash: text("tx_hash").notNull(),
   },
   (table) => ({
+    pk: primaryKey({ columns: [table.tournamentId, table.txHash] }),
     tournamentIdIdx: index("reward_claims_tournament_id_idx").on(
       table.tournamentId,
     ),
@@ -151,25 +142,21 @@ export const rewardClaims = pgTable(
 );
 
 // ---------------------------------------------------------------------------
-// qualification_entries
+// qualification_entries  (PK: tournament_id + tx_hash)
 // ---------------------------------------------------------------------------
 export const qualificationEntries = pgTable(
   "qualification_entries",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
     tournamentId: bigint("tournament_id", { mode: "bigint" }).notNull(),
     qualificationProof: jsonb("qualification_proof"),
     entryCount: integer("entry_count"),
     createdAtBlock: bigint("created_at_block", { mode: "bigint" }),
-    txHash: text("tx_hash"),
+    txHash: text("tx_hash").notNull(),
   },
   (table) => ({
+    pk: primaryKey({ columns: [table.tournamentId, table.txHash] }),
     tournamentIdIdx: index("qualification_entries_tournament_id_idx").on(
       table.tournamentId,
-    ),
-    uniqueQualification: unique("qualification_entries_unique").on(
-      table.tournamentId,
-      table.qualificationProof,
     ),
   }),
 );
@@ -186,25 +173,22 @@ export const platformStats = pgTable("platform_stats", {
 });
 
 // ---------------------------------------------------------------------------
-// tournament_events  (raw event log for replay / debugging)
+// tournament_events  (PK: block_number + tx_hash + event_index)
 // ---------------------------------------------------------------------------
 export const tournamentEvents = pgTable(
   "tournament_events",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
     eventType: text("event_type").notNull(),
     tournamentId: bigint("tournament_id", { mode: "bigint" }),
     playerAddress: text("player_address"),
     data: jsonb("data"),
-    blockNumber: bigint("block_number", { mode: "bigint" }),
-    txHash: text("tx_hash"),
-    eventIndex: integer("event_index"),
+    blockNumber: bigint("block_number", { mode: "bigint" }).notNull(),
+    txHash: text("tx_hash").notNull(),
+    eventIndex: integer("event_index").notNull(),
   },
   (table) => ({
-    uniqueEvent: unique("tournament_events_unique").on(
-      table.blockNumber,
-      table.txHash,
-      table.eventIndex,
-    ),
+    pk: primaryKey({
+      columns: [table.blockNumber, table.txHash, table.eventIndex],
+    }),
   }),
 );
