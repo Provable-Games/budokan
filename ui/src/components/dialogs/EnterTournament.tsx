@@ -86,6 +86,53 @@ interface EnterTournamentDialogProps {
   totalPrizesValueUSD: number;
 }
 
+const ENTRY_BATCH_SIZE = 20;
+const MAX_QUANTITY_NO_LIMIT = 100;
+
+function QuantitySelector({
+  quantity,
+  setQuantity,
+  maxQuantity,
+}: {
+  quantity: number;
+  setQuantity: React.Dispatch<React.SetStateAction<number>>;
+  maxQuantity: number;
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+        disabled={quantity <= 1}
+        className="w-7 h-7 flex items-center justify-center rounded border border-brand/25 hover:bg-brand/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-sm"
+      >
+        -
+      </button>
+      <input
+        type="number"
+        min={1}
+        max={maxQuantity}
+        value={quantity}
+        onChange={(e) => {
+          const val = parseInt(e.target.value, 10);
+          if (!isNaN(val)) {
+            setQuantity(Math.max(1, Math.min(maxQuantity, val)));
+          }
+        }}
+        className="w-10 h-7 text-center text-sm font-medium bg-transparent border border-brand/25 rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+      />
+      <button
+        type="button"
+        onClick={() => setQuantity((q) => Math.min(maxQuantity, q + 1))}
+        disabled={quantity >= maxQuantity}
+        className="w-7 h-7 flex items-center justify-center rounded border border-brand/25 hover:bg-brand/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-sm"
+      >
+        +
+      </button>
+    </div>
+  );
+}
+
 // Update the proof type to make tournamentId and position optional
 type Proof = {
   tournamentId?: string;
@@ -239,7 +286,7 @@ export function EnterTournamentDialog({
         totalPrizesValueUSD,
         swapCalls, // Pass swap calls to be prepended
         quantity,
-        20, // batch size
+        ENTRY_BATCH_SIZE,
         (current, total) => setBatchProgress({ current, total }),
       );
 
@@ -336,8 +383,6 @@ export function EnterTournamentDialog({
       ownerAddress: address ?? "",
       active: open && !!address && hasEntryFee && !!entryToken,
     });
-
-  console.log("Token balances:", tokenBalances, "Loading:", balancesLoading);
 
   // Build sell tokens array for Ekubo quotes (exclude the entry fee token)
   // Only include tokens with meaningful USD value to avoid fetching quotes for dust
@@ -1408,7 +1453,7 @@ export function EnterTournamentDialog({
     const minLeft = Math.min(
       ...entriesLeftByTournament.map((e) => e.entriesLeft),
     );
-    return minLeft === Infinity ? 100 : Math.max(minLeft, 1);
+    return minLeft === Infinity ? MAX_QUANTITY_NO_LIMIT : Math.max(minLeft, 1);
   }, [entriesLeftByTournament]);
 
   // Clamp quantity when maxQuantity changes
@@ -1602,39 +1647,11 @@ export function EnterTournamentDialog({
           {!hasEntryFee && maxQuantity > 1 && (
             <div className="flex items-center justify-between p-3 border border-brand/25 rounded-lg bg-neutral/5">
               <span className="text-sm text-brand-muted">Entries</span>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                  disabled={quantity <= 1}
-                  className="w-7 h-7 flex items-center justify-center rounded border border-brand/25 hover:bg-brand/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-sm"
-                >
-                  -
-                </button>
-                <input
-                  type="number"
-                  min={1}
-                  max={maxQuantity}
-                  value={quantity}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value, 10);
-                    if (!isNaN(val)) {
-                      setQuantity(Math.max(1, Math.min(maxQuantity, val)));
-                    }
-                  }}
-                  className="w-10 h-7 text-center text-sm font-medium bg-transparent border border-brand/25 rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                />
-                <button
-                  type="button"
-                  onClick={() =>
-                    setQuantity((q) => Math.min(maxQuantity, q + 1))
-                  }
-                  disabled={quantity >= maxQuantity}
-                  className="w-7 h-7 flex items-center justify-center rounded border border-brand/25 hover:bg-brand/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-sm"
-                >
-                  +
-                </button>
-              </div>
+              <QuantitySelector
+                quantity={quantity}
+                setQuantity={setQuantity}
+                maxQuantity={maxQuantity}
+              />
             </div>
           )}
 
@@ -1669,39 +1686,11 @@ export function EnterTournamentDialog({
               </div>
               {maxQuantity > 1 && (
                 <div className="flex flex-col items-center gap-1">
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                      disabled={quantity <= 1}
-                      className="w-7 h-7 flex items-center justify-center rounded border border-brand/25 hover:bg-brand/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-sm"
-                    >
-                      -
-                    </button>
-                    <input
-                      type="number"
-                      min={1}
-                      max={maxQuantity}
-                      value={quantity}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value, 10);
-                        if (!isNaN(val)) {
-                          setQuantity(Math.max(1, Math.min(maxQuantity, val)));
-                        }
-                      }}
-                      className="w-10 h-7 text-center text-sm font-medium bg-transparent border border-brand/25 rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setQuantity((q) => Math.min(maxQuantity, q + 1))
-                      }
-                      disabled={quantity >= maxQuantity}
-                      className="w-7 h-7 flex items-center justify-center rounded border border-brand/25 hover:bg-brand/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-sm"
-                    >
-                      +
-                    </button>
-                  </div>
+                  <QuantitySelector
+                    quantity={quantity}
+                    setQuantity={setQuantity}
+                    maxQuantity={maxQuantity}
+                  />
                   {quantity > 1 && (
                     <span className="text-xs text-brand-muted">
                       ${formatUsdValue(totalEntryFeeUsdCost)}
