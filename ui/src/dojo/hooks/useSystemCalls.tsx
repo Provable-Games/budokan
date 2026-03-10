@@ -75,7 +75,10 @@ export const useSystemCalls = () => {
     entryFeeUsdCost: number,
     entryCount: number,
     prizeTotalUsd: number,
-    prependCalls?: { contractAddress: string; entrypoint: string; calldata: string[] }[]
+    prependCalls?: { contractAddress: string; entrypoint: string; calldata: string[] }[],
+    quantity: number = 1,
+    batchSize: number = 20,
+    onProgress?: (current: number, total: number) => void
   ) => {
     const startsIn =
       Number(tournamentModel.schedule.game.start) - Date.now() / 1000;
@@ -84,40 +87,83 @@ export const useSystemCalls = () => {
     const budokanContract = initializeBudokanContract();
 
     try {
-      const call = budokanContract.populate("enter_tournament", [
+      const entryCall = budokanContract.populate("enter_tournament", [
         tournamentId,
         player_name,
         player_address,
         qualification,
       ]);
-      let calls: { contractAddress: string; entrypoint: string; calldata: any }[] = [];
 
-      // Add any prepended calls (e.g., swap calls for Ekubo)
+      // Build prefix calls: swap + approve (covers total amount upfront)
+      const prefixCalls: { contractAddress: string; entrypoint: string; calldata: any }[] = [];
+
       if (prependCalls && prependCalls.length > 0) {
-        calls.push(...prependCalls);
+        prefixCalls.push(...prependCalls);
       }
 
-      // Always add approve call for entry fee token (after swap or directly)
       if (entryFeeToken.isSome()) {
-        calls.push({
+        const totalAmount = (BigInt(entryFeeToken.Some?.amount!) * BigInt(quantity)).toString();
+        prefixCalls.push({
           contractAddress: entryFeeToken.Some?.token_address!,
           entrypoint: "approve",
           calldata: CallData.compile([
             tournamentAddress,
-            entryFeeToken.Some?.amount!,
+            totalAmount,
             "0",
           ]),
         });
       }
-      calls.push({
-        contractAddress: tournamentAddress,
-        entrypoint: "enter_tournament",
-        calldata: call.calldata,
-      });
 
-      const tx = await account?.execute(calls);
+      // Split entries into batches
+      const entryIndices = Array.from({ length: quantity }, (_, i) => i);
+      const batches: number[][] = [];
+      for (let i = 0; i < entryIndices.length; i += batchSize) {
+        batches.push(entryIndices.slice(i, i + batchSize));
+      }
 
-      await waitForTournamentEntry(tournamentId, entryCount);
+      let tx;
+      for (const [batchIndex, batch] of batches.entries()) {
+        const calls: { contractAddress: string; entrypoint: string; calldata: any }[] = [];
+
+        // First batch includes swap + approve
+        if (batchIndex === 0) {
+          calls.push(...prefixCalls);
+        }
+
+        // Add entry calls for this batch
+        for (let i = 0; i < batch.length; i++) {
+          calls.push({
+            contractAddress: tournamentAddress,
+            entrypoint: "enter_tournament",
+            calldata: entryCall.calldata,
+          });
+        }
+
+        console.log(
+          `Processing entry batch ${batchIndex + 1}/${batches.length} with ${batch.length} entries${
+            batchIndex === 0 && prefixCalls.length > 0
+              ? ` and ${prefixCalls.length} prefix calls (swap/approve)`
+              : ""
+          }`
+        );
+
+        if (onProgress) {
+          onProgress(batchIndex + 1, batches.length);
+        }
+
+        tx = await account?.execute(calls);
+
+        // Wait for confirmation before sending next batch
+        if (batches.length > 1 && tx?.transaction_hash) {
+          console.log(
+            `Waiting for transaction ${tx.transaction_hash} to be confirmed...`
+          );
+          await account?.waitForTransaction(tx.transaction_hash);
+          console.log(`Transaction ${tx.transaction_hash} confirmed`);
+        }
+      }
+
+      await waitForTournamentEntry(tournamentId, entryCount, quantity);
 
       if (tx) {
         showTournamentEntry({
