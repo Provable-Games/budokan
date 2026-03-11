@@ -14,7 +14,7 @@ databases:
   - name: budokan-db
     plan: basic-256mb # ~$7/mo - upgrade to basic-1gb ($20) or standard-1gb ($50) for production
     databaseName: budokan
-    postgresMajorVersion: 18
+    postgresMajorVersion: 16
     ipAllowList: [] # Allow all IPs (Render services connect internally)
 
 services:
@@ -35,6 +35,9 @@ services:
       paths:
         - api/**
         - indexer/src/lib/schema.ts
+        - package.json
+        - package-lock.json
+        - indexer/package.json
     envVars:
       - key: NODE_ENV
         value: production
@@ -56,12 +59,14 @@ services:
     plan: starter # $7/mo
     region: oregon
     dockerfilePath: ./indexer/Dockerfile
-    dockerContext: ./indexer
+    dockerContext: .
     autoDeploy: no # avoid restarting indexer on every push
     # Only rebuild when indexer files change
     buildFilter:
       paths:
         - indexer/**
+        - package.json
+        - package-lock.json
     envVars:
       - key: NODE_ENV
         value: production

@@ -2,14 +2,19 @@ FROM node:22-alpine
 
 WORKDIR /app
 
-# Copy package files
+# Copy root package files for workspace resolution
 COPY package.json package-lock.json ./
 
-# Install dependencies
-RUN npm ci
+# Copy indexer package.json
+COPY indexer/package.json indexer/package.json
 
-# Copy source
-COPY . .
+# Install dependencies
+RUN npm ci --workspace=indexer
+
+# Copy indexer source
+COPY indexer/ indexer/
+
+WORKDIR /app/indexer
 
 # Build the indexer
 RUN npm run build

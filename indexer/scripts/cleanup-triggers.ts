@@ -43,15 +43,19 @@ async function cleanupTriggers() {
 
     for (const row of result.rows) {
       const { trigger_name, event_object_schema, event_object_table } = row;
+      // Escape identifiers to prevent SQL injection
+      const escapedTrigger = trigger_name.replace(/"/g, '""');
+      const escapedTable = event_object_table.replace(/"/g, '""');
+      const escapedSchema = event_object_schema.replace(/"/g, '""');
       const qualifiedTable =
         event_object_schema === "public"
-          ? `"${event_object_table}"`
-          : `"${event_object_schema}"."${event_object_table}"`;
+          ? `"${escapedTable}"`
+          : `"${escapedSchema}"."${escapedTable}"`;
       console.log(
         `[Cleanup] Dropping trigger ${trigger_name} on ${qualifiedTable}`,
       );
       await client.query(
-        `DROP TRIGGER IF EXISTS "${trigger_name}" ON ${qualifiedTable}`,
+        `DROP TRIGGER IF EXISTS "${escapedTrigger}" ON ${qualifiedTable}`,
       );
     }
 

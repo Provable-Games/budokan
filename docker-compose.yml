@@ -21,17 +21,18 @@ services:
   # Budokan Indexer
   indexer:
     build:
-      context: ./indexer
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: indexer/Dockerfile
     container_name: budokan-indexer
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
-    env_file:
-      - ./indexer/.env
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/budokan
+      BUDOKAN_CONTRACT_ADDRESS: ${BUDOKAN_CONTRACT_ADDRESS:-0x0}
+      STREAM_URL: ${STREAM_URL:-https://mainnet.starknet.a5a.ch}
+      STARTING_BLOCK: ${STARTING_BLOCK:-0}
     volumes:
       - indexer_state:/app/.apibara/state
 
