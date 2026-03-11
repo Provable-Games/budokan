@@ -62,10 +62,6 @@
     "uuid": "^11.0.5",
     "zod": "^3.24.1"
   },
-  "overrides": {
-    "@noble/hashes": "^1.7.1",
-    "@noble/curves": "^1.8.1"
-  },
   "devDependencies": {
     "@babel/plugin-transform-react-jsx": "^7.25.9",
     "@eslint/js": "^9.17.0",
