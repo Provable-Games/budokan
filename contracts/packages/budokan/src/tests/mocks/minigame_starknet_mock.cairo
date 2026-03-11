@@ -171,12 +171,7 @@ pub mod minigame_starknet_mock {
         }
 
         fn game_details(self: @ContractState, token_id: felt252) -> Span<GameDetail> {
-            array![
-                GameDetail {
-                    name: "Test Game Detail", value: format!("Test Value for token {}", token_id),
-                },
-            ]
-                .span()
+            array![GameDetail { name: 'Test Game Detail', value: token_id }].span()
         }
 
         fn token_name_batch(self: @ContractState, token_ids: Span<felt252>) -> Array<ByteArray> {
@@ -257,9 +252,7 @@ pub mod minigame_starknet_mock {
             GameSettingDetails {
                 name,
                 description,
-                settings: array![
-                    GameSetting { name: "Difficulty", value: format!("{}", difficulty) },
-                ]
+                settings: array![GameSetting { name: 'Difficulty', value: difficulty.into() }]
                     .span(),
             }
         }
@@ -319,15 +312,9 @@ pub mod minigame_starknet_mock {
             GameObjectiveDetails {
                 name: "Score Target",
                 description: format!("Score Above {}", target_score),
-                objectives: array![
-                    GameObjective { name: "target", value: format!("{}", target_score) },
-                ]
+                objectives: array![GameObjective { name: 'target', value: target_score.into() }]
                     .span(),
             }
-        }
-
-        fn objective_settings_id(self: @ContractState, objective_id: u32) -> u32 {
-            0
         }
 
         fn objectives_details_batch(
@@ -340,21 +327,6 @@ pub mod minigame_starknet_mock {
                     break;
                 }
                 results.append(self.objectives_details(*objective_ids.at(index)));
-                index += 1;
-            }
-            results
-        }
-
-        fn objective_settings_id_batch(
-            self: @ContractState, objective_ids: Span<u32>,
-        ) -> Array<u32> {
-            let mut results = array![];
-            let mut index = 0;
-            loop {
-                if index >= objective_ids.len() {
-                    break;
-                }
-                results.append(self.objective_settings_id(*objective_ids.at(index)));
                 index += 1;
             }
             results
@@ -420,14 +392,11 @@ pub mod minigame_starknet_mock {
             self.objective_scores.entry(new_objective_id).write((score, true));
             self.objective_count.write(new_objective_id);
 
-            let objectives = array![
-                GameObjective { name: "Score Target", value: format!("Score Above {}", score) },
-            ];
+            let objectives = array![GameObjective { name: 'Score Target', value: score.into() }];
             self
                 .objectives
                 .create_objective(
                     new_objective_id,
-                    settings_id,
                     GameObjectiveDetails {
                         name: "Score Objective",
                         description: "Achieve target score",
@@ -450,9 +419,7 @@ pub mod minigame_starknet_mock {
                 .write((name.clone(), description.clone(), true));
             self.settings_count.write(new_settings_id);
 
-            let settings = array![
-                GameSetting { name: "Difficulty", value: format!("{}", difficulty) },
-            ];
+            let settings = array![GameSetting { name: 'Difficulty', value: difficulty.into() }];
 
             self
                 .settings
@@ -522,6 +489,8 @@ pub mod minigame_starknet_mock {
                     objectives_address,
                     minigame_token_address,
                     royalty_fraction,
+                    Option::None, // skills_address
+                    0 // version
                 );
         }
     }

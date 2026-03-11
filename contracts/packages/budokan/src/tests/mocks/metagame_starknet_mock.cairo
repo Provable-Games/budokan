@@ -101,8 +101,8 @@ pub mod metagame_starknet_mock {
         src5: SRC5Component::Storage,
         token_counter: u64,
         token_context_count: Map<felt252, u32>,
-        token_context_name: Map<(felt252, u32), ByteArray>,
-        token_context_value: Map<(felt252, u32), ByteArray>,
+        token_context_name: Map<(felt252, u32), felt252>,
+        token_context_value: Map<(felt252, u32), felt252>,
         token_context_exists: Map<felt252, bool>,
         cb_game_action_count: u32,
         cb_game_over_count: u32,
@@ -174,7 +174,7 @@ pub mod metagame_starknet_mock {
             salt: u16,
             metadata: u16,
         ) -> felt252 {
-            let context = array![GameContext { name: "Test Context 1", value: "Test Context" }]
+            let context = array![GameContext { name: 'Test Context 1', value: 'Test Context' }]
                 .span();
             let context_details = GameContextDetails {
                 name: "Test App",
@@ -194,6 +194,7 @@ pub mod metagame_starknet_mock {
                     Option::Some(context_details),
                     client_url,
                     renderer_address,
+                    Option::None, // skills_address
                     to,
                     soulbound,
                     paymaster,
@@ -202,8 +203,8 @@ pub mod metagame_starknet_mock {
                 );
 
             self.token_context_count.write(token_id, 1);
-            self.token_context_name.write((token_id, 0), "Test Context 1");
-            self.token_context_value.write((token_id, 0), "Test Context");
+            self.token_context_name.write((token_id, 0), 'Test Context 1');
+            self.token_context_value.write((token_id, 0), 'Test Context');
             self.token_context_exists.write(token_id, true);
 
             token_id
