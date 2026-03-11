@@ -1,0 +1,64 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: budokan-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: budokan
+    volumes:
+      - budokan_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d budokan"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Budokan Indexer
+  indexer:
+    build:
+      context: .
+      dockerfile: indexer/Dockerfile
+    container_name: budokan-indexer
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/budokan
+      BUDOKAN_CONTRACT_ADDRESS: ${BUDOKAN_CONTRACT_ADDRESS:-0x0}
+      STREAM_URL: ${STREAM_URL:-https://mainnet.starknet.a5a.ch}
+      STARTING_BLOCK: ${STARTING_BLOCK:-0}
+    volumes:
+      - indexer_state:/app/indexer/.apibara/state
+
+  # Budokan API
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    container_name: budokan-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/budokan
+      PORT: 3003
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+    ports:
+      - "3003:3003"
+
+volumes:
+  budokan_postgres_data:
+    driver: local
+  indexer_state:
+    driver: local
+
+networks:
+  default:
+    name: budokan-network

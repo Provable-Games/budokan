@@ -1,3 +1,6 @@
 target/
 PRECISION_FIX_PLAN.md
 node_modules/
+.env
+!.env.example
+.apibara/
