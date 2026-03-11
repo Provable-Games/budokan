@@ -34,7 +34,7 @@ services:
       STREAM_URL: ${STREAM_URL:-https://mainnet.starknet.a5a.ch}
       STARTING_BLOCK: ${STARTING_BLOCK:-0}
     volumes:
-      - indexer_state:/app/.apibara/state
+      - indexer_state:/app/indexer/.apibara/state
 
   # Budokan API
   api:
