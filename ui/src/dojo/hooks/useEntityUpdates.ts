@@ -26,15 +26,16 @@ export const useEntityUpdates = () => {
 
   const waitForTournamentEntry = async (
     tournamentId: BigNumberish,
-    entryCount: number
+    entryCount: number,
+    quantity: number = 1
   ) => {
     const entryCountEntityId = getEntityIdFromKeys([BigInt(tournamentId)]);
     await state.waitForEntityChange(
       entryCountEntityId,
       (entity) => {
         return (
-          entity?.models?.[namespace]?.EntryCount?.count ==
-          Number(entryCount) + 1
+          Number(entity?.models?.[namespace]?.EntryCount?.count ?? 0) >=
+          Number(entryCount) + quantity
         );
       },
       30000
