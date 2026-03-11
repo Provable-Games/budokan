@@ -68,6 +68,7 @@ pub mod MinigameRegistryContract {
         pub color: ByteArray,
         pub client_url: ByteArray,
         pub renderer_address: ContractAddress,
+        pub version: u64,
     }
 
     #[derive(Drop, starknet::Event)]
@@ -128,6 +129,8 @@ pub mod MinigameRegistryContract {
             client_url: Option<ByteArray>,
             renderer_address: Option<ContractAddress>,
             royalty_fraction: Option<u128>,
+            skills_address: Option<ContractAddress>,
+            version: u64,
         ) -> u64 {
             let game_count = self.game_counter.read();
             let new_game_id = game_count + 1;
@@ -173,6 +176,11 @@ pub mod MinigameRegistryContract {
                 Option::None => 0,
             };
 
+            let final_skills_address: ContractAddress = match skills_address {
+                Option::Some(addr) => addr,
+                Option::None => 0.try_into().unwrap(),
+            };
+
             let metadata = GameMetadata {
                 contract_address: caller_address,
                 name: name.clone(),
@@ -185,7 +193,9 @@ pub mod MinigameRegistryContract {
                 client_url: final_client_url.clone(),
                 renderer_address: final_renderer_address,
                 royalty_fraction: final_royalty_fraction,
+                skills_address: final_skills_address.clone(),
                 created_at: starknet::get_block_timestamp(),
+                version,
             };
 
             self.game_metadata.entry(new_game_id).write(metadata);
@@ -205,6 +215,7 @@ pub mod MinigameRegistryContract {
                         final_color.clone(),
                         final_client_url.clone(),
                         final_renderer_address,
+                        final_skills_address,
                     ),
                 Option::None => self
                     .emit(
@@ -220,6 +231,7 @@ pub mod MinigameRegistryContract {
                             color: final_color.clone(),
                             client_url: final_client_url.clone(),
                             renderer_address: final_renderer_address,
+                            version,
                         },
                     ),
             }
@@ -238,6 +250,10 @@ pub mod MinigameRegistryContract {
             let mut metadata = self.game_metadata.entry(game_id).read();
             metadata.royalty_fraction = royalty_fraction;
             self.game_metadata.entry(game_id).write(metadata);
+        }
+
+        fn skills_address(self: @ContractState, game_id: u64) -> ContractAddress {
+            self.game_metadata.entry(game_id).read().skills_address
         }
 
         fn game_metadata_batch(self: @ContractState, game_ids: Span<u64>) -> Array<GameMetadata> {

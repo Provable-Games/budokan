@@ -37,7 +37,7 @@ pub mod tournament_validator_mock {
     use game_components_interfaces::registration::{
         IRegistrationDispatcher, IRegistrationDispatcherTrait,
     };
-    use interfaces::entry_requirement_extension::{
+    use metagame_extensions_interfaces::entry_requirement_extension::{
         IENTRY_REQUIREMENT_EXTENSION_ID, IEntryRequirementExtension,
     };
     use openzeppelin_interfaces::erc721::{IERC721Dispatcher, IERC721DispatcherTrait};

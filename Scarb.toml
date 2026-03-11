@@ -7,24 +7,24 @@ members = [
 [workspace.package]
 version = "0.0.1"
 edition = "2024_07"
-cairo-version = "2.15.0"
+cairo-version = "2.15.1"
 
 [workspace.dependencies]
-starknet = "2.15.0"
-cairo_test = "2.15.0"
+starknet = "2.15.1"
+cairo_test = "2.15.1"
 snforge_std = { git = "https://github.com/foundry-rs/starknet-foundry", tag = "v0.55.0" }
 openzeppelin_access = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0" }
 openzeppelin_introspection = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0" }
 openzeppelin_token = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0" }
 openzeppelin_interfaces = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0" }
 openzeppelin_upgrades = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0" }
-game_components_embeddable_game_standard = { git = "https://github.com/Provable-Games/game-components.git", branch = "next" }
-game_components_metagame = { git = "https://github.com/Provable-Games/game-components.git", branch = "next" }
-game_components_utilities = { git = "https://github.com/Provable-Games/game-components.git", branch = "next" }
-game_components_interfaces = { git = "https://github.com/Provable-Games/game-components.git", branch = "next" }
-game_components_test_common = { git = "https://github.com/Provable-Games/game-components.git", branch = "next" }
-game_components_testing = { git = "https://github.com/Provable-Games/game-components.git", branch = "next" }
-interfaces = { git = "https://github.com/Provable-Games/metagame_extensions.git", branch = "next" }
+game_components_embeddable_game_standard = { git = "https://github.com/Provable-Games/game-components.git", branch = "main" }
+game_components_metagame = { git = "https://github.com/Provable-Games/game-components.git", branch = "main" }
+game_components_utilities = { git = "https://github.com/Provable-Games/game-components.git", branch = "main" }
+game_components_interfaces = { git = "https://github.com/Provable-Games/game-components.git", branch = "main" }
+game_components_test_common = { git = "https://github.com/Provable-Games/game-components.git", branch = "main" }
+game_components_testing = { git = "https://github.com/Provable-Games/game-components.git", branch = "main" }
+metagame_extensions_interfaces = { git = "https://github.com/Provable-Games/metagame_extensions.git", tag = "v0.1.1" }
 
 [scripts]
 test = "snforge test"

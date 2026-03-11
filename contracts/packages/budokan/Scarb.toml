@@ -25,11 +25,11 @@ game_components_metagame.workspace = true
 game_components_utilities.workspace = true
 game_components_interfaces.workspace = true
 game_components_test_common.workspace = true
-interfaces.workspace = true
+metagame_extensions_interfaces.workspace = true
 budokan_interfaces = { path = "../interfaces" }
 
 [dev-dependencies]
-cairo_test = "2.15.0"
+cairo_test = "2.15.1"
 snforge_std.workspace = true
 
 [features]

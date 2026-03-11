@@ -62,7 +62,7 @@ pub mod Budokan {
     use game_components_utilities::distribution::structs::{
         BASIS_POINTS, DIST_TYPE_CUSTOM, DIST_TYPE_EXPONENTIAL, DIST_TYPE_LINEAR, DIST_TYPE_UNIFORM,
     };
-    use interfaces::entry_requirement_extension::{
+    use metagame_extensions_interfaces::entry_requirement_extension::{
         IEntryRequirementExtensionDispatcher, IEntryRequirementExtensionDispatcherTrait,
     };
     use openzeppelin_access::ownable::OwnableComponent;
@@ -233,9 +233,7 @@ pub mod Budokan {
     impl GameContextDetailsImpl of IMetagameContextDetails<ContractState> {
         fn context_details(self: @ContractState, token_id: felt252) -> GameContextDetails {
             let tournament_id = self.token_context_id.entry(token_id).read();
-            let context = array![
-                GameContext { name: "Tournament ID", value: format!("{}", tournament_id) },
-            ]
+            let context = array![GameContext { name: 'Tournament ID', value: tournament_id.into() }]
                 .span();
             GameContextDetails {
                 name: "Budokan",
@@ -326,6 +324,7 @@ pub mod Budokan {
                     Option::None, // creator token, so we don't want to give it context
                     Option::None, // client_url
                     Option::None, // renderer_address
+                    Option::None, // skills_address
                     creator_rewards_address,
                     false, // soulbound
                     false, // paymaster
@@ -434,6 +433,7 @@ pub mod Budokan {
                     Option::Some(context),
                     client_url,
                     renderer,
+                    Option::None, // skills_address
                     mint_to_address, // to
                     tournament.game_config.soulbound, // soulbound
                     tournament.game_config.paymaster, // paymaster
@@ -1333,6 +1333,7 @@ pub mod Budokan {
             context: Option<GameContextDetails>,
             client_url: Option<ByteArray>,
             renderer_address: Option<ContractAddress>,
+            skills_address: Option<ContractAddress>,
             to: ContractAddress,
             soulbound: bool,
             paymaster: bool,
@@ -1352,6 +1353,7 @@ pub mod Budokan {
                     context,
                     client_url,
                     renderer_address,
+                    skills_address,
                     to,
                     soulbound,
                     paymaster,
@@ -1827,9 +1829,7 @@ pub mod Budokan {
         }
 
         fn _create_context(self: @ContractState, tournament_id: u64) -> GameContextDetails {
-            let context = array![
-                GameContext { name: "Tournament ID", value: format!("{}", tournament_id) },
-            ]
+            let context = array![GameContext { name: 'Tournament ID', value: tournament_id.into() }]
                 .span();
             GameContextDetails {
                 name: "Budokan",

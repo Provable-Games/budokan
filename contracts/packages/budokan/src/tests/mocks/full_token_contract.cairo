@@ -3,6 +3,7 @@
 // crate:: paths replaced with game_components_embeddable_game_standard::
 
 use game_components_embeddable_game_standard::metagame::extensions::context::structs::GameContextDetails;
+use game_components_embeddable_game_standard::minigame::extensions::objectives::structs::GameObjectiveDetails;
 use game_components_embeddable_game_standard::minigame::extensions::settings::structs::GameSettingDetails;
 use game_components_embeddable_game_standard::minigame::interface::{
     IMinigameDispatcher, IMinigameDispatcherTrait,
@@ -16,9 +17,11 @@ use game_components_embeddable_game_standard::token::extensions::minter::minter:
 use game_components_embeddable_game_standard::token::extensions::objectives::objectives::ObjectivesComponent;
 use game_components_embeddable_game_standard::token::extensions::renderer::renderer::RendererComponent;
 use game_components_embeddable_game_standard::token::extensions::settings::settings::SettingsComponent;
+use game_components_embeddable_game_standard::token::extensions::skills::skills::SkillsComponent;
 use game_components_embeddable_game_standard::token::structs::TokenMetadata;
 use game_components_embeddable_game_standard::token::token_component::CoreTokenComponent;
-use game_components_utilities::utils::renderer::{create_custom_metadata, create_default_svg};
+use game_components_utilities::renderer::metadata::create_custom_metadata;
+use game_components_utilities::renderer::svg::create_default_svg;
 use openzeppelin_interfaces::erc2981::IERC2981;
 use openzeppelin_interfaces::erc721::IERC721Metadata;
 use openzeppelin_introspection::src5::SRC5Component;
@@ -43,6 +46,7 @@ pub mod FullTokenContract {
     component!(path: SettingsComponent, storage: settings, event: SettingsEvent);
     component!(path: ContextComponent, storage: context, event: ContextEvent);
     component!(path: RendererComponent, storage: renderer, event: RendererEvent);
+    component!(path: SkillsComponent, storage: skills, event: SkillsEvent);
 
     #[storage]
     struct Storage {
@@ -64,6 +68,8 @@ pub mod FullTokenContract {
         context: ContextComponent::Storage,
         #[substorage(v0)]
         renderer: RendererComponent::Storage,
+        #[substorage(v0)]
+        skills: SkillsComponent::Storage,
     }
 
     #[event]
@@ -87,6 +93,8 @@ pub mod FullTokenContract {
         ContextEvent: ContextComponent::Event,
         #[flat]
         RendererEvent: RendererComponent::Event,
+        #[flat]
+        SkillsEvent: SkillsComponent::Event,
     }
 
     #[abi(embed_v0)]
@@ -159,6 +167,8 @@ pub mod FullTokenContract {
     impl SettingsImpl = SettingsComponent::SettingsImpl<ContractState>;
     #[abi(embed_v0)]
     impl RendererImpl = RendererComponent::RendererImpl<ContractState>;
+    #[abi(embed_v0)]
+    impl SkillsImpl = SkillsComponent::SkillsImpl<ContractState>;
 
     impl ERC721InternalImpl = ERC721Component::InternalImpl<ContractState>;
     impl ERC2981InternalImpl = ERC2981Component::InternalImpl<ContractState>;
@@ -169,12 +179,14 @@ pub mod FullTokenContract {
     impl SettingsInternalImpl = SettingsComponent::InternalImpl<ContractState>;
     impl ContextInternalImpl = ContextComponent::InternalImpl<ContractState>;
     impl RendererInternalImpl = RendererComponent::InternalImpl<ContractState>;
+    impl SkillsInternalImpl = SkillsComponent::InternalImpl<ContractState>;
 
     impl MinterOptionalImpl = MinterComponent::MinterOptionalImpl<ContractState>;
     impl ObjectivesOptionalImpl = ObjectivesComponent::ObjectivesOptionalImpl<ContractState>;
     impl SettingsOptionalImpl = SettingsComponent::SettingsOptionalImpl<ContractState>;
     impl ContextOptionalImpl = ContextComponent::ContextOptionalImpl<ContractState>;
     impl RendererOptionalImpl = RendererComponent::RendererOptionalImpl<ContractState>;
+    impl SkillsOptionalImpl = SkillsComponent::SkillsOptionalImpl<ContractState>;
 
     #[abi(embed_v0)]
     impl ERC721Metadata of IERC721Metadata<ContractState> {
@@ -260,41 +272,6 @@ pub mod FullTokenContract {
                     Result::Err(_) => "An NFT representing ownership of an embeddable game.",
                 };
 
-                let game_details_svg =
-                    match call_contract_syscall(
-                        renderer_address, game_details_svg_selector, token_calldata.span(),
-                    ) {
-                    Result::Ok(result) => {
-                        let mut result_span = result;
-                        match Serde::<ByteArray>::deserialize(ref result_span) {
-                            Option::Some(game_details_svg) => game_details_svg,
-                            Option::None => create_default_svg(
-                                token_id.try_into().unwrap(),
-                                game_metadata.clone(),
-                                score,
-                                player_name,
-                            ),
-                        }
-                    },
-                    Result::Err(_) => create_default_svg(
-                        token_id.try_into().unwrap(), game_metadata.clone(), score, player_name,
-                    ),
-                };
-
-                let game_details =
-                    match call_contract_syscall(
-                        renderer_address, game_details_selector, token_calldata.span(),
-                    ) {
-                    Result::Ok(result) => {
-                        let mut result_span = result;
-                        match Serde::<Span<GameDetail>>::deserialize(ref result_span) {
-                            Option::Some(game_details) => game_details,
-                            Option::None => array![].span(),
-                        }
-                    },
-                    Result::Err(_) => array![].span(),
-                };
-
                 let mut settings_calldata = array![];
                 settings_calldata.append(token_metadata.settings_id.into());
 
@@ -313,6 +290,28 @@ pub mod FullTokenContract {
                     },
                     Result::Err(_) => GameSettingDetails {
                         name: "", description: "", settings: array![].span(),
+                    },
+                };
+
+                let objectives_details_selector = selector!("objectives_details");
+                let mut objectives_calldata = array![];
+                objectives_calldata.append(token_metadata.objective_id.into());
+
+                let objective_details =
+                    match call_contract_syscall(
+                        game_address, objectives_details_selector, objectives_calldata.span(),
+                    ) {
+                    Result::Ok(result) => {
+                        let mut result_span = result;
+                        match Serde::<GameObjectiveDetails>::deserialize(ref result_span) {
+                            Option::Some(objective_details) => objective_details,
+                            Option::None => GameObjectiveDetails {
+                                name: "", description: "", objectives: array![].span(),
+                            },
+                        }
+                    },
+                    Result::Err(_) => GameObjectiveDetails {
+                        name: "", description: "", objectives: array![].span(),
                     },
                 };
 
@@ -338,6 +337,52 @@ pub mod FullTokenContract {
                         name: "", description: "", id: Option::None, context: array![].span(),
                     },
                 };
+
+                let game_details_svg =
+                    match call_contract_syscall(
+                        renderer_address, game_details_svg_selector, token_calldata.span(),
+                    ) {
+                    Result::Ok(result) => {
+                        let mut result_span = result;
+                        match Serde::<ByteArray>::deserialize(ref result_span) {
+                            Option::Some(game_details_svg) => game_details_svg,
+                            Option::None => create_default_svg(
+                                game_metadata.clone(),
+                                token_metadata,
+                                score,
+                                player_name,
+                                settings_details.clone(),
+                                objective_details.clone(),
+                                context_details.clone(),
+                                game_metadata.client_url.clone(),
+                            ),
+                        }
+                    },
+                    Result::Err(_) => create_default_svg(
+                        game_metadata.clone(),
+                        token_metadata,
+                        score,
+                        player_name,
+                        settings_details.clone(),
+                        objective_details.clone(),
+                        context_details.clone(),
+                        game_metadata.client_url.clone(),
+                    ),
+                };
+
+                let game_details =
+                    match call_contract_syscall(
+                        renderer_address, game_details_selector, token_calldata.span(),
+                    ) {
+                    Result::Ok(result) => {
+                        let mut result_span = result;
+                        match Serde::<Span<GameDetail>>::deserialize(ref result_span) {
+                            Option::Some(game_details) => game_details,
+                            Option::None => array![].span(),
+                        }
+                    },
+                    Result::Err(_) => array![].span(),
+                };
                 create_custom_metadata(
                     token_id.try_into().unwrap(),
                     token_name,
@@ -351,6 +396,7 @@ pub mod FullTokenContract {
                     score,
                     minted_by_address,
                     player_name,
+                    "",
                 )
             } else {
                 "https://denshokan.dev/game/1"
@@ -402,5 +448,6 @@ pub mod FullTokenContract {
         self.settings.initializer();
         self.context.initializer();
         self.renderer.initializer();
+        self.skills.initializer();
     }
 }
