@@ -1,0 +1,77 @@
+# Budokan Infrastructure Blueprint
+# Deploy with: Connect repo to Render, or `render blueprint apply`
+#
+# Services:
+#   - PostgreSQL database (managed)
+#   - Indexer (background worker - processes Starknet events)
+#   - API server (web service - REST + WebSocket)
+#
+# Build Filters:
+#   Each service only rebuilds when its specific files change.
+#   Changes to render.yaml always trigger a sync regardless of filters.
+
+databases:
+  - name: budokan-db
+    plan: basic-256mb # ~$7/mo - upgrade to basic-1gb ($20) or standard-1gb ($50) for production
+    databaseName: budokan
+    postgresMajorVersion: 18
+    ipAllowList: [] # Allow all IPs (Render services connect internally)
+
+services:
+  # ===========================================
+  # API Server (REST + WebSocket)
+  # ===========================================
+  - type: web
+    name: budokan-api
+    runtime: docker
+    plan: starter # $7/mo - upgrade for production
+    region: oregon
+    dockerfilePath: ./api/Dockerfile
+    dockerContext: .
+    autoDeploy: yes
+    healthCheckPath: /health
+    # Only rebuild when API or shared schema changes
+    buildFilter:
+      paths:
+        - api/**
+        - indexer/src/lib/schema.ts
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3003"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: budokan-db
+          property: connectionString
+      - key: CORS_ORIGIN
+        sync: false # Set manually in dashboard
+
+  # ===========================================
+  # Indexer (Background Worker)
+  # ===========================================
+  - type: worker
+    name: budokan-indexer
+    runtime: docker
+    plan: starter # $7/mo
+    region: oregon
+    dockerfilePath: ./indexer/Dockerfile
+    dockerContext: ./indexer
+    autoDeploy: no # avoid restarting indexer on every push
+    # Only rebuild when indexer files change
+    buildFilter:
+      paths:
+        - indexer/**
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: budokan-db
+          property: connectionString
+      - key: BUDOKAN_CONTRACT_ADDRESS
+        sync: false # Set manually in dashboard
+      - key: STREAM_URL
+        sync: false # Set manually in dashboard
+      - key: STARTING_BLOCK
+        sync: false # Set manually in dashboard
