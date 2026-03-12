@@ -19,7 +19,7 @@ import { useAccount } from "@starknet-react/core";
 import { useConnectToSelectedChain } from "@/dojo/hooks/useChain";
 import { useDojo } from "@/context/dojo";
 import { LoadingSpinner } from "@/components/ui/spinner";
-import { useGetPrizeMetrics } from "@/dojo/hooks/useSqlQueries";
+import { useGetPlatformStats } from "@/hooks/useBudokanQueries";
 import { PrizeManager } from "@/components/shared/PrizeManager";
 import { ChainId } from "@/dojo/setup/networks";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
@@ -95,7 +95,7 @@ export function AddPrizesDialog({
   });
 
   const { address, account: _account } = useAccount();
-  const { namespace, selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useDojo();
   const { connect } = useConnectToSelectedChain();
   const { approveAndAddPrizes, approveAndAddPrizesBatched, getTokenDecimals } =
     useSystemCalls();
@@ -120,12 +120,11 @@ export function AddPrizesDialog({
   const chainId = selectedChainConfig?.chainId ?? "";
   const isSepolia = selectedChainConfig?.chainId === ChainId.SN_SEPOLIA;
 
-  const { data: prizeMetricsModel } = useGetPrizeMetrics({
-    namespace,
+  const { data: platformStats } = useGetPlatformStats({
     active: open,
   });
 
-  const prizeCount = Number(prizeMetricsModel?.total_prizes ?? 0);
+  const prizeCount = Number(platformStats?.totalPrizes ?? 0);
 
   // Get unique token addresses for price fetching
   const uniqueTokenAddresses = useMemo(() => {

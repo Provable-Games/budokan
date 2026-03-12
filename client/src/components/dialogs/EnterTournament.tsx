@@ -25,7 +25,6 @@ import {
   bigintToHex,
   displayAddress,
   stringToFelt,
-  padU64,
   formatPrizeAmount,
   formatUsdValue,
 } from "@/lib/utils";
@@ -45,11 +44,11 @@ import {
   REFRESH,
 } from "@/components/Icons";
 import {
-  useGetTournamentRegistrants,
-  useGetTournamentLeaderboards,
-  useGetTournamentQualificationEntries,
-} from "@/dojo/hooks/useSqlQueries";
-import { useGameTokens } from "metagame-sdk";
+  useGetTournamentRegistrations,
+  useGetTournamentLeaderboard,
+  useGetTournamentQualifications,
+} from "@/hooks/useBudokanQueries";
+import { useGameTokens } from "@/hooks/useDenshokanQueries";
 import { useDojo } from "@/context/dojo";
 import { processQualificationProof, computeAbsoluteTimes } from "@/lib/utils/formatting";
 import { getTokenLogoUrl, getTokenDecimals } from "@/lib/tokensMeta";
@@ -114,7 +113,7 @@ export function EnterTournamentDialog({
   duration,
   totalPrizesValueUSD,
 }: EnterTournamentDialogProps) {
-  const { namespace, selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useDojo();
   const { address } = useAccount();
   const { provider } = useProvider();
   const { connect } = useConnectToSelectedChain();
@@ -800,33 +799,34 @@ export function EnterTournamentDialog({
     // };
   }, [manualTokenId, open, requirementVariant, ownedTokenIds]);
 
-  const requiredTournamentGameAddresses = tournamentsData.map((tournament) =>
-    indexAddress(tournament.game_config?.game_address ?? ""),
-  );
-
-  const { games } = useGameTokens({
+  const { data: games } = useGameTokens({
     owner: address,
-    gameAddresses: requiredTournamentGameAddresses,
-    includeMetadata: false,
+    active: !!address,
   });
 
   const ownedGameIds = useMemo(() => {
     return games?.map((game) => game.token_id).filter(Boolean);
   }, [games]);
 
-  const { data: registrations } = useGetTournamentRegistrants({
-    namespace: namespace ?? "",
-    gameIds: ownedGameIds ?? [],
-    active: isTournamentValidatorExtension && !!tournamentValidatorConfig,
-  });
+  const enterTournamentId = tournamentModel?.id ? String(tournamentModel.id) : undefined;
 
-  const { data: leaderboards } = useGetTournamentLeaderboards({
-    namespace: namespace ?? "",
-    tournamentIds: tournamentsData.map((tournament) =>
-      padU64(BigInt(tournament.id)),
-    ),
-    active: isTournamentValidatorExtension && !!tournamentValidatorConfig,
-  });
+  const { data: registrations } = useGetTournamentRegistrations(
+    isTournamentValidatorExtension && !!tournamentValidatorConfig
+      ? enterTournamentId
+      : undefined,
+  );
+
+  const { data: leaderboard } = useGetTournamentLeaderboard(
+    isTournamentValidatorExtension && !!tournamentValidatorConfig
+      ? enterTournamentId
+      : undefined,
+  );
+
+  // Wrap single leaderboard in array for compatibility with downstream code
+  const leaderboards = useMemo(
+    () => (leaderboard ? [leaderboard] : []),
+    [leaderboard],
+  );
 
   const currentTime = BigInt(new Date().getTime()) / 1000n;
 
@@ -854,12 +854,13 @@ export function EnterTournamentDialog({
         // For participation, we don't care if tournament is finalized
         // Just track that they participated
         // Initialize array if it doesn't exist
-        if (!acc[registration.tournament_id]) {
-          acc[registration.tournament_id] = [];
+        const tid = registration.tournament_id.toString();
+        if (!acc[tid]) {
+          acc[tid] = [];
         }
 
         // Add this token ID to the array
-        acc[registration.tournament_id].push(registration.game_token_id);
+        acc[tid].push(registration.game_token_id.toString());
 
         return acc;
       },
@@ -892,9 +893,9 @@ export function EnterTournamentDialog({
 
     return leaderboards.reduce(
       (acc, leaderboard) => {
-        const leaderboardTournamentId = leaderboard.tournament_id;
+        const leaderboardTournamentId = leaderboard.tournament_id.toString();
         const leaderboardTournament = tournamentsData.find(
-          (tournament) => tournament.id === leaderboardTournamentId,
+          (tournament) => tournament.id.toString() === leaderboardTournamentId,
         );
         const leaderboardTournamentFinalizedTime = leaderboardTournament
           ? BigInt(computeAbsoluteTimes(leaderboardTournament.created_at, leaderboardTournament.schedule).submissionEndTime)
@@ -903,19 +904,23 @@ export function EnterTournamentDialog({
           leaderboardTournamentFinalizedTime < currentTime;
 
         if (hasLeaderboardTournamentFinalized) {
-          // Parse the token_ids string into an array
-          const leaderboardTokenIds = parseTokenIds(leaderboard.token_ids);
+          // Get token IDs from leaderboard (already BigInt[] from mapper)
+          const leaderboardTokenIds = Array.isArray(leaderboard.token_ids)
+            ? leaderboard.token_ids.map((id: any) => addAddressPadding(bigintToHex(BigInt(id))))
+            : typeof leaderboard.token_ids === "string"
+            ? parseTokenIds(leaderboard.token_ids)
+            : [];
 
           // Initialize array if it doesn't exist
-          if (!acc[leaderboard.tournament_id]) {
-            acc[leaderboard.tournament_id] = [];
+          if (!acc[leaderboardTournamentId]) {
+            acc[leaderboardTournamentId] = [];
           }
 
           // Find all owned token IDs that appear in the leaderboard and their positions
           for (let i = 0; i < leaderboardTokenIds.length; i++) {
             const leaderboardTokenId = leaderboardTokenIds[i];
-            if (ownedGameIds.includes(Number(leaderboardTokenId))) {
-              acc[leaderboard.tournament_id].push({
+            if (ownedGameIds.includes(String(Number(leaderboardTokenId)))) {
+              acc[leaderboardTournamentId].push({
                 tokenId: leaderboardTokenId,
                 position: i + 1, // Convert to 1-based position for display
               });
@@ -1082,12 +1087,19 @@ export function EnterTournamentDialog({
     requirementVariant,
   ]);
 
-  const { data: qualificationEntries } = useGetTournamentQualificationEntries({
-    namespace: namespace ?? "",
-    tournamentId: padU64(BigInt(tournamentModel?.id ?? 0n)),
-    qualifications: qualificationMethods,
-    active: qualificationMethods.length > 0,
-  });
+  const { data: qualificationEntriesRaw } = useGetTournamentQualifications(
+    qualificationMethods.length > 0 ? enterTournamentId : undefined,
+  );
+
+  // Normalize qualification entries to an array (SDK may return paginated result or array)
+  const qualificationEntries = useMemo(() => {
+    if (!qualificationEntriesRaw) return [];
+    if (Array.isArray(qualificationEntriesRaw)) return qualificationEntriesRaw;
+    if (typeof qualificationEntriesRaw === "object" && "data" in (qualificationEntriesRaw as any)) {
+      return (qualificationEntriesRaw as any).data ?? [];
+    }
+    return [];
+  }, [qualificationEntriesRaw]);
 
   const { meetsEntryRequirements, proof, entriesLeftByTournament } = useMemo<{
     meetsEntryRequirements: boolean;
@@ -1118,7 +1130,7 @@ export function EnterTournamentDialog({
         // Use manually verified token
         const currentEntryCount =
           qualificationEntries?.find(
-            (entry) =>
+            (entry: any) =>
               entry["qualification_proof.NFT.token_id"] === manualTokenId,
           )?.entry_count ?? 0;
 
@@ -1159,7 +1171,7 @@ export function EnterTournamentDialog({
         // Get current entry count for this token
         const currentEntryCount =
           qualificationEntries?.find(
-            (entry) =>
+            (entry: any) =>
               entry["qualification_proof.NFT.token_id"] ===
               addAddressPadding(tokenId),
           )?.entry_count ?? 0;

@@ -11,12 +11,12 @@ import LoadingPage from "@/containers/LoadingPage";
 import { useResetDojoOnNetworkChange } from "@/dojo/hooks/useResetDojoOnNetworkChange";
 import { useSyncNetworkUrl } from "@/dojo/hooks/useSyncNetworkUrl";
 import { useSwitchToUrlNetwork } from "@/dojo/hooks/useSwitchToUrlNetwork";
-import { useMiniGames } from "metagame-sdk/sql";
+import { useGames } from "@/hooks/useDenshokanQueries";
 import {
-  useSubscribeTournamentsQuery,
-  useSubscribeMetricsQuery,
-} from "./dojo/hooks/useSdkQueries";
-import { useDojo } from "./context/dojo";
+  useSubscribeTournaments,
+  useSubscribeMetrics,
+} from "@/hooks/useBudokanWebSocket";
+
 
 const NotFound = lazy(() => import("@/containers/NotFound"));
 const Overview = lazy(() => {
@@ -31,7 +31,6 @@ const Play = lazy(() => import("@/containers/Play"));
 const CreateTournament = lazy(() => import("@/containers/CreateTournament"));
 
 function App() {
-  const { namespace } = useDojo();
   const { setGameData, setGameDataLoading } = useUIStore();
 
   // Network management hooks
@@ -39,10 +38,10 @@ function App() {
   useSyncNetworkUrl(); // Keep URL in sync when network changes
   useResetDojoOnNetworkChange();
 
-  useSubscribeMetricsQuery(namespace);
-  useSubscribeTournamentsQuery(namespace);
+  useSubscribeMetrics();
+  useSubscribeTournaments();
 
-  const { minigames, loading: minigamesLoading } = useMiniGames({});
+  const { games: minigames, loading: minigamesLoading } = useGames();
 
   const whitelistedGames = getGames();
 

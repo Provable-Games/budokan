@@ -21,33 +21,22 @@ import {
   useGetMyTournaments,
   useGetMyTournamentsCount,
   useGetMyLiveTournamentsCount,
-} from "@/dojo/hooks/useSqlQueries";
-import { useGameTokens } from "metagame-sdk";
-import {
-  bigintToHex,
-  indexAddress,
-  stringToFelt,
-  padAddress,
-  padU64,
-} from "@/lib/utils";
+  TAB_TO_PHASE,
+} from "@/hooks/useBudokanQueries";
+import { useAccountTokenIds } from "@/hooks/useDenshokanQueries";
+import { useSubscribeTournaments } from "@/hooks/useBudokanWebSocket";
+import { indexAddress } from "@/lib/utils";
 import { useDojo } from "@/context/dojo";
 import EmptyResults from "@/components/overview/tournaments/EmptyResults";
 import { TournamentCard } from "@/components/overview/TournamanentCard";
 import TournamentSkeletons from "@/components/overview/TournamentSkeletons";
 import NoAccount from "@/components/overview/tournaments/NoAccount";
 import { useAccount, useNetwork } from "@starknet-react/core";
-import { useDojoStore } from "@/dojo/hooks/useDojoStore";
-import { ParsedEntity } from "@dojoengine/sdk";
-import { SchemaType } from "@/generated/models.gen";
 import useTournamentStore, { TournamentTab } from "@/hooks/tournamentStore";
-import {
-  STARTING_TOURNAMENT_ID,
-  EXCLUDED_TOURNAMENT_IDS,
-} from "@/lib/constants";
+import { EXCLUDED_TOURNAMENT_IDS } from "@/lib/constants";
 import { LoadingSpinner } from "@/components/ui/spinner";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
 import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
-import { getWhitelistedExtensionAddresses } from "@/lib/extensionConfig";
 
 const SORT_OPTIONS = {
   upcoming: [
@@ -70,7 +59,7 @@ const SORT_OPTIONS = {
 } as const;
 
 const Overview = () => {
-  const { namespace, selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useDojo();
   const { address } = useAccount();
   const { chain } = useNetwork();
   const { getTokenDecimals } = useSystemCalls();
@@ -97,10 +86,8 @@ const Overview = () => {
     setSortBy,
     isLoadingByTab,
     setIsLoading,
-    processTournamentsFromRaw,
+    processTournamentsFromMapped,
   } = useTournamentStore();
-
-  const tournamentAddress = selectedChainConfig.budokanAddress!;
 
   const [hasSelectedInitialTab, setHasSelectedInitialTab] = useState(false);
 
@@ -111,24 +98,7 @@ const Overview = () => {
     }
   }, [chain]);
 
-  const isMainnet = useMemo(() => {
-    return bigintToHex(BigInt(chain?.id)) === stringToFelt("SN_MAIN");
-  }, [chain]);
-
-  const subscribedTournaments = useDojoStore((state) =>
-    state.getEntitiesByModel(namespace, "Tournament"),
-  );
-
-  const subscribedTournamentsKey = useMemo(() => {
-    // Just use the length and a simple hash of IDs
-    return `${subscribedTournaments.length}-${subscribedTournaments
-      .map((t) => t.entityId.toString())
-      .join(",")}`;
-  }, [subscribedTournaments]);
-
-  const [prevSubscribedTournaments, setPrevSubscribedTournaments] = useState<
-    ParsedEntity<SchemaType>[] | null
-  >(null);
+  const { lastMessage } = useSubscribeTournaments();
 
   const [tokenDecimals, setTokenDecimals] = useState<Record<string, number>>(
     {},
@@ -136,44 +106,18 @@ const Overview = () => {
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const loadingRef = useRef<HTMLDivElement>(null);
-  const currentTime = useMemo(() => {
-    return BigInt(Date.now()) / 1000n;
-  }, []);
-
-  const fromTournamentId = useMemo(() => {
-    return isMainnet ? padU64(BigInt(STARTING_TOURNAMENT_ID)) : undefined;
-  }, [isMainnet]);
-
-  const whitelistedExtensions = useMemo(() => {
-    const chainId = selectedChainConfig?.chainId ?? "";
-    const addressSet = getWhitelistedExtensionAddresses(chainId);
-    return Array.from(addressSet);
-  }, [selectedChainConfig?.chainId]);
 
   const {
     data: upcomingTournamentsCount,
     refetch: refetchUpcomingTournamentsCount,
-  } = useGetUpcomingTournamentsCount({
-    namespace: namespace,
-    currentTime: currentTime,
-    fromTournamentId: fromTournamentId,
-    whitelistedExtensions,
-  });
+  } = useGetUpcomingTournamentsCount({ active: true });
 
   const { data: liveTournamentsCount } = useGetLiveTournamentsCount({
-    namespace: namespace,
-    currentTime: currentTime,
-    fromTournamentId: fromTournamentId,
-    excludedTournamentIds: EXCLUDED_TOURNAMENT_IDS,
-    whitelistedExtensions,
+    active: true,
   });
 
   const { data: endedTournamentsCount } = useGetEndedTournamentsCount({
-    namespace: namespace,
-    currentTime: currentTime,
-    fromTournamentId: fromTournamentId,
-    excludedTournamentIds: EXCLUDED_TOURNAMENT_IDS,
-    whitelistedExtensions,
+    active: true,
   });
 
   const queryAddress = useMemo(() => {
@@ -181,43 +125,27 @@ const Overview = () => {
     return indexAddress(address);
   }, [address]);
 
-  const gameAddresses = useMemo(() => {
-    return gameData?.map((game) => padAddress(game.contract_address));
-  }, [gameData]);
-
-  const { games: gameTokens } = useGameTokens({
-    mintedByAddress: padAddress(tournamentAddress),
+  const { data: gameTokenIds } = useAccountTokenIds({
     owner: address,
-    includeMetadata: false,
+    active: !!address,
   });
 
-  const gameTokenIds = useMemo(() => {
-    return gameTokens?.map((game) => padU64(BigInt(game.token_id)));
-  }, [gameTokens]);
-
   const { data: myTournamentsCount } = useGetMyTournamentsCount({
-    namespace: namespace,
-    address: queryAddress,
-    gameAddresses: gameAddresses ?? [],
-    tokenIds: gameTokenIds,
-    fromTournamentId: fromTournamentId,
+    playerAddress: queryAddress ?? undefined,
+    active: !!queryAddress,
   });
 
   const { data: myLiveTournamentsCount } = useGetMyLiveTournamentsCount({
-    namespace: namespace,
-    address: queryAddress,
-    gameAddresses: gameAddresses ?? [],
-    tokenIds: gameTokenIds,
-    fromTournamentId: fromTournamentId,
-    currentTime: currentTime,
+    playerAddress: queryAddress ?? undefined,
+    active: !!queryAddress,
   });
 
   const tournamentCounts = useMemo(() => {
     return {
-      upcoming: upcomingTournamentsCount,
-      live: liveTournamentsCount,
-      ended: endedTournamentsCount,
-      my: myTournamentsCount,
+      upcoming: upcomingTournamentsCount ?? 0,
+      live: liveTournamentsCount ?? 0,
+      ended: endedTournamentsCount ?? 0,
+      my: myTournamentsCount ?? 0,
     };
   }, [
     upcomingTournamentsCount,
@@ -272,49 +200,33 @@ const Overview = () => {
   const {
     data: tournaments,
     loading: tournamentsLoading,
-    // refetch: refetchTournaments,
   } = useGetTournaments({
-    namespace: namespace,
-    currentTime,
-    gameFilters: gameFilters,
+    phase: TAB_TO_PHASE[selectedTab as keyof typeof TAB_TO_PHASE],
+    gameAddress: gameFilters[0],
+    sort: currentSortBy as any,
     offset: currentPage * 12,
     limit: 12,
-    status: selectedTab,
-    sortBy: currentSortBy,
-    fromTournamentId: fromTournamentId,
-    excludedTournamentIds: EXCLUDED_TOURNAMENT_IDS,
-    whitelistedExtensions,
+    excludeIds: EXCLUDED_TOURNAMENT_IDS.map(String),
     // Only activate the query for the appropriate tabs and when we need to fetch
     active: ["upcoming", "live", "ended"].includes(selectedTab) && shouldFetch,
   });
 
   useEffect(() => {
-    if (
-      prevSubscribedTournaments !== null &&
-      prevSubscribedTournaments !== subscribedTournaments
-    ) {
+    if (lastMessage) {
       const timer = setTimeout(() => {
         refetchUpcomingTournamentsCount();
       }, 1000);
-
       return () => clearTimeout(timer);
     }
-
-    setPrevSubscribedTournaments(subscribedTournaments);
-  }, [subscribedTournamentsKey, prevSubscribedTournaments]);
+  }, [lastMessage, refetchUpcomingTournamentsCount]);
 
   const { data: myTournaments, loading: myTournamentsLoading } =
     useGetMyTournaments({
-      namespace: namespace,
-      address: queryAddress,
-      gameAddresses: gameAddresses,
-      tokenIds: gameTokenIds,
-      gameFilters: gameFilters,
+      playerAddress: queryAddress ?? undefined,
+      gameTokenIds: gameTokenIds ?? undefined,
       limit: 12,
       offset: currentPage * 12,
       active: selectedTab === "my",
-      sortBy: currentSortBy,
-      fromTournamentId: fromTournamentId,
     });
 
   // Extract unique token addresses from all accumulated tournaments (not just current page)
@@ -443,7 +355,7 @@ const Overview = () => {
         Array.isArray(rawTournaments) &&
         rawTournaments.length > 0
       ) {
-        const processedTournaments = processTournamentsFromRaw(rawTournaments);
+        const processedTournaments = processTournamentsFromMapped(rawTournaments);
 
         // For first page, replace all tournaments
         // For subsequent pages, add only new tournaments
@@ -467,7 +379,7 @@ const Overview = () => {
     setTournaments,
     addTournaments,
     setIsLoading,
-    processTournamentsFromRaw,
+    processTournamentsFromMapped,
   ]);
 
   // Infinite scroll implementation with debounce to prevent multiple triggers
@@ -577,31 +489,31 @@ const Overview = () => {
     // If user is connected and has live tournaments they're registered for
     if (
       address &&
-      myLiveTournamentsCount !== undefined &&
+      myLiveTournamentsCount != null &&
       myLiveTournamentsCount > 0
     ) {
       bestTab = "my";
     }
     // Otherwise check live tournaments
-    else if (liveTournamentsCount !== undefined && liveTournamentsCount > 0) {
+    else if (liveTournamentsCount != null && liveTournamentsCount > 0) {
       bestTab = "live";
     }
     // Then upcoming
     else if (
-      upcomingTournamentsCount !== undefined &&
+      upcomingTournamentsCount != null &&
       upcomingTournamentsCount > 0
     ) {
       bestTab = "upcoming";
     }
     // Then ended
-    else if (endedTournamentsCount !== undefined && endedTournamentsCount > 0) {
+    else if (endedTournamentsCount != null && endedTournamentsCount > 0) {
       bestTab = "ended";
     }
     // Default to upcoming if we have data but no tournaments
     else if (
-      liveTournamentsCount !== undefined ||
-      upcomingTournamentsCount !== undefined ||
-      endedTournamentsCount !== undefined
+      liveTournamentsCount != null ||
+      upcomingTournamentsCount != null ||
+      endedTournamentsCount != null
     ) {
       bestTab = "upcoming";
     }
@@ -636,10 +548,10 @@ const Overview = () => {
             <TournamentTabs
               selectedTab={selectedTab}
               setSelectedTab={setSelectedTab}
-              upcomingTournamentsCount={upcomingTournamentsCount}
-              liveTournamentsCount={liveTournamentsCount}
-              endedTournamentsCount={endedTournamentsCount}
-              myTournamentsCount={myLiveTournamentsCount}
+              upcomingTournamentsCount={upcomingTournamentsCount ?? undefined}
+              liveTournamentsCount={liveTournamentsCount ?? undefined}
+              endedTournamentsCount={endedTournamentsCount ?? undefined}
+              myTournamentsCount={myLiveTournamentsCount ?? undefined}
             />
           </div>
 

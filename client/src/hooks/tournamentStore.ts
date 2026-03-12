@@ -1,9 +1,11 @@
 import { create } from "zustand";
-import {
-  processTournamentFromSql,
-  processPrizesFromSql,
-} from "@/lib/utils/formatting";
 import { Tournament, Prize } from "@/generated/models.gen";
+
+type MappedTournament = Tournament & {
+  entry_count: number;
+  prize_count: number;
+  submission_count: number;
+};
 
 interface TokenTotal {
   tokenAddress: string;
@@ -58,8 +60,8 @@ interface TournamentState {
   isLoadingByTab: Record<TournamentTab, boolean>;
   setIsLoading: (tab: TournamentTab, isLoading: boolean) => void;
 
-  // Process raw tournament data
-  processTournamentsFromRaw: (rawTournaments: any[]) => ProcessedTournament[];
+  // Process pre-mapped tournament data (from new SDK hooks)
+  processTournamentsFromMapped: (mapped: MappedTournament[]) => ProcessedTournament[];
 }
 
 const useTournamentStore = create<TournamentState>((set, get) => ({
@@ -171,23 +173,15 @@ const useTournamentStore = create<TournamentState>((set, get) => ({
       },
     })),
 
-  // Process raw tournament data
-  processTournamentsFromRaw: (rawTournaments) => {
-    if (!rawTournaments || !Array.isArray(rawTournaments)) return [];
+  // Process pre-mapped tournament data (from new SDK hooks)
+  processTournamentsFromMapped: (mapped) => {
+    if (!mapped || !Array.isArray(mapped)) return [];
 
-    return rawTournaments.map((tournament) => {
-      const processedTournament = processTournamentFromSql(tournament);
-      const processedPrizes = processPrizesFromSql(
-        tournament.prizes,
-        tournament.id
-      );
-      return {
-        tournament: processedTournament,
-        prizes: processedPrizes!,
-        entryCount: Number(tournament.entry_count),
-        aggregations: tournament.aggregations,
-      };
-    });
+    return mapped.map((t) => ({
+      tournament: t as Tournament,
+      prizes: [],
+      entryCount: t.entry_count ?? 0,
+    }));
   },
 }));
 

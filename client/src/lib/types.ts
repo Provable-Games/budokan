@@ -81,3 +81,31 @@ export type FormToken = {
   is_registered?: boolean;
   image?: string;
 };
+
+/**
+ * Game token data shape (replaces metagame-sdk GameTokenData).
+ */
+export interface GameTokenData {
+  token_id: string;
+  game_id: number;
+  owner: string;
+  player_name: string;
+  score: number;
+  game_over: boolean;
+  lifecycle: {
+    start: bigint;
+    end: bigint;
+  };
+  metadata: Record<string, unknown>;
+}
+
+/**
+ * Game settings shape (replaces metagame-sdk GameSettings).
+ */
+export interface GameSettings {
+  settings_id: number;
+  game_address: string;
+  name?: string;
+  description?: string;
+  settings?: Record<string, unknown>;
+}

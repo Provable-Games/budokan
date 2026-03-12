@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { useState, useMemo, useEffect } from "react";
 import { TableProperties } from "lucide-react";
 import { BigNumberish } from "starknet";
-import { useGameTokens } from "metagame-sdk";
+import { useGameTokens } from "@/hooks/useDenshokanQueries";
+import { useGetTournamentRegistrations } from "@/hooks/useBudokanQueries";
 import { useGetUsernames } from "@/hooks/useController";
 import { MobilePlayerCard } from "@/components/tournament/table/PlayerCard";
 import {
@@ -20,7 +21,6 @@ import EntrantRow from "@/components/tournament/table/EntrantRow";
 import { padAddress } from "@/lib/utils";
 import { ScoreTableDialog } from "@/components/dialogs/ScoreTable";
 import { BanManagementDialog } from "@/components/dialogs/BanManagement";
-import { useGetTournamentRegistrants } from "@/dojo/hooks/useSqlQueries";
 import { useDojo } from "@/context/dojo";
 import { Tournament } from "@/generated/models.gen";
 import { Ban } from "lucide-react";
@@ -42,7 +42,7 @@ const ScoreTable = ({
   tournamentModel,
   onBanComplete,
 }: ScoreTableProps) => {
-  const { namespace, selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useDojo();
   const [showScores, setShowScores] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<any>(null);
   const [isMobileDialogOpen, setIsMobileDialogOpen] = useState(false);
@@ -71,67 +71,60 @@ const ScoreTable = ({
     extensionConfig?.address &&
     entryCount > 0;
 
+  const [currentPage, setCurrentPageNum] = useState(1);
+  const pageSize = 10;
+
   const {
-    games,
-    pagination: {
-      currentPage,
-      hasNextPage,
-      hasPreviousPage,
-      nextPage,
-      previousPage,
-    },
+    data: games,
     refetch,
     loading,
   } = useGameTokens({
-    context: {
-      id: Number(tournamentId),
-    },
-    pagination: {
-      pageSize: 10,
-    },
-    sortBy: "score",
-    sortOrder: "desc",
-    mintedByAddress: padAddress(tournamentAddress),
-    includeMetadata: true,
+    owner: padAddress(tournamentAddress),
+    gameId: Number(tournamentId),
+    limit: pageSize,
+    offset: (currentPage - 1) * pageSize,
+    active: true,
   });
 
-  const gameIds = useMemo(
-    () => games?.map((game) => Number(game.token_id)) || [],
-    [games]
+  const totalPages = Math.ceil(entryCount / pageSize);
+  const hasNextPage = currentPage < totalPages;
+  const hasPreviousPage = currentPage > 1;
+  const nextPage = () => setCurrentPageNum((p) => Math.min(p + 1, totalPages));
+  const previousPage = () => setCurrentPageNum((p) => Math.max(p - 1, 1));
+
+  const gameTokens = games ?? [];
+
+  const { data: registrants } = useGetTournamentRegistrations(
+    tournamentId?.toString(),
+    {
+      limit: pageSize,
+    },
   );
-
-  const { data: registrants } = useGetTournamentRegistrants({
-    namespace,
-    gameIds,
-    active: gameIds.length > 0,
-    offset: 0,
-    limit: 10,
-  });
 
   // Map registrants to match the order of games
   const orderedRegistrants = useMemo(() => {
-    if (!registrants || !games) return [];
+    if (!registrants || !gameTokens.length) return [];
 
-    return games.map((game) => {
+    return gameTokens.map((game) => {
       const tokenId = Number(game.token_id);
       return (
-        registrants.find((reg) => Number(reg.game_token_id) === tokenId) || null
+        registrants.find((reg: any) => Number(reg.game_token_id) === tokenId) || null
       );
     });
-  }, [games, registrants]);
+  }, [gameTokens, registrants]);
 
   const ownerAddresses = useMemo(
-    () => games?.map((game) => game?.owner ?? "0x0"),
-    [games]
+    () => gameTokens.map((game) => game?.owner ?? "0x0"),
+    [gameTokens]
   );
-  const { usernames } = useGetUsernames(ownerAddresses ?? []);
+  const { usernames } = useGetUsernames(ownerAddresses);
 
   useEffect(() => {
-    if (games.length > 0 && !hasInitialized) {
+    if (gameTokens.length > 0 && !hasInitialized) {
       setShowScores(true);
       setHasInitialized(true);
     }
-  }, [games, hasInitialized]);
+  }, [gameTokens, hasInitialized]);
 
   useEffect(() => {
     refetch();
@@ -244,10 +237,10 @@ const ScoreTable = ({
                 colIndex === 0 ? "pr-3" : "pl-3"
               }`}
             >
-              {colIndex === 0 && games.length > 5 && (
+              {colIndex === 0 && gameTokens.length > 5 && (
                 <div className="absolute right-0 top-0 bottom-0 w-0.5 bg-brand/25 h-full" />
               )}
-              {games?.slice(colIndex * 5, colIndex * 5 + 5).map((_, index) => (
+              {gameTokens.slice(colIndex * 5, colIndex * 5 + 5).map((_, index) => (
                 <>
                   {isStarted ? (
                     <ScoreRow
@@ -255,7 +248,7 @@ const ScoreTable = ({
                       index={index}
                       colIndex={colIndex}
                       currentPage={currentPage}
-                      game={games?.[index + colIndex * 5]}
+                      game={gameTokens[index + colIndex * 5]}
                       registration={orderedRegistrants?.[index + colIndex * 5]}
                       usernames={usernames}
                       isStarted={isStarted}
@@ -267,7 +260,7 @@ const ScoreTable = ({
                   ) : (
                     <EntrantRow
                       key={index}
-                      game={games?.[index + colIndex * 5]}
+                      game={gameTokens[index + colIndex * 5]}
                       index={index}
                       colIndex={colIndex}
                       currentPage={currentPage}

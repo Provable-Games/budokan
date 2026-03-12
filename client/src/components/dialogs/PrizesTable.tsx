@@ -20,10 +20,7 @@ import { getTokenLogoUrl } from "@/lib/tokensMeta";
 import { useDojo } from "@/context/dojo";
 import { calculatePrizeValue } from "@/lib/utils/formatting";
 import { useState, useMemo } from "react";
-import {
-  useGetTournamentPrizes,
-  useGetTournamentPrizesAggregations,
-} from "@/dojo/hooks/useSqlQueries";
+import { useGetTournamentPrizes } from "@/hooks/useBudokanQueries";
 import { BigNumberish } from "starknet";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -54,7 +51,7 @@ export const PrizesTableDialog = ({
   tournamentId,
   entryFeePrizes = [],
 }: PrizesTableDialogProps) => {
-  const { selectedChainConfig, namespace } = useDojo();
+  const { selectedChainConfig } = useDojo();
   const chainId = selectedChainConfig?.chainId ?? "";
   const [currentPage, setCurrentPage] = useState(0);
   const positionsPerPage = 5;
@@ -66,48 +63,39 @@ export const PrizesTableDialog = ({
     symbol: string;
   } | null>(null);
 
-  // Fetch aggregations to get total positions
-  const { data: aggregations } = useGetTournamentPrizesAggregations({
-    namespace,
-    tournamentId: tournamentId ?? 0,
-    active: !!tournamentId && open,
-  });
+  const tournamentIdStr = tournamentId ? String(tournamentId) : undefined;
 
-  // Initial position range calculation (we'll fetch a wider range if we detect distributed prizes)
+  // Fetch prizes (new API returns all prizes at once)
+  const { data: prizesData, loading: prizesLoading } = useGetTournamentPrizes(
+    open ? tournamentIdStr : undefined,
+  );
+
+  // Initial position range calculation
   const startPosition = currentPage * positionsPerPage + 1;
-  // If aggregations shows position 0, assume it's a distributed prize and fetch more
-  const hasDistributedPrize = (aggregations?.lowest_prize_position ?? 0) === 0;
-  const endPosition = hasDistributedPrize
-    ? Math.max(startPosition + positionsPerPage - 1, 50) // Fetch up to 50 positions for distributed prizes
-    : Math.min(
-        startPosition + positionsPerPage - 1,
-        aggregations?.lowest_prize_position || 5
-      );
 
-  // Fetch paginated prizes
-  const { data: prizesData, loading: prizesLoading } = useGetTournamentPrizes({
-    namespace,
-    tournamentId: tournamentId ?? 0,
-    active: !!tournamentId && open,
-    startPosition: hasDistributedPrize ? 0 : startPosition,
-    endPosition,
-  });
-
-  // Calculate total positions for pagination (from aggregations)
+  // Calculate total positions for pagination from prize data
   const totalPositions = useMemo(() => {
-    // Get the lowest position from aggregations
-    let dbLowestPosition = aggregations?.lowest_prize_position || 0;
-
-    // If the lowest position is 0 (distributed prize), check the fetched data for distribution_count
-    if (dbLowestPosition === 0 && prizesData && prizesData.length > 0) {
-      const distributedPrize = prizesData.find(
-        (p: any) => p.position === 0 || p.payout_position === 0
-      );
-      if (distributedPrize) {
-        const distributionCount = Number(
-          distributedPrize["token_type.erc20.distribution_count.Some"] ?? 0
+    // Derive max position from fetched prizes
+    let dbMaxPosition = 0;
+    if (prizesData && prizesData.length > 0) {
+      for (const p of prizesData as any[]) {
+        const pos = Number(p.position ?? p.payout_position ?? 0);
+        if (pos > dbMaxPosition) dbMaxPosition = pos;
+      }
+      // If max position is 0, check for distributed prizes
+      if (dbMaxPosition === 0) {
+        const distributedPrize = (prizesData as any[]).find(
+          (p: any) => (p.position ?? p.payout_position ?? 0) === 0
         );
-        dbLowestPosition = distributionCount;
+        if (distributedPrize) {
+          const tokenType = distributedPrize.token_type;
+          const distributionCount = Number(
+            tokenType?.variant?.erc20?.distribution_count?.Some ??
+            tokenType?.variant?.erc20?.distribution_count ??
+            0
+          );
+          dbMaxPosition = distributionCount;
+        }
       }
     }
 
@@ -117,8 +105,8 @@ export const PrizesTableDialog = ({
             ...entryFeePrizes.map((p) => Number((p as any).position ?? 0))
           )
         : 0;
-    return Math.max(dbLowestPosition, entryFeeLowestPosition);
-  }, [aggregations?.lowest_prize_position, entryFeePrizes, prizesData]);
+    return Math.max(dbMaxPosition, entryFeeLowestPosition);
+  }, [prizesData, entryFeePrizes]);
 
   const totalPages = Math.ceil(totalPositions / positionsPerPage);
   const actualEndPosition = Math.min(

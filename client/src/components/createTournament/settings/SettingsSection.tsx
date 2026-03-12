@@ -8,7 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import SmallSettingsTable from "./SmallSettingsTable";
 import { UseFormReturn, ControllerRenderProps } from "react-hook-form";
-import { useSettings } from "metagame-sdk/sql";
+import { useGameSettings, useGameSetting, useGameSettingsCount } from "@/hooks/useDenshokanQueries";
 import { useEffect, useState } from "react";
 import { SettingsDialog } from "@/components/dialogs/CreateSettings";
 import { LoadingSpinner } from "@/components/ui/spinner";
@@ -23,22 +23,27 @@ const GameSettingsField = ({ form, field }: GameSettingsFieldProps) => {
   const [currentPage, setCurrentPage] = useState(1);
   const settingsPerPage = 5;
 
-  const { settings: setting } = useSettings({
-    gameAddresses: [form.watch("game")],
-    settingsIds: [field.value],
-  });
+  const gameAddress = form.watch("game");
 
-  const { totalCount: settingsCount } = useSettings({
-    gameAddresses: [form.watch("game")],
-    fetchCount: true,
+  const { data: singleSetting } = useGameSetting({
+    gameAddress,
+    settingsId: field.value,
+    active: !!gameAddress && field.value !== undefined,
+  });
+  const setting = singleSetting ? [singleSetting] : [];
+
+  const { data: settingsCount } = useGameSettingsCount({
+    gameAddress,
+    active: !!gameAddress,
   });
 
   const totalPages = Math.ceil((settingsCount ?? 0) / settingsPerPage);
 
-  const { settings, loading: isLoadingSettings } = useSettings({
-    gameAddresses: [form.watch("game")],
+  const { data: settings, loading: isLoadingSettings } = useGameSettings({
+    gameAddress,
     limit: settingsPerPage,
     offset: (currentPage - 1) * settingsPerPage,
+    active: !!gameAddress,
   });
 
   useEffect(() => {
@@ -47,7 +52,7 @@ const GameSettingsField = ({ form, field }: GameSettingsFieldProps) => {
     }
   }, [open]);
 
-  const hasSettings = !!setting[0]?.data;
+  const hasSettings = !!setting[0]?.settings;
 
   return (
     <>
@@ -55,7 +60,7 @@ const GameSettingsField = ({ form, field }: GameSettingsFieldProps) => {
         open={open}
         onOpenChange={setOpen}
         game={form.watch("game")}
-        settings={settings}
+        settings={settings ?? []}
         value={field.value}
         onChange={field.onChange}
         currentPage={currentPage}
@@ -101,7 +106,7 @@ const GameSettingsField = ({ form, field }: GameSettingsFieldProps) => {
               ) : (
                 <SmallSettingsTable
                   hasSettings={hasSettings}
-                  settings={setting[0]?.data}
+                  settings={setting[0]?.settings as any}
                 />
               )}
             </div>

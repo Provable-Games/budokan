@@ -11,12 +11,12 @@ import { useAccount } from "@starknet-react/core";
 import { Leaderboard, Tournament } from "@/generated/models.gen";
 import { padAddress, feltToString, getOrdinalSuffix } from "@/lib/utils";
 import { useConnectToSelectedChain } from "@/dojo/hooks/useChain";
-import { useGameTokens } from "metagame-sdk";
+import { useGameTokens } from "@/hooks/useDenshokanQueries";
 import { getSubmittableScores } from "@/lib/utils/formatting";
 import { useState, useMemo } from "react";
 import { LoadingSpinner } from "@/components/ui/spinner";
 import { useDojo } from "@/context/dojo";
-import { useGetTournamentRegistrants } from "@/dojo/hooks/useSqlQueries";
+import { useGetTournamentRegistrations } from "@/hooks/useBudokanQueries";
 
 interface SubmitScoresDialogProps {
   open: boolean;
@@ -34,7 +34,7 @@ export function SubmitScoresDialog({
   const { address } = useAccount();
   const { connect } = useConnectToSelectedChain();
   const { submitScores, submitScoresBatched } = useSystemCalls();
-  const { namespace, selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useDojo();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [batchProgress, setBatchProgress] = useState<{
     current: number;
@@ -50,17 +50,11 @@ export function SubmitScoresDialog({
   // Fetch extra games beyond leaderboard size to account for banned entries
   const fetchSize = (leaderboardSize || 10) + 10;
 
-  const { games } = useGameTokens({
-    context: {
-      id: Number(tournamentModel?.id) ?? 0,
-    },
-    pagination: {
-      pageSize: fetchSize,
-    },
-    sortBy: "score",
-    sortOrder: "desc",
-    mintedByAddress: padAddress(tournamentAddress),
-    includeMetadata: false,
+  const { data: games } = useGameTokens({
+    owner: padAddress(tournamentAddress),
+    gameId: Number(tournamentModel?.id) ?? 0,
+    limit: fetchSize,
+    active: !!tournamentModel?.id,
   });
 
   // Sort games by score (desc) and then by token_id (asc) for equal scores
@@ -82,13 +76,13 @@ export function SubmitScoresDialog({
     [sortedGames]
   );
 
+  const tournamentId = tournamentModel?.id ? String(tournamentModel.id) : undefined;
+
   // Fetch registration data to check banned status
-  const { data: registrants } = useGetTournamentRegistrants({
-    namespace,
-    gameIds,
-    active: gameIds.length > 0,
-    limit: 1000,
-  });
+  const { data: registrants } = useGetTournamentRegistrations(
+    gameIds.length > 0 ? tournamentId : undefined,
+    { limit: 1000 },
+  );
 
   // Filter out banned games and take only top leaderboardSize entries
   const nonBannedGames = useMemo(() => {
@@ -98,8 +92,8 @@ export function SubmitScoresDialog({
       const registration = registrants.find(
         (reg) => Number(reg.game_token_id) === Number(game.token_id)
       );
-      // Filter out if banned (is_banned === 1)
-      return registration?.is_banned !== 1;
+      // Filter out if banned
+      return !registration?.is_banned;
     });
 
     // Take only top leaderboardSize entries to ensure correct number of submissions
