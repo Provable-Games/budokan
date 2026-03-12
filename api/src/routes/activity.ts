@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { tournamentEvents, platformStats } from "../db/schema.js";
+import { tournamentEvents, platformStats, prizes } from "../db/schema.js";
 import {
   parseLimit,
   parseOffset,
@@ -92,6 +92,39 @@ app.get("/stats", async (c) => {
     });
   } catch (err) {
     console.error("[activity] stats error:", err);
+    return c.json({ error: "Internal server error" }, 500);
+  }
+});
+
+// ─── GET /prize-stats ── Prize amounts aggregated by token address ──────────
+app.get("/prize-stats", async (c) => {
+  try {
+    const rows = await db.execute(sql`
+      SELECT
+        token_address,
+        token_type->>'type' AS token_type_name,
+        COUNT(*)::int AS prize_count,
+        COALESCE(SUM((token_type->>'amount')::numeric), 0)::text AS total_amount
+      FROM prizes
+      GROUP BY token_address, token_type->>'type'
+      ORDER BY COALESCE(SUM((token_type->>'amount')::numeric), 0) DESC
+    `);
+
+    return c.json({
+      data: (rows.rows as Array<{
+        token_address: string;
+        token_type_name: string;
+        prize_count: number;
+        total_amount: string;
+      }>).map((row) => ({
+        tokenAddress: row.token_address,
+        tokenType: row.token_type_name,
+        prizeCount: row.prize_count,
+        totalAmount: row.total_amount,
+      })),
+    });
+  } catch (err) {
+    console.error("[activity] prize-stats error:", err);
     return c.json({ error: "Internal server error" }, 500);
   }
 });
