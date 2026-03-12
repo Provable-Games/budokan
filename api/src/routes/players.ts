@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { eq, sql, desc, and, inArray } from "drizzle-orm";
+import { eq, sql, desc, and, inArray, SQL } from "drizzle-orm";
 import { db } from "../db/client.js";
 import {
   tournaments,
@@ -27,7 +27,7 @@ app.get("/:address/tournaments", async (c) => {
     const limit = parseLimit(c.req.query("limit"), 50, 100);
     const offset = parseOffset(c.req.query("offset"));
 
-    const conditions: unknown[] = [eq(registrations.playerAddress, address)];
+    const conditions: SQL[] = [eq(registrations.playerAddress, address)];
 
     // Phase filtering (reuses tournament phase SQL logic)
     if (phase) {
@@ -47,7 +47,7 @@ app.get("/:address/tournaments", async (c) => {
       }
     }
 
-    const where = and(...(conditions as Parameters<typeof and>));
+    const where = and(...conditions);
 
     const [rows, countResult] = await Promise.all([
       db

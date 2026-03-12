@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { eq, sql, and, desc, asc, gt, notInArray } from "drizzle-orm";
+import { eq, sql, and, desc, asc, notInArray, SQL } from "drizzle-orm";
 import { db } from "../db/client.js";
 import {
   tournaments,
@@ -27,7 +27,7 @@ const submissionEndTime = sql`(${tournaments.createdAt} + (${tournaments.schedul
 
 // ─── GET / ── List tournaments ──────────────────────────────────────────────
 // Query params: game_address, creator, phase, sort, include_prizes,
-//               exclude_ids, whitelisted_extensions, from_id, limit, offset
+//               exclude_ids, whitelisted_extensions, limit, offset
 app.get("/", async (c) => {
   try {
     const gameAddress = isValidAddress(c.req.query("game_address"));
@@ -37,21 +37,12 @@ app.get("/", async (c) => {
     const includePrizes = c.req.query("include_prizes") || null;
     const excludeIdsRaw = c.req.query("exclude_ids") || null;
     const whitelistedExtensionsRaw = c.req.query("whitelisted_extensions") || null;
-    const fromIdRaw = c.req.query("from_id") || null;
     const limit = parseLimit(c.req.query("limit"), 50, 100);
     const offset = parseOffset(c.req.query("offset"));
 
-    const conditions = [];
+    const conditions: SQL[] = [];
     if (gameAddress) conditions.push(eq(tournaments.gameAddress, gameAddress));
     if (creator) conditions.push(eq(tournaments.createdBy, creator));
-
-    // Cursor-based pagination: from_id
-    if (fromIdRaw) {
-      const fromId = parseTournamentId(fromIdRaw);
-      if (fromId !== null) {
-        conditions.push(gt(tournaments.tournamentId, fromId));
-      }
-    }
 
     // Exclude specific tournament IDs
     if (excludeIdsRaw) {
@@ -73,11 +64,11 @@ app.get("/", async (c) => {
       if (whitelist.length > 0) {
         // Exclude tournaments that have an extension-type entry_requirement
         // whose address is NOT in the provided whitelist
-        const addressList = whitelist.map((a) => `'${a}'`).join(",");
+        const addressList = sql.join(whitelist.map(a => sql`${a}`), sql`, `);
         conditions.push(
           sql`NOT (
             ${tournaments.entryRequirement}->>'type' = 'extension'
-            AND lower(${tournaments.entryRequirement}->>'address') NOT IN (${sql.raw(addressList)})
+            AND lower(${tournaments.entryRequirement}->>'address') NOT IN (${addressList})
           )`
         );
       }
@@ -108,16 +99,14 @@ app.get("/", async (c) => {
         break;
     }
 
-    // When using cursor-based pagination (from_id), skip offset
-    const baseQuery = db
-      .select()
-      .from(tournaments)
-      .where(where)
-      .orderBy(orderByClause)
-      .limit(limit);
-
     const [rows, countResult] = await Promise.all([
-      fromIdRaw ? baseQuery : baseQuery.offset(offset),
+      db
+        .select()
+        .from(tournaments)
+        .where(where)
+        .orderBy(orderByClause)
+        .limit(limit)
+        .offset(offset),
       db
         .select({ count: sql<number>`count(*)::int` })
         .from(tournaments)
@@ -356,7 +345,7 @@ app.get("/:id/reward-claims", async (c) => {
         .select()
         .from(rewardClaims)
         .where(where)
-        .orderBy(desc(rewardClaims.createdAtBlock))
+        .orderBy(desc(rewardClaims.createdAtBlock), asc(rewardClaims.eventIndex))
         .limit(limit)
         .offset(offset),
       db
@@ -434,7 +423,7 @@ app.get("/:id/qualifications", async (c) => {
         .select()
         .from(qualificationEntries)
         .where(where)
-        .orderBy(desc(qualificationEntries.createdAtBlock))
+        .orderBy(desc(qualificationEntries.createdAtBlock), asc(qualificationEntries.eventIndex))
         .limit(limit)
         .offset(offset),
       db
@@ -459,7 +448,7 @@ app.get("/:id/qualifications", async (c) => {
 
 // ─── Phase condition helper (shared with players route) ─────────────────────
 
-export function applyPhaseCondition(phase: string, conditions: unknown[]): void {
+export function applyPhaseCondition(phase: string, conditions: SQL[]): void {
   const now = sql`EXTRACT(EPOCH FROM NOW())::bigint`;
   switch (phase) {
     case "scheduled":
@@ -515,7 +504,7 @@ async function fetchPrizeAggregation(
 ): Promise<Map<string, PrizeAggregation[]>> {
   if (tournamentIds.length === 0) return new Map();
 
-  const idList = tournamentIds.map((id) => `${id}`).join(",");
+  const idList = sql.join(tournamentIds.map(id => sql`${id}`), sql`, `);
   const rows = await db.execute(sql`
     SELECT
       tournament_id,
@@ -524,7 +513,7 @@ async function fetchPrizeAggregation(
       COALESCE(SUM((token_type->>'amount')::numeric), 0)::text AS total_amount,
       COUNT(*)::int AS nft_count
     FROM prizes
-    WHERE tournament_id IN (${sql.raw(idList)})
+    WHERE tournament_id IN (${idList})
     GROUP BY tournament_id, token_address, token_type->>'type'
     ORDER BY tournament_id, token_address
   `);

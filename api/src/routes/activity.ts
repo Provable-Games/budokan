@@ -107,7 +107,7 @@ app.get("/prize-stats", async (c) => {
         COALESCE(SUM((token_type->>'amount')::numeric), 0)::text AS total_amount
       FROM prizes
       GROUP BY token_address, token_type->>'type'
-      ORDER BY total_amount DESC
+      ORDER BY COALESCE(SUM((token_type->>'amount')::numeric), 0) DESC
     `);
 
     return c.json({
