@@ -17,7 +17,7 @@ import { formatNumber, indexAddress } from "@/lib/utils";
 import { getTokenLogoUrl, getTokenSymbol } from "@/lib/tokensMeta";
 import { useDojo } from "@/context/dojo";
 import { useMemo } from "react";
-import { useGetAllTournamentPrizes } from "@/dojo/hooks/useSqlQueries";
+import { useGetTournamentPrizes } from "@/hooks/useBudokanQueries";
 import { BigNumberish } from "starknet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useGetUsernames } from "@/hooks/useController";
@@ -61,16 +61,16 @@ export const SponsorsDialog = ({
   tokenDecimals,
   tournamentId,
 }: SponsorsDialogProps) => {
-  const { selectedChainConfig, namespace } = useDojo();
+  const { selectedChainConfig } = useDojo();
   const chainId = selectedChainConfig?.chainId ?? "";
+
+  const tournamentIdStr = tournamentId ? String(tournamentId) : undefined;
 
   // Fetch all prizes to get sponsored ones
   const { data: prizesData, loading: prizesLoading } =
-    useGetAllTournamentPrizes({
-      namespace,
-      tournamentId: tournamentId ?? 0,
-      active: !!tournamentId && open,
-    });
+    useGetTournamentPrizes(
+      open ? tournamentIdStr : undefined,
+    );
 
   // Group prizes by sponsor and aggregate by token
   const sponsorContributions = useMemo(() => {

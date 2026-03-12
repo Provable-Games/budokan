@@ -1,8 +1,8 @@
 import { DOLLAR, REFRESH } from "@/components/Icons";
-import { useGameTokens, useGameTokensCount } from "metagame-sdk/sql";
+import { useGameTokens } from "@/hooks/useDenshokanQueries";
+import { useGetTournamentRegistrations } from "@/hooks/useBudokanQueries";
 import { useEffect, useState, useMemo } from "react";
 import { useAccount } from "@starknet-react/core";
-import { useGetMyTournamentEntries } from "@/dojo/hooks/useSqlQueries";
 import { BigNumberish } from "starknet";
 import EntryCard from "@/components/tournament/myEntries/EntryCard";
 import { Tournament } from "@/generated/models.gen";
@@ -15,8 +15,6 @@ import {
   TournamentCardMetric,
   TournamentCardSwitch,
 } from "./containers/TournamentCard";
-import { padAddress } from "@/lib/utils";
-import { useDojo } from "@/context/dojo";
 
 interface MyEntriesProps {
   tournamentId: BigNumberish;
@@ -33,81 +31,66 @@ const MyEntries = ({
   totalEntryCount,
   banRefreshTrigger,
 }: MyEntriesProps) => {
-  const { namespace, selectedChainConfig } = useDojo();
   const { address } = useAccount();
-  const tournamentAddress = selectedChainConfig.budokanAddress!;
   const [showMyEntries, setShowMyEntries] = useState(false);
 
-  const { count: myEntriesCount, refetch: refetchMyEntriesCount } =
-    useGameTokensCount({
-      context: {
-        id: Number(tournamentId),
-      },
-      owner: address ?? "0x0",
-      mintedByAddress: padAddress(tournamentAddress),
-    });
-
-  const { games: ownedGames, refetch, loading } = useGameTokens({
-    context: {
-      id: Number(tournamentId) ?? 0,
-    },
+  const {
+    data: ownedGames,
+    refetch,
+    loading,
+  } = useGameTokens({
     owner: address ?? "0x0",
-    mintedByAddress: padAddress(tournamentAddress),
-    includeMetadata: true,
-    sortBy: "token_id",
-    sortOrder: "desc",
+    gameId: Number(tournamentId),
     limit: 1000,
+    active: !!address,
   });
 
-  const tokenIds = useMemo(
-    () => ownedGames?.map((game) => game.token_id) || [],
-    [ownedGames]
+  const gameTokens = ownedGames ?? [];
+  const myEntriesCount = gameTokens.length;
+
+  const { data: myEntries, refetch: refetchRegistrations } = useGetTournamentRegistrations(
+    tournamentId?.toString(),
+    {
+      playerAddress: address,
+      limit: 1000,
+    },
   );
-
-  const { data: myEntries } = useGetMyTournamentEntries({
-    namespace,
-    tournamentId,
-    tokenIds: tokenIds,
-    active: tokenIds.length > 0 && Number(tournamentId) > 0,
-    limit: 1000,
-  });
 
   const processedEntries = useMemo(() => {
     if (!myEntries || myEntries.length === 0) return [];
-    // Sort entries by their score in descending order
-    const processedEntries = myEntries.map((entry) => ({
+    const processed = myEntries.map((entry: any) => ({
       ...entry,
       game_token_id: Number(entry.game_token_id),
     }));
-    return processedEntries;
+    return processed;
   }, [myEntries]);
 
   useEffect(() => {
     if (address) {
       setShowMyEntries(myEntriesCount > 0);
-      refetchMyEntriesCount();
       refetch();
+      refetchRegistrations();
     } else {
       setShowMyEntries(false);
     }
   }, [address, myEntriesCount, totalEntryCount]);
 
   useEffect(() => {
-    refetchMyEntriesCount();
     refetch();
+    refetchRegistrations();
   }, [totalEntryCount]);
 
   // Refetch when a ban operation completes
   useEffect(() => {
     if (banRefreshTrigger && banRefreshTrigger > 0) {
-      refetchMyEntriesCount();
       refetch();
+      refetchRegistrations();
     }
   }, [banRefreshTrigger]);
 
   const handleRefresh = () => {
-    refetchMyEntriesCount();
     refetch();
+    refetchRegistrations();
   };
 
   return (
@@ -153,7 +136,7 @@ const MyEntries = ({
       <TournamentCardContent showContent={showMyEntries}>
         <div className="p-2 h-full">
           <div className="flex flex-row gap-5 overflow-x-auto pb-2 h-full">
-            {ownedGames?.map((game, index) => {
+            {gameTokens.map((game, index) => {
               const registration = processedEntries.find(
                 (entry) => entry.game_token_id === Number(game.token_id)
               );

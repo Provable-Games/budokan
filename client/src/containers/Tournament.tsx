@@ -12,23 +12,16 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useProvider } from "@starknet-react/core";
 import TournamentTimeline from "@/components/TournamentTimeline";
 import Countdown from "@/components/Countdown";
-import { feltToString, indexAddress, padAddress, padU64, formatNumber } from "@/lib/utils";
+import { feltToString, indexAddress, padU64, formatNumber } from "@/lib/utils";
 import { addAddressPadding } from "starknet";
 import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
 import {
   Tournament as TournamentModel,
-  EntryCount,
-  Leaderboard,
-  getModelsMapping,
-  PrizeMetrics,
 } from "@/generated/models.gen";
 import { useDojo } from "@/context/dojo";
 import {
   extractEntryFeePrizes,
-  processTournamentFromSql,
   expandDistributedPrizes,
-  processPrizeFromSql,
-  getClaimablePrizes,
   computeAbsoluteTimes,
 } from "@/lib/utils/formatting";
 import { EnterTournamentDialog } from "@/components/dialogs/EnterTournament";
@@ -37,20 +30,22 @@ import { useEkuboPrices } from "@/hooks/useEkuboPrices";
 import { useTournamentPrizeValue } from "@/hooks/useTournamentPrizeValue";
 import MyEntries from "@/components/tournament/MyEntries";
 import TokenGameIcon from "@/components/icons/TokenGameIcon";
-import { useGameTokens } from "metagame-sdk";
+// useGameTokens from denshokan no longer needed for this component
 import EntryRequirements from "@/components/tournament/EntryRequirements";
 import PrizesContainer from "@/components/tournament/prizes/PrizesContainer";
 import { ClaimPrizesDialog } from "@/components/dialogs/ClaimPrizes";
 import { SubmitScoresDialog } from "@/components/dialogs/SubmitScores";
 import {
-  useGetTournamentPrizesAggregations,
+  useGetTournament,
+  useGetTournamentPrizeAggregation,
   useGetTournaments,
-  useGetTournamentsCount,
-  useGetTournamentLeaderboards,
-  useGetTournamentRegistrants,
-  useGetAllTournamentPrizes,
-  useGetTournamentRewardClaims,
-} from "@/dojo/hooks/useSqlQueries";
+  useGetTournamentLeaderboard,
+  useGetTournamentRegistrations,
+  useGetTournamentPrizes,
+  useGetTournamentRewardClaimsSummary,
+  useGetPlatformMetrics,
+} from "@/hooks/useBudokanQueries";
+import { useSubscribeTournament } from "@/hooks/useBudokanWebSocket";
 import { getTokensByAddresses } from "@/lib/tokenUtils";
 import { getTokenLogoUrl } from "@/lib/tokensMeta";
 import { ChainId } from "@/dojo/setup/networks";
@@ -69,11 +64,8 @@ import { SettingsDialog } from "@/components/dialogs/Settings";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { useSettings } from "metagame-sdk/sql";
-import { getEntityIdFromKeys } from "@dojoengine/utils";
-import useModel from "@/dojo/hooks/useModel";
+import { useGameSetting } from "@/hooks/useDenshokanQueries";
 import {
-  TOURNAMENT_VERSION_KEY,
   EXCLUDED_TOURNAMENT_IDS,
 } from "@/lib/constants";
 import GeoBlockedDialog from "@/components/dialogs/GeoBlocked";
@@ -84,7 +76,7 @@ const Tournament = () => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isDescriptionDialogOpen, setIsDescriptionDialogOpen] = useState(false);
   const navigate = useNavigate();
-  const { namespace, selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useDojo();
   const { getTokenDecimals } = useSystemCalls();
   const { gameData, getGameImage } = useUIStore();
   const [enterDialogOpen, setEnterDialogOpen] = useState(false);
@@ -102,157 +94,71 @@ const Tournament = () => {
   const [tokenDecimalsLoading, setTokenDecimalsLoading] = useState(false);
   const [creatorAddress, setCreatorAddress] = useState<string | null>(null);
   const [banRefreshTrigger, setBanRefreshTrigger] = useState(0);
-  const { data: tournamentsCount } = useGetTournamentsCount({
-    namespace: namespace,
-  });
 
-  // Fetch tournament data from SQL
-  const { data: tournamentSqlData, loading: tournamentSqlLoading } =
-    useGetTournaments({
-      namespace: namespace,
-      gameFilters: [],
-      status: "tournaments",
-      tournamentIds: id ? [padU64(BigInt(id))] : [],
-      active: !!id,
-      limit: 1,
-    });
+  // Fetch tournament data via new SDK hook
+  const { data: tournamentData, loading: tournamentLoading, refetch: refetchTournament } =
+    useGetTournament(id);
 
-  // Process the tournament data from SQL
-  const tournamentModel = useMemo(() => {
-    if (!tournamentSqlData || tournamentSqlData.length === 0) return null;
-    return processTournamentFromSql(tournamentSqlData[0]);
-  }, [tournamentSqlData]) as TournamentModel | null;
+  // The new hook returns a pre-mapped model directly
+  const tournamentModel = tournamentData as (TournamentModel & { entry_count: number; prize_count: number; submission_count: number }) | null;
 
-  // Get entry count from SQL data
-  const entryCountModel = useMemo(() => {
-    if (!tournamentSqlData || tournamentSqlData.length === 0) return null;
-    return {
-      tournament_id: tournamentSqlData[0].id,
-      count: tournamentSqlData[0].entry_count || 0,
-    };
-  }, [tournamentSqlData]) as EntryCount | null;
+  // Entry count comes from the mapped tournament data
+  const entryCount = Number(tournamentModel?.entry_count ?? 0);
 
-  const tournamentEntityId = useMemo(
-    () => getEntityIdFromKeys([BigInt(id!)]),
-    [id],
-  );
+  // Subscribe to tournament updates via WebSocket
+  const { lastMessage } = useSubscribeTournament(id);
 
-  const subscribedEntryCountModel = useModel(
-    tournamentEntityId,
-    getModelsMapping(namespace).EntryCount,
-  ) as unknown as EntryCount;
+  // Platform metrics for prize count tracking
+  const { data: platformMetrics } = useGetPlatformMetrics({ active: true });
+  const subscribedPrizeCount = Number(platformMetrics?.total_tournaments ?? 0);
 
-  const subscribedEntryCount = Number(subscribedEntryCountModel?.count) ?? 0;
-
-  const entryCount =
-    subscribedEntryCount > 0
-      ? subscribedEntryCount
-      : (Number(entryCountModel?.count) ?? 0);
-
-  const prizeMetricsEntityId = getEntityIdFromKeys([
-    BigInt(TOURNAMENT_VERSION_KEY),
-  ]);
-
-  const subscribedPrizesMetricsModel = useModel(
-    prizeMetricsEntityId,
-    getModelsMapping(namespace).PrizeMetrics,
-  ) as unknown as PrizeMetrics;
-
-  const subscribedPrizeCount =
-    Number(subscribedPrizesMetricsModel?.total_prizes) ?? 0;
-
-  // Fetch leaderboard from SQL
-  const { data: leaderboardData } = useGetTournamentLeaderboards({
-    namespace,
-    tournamentIds: id ? [padU64(BigInt(id))] : [],
-    active: !!id,
-    limit: 1,
-  });
-
-  const leaderboardModel = useMemo(() => {
-    if (!leaderboardData || leaderboardData.length === 0) return null;
-    const lb = leaderboardData[0];
-    return {
-      tournament_id: lb.tournament_id,
-      token_ids: lb.token_ids ? JSON.parse(lb.token_ids) : [],
-    };
-  }, [leaderboardData]) as Leaderboard | null;
+  // Fetch leaderboard via new SDK hook (returns a single Leaderboard object)
+  const { data: leaderboardModel } = useGetTournamentLeaderboard(id);
 
   useEffect(() => {
     let timeoutId: number;
 
-    const checkTournament = async () => {
-      const tournamentId = Number(id || 0);
+    const tournamentId = Number(id || 0);
 
-      // Check if tournament is excluded
-      if (EXCLUDED_TOURNAMENT_IDS.includes(tournamentId)) {
+    // Check if tournament is excluded
+    if (EXCLUDED_TOURNAMENT_IDS.includes(tournamentId)) {
+      setTournamentExists(false);
+      setLoading(false);
+      return;
+    }
+
+    // Derive existence from fetched data
+    if (!tournamentLoading) {
+      setTournamentExists(tournamentData !== null);
+      setLoading(false);
+    } else {
+      // Set a timeout to consider the tournament as "not found" if data doesn't load
+      timeoutId = window.setTimeout(() => {
         setTournamentExists(false);
         setLoading(false);
-        return;
-      }
+      }, 20000);
+    }
 
-      // If we have the tournament count, we can check immediately
-      if (tournamentsCount !== undefined) {
-        setTournamentExists(tournamentId <= tournamentsCount);
-        setLoading(false);
-      } else {
-        // Set a timeout to consider the tournament as "not found" if data doesn't load within 5 seconds
-        timeoutId = window.setTimeout(() => {
-          setTournamentExists(false);
-          setLoading(false);
-        }, 20000);
-      }
-    };
-
-    checkTournament();
-
-    // Clean up the timeout if the component unmounts or dependencies change
     return () => {
       if (timeoutId) window.clearTimeout(timeoutId);
     };
-  }, [id, tournamentsCount]);
+  }, [id, tournamentLoading, tournamentData]);
 
   // Get leaderboard size from distribution_count if specified, otherwise use entry count
   const leaderboardSize =
     Number(tournamentModel?.entry_fee?.Some?.distribution_count ?? 0) > 0
       ? Number(tournamentModel!.entry_fee.Some!.distribution_count)
-      : Number(entryCountModel?.count ?? 0);
+      : entryCount;
 
-  // Fetch registration data to check for banned entries
-  const tournamentAddress = selectedChainConfig.budokanAddress!;
-  const { games: allTournamentGames } = useGameTokens({
-    context: {
-      id: Number(tournamentModel?.id) ?? 0,
-    },
-    pagination: {
-      pageSize: Math.max(entryCount, leaderboardSize) + 10, // Fetch all entries with buffer
-    },
-    sortBy: "score",
-    sortOrder: "desc",
-    mintedByAddress: padAddress(tournamentAddress),
-    includeMetadata: false,
-  });
-
-  // Get game IDs for registration check
-  const allGameIds = useMemo(
-    () => allTournamentGames?.map((game) => Number(game.token_id)) || [],
-    [allTournamentGames],
-  );
-
-  // Fetch registrations to check banned status
-  const { data: allRegistrants } = useGetTournamentRegistrants({
-    namespace,
-    gameIds: allGameIds,
-    active: allGameIds.length > 0 && !!tournamentModel?.id,
-    limit: 1000,
-  });
+  // Fetch registrations via new SDK hook
+  const { data: allRegistrants, refetch: refetchRegistrations } = useGetTournamentRegistrations(id);
 
   // Calculate non-banned entry count
   const nonBannedEntryCount = useMemo(() => {
     if (!allRegistrants || allRegistrants.length === 0) return entryCount;
 
     const bannedCount = allRegistrants.filter(
-      (reg) => reg.is_banned === 1,
+      (reg) => reg.is_banned,
     ).length;
 
     return entryCount - bannedCount;
@@ -335,114 +241,89 @@ const Tournament = () => {
 
   const entryFeeToken = tournamentModel?.entry_fee.Some?.token_address;
 
-  const tournamentId = tournamentModel?.id;
-
   // Fetch aggregated data
   const {
-    data: aggregations,
+    data: rawAggregations,
     loading: aggregationsLoading,
     refetch: refetchAggregations,
-  } = useGetTournamentPrizesAggregations({
-    namespace,
-    tournamentId: tournamentId ?? 0,
-    active: !!tournamentId,
-  });
+  } = useGetTournamentPrizeAggregation(id);
+
+  // Reshape aggregation data to match the expected { token_totals, total_prizes } shape
+  const aggregations = useMemo(() => {
+    if (!rawAggregations) return undefined;
+    return {
+      token_totals: rawAggregations.map((a: any) => ({
+        tokenAddress: a.tokenAddress,
+        tokenType: typeof a.tokenType === "object" && a.tokenType
+          ? ("erc20" in a.tokenType ? "erc20" : "erc721")
+          : "erc20",
+        totalAmount: Number(a.totalAmount),
+      })),
+      total_prizes: rawAggregations.length,
+    };
+  }, [rawAggregations]);
 
 
-  // Fetch ALL sponsored prizes from database for accurate paid places calculation
-  const { data: sponsoredPrizesData } = useGetAllTournamentPrizes({
-    namespace,
-    tournamentId: Number(tournamentModel?.id || 0),
-    active: !!tournamentModel?.id,
-  });
-
-  // Process SQL prizes to proper Prize objects with CairoCustomEnum structures
-  const sponsoredPrizes = useMemo(
-    () => (sponsoredPrizesData || []).map(processPrizeFromSql),
-    [sponsoredPrizesData],
-  );
+  // Fetch ALL sponsored prizes via new SDK hook (returns pre-mapped Prize objects)
+  const { data: sponsoredPrizes } = useGetTournamentPrizes(id);
 
   // Expand distributed sponsored prizes into individual positions
   const expandedSponsoredPrizes = useMemo(
-    () => expandDistributedPrizes(sponsoredPrizes),
+    () => expandDistributedPrizes(sponsoredPrizes ?? []),
     [sponsoredPrizes],
   );
 
-  // Fetch claimed rewards using SQL query
-  const { data: rewardClaimsData } = useGetTournamentRewardClaims({
-    namespace,
-    tournamentId: Number(tournamentModel?.id || 0),
-    active: !!tournamentModel?.id,
-  });
+  // Fetch reward claims summary via new SDK hook
+  const { data: rewardClaimsSummary } = useGetTournamentRewardClaimsSummary(id);
 
-  // Process reward claims - filter to only include actually claimed rewards
-  // Note: claimed field is stored as 1/0 (integer) in database, not boolean
-  // Pass through all nested reward_type fields needed for matching in getClaimablePrizes()
-  const claimedRewards = useMemo(() => {
-    if (!rewardClaimsData) return [];
-    return rewardClaimsData
-      .filter((claim: any) => claim.claimed === 1)
-      .map((claim: any) => ({
-        tournament_id: claim.tournament_id,
-        reward_type: claim.reward_type,
-        claimed: true,
-        // Pass through all nested SQL fields for proper matching
-        "reward_type.EntryFee": claim["reward_type.EntryFee"],
-        "reward_type.EntryFee.Position": claim["reward_type.EntryFee.Position"],
-        "reward_type.EntryFee.Refund": claim["reward_type.EntryFee.Refund"],
-        "reward_type.Prize": claim["reward_type.Prize"],
-        "reward_type.Prize.Distributed.0":
-          claim["reward_type.Prize.Distributed.0"],
-        "reward_type.Prize.Distributed.1":
-          claim["reward_type.Prize.Distributed.1"],
-        "reward_type.Prize.Single": claim["reward_type.Prize.Single"],
-      }));
-  }, [rewardClaimsData]);
-
-  // Calculate actual claimable prizes (filtering out 0-amount prizes)
+  // Calculate actual claimable prizes from summary
   const actualClaimablePrizesCount = useMemo(() => {
     if (!tournamentModel) return 0;
-
-    // Combine all prizes
-    const allPrizes = [
-      ...distributionPrizes,
-      ...tournamentCreatorShare,
-      ...gameCreatorShare,
-      ...expandedSponsoredPrizes,
-    ];
-
-    // Get claimable prizes (not yet claimed)
-    const { claimablePrizes } = getClaimablePrizes(allPrizes, claimedRewards);
-
-    // Filter out prizes with 0 amount (matching UI calculation logic)
-    const nonZeroPrizes = claimablePrizes.filter((prize: any) => {
-      const isErc20 =
-        prize.token_type?.variant?.erc20 || prize.token_type === "erc20";
-
-      if (!isErc20) return true; // NFTs are always claimable
-
-      const amount =
-        prize.token_type?.variant?.erc20?.amount ||
-        prize["token_type.erc20.amount"] ||
-        "0";
-
-      return BigInt(amount) > 0n;
-    });
-
-    return nonZeroPrizes.length;
+    if (!rewardClaimsSummary) {
+      // If no summary yet, compute from prizes (all unclaimed)
+      const allPrizes = [
+        ...distributionPrizes,
+        ...tournamentCreatorShare,
+        ...gameCreatorShare,
+        ...expandedSponsoredPrizes,
+      ];
+      // Filter out prizes with 0 amount
+      const nonZeroPrizes = allPrizes.filter((prize: any) => {
+        const isErc20 =
+          prize.token_type?.variant?.erc20 || prize.token_type === "erc20";
+        if (!isErc20) return true;
+        const amount =
+          prize.token_type?.variant?.erc20?.amount ||
+          prize["token_type.erc20.amount"] ||
+          "0";
+        return BigInt(amount) > 0n;
+      });
+      return nonZeroPrizes.length;
+    }
+    return rewardClaimsSummary.totalUnclaimed ?? 0;
   }, [
     tournamentModel,
     distributionPrizes,
     tournamentCreatorShare,
     gameCreatorShare,
     expandedSponsoredPrizes,
-    claimedRewards,
+    rewardClaimsSummary,
   ]);
 
   // useEffect(() => {
 
   // Note: We no longer use reward claims aggregations since we calculate
   // actual claimable count directly from filtered prizes
+
+  // Refetch data when WebSocket messages arrive
+  useEffect(() => {
+    if (lastMessage) {
+      refetchTournament();
+      refetchAggregations();
+      refetchRegistrations();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastMessage]);
 
   // Refetch prize aggregations when subscribedPrizeCount changes
   useEffect(() => {
@@ -762,29 +643,38 @@ const Tournament = () => {
     return tournamentIds.map((id: any) => padU64(BigInt(id)));
   }, [tournamentModel, extensionRequirement]);
 
-  const { data: tournaments } = useGetTournaments({
-    namespace: namespace,
-    gameFilters: [],
+  const { data: extensionTournaments } = useGetTournaments({
     limit: 100,
-    status: "tournaments",
-    tournamentIds: tournamentIdsQuery,
     active: tournamentIdsQuery.length > 0,
   });
 
+  // Filter extension tournaments client-side by IDs from the extension config
   const tournamentsData = useMemo(() => {
-    if (!tournaments) return [];
-    return tournaments.map((tournament) => ({
-      ...processTournamentFromSql(tournament),
-      entry_count: tournament.entry_count,
-    }));
-  }, [tournaments]);
+    if (!extensionTournaments || tournamentIdsQuery.length === 0) return [];
+    const idSet = new Set(tournamentIdsQuery.map((tid: string) => tid));
+    return extensionTournaments.filter((t) =>
+      idSet.has(padU64(BigInt(t.id))),
+    );
+  }, [extensionTournaments, tournamentIdsQuery]);
 
-  const { settings } = useSettings({
-    gameAddresses: gameAddress ? [gameAddress] : [],
-    settingsIds: [Number(tournamentModel?.game_config?.settings_id)],
+  const { data: settingsData } = useGameSetting({
+    settingsId: Number(tournamentModel?.game_config?.settings_id),
+    gameAddress: gameAddress,
+    active: !!gameAddress,
   });
+  // Map SDK shape to legacy GameSettings shape and wrap in array for backward compatibility
+  const settings = useMemo(() => {
+    if (!settingsData) return [];
+    return [{
+      settings_id: settingsData.id,
+      game_address: settingsData.gameAddress,
+      name: settingsData.name,
+      description: settingsData.description,
+      settings: settingsData.settings,
+    }];
+  }, [settingsData]);
 
-  if (loading || tournamentSqlLoading) {
+  if (loading || tournamentLoading) {
     return <LoadingPage message={`Loading tournament...`} />;
   }
 

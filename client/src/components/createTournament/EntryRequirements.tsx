@@ -27,9 +27,8 @@ import { useDojo } from "@/context/dojo";
 import {
   useGetTournaments,
   useGetTournamentsCount,
-} from "@/dojo/hooks/useSqlQueries";
-import { processTournamentFromSql, computeAbsoluteTimes } from "@/lib/utils/formatting";
-import { processPrizesFromSql } from "@/lib/utils/formatting";
+} from "@/hooks/useBudokanQueries";
+import { computeAbsoluteTimes } from "@/lib/utils/formatting";
 import Pagination from "@/components/table/Pagination";
 import {
   Tooltip,
@@ -59,7 +58,7 @@ import { OpusTrovesConfig } from "./extensions/OpusTrovesConfig";
 import { CustomExtensionConfig } from "./extensions/CustomExtensionConfig";
 
 const EntryRequirements = ({ form }: StepProps) => {
-  const { namespace, selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useDojo();
   const [newAddress, setNewAddress] = React.useState("");
   const [tournamentSearchQuery, setTournamentSearchQuery] = useState("");
   const [gameFilters, setGameFilters] = useState<string[]>([]);
@@ -78,30 +77,23 @@ const EntryRequirements = ({ form }: StepProps) => {
   ];
 
   const { data: tournaments } = useGetTournaments({
-    namespace: namespace,
-    gameFilters: gameFilters,
+    gameAddress: gameFilters.length > 0 ? gameFilters[0] : undefined,
     limit: 10,
     offset: (currentPage - 1) * 10,
-    status: "all",
     active: true,
   });
 
   const { data: tournamentsCount } = useGetTournamentsCount({
-    namespace: namespace,
+    active: true,
   });
 
-  const totalPages = Math.ceil(tournamentsCount / 10);
+  const totalPages = Math.ceil((tournamentsCount ?? 0) / 10);
 
-  const tournamentsData = tournaments.map((tournament) => {
-    const processedTournament = processTournamentFromSql(tournament);
-    const processedPrizes = processPrizesFromSql(
-      tournament.prizes,
-      tournament.id
-    );
+  const tournamentsData = (tournaments ?? []).map((tournament: any) => {
     return {
-      tournament: processedTournament,
-      prizes: processedPrizes,
-      entryCount: Number(tournament.entry_count),
+      tournament: tournament,
+      prizes: [],
+      entryCount: Number(tournament.entry_count ?? 0),
     };
   });
 

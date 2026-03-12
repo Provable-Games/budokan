@@ -6,7 +6,7 @@ import {
 } from "@/components/ui/dialog";
 import TokenGameIcon from "../icons/TokenGameIcon";
 import useUIStore from "@/hooks/useUIStore";
-import { GameSettings } from "metagame-sdk";
+import { GameSettings } from "@/lib/types";
 import SettingsDisplay from "../createTournament/settings/SettingsDisplay";
 
 interface SettingsDialogProps {

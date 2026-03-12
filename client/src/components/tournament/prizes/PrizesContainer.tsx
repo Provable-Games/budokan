@@ -20,8 +20,7 @@ import { Button } from "@/components/ui/button";
 import { PrizesTableDialog } from "@/components/dialogs/PrizesTable";
 import { SponsorsDialog } from "@/components/dialogs/Sponsors";
 import { TableProperties, Users } from "lucide-react";
-import { useGetTournamentPrizes } from "@/dojo/hooks/useSqlQueries";
-import { useDojo } from "@/context/dojo";
+import { useGetTournamentPrizes } from "@/hooks/useBudokanQueries";
 import { BigNumberish } from "starknet";
 
 interface PrizesContainerProps {
@@ -51,7 +50,6 @@ const PrizesContainer = ({
   paidPlaces,
   subscibedPrizeCount,
 }: PrizesContainerProps) => {
-  const { namespace } = useDojo();
   const [showPrizes, setShowPrizes] = useState(false);
   const [showTableDialog, setShowTableDialog] = useState(false);
   const [showSponsorsDialog, setShowSponsorsDialog] = useState(false);
@@ -61,13 +59,9 @@ const PrizesContainer = ({
     data: prizesData,
     loading: prizesLoading,
     refetch: refetchPrizes,
-  } = useGetTournamentPrizes({
-    namespace,
-    tournamentId: tournamentId ?? 0,
-    active: !!tournamentId,
-    startPosition: 1,
-    endPosition: 5,
-  });
+  } = useGetTournamentPrizes(
+    tournamentId ? tournamentId.toString() : undefined,
+  );
 
   useEffect(() => {
     refetchPrizes();

@@ -23,8 +23,8 @@ import { useDojo } from "@/context/dojo";
 import { FormToken } from "@/lib/types";
 import {
   useGetPlatformMetrics,
-  useGetPrizeMetrics,
-} from "@/dojo/hooks/useSqlQueries";
+  useGetPlatformStats,
+} from "@/hooks/useBudokanQueries";
 import { getExtensionAddresses } from "@/lib/extensionConfig";
 
 export type TournamentFormData = z.infer<typeof formSchema>;
@@ -134,7 +134,7 @@ const formSchema = z.object({
 const CreateTournament = () => {
   const navigate = useNavigate();
   const { address } = useAccount();
-  const { namespace, selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useDojo();
   const { createTournamentAndApproveAndAddPrizes } = useSystemCalls();
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -197,17 +197,15 @@ const CreateTournament = () => {
   });
 
   const { data: platformMetricsModel } = useGetPlatformMetrics({
-    namespace,
     active: true,
   });
 
-  const { data: prizeMetricsModel } = useGetPrizeMetrics({
-    namespace,
+  const { data: platformStats } = useGetPlatformStats({
     active: true,
   });
 
   const tournamentCount = Number(platformMetricsModel?.total_tournaments ?? 0);
-  const prizeCount = Number(prizeMetricsModel?.total_prizes ?? 0);
+  const prizeCount = Number(platformStats?.totalPrizes ?? 0);
 
   // Add state for current step
   const [currentStep, setCurrentStep] = useState<

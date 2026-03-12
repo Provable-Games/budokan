@@ -17,11 +17,11 @@ import { Input } from "@/components/ui/input";
 import Pagination from "@/components/table/Pagination";
 import { useState, useEffect, useMemo } from "react";
 import { BigNumberish, addAddressPadding } from "starknet";
-import { useGameTokens, useGameTokensCount } from "metagame-sdk/sql";
+import { useGameTokens } from "@/hooks/useDenshokanQueries";
 import { REFRESH, VERIFIED } from "@/components/Icons";
 import { Search, Ban } from "lucide-react";
 import { useDebounce } from "@/hooks/useDebounce";
-import { useGetTournamentRegistrants } from "@/dojo/hooks/useSqlQueries";
+import { useGetTournamentRegistrations } from "@/hooks/useBudokanQueries";
 import { useDojo } from "@/context/dojo";
 
 interface ScoreTableDialogProps {
@@ -43,52 +43,59 @@ export const ScoreTableDialog = ({
   isEnded,
   banRefreshTrigger,
 }: ScoreTableDialogProps) => {
-  const { namespace, selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useDojo();
   const tournamentAddress = selectedChainConfig.budokanAddress!;
   const [searchQuery, setSearchQuery] = useState("");
 
   // Debounce search query to avoid too many requests
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
+  const [currentPage, setCurrentPage] = useState(0);
+  const pageSize = 10;
+
   const {
-    games,
-    pagination: {
-      currentPage,
-      hasNextPage,
-      hasPreviousPage,
-      nextPage,
-      previousPage,
-      goToPage,
-    },
+    data: allGames,
     refetch,
     loading,
   } = useGameTokens({
-    context: {
-      id: Number(tournamentId),
-    },
-    pagination: {
-      pageSize: 10,
-    },
-    sortBy: "score",
-    sortOrder: "desc",
-    mintedByAddress: addAddressPadding(tournamentAddress),
-    includeMetadata: true,
-    // Pass the player name string directly for server-side search
-    playerName: debouncedSearchQuery.trim() || undefined,
+    owner: addAddressPadding(tournamentAddress),
+    gameId: Number(tournamentId),
+    limit: 1000,
+    active: open,
   });
 
+  // Client-side search filtering
+  const filteredGames = useMemo(() => {
+    if (!allGames) return [];
+    const query = debouncedSearchQuery.trim().toLowerCase();
+    if (!query) return allGames;
+    return allGames.filter((game: any) =>
+      (game.player_name || game.playerName || "").toLowerCase().includes(query),
+    );
+  }, [allGames, debouncedSearchQuery]);
+
+  // Client-side pagination
+  const games = useMemo(
+    () => filteredGames.slice(currentPage * pageSize, (currentPage + 1) * pageSize),
+    [filteredGames, currentPage],
+  );
+
+  const totalPages = Math.ceil(filteredGames.length / pageSize);
+  const hasNextPage = currentPage < totalPages - 1;
+  const hasPreviousPage = currentPage > 0;
+  const nextPage = () => setCurrentPage((p) => Math.min(totalPages - 1, p + 1));
+  const previousPage = () => setCurrentPage((p) => Math.max(0, p - 1));
   const gameIds = useMemo(
     () => games?.map((game) => Number(game.token_id)) || [],
     [games]
   );
 
-  const { data: registrants } = useGetTournamentRegistrants({
-    namespace,
-    gameIds,
-    active: gameIds.length > 0,
-    offset: 0,
-    limit: 10,
-  });
+  const tournamentIdStr = tournamentId ? String(tournamentId) : undefined;
+
+  const { data: registrants } = useGetTournamentRegistrations(
+    gameIds.length > 0 ? tournamentIdStr : undefined,
+    { limit: 1000 },
+  );
 
   // Map registrants to match the order of games
   const orderedRegistrants = useMemo(() => {
@@ -109,17 +116,8 @@ export const ScoreTableDialog = ({
     }
   }, [banRefreshTrigger, open]);
 
-  // Get the filtered count based on the same search parameters
-  const { count: filteredCount } = useGameTokensCount({
-    context: {
-      id: Number(tournamentId),
-    },
-    mintedByAddress: addAddressPadding(tournamentAddress),
-    playerName: debouncedSearchQuery.trim() || undefined,
-  });
-
-  // Use filtered count if available, otherwise fall back to total entry count
-  const totalCount = filteredCount ?? entryCount;
+  // Derive count from filtered games
+  const totalCount = filteredGames.length || entryCount;
 
   // Clear search when dialog closes
   useEffect(() => {
@@ -130,11 +128,8 @@ export const ScoreTableDialog = ({
 
   // Reset page when search changes
   useEffect(() => {
-    // Reset to first page when search query changes
-    if (goToPage && debouncedSearchQuery !== undefined) {
-      goToPage(0);
-    }
-  }, [debouncedSearchQuery, goToPage]);
+    setCurrentPage(0);
+  }, [debouncedSearchQuery]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -204,7 +199,7 @@ export const ScoreTableDialog = ({
             <TableBody className="overflow-y-auto">
               {games && games.length > 0 ? (
                 games.map((game, index) => {
-                  const globalIndex = currentPage * 10 + index;
+                  const globalIndex = currentPage * pageSize + index;
                   const playerName = game?.player_name || "";
                   const ownerAddress = game?.owner ?? "0x0";
                   const shortAddress = `${ownerAddress?.slice(
@@ -212,8 +207,8 @@ export const ScoreTableDialog = ({
                     6
                   )}...${ownerAddress?.slice(-4)}`;
                   const registration = orderedRegistrants[index];
-                  const hasSubmitted = registration?.has_submitted === 1;
-                  const isBanned = registration?.is_banned === 1;
+                  const hasSubmitted = !!registration?.has_submitted;
+                  const isBanned = !!registration?.is_banned;
 
                   return (
                     <TableRow key={index} className={isBanned ? "opacity-60" : ""}>
@@ -275,10 +270,10 @@ export const ScoreTableDialog = ({
         </div>
 
         {/* Pagination */}
-        {totalCount > 10 && (
+        {totalCount > pageSize && (
           <div className="flex-shrink-0 p-4 border-t border-border">
             <Pagination
-              totalPages={Math.ceil(totalCount / 10)}
+              totalPages={totalPages}
               currentPage={currentPage}
               nextPage={nextPage}
               previousPage={previousPage}

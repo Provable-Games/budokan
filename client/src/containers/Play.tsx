@@ -3,40 +3,26 @@ import { ARROW_LEFT } from "@/components/Icons";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { feltToString } from "@/lib/utils";
-import { useDojo } from "@/context/dojo";
-import { useGetTournaments } from "@/dojo/hooks/useSqlQueries";
+import { useGetTournaments } from "@/hooks/useBudokanQueries";
 // import TournamentGames from "@/components/play/TournamentGames";
-import { processPrizesFromSql } from "@/lib/utils/formatting";
-import { processTournamentFromSql } from "@/lib/utils/formatting";
 import { Tournament } from "@/generated/models.gen";
 import { Card } from "@/components/ui/card";
 
 const Play = () => {
   const navigate = useNavigate();
-  const { namespace } = useDojo();
   const [selectedTournament, setSelectedTournament] = useState<Tournament>();
 
   const { data: tournaments } = useGetTournaments({
-    namespace: namespace,
-    gameFilters: [],
     limit: 100,
     offset: 0,
-    status: "all",
     active: true,
   });
 
-  const tournamentsData = tournaments.map((tournament) => {
-    const processedTournament = processTournamentFromSql(tournament);
-    const processedPrizes = processPrizesFromSql(
-      tournament.prizes,
-      tournament.id
-    );
-    return {
-      tournament: processedTournament,
-      prizes: processedPrizes,
-      entryCount: Number(tournament.entry_count),
-    };
-  });
+  const tournamentsData = tournaments.map((tournament) => ({
+    tournament,
+    prizes: [],
+    entryCount: tournament.entry_count ?? 0,
+  }));
 
   return (
     <div className="flex flex-col gap-5 h-[calc(100vh-80px)] w-3/4 mx-auto">

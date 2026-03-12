@@ -16,7 +16,6 @@ import {
   getClaimablePrizes,
   expandDistributedPrizes,
   formatRewardTypes,
-  processPrizeFromSql,
 } from "@/lib/utils/formatting";
 import { useConnectToSelectedChain } from "@/dojo/hooks/useChain";
 import { TokenPrices } from "@/hooks/useEkuboPrices";
@@ -27,9 +26,9 @@ import {
 import { useDojo } from "@/context/dojo";
 import { LoadingSpinner } from "@/components/ui/spinner";
 import {
-  useGetTournamentRewardClaims,
-  useGetAllTournamentPrizes,
-} from "@/dojo/hooks/useSqlQueries";
+  useGetTournamentPrizes,
+  useGetTournamentRewardClaimsSummary,
+} from "@/hooks/useBudokanQueries";
 
 interface ClaimPrizesDialogProps {
   open: boolean;
@@ -49,7 +48,7 @@ export function ClaimPrizesDialog({
   const { address } = useAccount();
   const { connect } = useConnectToSelectedChain();
   const { claimPrizes, claimPrizesBatched } = useSystemCalls();
-  const { selectedChainConfig, namespace } = useDojo();
+  const { selectedChainConfig } = useDojo();
   const [isProcessing, setIsProcessing] = useState(false);
   const [batchProgress, setBatchProgress] = useState<{
     current: number;
@@ -58,25 +57,17 @@ export function ClaimPrizesDialog({
 
   const chainId = selectedChainConfig?.chainId ?? "";
 
-  // Fetch ALL sponsored prizes from database
-  const { data: sponsoredPrizesData } = useGetAllTournamentPrizes({
-    namespace,
-    tournamentId: Number(tournamentModel?.id),
-    active: !!tournamentModel?.id && open,
-  });
+  const tournamentId = tournamentModel?.id ? String(tournamentModel.id) : undefined;
 
-  // Process SQL prizes to proper Prize objects with CairoCustomEnum structures
-  const sponsoredPrizes = useMemo(
-    () => (sponsoredPrizesData || []).map(processPrizeFromSql),
-    [sponsoredPrizesData]
+  // Fetch ALL sponsored prizes from database (data comes pre-mapped)
+  const { data: sponsoredPrizes } = useGetTournamentPrizes(
+    open ? tournamentId : undefined,
   );
 
-  // Fetch claimed rewards using SQL query
-  const { data: rewardClaimsData } = useGetTournamentRewardClaims({
-    namespace,
-    tournamentId: Number(tournamentModel?.id),
-    active: !!tournamentModel?.id && open,
-  });
+  // Fetch claimed rewards using API
+  const { data: rewardClaimsData } = useGetTournamentRewardClaimsSummary(
+    open ? tournamentId : undefined,
+  );
 
   const claimedRewards: RewardClaim[] = (rewardClaimsData ||
     []) as RewardClaim[];
@@ -101,7 +92,7 @@ export function ClaimPrizesDialog({
 
   // Expand distributed sponsored prizes into individual positions
   const expandedSponsoredPrizes = useMemo(
-    () => expandDistributedPrizes(sponsoredPrizes),
+    () => expandDistributedPrizes(sponsoredPrizes ?? []),
     [sponsoredPrizes]
   );
 

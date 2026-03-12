@@ -1,6 +1,13 @@
 import { create } from "zustand";
-import { GameMetadata } from "metagame-sdk";
 import { TabType } from "@/components/overview/TournamentTabs";
+
+export interface GameMetadata {
+  contract_address: string;
+  name: string;
+  image: string;
+  description?: string;
+  color?: string;
+}
 
 export interface GameData extends GameMetadata {
   isWhitelisted: boolean;

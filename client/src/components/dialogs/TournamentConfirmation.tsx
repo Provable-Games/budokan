@@ -28,7 +28,7 @@ import { useMemo, useState, useEffect } from "react";
 import { useDojo } from "@/context/dojo";
 // import { calculateTotalValue } from "@/lib/utils/formatting";
 import { LoadingSpinner } from "@/components/ui/spinner";
-import { useSettings } from "metagame-sdk/sql";
+import { useGameSetting } from "@/hooks/useDenshokanQueries";
 import { getExtensionAddresses } from "@/lib/extensionConfig";
 import { getTokenByAddress } from "@/lib/tokenUtils";
 import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
@@ -68,11 +68,13 @@ const TournamentConfirmation = ({
   const [extensionRequiresRegistration, setExtensionRequiresRegistration] = useState(false);
   const { checkRegistrationOnly } = useSystemCalls();
 
-  const { settings } = useSettings({
-    settingsIds: [Number(formData.settings)],
+  const { data: settingData } = useGameSetting({
+    settingsId: Number(formData.settings),
+    gameAddress: formData.game,
+    active: !!formData.game,
   });
 
-  const hasSettings = !!settings[0];
+  const hasSettings = !!settingData;
 
   const { prices, isLoading: _pricesLoading } = useEkuboPrices({
     tokens: [
@@ -377,7 +379,7 @@ const TournamentConfirmation = ({
                   </a>
                 </div>
                 <span className="text-muted-foreground">Settings:</span>
-                <span>{hasSettings ? settings[0].name : "Default"}</span>
+                <span>{hasSettings ? settingData!.name : "Default"}</span>
                 {/* TODO: Uncomment when ready to use soulbound and play_url */}
                 {/* <span className="text-muted-foreground">Soulbound:</span>
                 <span>{formData.soulbound ? "Yes" : "No"}</span>

@@ -2,7 +2,7 @@ import { USER } from "@/components/Icons";
 import { HoverCardContent } from "@/components/ui/hover-card";
 import { HoverCard } from "@/components/ui/hover-card";
 import { HoverCardTrigger } from "@/components/ui/hover-card";
-import { GameTokenData } from "metagame-sdk";
+import { GameTokenData } from "@/lib/types";
 import { displayAddress, indexAddress } from "@/lib/utils";
 import { Ban } from "lucide-react";
 

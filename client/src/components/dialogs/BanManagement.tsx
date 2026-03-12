@@ -8,9 +8,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { useState, useEffect, useMemo } from "react";
 import { BigNumberish, addAddressPadding } from "starknet";
-import { useGameTokens } from "metagame-sdk/sql";
+import { useGameTokens } from "@/hooks/useDenshokanQueries";
 import { REFRESH, USER } from "@/components/Icons";
-import { useGetTournamentRegistrants } from "@/dojo/hooks/useSqlQueries";
+import { useGetTournamentRegistrations } from "@/hooks/useBudokanQueries";
 import { useDojo } from "@/context/dojo";
 import { Tournament } from "@/generated/models.gen";
 import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
@@ -53,7 +53,7 @@ export const BanManagementDialog = ({
   extensionAddress,
   onBanComplete,
 }: BanManagementDialogProps) => {
-  const { namespace, selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useDojo();
   const { address } = useAccount();
   const tournamentAddress = selectedChainConfig.budokanAddress!;
   const [bannableEntries, setBannableEntries] = useState<Set<string>>(
@@ -64,17 +64,11 @@ export const BanManagementDialog = ({
   const { waitForBannedEntry } = useEntityUpdates();
 
   // Fetch all game tokens for this tournament
-  const { games, refetch, loading } = useGameTokens({
-    context: {
-      id: Number(tournamentId),
-    },
-    pagination: {
-      pageSize: 1000, // Get all entries
-    },
-    sortBy: "score",
-    sortOrder: "desc",
-    mintedByAddress: addAddressPadding(tournamentAddress),
-    includeMetadata: true,
+  const { data: games, refetch, loading } = useGameTokens({
+    owner: addAddressPadding(tournamentAddress),
+    gameId: Number(tournamentId),
+    limit: 1000,
+    active: open,
   });
 
   const gameIds = useMemo(
@@ -82,13 +76,12 @@ export const BanManagementDialog = ({
     [games]
   );
 
-  const { data: registrants, refetch: refetchRegistrants } = useGetTournamentRegistrants({
-    namespace,
-    gameIds,
-    active: gameIds.length > 0,
-    offset: 0,
-    limit: 1000,
-  });
+  const tournamentIdStr = tournamentId ? String(tournamentId) : undefined;
+
+  const { data: registrants, refetch: refetchRegistrants } = useGetTournamentRegistrations(
+    gameIds.length > 0 ? tournamentIdStr : undefined,
+    { limit: 1000 },
+  );
 
   // Get Opus Troves validator address for the current chain
   const opusTrovesValidatorAddress = useMemo(() => {
@@ -156,7 +149,7 @@ export const BanManagementDialog = ({
   // Use Opus Troves hook for bannable entries calculation
   const { bannableEntries: opusBannableEntries, troveDebts } =
     useOpusTrovesBannableEntries({
-      games: games || [],
+      games: (games || []).map((g) => ({ token_id: Number(g.token_id), owner: g.owner })),
       config: opusTrovesValidatorConfig
         ? {
             assetAddresses: opusTrovesValidatorConfig.assetAddresses,
@@ -252,7 +245,7 @@ export const BanManagementDialog = ({
       const registration = registrants.find(
         (reg) => Number(reg.game_token_id) === Number(game.token_id)
       );
-      const isBanned = registration?.is_banned === 1;
+      const isBanned = !!registration?.is_banned;
       const isBannable = bannableEntries.has(game.token_id.toString());
 
       // Only include bannable entries that aren't already banned
@@ -414,8 +407,8 @@ export const BanManagementDialog = ({
                             config={opusTrovesValidatorConfig}
                             troveDebt={troveDebts.get(playerGroup.address)!}
                             totalEntriesRegistered={
-                              games.filter(
-                                (g) => g?.owner === playerGroup.address
+                              (games ?? []).filter(
+                                (g: any) => g?.owner === playerGroup.address
                               ).length
                             }
                           />

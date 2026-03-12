@@ -3,7 +3,7 @@ import { HoverCardContent } from "@/components/ui/hover-card";
 import { HoverCard } from "@/components/ui/hover-card";
 import { HoverCardTrigger } from "@/components/ui/hover-card";
 import { PlayerDetails } from "@/components/tournament/table/PlayerCard";
-import { GameTokenData } from "metagame-sdk";
+import { GameTokenData } from "@/lib/types";
 import { displayAddress } from "@/lib/utils";
 import { indexAddress } from "@/lib/utils";
 import { Ban } from "lucide-react";
@@ -97,7 +97,7 @@ const ScoreRow = ({
             <PlayerDetails
               playerName={game.player_name ?? "Unknown Player"}
               username={username}
-              metadata={game.metadata}
+              metadata={typeof game.metadata === 'string' ? game.metadata : JSON.stringify(game.metadata)}
               isStarted={isStarted}
               isEnded={isEnded}
               hasSubmitted={hasSubmitted}

@@ -11,7 +11,7 @@ import { TooltipContent } from "@/components/ui/tooltip";
 import { TooltipTrigger } from "@/components/ui/tooltip";
 import { Tooltip } from "@/components/ui/tooltip";
 import useUIStore from "@/hooks/useUIStore";
-import { GameTokenData } from "metagame-sdk";
+import { GameTokenData } from "@/lib/types";
 import { Tournament } from "@/generated/models.gen";
 
 interface EntryCardProps {
@@ -93,7 +93,7 @@ const EntryCard = ({
           </HoverCardTrigger>
           <EntryInfo
             entryNumber={entryNumber.toString()}
-            tokenMetadata={game.metadata}
+            tokenMetadata={typeof game.metadata === 'string' ? game.metadata : JSON.stringify(game.metadata)}
             tournamentModel={tournamentModel}
           />
         </HoverCard>
