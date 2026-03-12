@@ -76,6 +76,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "budokan_viewer"
+version = "0.0.1"
+dependencies = [
+ "budokan",
+ "budokan_interfaces",
+ "game_components_embeddable_game_standard",
+ "game_components_interfaces",
+ "game_components_test_common",
+ "openzeppelin_access",
+ "openzeppelin_interfaces",
+ "openzeppelin_upgrades",
+ "snforge_std",
+]
+
+[[package]]
 name = "ekubo"
 version = "0.1.0"
 source = "git+https://github.com/EkuboProtocol/starknet-contracts.git?tag=v4.0.1#3db234ee0c4a9e1709677f6180186d37a356a14e"

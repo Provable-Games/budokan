@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 
+use budokan::mocks::tournament_validator_mock::{
+    QUALIFIER_TYPE_PARTICIPANTS, QUALIFIER_TYPE_WINNERS,
+};
 use budokan::structs::budokan::{
     Distribution, ERC20Data, ERC721Data, EntryFee, EntryFeeRewardType, EntryRequirement,
     EntryRequirementType, ExtensionConfig, GameConfig, LeaderboardConfig, PrizeType,
@@ -23,12 +26,6 @@ use budokan::tests::interfaces::{
     IERC20MockDispatcher, IERC20MockDispatcherTrait, IERC721MockDispatcher,
     IERC721MockDispatcherTrait, IERC721OldMockDispatcher,
 };
-use budokan::tests::mocks::minigame_starknet_mock::{
-    IMinigameStarknetMockDispatcher, IMinigameStarknetMockDispatcherTrait,
-};
-use budokan::tests::mocks::tournament_validator_mock::{
-    QUALIFIER_TYPE_PARTICIPANTS, QUALIFIER_TYPE_WINNERS,
-};
 use budokan::tests::setup_denshokan;
 use budokan_interfaces::budokan::{IBudokanDispatcher, IBudokanDispatcherTrait};
 use core::option::Option;
@@ -38,6 +35,9 @@ use game_components_embeddable_game_standard::token::interface::IMinigameTokenMi
 use game_components_interfaces::prize::{IPrizeDispatcher, IPrizeDispatcherTrait};
 use game_components_interfaces::registration::{
     IRegistrationDispatcher, IRegistrationDispatcherTrait,
+};
+use game_components_test_common::mocks::minigame_mock::{
+    IMinigameMockDispatcher, IMinigameMockDispatcherTrait,
 };
 use metagame_extensions_interfaces::entry_requirement_extension::IEntryRequirementExtensionDispatcher;
 use openzeppelin_interfaces::erc721::{IERC721Dispatcher, IERC721DispatcherTrait};
@@ -53,7 +53,7 @@ pub struct TestContracts {
     pub budokan: IBudokanDispatcher,
     pub prize: IPrizeDispatcher,
     pub registration: IRegistrationDispatcher,
-    pub minigame: IMinigameStarknetMockDispatcher,
+    pub minigame: IMinigameMockDispatcher,
     pub denshokan: IMinigameTokenMixinDispatcher,
     pub erc20: IERC20MockDispatcher,
     pub erc721: IERC721MockDispatcher,

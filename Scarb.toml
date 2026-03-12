@@ -2,12 +2,13 @@
 members = [
     "contracts/packages/interfaces",
     "contracts/packages/budokan",
+    "contracts/packages/viewer",
 ]
 
 [workspace.package]
 version = "0.0.1"
 edition = "2024_07"
-cairo-version = "2.15.1"
+cairo-version = "2.15.0"
 
 [workspace.dependencies]
 starknet = "2.15.1"

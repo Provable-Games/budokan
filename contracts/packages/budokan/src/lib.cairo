@@ -20,19 +20,18 @@ pub mod libs {
     pub mod validations;
 }
 
+// Test mocks are public so downstream packages (e.g. budokan_viewer) can use them
+// via build-external-contracts
+pub mod mocks {
+    pub mod entry_validator_mock;
+    pub mod erc20_mock;
+    pub mod erc721_mock;
+    pub mod erc721_old_mock;
+    pub mod tournament_validator_mock;
+}
+
 #[cfg(test)]
 mod tests {
-    pub mod mocks {
-        pub mod entry_validator_mock;
-        pub mod erc20_mock;
-        pub mod erc721_mock;
-        pub mod erc721_old_mock;
-        pub mod full_token_contract;
-        pub mod metagame_starknet_mock;
-        pub mod minigame_registry_contract;
-        pub mod minigame_starknet_mock;
-        pub mod tournament_validator_mock;
-    }
     pub mod constants;
     #[cfg(test)]
     mod helpers;
