@@ -1,0 +1,36 @@
+{
+  "name": "budokan",
+  "version": "0.1.0",
+  "author": "Provable Games",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Provable-Games/budokan.git"
+  },
+  "description": "On-chain tournament management platform for Starknet",
+  "keywords": [
+    "starknet",
+    "cairo",
+    "tournament",
+    "gaming",
+    "indexer"
+  ],
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "build:indexer": "cd indexer && npm run build",
+    "dev:indexer": "cd indexer && npm run dev",
+    "build:api": "cd api && npm run build",
+    "dev:api": "cd api && npm run dev",
+    "dev:client": "cd client && bun run dev",
+    "build:client": "cd client && bun run build",
+    "db:migrate": "cd indexer && npm run db:migrate",
+    "db:generate": "cd indexer && npm run db:generate",
+    "test": "cd contracts && snforge test",
+    "build": "npm run build:indexer && npm run build:api",
+    "fmt": "cd contracts && scarb fmt -w"
+  },
+  "workspaces": [
+    "indexer",
+    "api"
+  ]
+}

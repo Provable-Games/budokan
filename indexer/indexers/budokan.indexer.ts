@@ -38,11 +38,24 @@ const SELECTORS = getEventSelectors();
 // ---------------------------------------------------------------------------
 // Indexer definition
 // ---------------------------------------------------------------------------
+const ZERO_ADDRESS =
+  "0x0000000000000000000000000000000000000000000000000000000000000000";
+
 export default async function (runtimeConfig: ApibaraRuntimeConfig) {
   const contractAddress = runtimeConfig.budokanContractAddress as `0x${string}`;
   const streamUrl = runtimeConfig.streamUrl as string;
   const startingBlock = BigInt(runtimeConfig.startingBlock as string);
   const databaseUrl = runtimeConfig.databaseUrl as string;
+
+  if (!contractAddress || contractAddress === "0x0" || contractAddress === ZERO_ADDRESS) {
+    throw new Error(
+      "BUDOKAN_CONTRACT_ADDRESS env var is required and must not be the zero address",
+    );
+  }
+
+  if (!databaseUrl) {
+    throw new Error("DATABASE_URL env var is required");
+  }
 
   const database = drizzle({
     connectionString: databaseUrl,

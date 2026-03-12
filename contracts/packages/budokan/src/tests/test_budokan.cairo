@@ -39,7 +39,7 @@ use game_components_interfaces::registration::{
 use game_components_test_common::mocks::minigame_mock::{
     IMinigameMockDispatcher, IMinigameMockDispatcherTrait,
 };
-use interfaces::entry_requirement_extension::IEntryRequirementExtensionDispatcher;
+use metagame_extensions_interfaces::entry_requirement_extension::IEntryRequirementExtensionDispatcher;
 use openzeppelin_interfaces::erc721::{IERC721Dispatcher, IERC721DispatcherTrait};
 use openzeppelin_interfaces::introspection::{ISRC5Dispatcher, ISRC5DispatcherTrait};
 use snforge_std::{

@@ -1,30 +1,21 @@
 import { defineConfig } from "apibara/config";
 
-const ZERO_ADDRESS =
-  "0x0000000000000000000000000000000000000000000000000000000000000000";
-
-const budokanContractAddress = (
-  process.env.BUDOKAN_CONTRACT_ADDRESS ?? ""
-).trim();
-
-if (!budokanContractAddress || budokanContractAddress === ZERO_ADDRESS) {
-  throw new Error(
-    "BUDOKAN_CONTRACT_ADDRESS env var is required and must not be the zero address",
-  );
-}
-
-const databaseUrl = (process.env.DATABASE_URL ?? "").trim();
-if (!databaseUrl) {
-  throw new Error("DATABASE_URL env var is required");
-}
-
 export default defineConfig({
   runtimeConfig: {
-    budokanContractAddress: budokanContractAddress as `0x${string}`,
+    // Budokan tournament contract address
+    budokanContractAddress: (
+      process.env.BUDOKAN_CONTRACT_ADDRESS ?? "0x0"
+    ).trim(),
+    // Starknet DNA stream URL (mainnet or sepolia)
     streamUrl: (
       process.env.STREAM_URL ?? "https://mainnet.starknet.a5a.ch"
     ).trim(),
+    // Starting block - set to contract deployment block for full history
     startingBlock: (process.env.STARTING_BLOCK ?? "0").trim(),
-    databaseUrl,
+    // PostgreSQL connection string
+    databaseUrl: (
+      process.env.DATABASE_URL ??
+      "postgres://postgres:postgres@localhost:5432/budokan"
+    ).trim(),
   },
 });

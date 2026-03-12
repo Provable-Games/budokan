@@ -24,7 +24,7 @@ const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app });
 app.use(
   "*",
   cors({
-    origin: "*",
+    origin: process.env.CORS_ORIGIN ?? "*",
     allowMethods: ["GET", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],
     maxAge: 86400,
