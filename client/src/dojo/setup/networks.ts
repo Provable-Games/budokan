@@ -50,6 +50,9 @@ export type DojoChainConfig = {
   explorers?: ChainExplorers;
   denshokanAddress?: string;
   budokanAddress?: string;
+  // SDK API URLs
+  budokanApiUrl?: string;
+  denshokanApiUrl?: string;
 };
 
 const snSepoliaConfig: DojoChainConfig = {
@@ -74,6 +77,8 @@ const snSepoliaConfig: DojoChainConfig = {
     "0x02334dc9c950c74c3228e2a343d495ae36f0b4edf06767a679569e9f9de08776",
   budokanAddress:
     "0x027649a648ce25712cf90a3b32b9f15f86edb21293227d0b3cc689987c77a02b",
+  budokanApiUrl: "https://budokan-api-sepolia.provable.games",
+  denshokanApiUrl: "https://denshokan-api-sepolia.provable.games",
 };
 
 const snMainnetConfig: DojoChainConfig = {
@@ -97,6 +102,8 @@ const snMainnetConfig: DojoChainConfig = {
     "0x036017e69d21d6d8c13e266eabb73ef1f1d02722d86bdcabe5f168f8e549d3cd",
   budokanAddress:
     "0x051f5fc1ddcffcb0bf548378e0166a5e5328fb4894efbab170e3fb1a4c0cdfdf",
+  budokanApiUrl: "https://budokan-api.provable.games",
+  denshokanApiUrl: "https://denshokan-api.provable.games",
 } as const;
 
 //--------------------------------

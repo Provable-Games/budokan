@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { eq, sql, desc } from "drizzle-orm";
+import { eq, sql, desc, and, inArray } from "drizzle-orm";
 import { db } from "../db/client.js";
 import {
   tournaments,
@@ -10,6 +10,7 @@ import {
   parseLimit,
   parseOffset,
 } from "../utils/validation.js";
+import { applyPhaseCondition } from "./tournaments.js";
 
 const app = new Hono();
 
@@ -21,8 +22,32 @@ app.get("/:address/tournaments", async (c) => {
       return c.json({ error: "Invalid player address" }, 400);
     }
 
+    const phase = c.req.query("phase") || null;
+    const gameTokenIdsRaw = c.req.query("game_token_ids") || null;
     const limit = parseLimit(c.req.query("limit"), 50, 100);
     const offset = parseOffset(c.req.query("offset"));
+
+    const conditions: unknown[] = [eq(registrations.playerAddress, address)];
+
+    // Phase filtering (reuses tournament phase SQL logic)
+    if (phase) {
+      applyPhaseCondition(phase, conditions);
+    }
+
+    // Filter by specific game token IDs
+    if (gameTokenIdsRaw) {
+      const tokenIds = gameTokenIdsRaw
+        .split(",")
+        .map((id) => {
+          try { return BigInt(id.trim()); } catch { return null; }
+        })
+        .filter((id): id is bigint => id !== null);
+      if (tokenIds.length > 0) {
+        conditions.push(inArray(registrations.gameTokenId, tokenIds));
+      }
+    }
+
+    const where = and(...(conditions as Parameters<typeof and>));
 
     const [rows, countResult] = await Promise.all([
       db
@@ -32,14 +57,15 @@ app.get("/:address/tournaments", async (c) => {
         })
         .from(registrations)
         .innerJoin(tournaments, eq(registrations.tournamentId, tournaments.tournamentId))
-        .where(eq(registrations.playerAddress, address))
+        .where(where)
         .orderBy(desc(tournaments.createdAt))
         .limit(limit)
         .offset(offset),
       db
         .select({ count: sql<number>`count(*)::int` })
         .from(registrations)
-        .where(eq(registrations.playerAddress, address)),
+        .innerJoin(tournaments, eq(registrations.tournamentId, tournaments.tournamentId))
+        .where(where),
     ]);
 
     return c.json({

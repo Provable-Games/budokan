@@ -11,6 +11,7 @@ const CHANNEL_MAP: Record<string, string> = {
   leaderboards: "leaderboard_updates",
   prizes: "prize_updates",
   rewards: "reward_claim_updates",
+  metrics: "metrics_updates",
 };
 
 const VALID_CHANNELS = new Set(Object.values(CHANNEL_MAP));
