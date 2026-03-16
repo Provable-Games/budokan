@@ -296,7 +296,8 @@ function decodeOptionByteArray(
   idx: number,
 ): { value: string | null; consumed: number } {
   const variant = Number(hexToBigInt(data[idx]));
-  if (variant === 0) {
+  // Cairo serde: Option::Some = 0, Option::None = 1
+  if (variant === 1) {
     return { value: null, consumed: 1 };
   }
   const byteArray = decodeByteArray(data, idx + 1);
@@ -305,14 +306,15 @@ function decodeOptionByteArray(
 
 /**
  * Decode an Option<ContractAddress> from data starting at idx.
- * Option variant (0=None, 1=Some), then felt252 if Some.
+ * Cairo serde: Option::Some = 0, Option::None = 1.
  */
 function decodeOptionAddress(
   data: readonly string[],
   idx: number,
 ): { value: string | null; consumed: number } {
   const variant = Number(hexToBigInt(data[idx]));
-  if (variant === 0) {
+  // Cairo serde: Option::Some = 0, Option::None = 1
+  if (variant === 1) {
     return { value: null, consumed: 1 };
   }
   return { value: feltToHex(data[idx + 1]), consumed: 2 };
@@ -423,7 +425,8 @@ function decodeOptionEntryFee(
   idx: number,
 ): { value: Record<string, unknown> | null; consumed: number } {
   const variant = Number(hexToBigInt(data[idx]));
-  if (variant === 0) {
+  // Cairo serde: Option::Some = 0, Option::None = 1
+  if (variant === 1) {
     return { value: null, consumed: 1 };
   }
 
@@ -485,7 +488,8 @@ function decodeOptionEntryRequirement(
   idx: number,
 ): { value: Record<string, unknown> | null; consumed: number } {
   const variant = Number(hexToBigInt(data[idx]));
-  if (variant === 0) {
+  // Cairo serde: Option::Some = 0, Option::None = 1
+  if (variant === 1) {
     return { value: null, consumed: 1 };
   }
 
