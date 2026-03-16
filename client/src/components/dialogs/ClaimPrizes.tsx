@@ -7,7 +7,7 @@ import {
   DialogTitle,
   DialogClose,
 } from "@/components/ui/dialog";
-import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
+import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 import { useAccount } from "@starknet-react/core";
 import { Tournament, RewardClaim } from "@/generated/models.gen";
 import { feltToString, formatNumber, getOrdinalSuffix, indexAddress } from "@/lib/utils";
@@ -17,13 +17,13 @@ import {
   expandDistributedPrizes,
   formatRewardTypes,
 } from "@/lib/utils/formatting";
-import { useConnectToSelectedChain } from "@/dojo/hooks/useChain";
+import { useConnectToSelectedChain } from "@/chain/hooks/useChain";
 import { TokenPrices } from "@/hooks/useEkuboPrices";
 import {
   getTokenLogoUrl,
   getTokenDecimals,
 } from "@/lib/tokensMeta";
-import { useDojo } from "@/context/dojo";
+import { useChainConfig } from "@/context/chain";
 import { LoadingSpinner } from "@/components/ui/spinner";
 import {
   useGetTournamentPrizes,
@@ -48,7 +48,7 @@ export function ClaimPrizesDialog({
   const { address } = useAccount();
   const { connect } = useConnectToSelectedChain();
   const { claimPrizes, claimPrizesBatched } = useSystemCalls();
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
   const [isProcessing, setIsProcessing] = useState(false);
   const [batchProgress, setBatchProgress] = useState<{
     current: number;

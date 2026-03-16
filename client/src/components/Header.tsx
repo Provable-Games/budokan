@@ -17,9 +17,9 @@ import {
 } from "@/hooks/useController";
 import { useNavigate, useLocation } from "react-router-dom";
 import { getConnectorIcon } from "@/lib/connectors";
-import { useDojo } from "@/context/dojo";
-import { ChainId, NetworkId } from "@/dojo/setup/networks";
-import { useSwitchNetwork } from "@/dojo/hooks/useChain";
+import { useChainConfig } from "@/context/chain";
+import { ChainId, NetworkId } from "@/chain/setup/networks";
+import { useSwitchNetwork } from "@/chain/hooks/useChain";
 import {
   Sheet,
   SheetContent,
@@ -63,7 +63,7 @@ const Header = () => {
   const { switchToMainnet, switchToSepolia } = useSwitchNetwork();
   const navigate = useNavigate();
   const location = useLocation();
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
   const isMainnet = selectedChainConfig.chainId === ChainId.SN_MAIN;
   const isSepolia = selectedChainConfig.chainId === ChainId.SN_SEPOLIA;
   const isHomeScreen = location.pathname === "/";

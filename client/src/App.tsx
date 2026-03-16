@@ -8,9 +8,8 @@ import useUIStore from "./hooks/useUIStore";
 import { getGames } from "./assets/games";
 import Header from "@/components/Header";
 import LoadingPage from "@/containers/LoadingPage";
-import { useResetDojoOnNetworkChange } from "@/dojo/hooks/useResetDojoOnNetworkChange";
-import { useSyncNetworkUrl } from "@/dojo/hooks/useSyncNetworkUrl";
-import { useSwitchToUrlNetwork } from "@/dojo/hooks/useSwitchToUrlNetwork";
+import { useSyncNetworkUrl } from "@/chain/hooks/useSyncNetworkUrl";
+import { useSwitchToUrlNetwork } from "@/chain/hooks/useSwitchToUrlNetwork";
 import { useGames } from "@/hooks/useDenshokanQueries";
 import {
   useSubscribeTournaments,
@@ -36,8 +35,6 @@ function App() {
   // Network management hooks
   useSwitchToUrlNetwork(); // Switch to network from URL on initial load
   useSyncNetworkUrl(); // Keep URL in sync when network changes
-  useResetDojoOnNetworkChange();
-
   useSubscribeMetrics();
   useSubscribeTournaments();
 

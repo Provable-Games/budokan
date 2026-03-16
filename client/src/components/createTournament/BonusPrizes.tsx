@@ -1,12 +1,12 @@
 import { StepProps } from "@/containers/CreateTournament";
 import { PrizeManager } from "@/components/shared/PrizeManager";
-import { useDojo } from "@/context/dojo";
-import { ChainId } from "@/dojo/setup/networks";
+import { useChainConfig } from "@/context/chain";
+import { ChainId } from "@/chain/setup/networks";
 import { FormField, FormItem } from "@/components/ui/form";
 import { OptionalSection } from "@/components/createTournament/containers/OptionalSection";
 
 const BonusPrizes = ({ form }: StepProps) => {
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
 
   const chainId = selectedChainConfig?.chainId ?? "";
   const isSepolia = selectedChainConfig?.chainId === ChainId.SN_SEPOLIA;

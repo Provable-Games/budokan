@@ -1,7 +1,7 @@
 import { createContext, useContext, useMemo } from "react";
 import type { ReactNode } from "react";
 import { useNetwork } from "@starknet-react/core";
-import { CHAINS, ChainId, getDefaultChainId } from "@/dojo/setup/networks";
+import { CHAINS, ChainId, getDefaultChainId } from "@/chain/setup/networks";
 import { createDenshokanClient, type DenshokanClient, type DenshokanClientConfig } from "@provable-games/denshokan-sdk";
 
 const DenshokanContext = createContext<DenshokanClient | null>(null);

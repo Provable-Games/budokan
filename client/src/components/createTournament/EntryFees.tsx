@@ -13,13 +13,13 @@ import { useEkuboPrices } from "@/hooks/useEkuboPrices";
 import { getTokenLogoUrl } from "@/lib/tokensMeta";
 import { FeeDistributionVisual } from "@/components/createTournament/FeeDistributionVisual";
 import { PrizeDistributionVisual } from "@/components/createTournament/PrizeDistributionVisual";
-import { useDojo } from "@/context/dojo";
+import { useChainConfig } from "@/context/chain";
 import { TokenSelector } from "@/components/createTournament/inputs/TokenSelector";
 import { TokenAmountInput } from "@/components/createTournament/inputs/TokenAmountInput";
-import { ChainId } from "@/dojo/setup/networks";
+import { ChainId } from "@/chain/setup/networks";
 
 const EntryFees = ({ form }: StepProps) => {
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
 
   const chainId = selectedChainConfig?.chainId ?? "";
   const isSepolia = selectedChainConfig?.chainId === ChainId.SN_SEPOLIA;

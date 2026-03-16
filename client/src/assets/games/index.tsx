@@ -1,5 +1,5 @@
-import { ChainId } from "@/dojo/setup/networks";
-import { useDojo } from "@/context/dojo";
+import { ChainId } from "@/chain/setup/networks";
+import { useChainConfig } from "@/context/chain";
 import lsLogo from "./ls-logo.png";
 
 export interface Game {
@@ -248,6 +248,6 @@ export const getGamesForChain = (chainId: string): Game[] => {
 };
 
 export const getGames = (): Game[] => {
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
   return getGamesForChain(selectedChainConfig.chainId ?? "");
 };

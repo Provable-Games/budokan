@@ -5,7 +5,7 @@ import App from "./App.tsx";
 import { StarknetProvider } from "@/context/starknet";
 
 import { BrowserRouter as Router } from "react-router-dom";
-import { DojoContextProvider } from "@/context/dojo";
+import { ChainContextProvider } from "@/context/chain";
 import { EkuboProvider } from "@provable-games/ekubo-sdk/react";
 import { BudokanProvider } from "@/context/budokan";
 import { DenshokanProvider } from "@/context/denshokan";
@@ -14,7 +14,7 @@ async function main() {
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
       <StarknetProvider>
-        <DojoContextProvider>
+        <ChainContextProvider>
           <EkuboProvider config={{ fetch: { timeout: 30000 } }}>
             <BudokanProvider>
               <DenshokanProvider>
@@ -24,7 +24,7 @@ async function main() {
               </DenshokanProvider>
             </BudokanProvider>
           </EkuboProvider>
-        </DojoContextProvider>
+        </ChainContextProvider>
       </StarknetProvider>
     </StrictMode>
   );

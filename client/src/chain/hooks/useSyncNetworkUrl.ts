@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useNetwork } from "@starknet-react/core";
 import { useNavigate, useLocation } from "react-router-dom";
 import { feltToString } from "@/lib/utils";
-import { ChainId } from "@/dojo/setup/networks";
+import { ChainId } from "@/chain/setup/networks";
 
 /**
  * Hook to keep URL network parameter in sync with wallet network

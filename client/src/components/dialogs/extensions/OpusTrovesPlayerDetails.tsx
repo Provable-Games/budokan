@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { OPUS } from "@/components/Icons";
 import { getTokenByAddress } from "@/lib/tokenUtils";
-import { useDojo } from "@/context/dojo";
+import { useChainConfig } from "@/context/chain";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 
 interface OpusTrovesConfig {
@@ -29,7 +29,7 @@ export const OpusTrovesPlayerDetails = ({
   troveDebt,
   totalEntriesRegistered,
 }: OpusTrovesPlayerDetailsProps) => {
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
 
   // Get CASH token for display
   const cashToken = useMemo(() => {

@@ -1,6 +1,6 @@
 import { useAccount } from "@starknet-react/core";
 import { useProvider } from "@starknet-react/core";
-import { useDojo } from "@/context/dojo";
+import { useChainConfig } from "@/context/chain";
 import {
   Tournament,
   Prize,
@@ -23,12 +23,19 @@ import {
 } from "starknet";
 import { feltToString } from "@/lib/utils";
 import useUIStore from "@/hooks/useUIStore";
+import {
+  checkExtensionValidEntry as sdkCheckExtensionValidEntry,
+  getExtensionEntriesLeft as sdkGetExtensionEntriesLeft,
+  checkExtensionShouldBan as sdkCheckExtensionShouldBan,
+  getUserTroveIds as sdkGetUserTroveIds,
+  getTroveDebt as sdkGetTroveDebt,
+} from "@provable-games/metagame-sdk/rpc";
 import { useToastMessages } from "@/components/toast";
-import { useEntityUpdates } from "@/dojo/hooks/useEntityUpdates";
+import { useEntityUpdates } from "@/chain/hooks/useEntityUpdates";
 import BUDOKAN_ABI from "@/lib/abis/budokan";
 
 export const useSystemCalls = () => {
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
   const { account, address } = useAccount();
   const { provider } = useProvider();
   const tournamentAddress = selectedChainConfig.budokanAddress!;
@@ -1030,24 +1037,8 @@ export const useSystemCalls = () => {
     playerAddress: string,
     qualification: string[]
   ): Promise<boolean> => {
-    try {
-      if (!provider) return false;
-
-      const result = await provider.callContract({
-        contractAddress: extensionAddress,
-        entrypoint: "valid_entry",
-        calldata: CallData.compile([
-          tournamentId,
-          playerAddress,
-          qualification,
-        ]),
-      });
-
-      return result[0] === "0x1" || BigInt(result[0]) === 1n;
-    } catch (error) {
-      console.error("Error checking extension valid_entry:", error);
-      return false;
-    }
+    if (!provider) return false;
+    return sdkCheckExtensionValidEntry(provider, extensionAddress, tournamentId, playerAddress, qualification);
   };
 
   const checkRegistrationOnly = async (
@@ -1077,31 +1068,9 @@ export const useSystemCalls = () => {
     playerAddress: string,
     qualification: string[]
   ): Promise<number | null> => {
+    if (!provider) return null;
     try {
-      if (!provider) return null;
-
-      const result = await provider.callContract({
-        contractAddress: extensionAddress,
-        entrypoint: "entries_left",
-        calldata: CallData.compile([
-          tournamentId,
-          playerAddress,
-          qualification,
-        ]),
-      });
-
-      console.log(result);
-
-      // Result is Option<u8>
-      // If Option::Some, result[0] is 0 and result[1] is the value
-      // If Option::None, result[0] is 1
-      if (result[0] === "0x1" || BigInt(result[0]) === 1n) {
-        // Option::None - no limit
-        return null;
-      } else {
-        // Option::Some - return the value
-        return Number(result[1]);
-      }
+      return sdkGetExtensionEntriesLeft(provider, extensionAddress, tournamentId, playerAddress, qualification);
     } catch (error) {
       console.error("Error getting extension entries_left:", error);
       return null;
@@ -1115,82 +1084,22 @@ export const useSystemCalls = () => {
     playerAddress: string,
     qualification: string[]
   ): Promise<boolean> => {
-    try {
-      if (!provider) return false;
-
-      // should_ban signature: (tournament_id: u64, game_token_id: u64, current_owner: ContractAddress, qualification: Span<felt252>)
-      const result = await provider.callContract({
-        contractAddress: extensionAddress,
-        entrypoint: "should_ban",
-        calldata: CallData.compile([
-          tournamentId,
-          gameTokenId, // u64, not u256
-          playerAddress,
-          qualification,
-        ]),
-      });
-
-      return result[0] === "0x1" || BigInt(result[0]) === 1n;
-    } catch (error) {
-      console.error("Error checking should_ban:", error);
-      return false;
-    }
+    if (!provider) return false;
+    return sdkCheckExtensionShouldBan(provider, extensionAddress, tournamentId, gameTokenId, playerAddress, qualification);
   };
 
   const getUserTroveIds = async (
     userAddress: BigNumberish
   ): Promise<bigint[]> => {
-    try {
-      if (!provider) return [];
-
-      const ABBOT_ADDRESS =
-        "0x04d0bb0a4c40012384e7c419e6eb3c637b28e8363fb66958b60d90505b9c072f";
-
-      // get_user_trove_ids returns an array of trove IDs
-      const result = await provider.callContract({
-        contractAddress: ABBOT_ADDRESS,
-        entrypoint: "get_user_trove_ids",
-        calldata: CallData.compile([userAddress]),
-      });
-
-      // Result format is array length followed by the trove IDs
-      const arrayLength = Number(result[0] || 0);
-      const troveIds: bigint[] = [];
-
-      for (let i = 1; i <= arrayLength; i++) {
-        troveIds.push(BigInt(result[i] || 0));
-      }
-
-      return troveIds;
-    } catch (error) {
-      console.error("Error getting user trove IDs:", error);
-      return [];
-    }
+    if (!provider) return [];
+    return sdkGetUserTroveIds(provider, userAddress);
   };
 
   const getTroveHealth = async (
     troveId: BigNumberish
   ): Promise<bigint | null> => {
-    try {
-      if (!provider) return null;
-
-      const SHRINE_ADDRESS =
-        "0x0498edfaf50ca5855666a700c25dd629d577eb9afccdf3b5977aec79aee55ada";
-
-      // get_trove_health returns [value, threshold, ltv, debt]
-      // We need the debt (last element, index 3) with 18 decimals
-      const result = await provider.callContract({
-        contractAddress: SHRINE_ADDRESS,
-        entrypoint: "get_trove_health",
-        calldata: CallData.compile([troveId]),
-      });
-
-      // Return debt amount (last element in result)
-      return BigInt(result[3] || 0);
-    } catch (error) {
-      console.error("Error getting trove health:", error);
-      return null;
-    }
+    if (!provider) return null;
+    return sdkGetTroveDebt(provider, troveId);
   };
 
   return {

@@ -17,9 +17,9 @@ import BonusPrizes from "@/components/createTournament/BonusPrizes";
 import TournamentConfirmation from "@/components/dialogs/TournamentConfirmation";
 import { processPrizes, processTournamentData } from "@/lib/utils/formatting";
 import { useAccount } from "@starknet-react/core";
-import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
+import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 import { Tournament } from "@/generated/models.gen";
-import { useDojo } from "@/context/dojo";
+import { useChainConfig } from "@/context/chain";
 import { FormToken } from "@/lib/types";
 import {
   useGetPlatformMetrics,
@@ -134,7 +134,7 @@ const formSchema = z.object({
 const CreateTournament = () => {
   const navigate = useNavigate();
   const { address } = useAccount();
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
   const { createTournamentAndApproveAndAddPrizes } = useSystemCalls();
 
   const form = useForm<z.infer<typeof formSchema>>({

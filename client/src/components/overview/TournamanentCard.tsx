@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 import Countdown from "@/components/Countdown";
 import { Tournament, Prize } from "@/generated/models.gen";
 import { TokenMetadata } from "@/lib/types";
-import { useDojo } from "@/context/dojo";
+import { useChainConfig } from "@/context/chain";
 import {
   groupPrizesByTokens,
   extractEntryFeePrizes,
@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/tooltip";
 import useUIStore from "@/hooks/useUIStore";
 import { Badge } from "@/components/ui/badge";
-import { ChainId } from "@/dojo/setup/networks";
+import { ChainId } from "@/chain/setup/networks";
 import { TokenPrices } from "@/hooks/useEkuboPrices";
 import { getTokenLogoUrl } from "@/lib/tokensMeta";
 import { useTournamentPrizeValue } from "@/hooks/useTournamentPrizeValue";
@@ -61,7 +61,7 @@ export const TournamentCard = ({
   tokenDecimals,
   aggregations,
 }: TournamentCardProps) => {
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
   const navigate = useNavigate();
   const { gameData, getGameImage } = useUIStore();
 

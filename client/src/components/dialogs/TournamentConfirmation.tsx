@@ -11,7 +11,7 @@ import { format } from "date-fns";
 import TokenGameIcon from "@/components/icons/TokenGameIcon";
 import { ALERT, EXTERNAL_LINK } from "@/components/Icons";
 import { useAccount } from "@starknet-react/core";
-import { useConnectToSelectedChain } from "@/dojo/hooks/useChain";
+import { useConnectToSelectedChain } from "@/chain/hooks/useChain";
 import useUIStore from "@/hooks/useUIStore";
 import {
   feltToString,
@@ -25,13 +25,13 @@ import { calculatePaidPlaces } from "@/lib/utils/formatting";
 import { getTokenLogoUrl, getTokenDecimals } from "@/lib/tokensMeta";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
 import { useMemo, useState, useEffect } from "react";
-import { useDojo } from "@/context/dojo";
+import { useChainConfig } from "@/context/chain";
 // import { calculateTotalValue } from "@/lib/utils/formatting";
 import { LoadingSpinner } from "@/components/ui/spinner";
 import { useGameSetting } from "@/hooks/useDenshokanQueries";
 import { getExtensionAddresses } from "@/lib/extensionConfig";
 import { getTokenByAddress } from "@/lib/tokenUtils";
-import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
+import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 import { OPUS } from "@/components/Icons";
 import {
   validateTournamentCreation,
@@ -54,7 +54,7 @@ const TournamentConfirmation = ({
 }: TournamentConfirmationProps) => {
   const { address } = useAccount();
   const { connect } = useConnectToSelectedChain();
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
   const { gameData, getGameImage } = useUIStore();
   const [isCreating, setIsCreating] = useState(false);
 

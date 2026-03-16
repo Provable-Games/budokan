@@ -10,13 +10,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { getTokenLogoUrl } from "@/lib/tokensMeta";
-import { useDojo } from "@/context/dojo";
+import { useChainConfig } from "@/context/chain";
 import { QUESTION } from "@/components/Icons";
 import { indexAddress } from "@/lib/utils";
 import { FormToken } from "@/lib/types";
 import { mainnetNFTs, sepoliaNFTs } from "@/lib/nfts";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useDebounce } from "@/hooks/useDebounce";
+import { useDebounce } from "@provable-games/metagame-sdk/react";
 import { getPaginatedTokens, TokenForDisplay } from "@/lib/tokenUtils";
 
 interface TokenDialogProps {
@@ -35,7 +35,7 @@ const TokenDialog = ({
   const [tokenSearchQuery, setTokenSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
 
   const tokensPerPage = 10;
   const offset = currentPage * tokensPerPage;

@@ -1,5 +1,5 @@
 import { StarknetDomain } from "starknet";
-import { ChainId, CHAINS } from "@/dojo/setup/networks";
+import { ChainId, CHAINS } from "@/chain/setup/networks";
 
 export const namespace: Record<ChainId, string> = {
   [ChainId.SN_MAIN]: "budokan_relayer_0_0_12",
@@ -20,13 +20,13 @@ export const makeStarknetDomain = (chainId: ChainId): StarknetDomain => ({
 
 //------------------------
 
-export interface DojoAppConfig {
+export interface AppConfig {
   selectedChainId: ChainId;
   namespace: string;
   starknetDomain: StarknetDomain;
 }
 
-export const makeDojoAppConfig = (chainId: ChainId): DojoAppConfig => {
+export const makeAppConfig = (chainId: ChainId): AppConfig => {
   return {
     selectedChainId: chainId,
     namespace: namespace[chainId],

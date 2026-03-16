@@ -14,11 +14,11 @@ import TournamentTimeline from "@/components/TournamentTimeline";
 import Countdown from "@/components/Countdown";
 import { feltToString, indexAddress, padU64, formatNumber } from "@/lib/utils";
 import { addAddressPadding } from "starknet";
-import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
+import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 import {
   Tournament as TournamentModel,
 } from "@/generated/models.gen";
-import { useDojo } from "@/context/dojo";
+import { useChainConfig } from "@/context/chain";
 import {
   extractEntryFeePrizes,
   expandDistributedPrizes,
@@ -48,7 +48,7 @@ import {
 import { useSubscribeTournament } from "@/hooks/useBudokanWebSocket";
 import { getTokensByAddresses } from "@/lib/tokenUtils";
 import { getTokenLogoUrl } from "@/lib/tokensMeta";
-import { ChainId } from "@/dojo/setup/networks";
+import { ChainId } from "@/chain/setup/networks";
 import NotFound from "@/containers/NotFound";
 import {
   Tooltip,
@@ -76,7 +76,7 @@ const Tournament = () => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isDescriptionDialogOpen, setIsDescriptionDialogOpen] = useState(false);
   const navigate = useNavigate();
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
   const { getTokenDecimals } = useSystemCalls();
   const { gameData, getGameImage } = useUIStore();
   const [enterDialogOpen, setEnterDialogOpen] = useState(false);

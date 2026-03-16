@@ -3,11 +3,11 @@ import { FormLabel, FormDescription } from "@/components/ui/form";
 import TokenDialog from "@/components/dialogs/Token";
 import { getTokenLogoUrl } from "@/lib/tokensMeta";
 import { FormToken } from "@/lib/types";
-import { useDojo } from "@/context/dojo";
-import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
+import { useChainConfig } from "@/context/chain";
+import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 import { mainnetTokens } from "@/lib/mainnetTokens";
 import { sepoliaTokens } from "@/lib/sepoliaTokens";
-import { ChainId } from "@/dojo/setup/networks";
+import { ChainId } from "@/chain/setup/networks";
 import { indexAddress } from "@/lib/utils";
 
 interface QuickSelectToken {
@@ -41,7 +41,7 @@ export const TokenSelector = ({
   showTypeSelector = false,
   onTokenTypeChange,
 }: TokenSelectorProps) => {
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
   const { getTokenDecimals } = useSystemCalls();
 
   const chainId = selectedChainConfig?.chainId ?? "";

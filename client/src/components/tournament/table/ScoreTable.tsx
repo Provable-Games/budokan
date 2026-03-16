@@ -21,7 +21,7 @@ import EntrantRow from "@/components/tournament/table/EntrantRow";
 import { padAddress } from "@/lib/utils";
 import { ScoreTableDialog } from "@/components/dialogs/ScoreTable";
 import { BanManagementDialog } from "@/components/dialogs/BanManagement";
-import { useDojo } from "@/context/dojo";
+import { useChainConfig } from "@/context/chain";
 import { Tournament } from "@/generated/models.gen";
 import { Ban } from "lucide-react";
 
@@ -42,7 +42,7 @@ const ScoreTable = ({
   tournamentModel,
   onBanComplete,
 }: ScoreTableProps) => {
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
   const [showScores, setShowScores] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<any>(null);
   const [isMobileDialogOpen, setIsMobileDialogOpen] = useState(false);

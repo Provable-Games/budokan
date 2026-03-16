@@ -5,14 +5,14 @@ import {
   useConnect,
   useSwitchChain,
 } from "@starknet-react/core";
-import { useDojo } from "@/context/dojo";
-import { ChainId } from "@/dojo/setup/networks";
+import { useChainConfig } from "@/context/chain";
+import { ChainId } from "@/chain/setup/networks";
 import { stringToFelt } from "@/lib/utils";
 
 export const useConnectToSelectedChain = (onConnect?: () => void) => {
   const { connect, connectors } = useConnect();
   const { isConnected, isConnecting } = useAccount();
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
 
   const [requestedConnect, setRequestedConnect] = useState(false);
   useEffect(() => {

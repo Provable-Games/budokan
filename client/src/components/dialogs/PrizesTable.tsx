@@ -17,7 +17,7 @@ import { PositionPrizes, DisplayPrize, TokenMetadata } from "@/lib/types";
 import { formatNumber, getOrdinalSuffix, indexAddress } from "@/lib/utils";
 import { expandDistributedPrize } from "@/lib/utils/prizeDistribution";
 import { getTokenLogoUrl } from "@/lib/tokensMeta";
-import { useDojo } from "@/context/dojo";
+import { useChainConfig } from "@/context/chain";
 import { calculatePrizeValue } from "@/lib/utils/formatting";
 import { useState, useMemo } from "react";
 import { useGetTournamentPrizes } from "@/hooks/useBudokanQueries";
@@ -51,7 +51,7 @@ export const PrizesTableDialog = ({
   tournamentId,
   entryFeePrizes = [],
 }: PrizesTableDialogProps) => {
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
   const chainId = selectedChainConfig?.chainId ?? "";
   const [currentPage, setCurrentPage] = useState(0);
   const positionsPerPage = 5;

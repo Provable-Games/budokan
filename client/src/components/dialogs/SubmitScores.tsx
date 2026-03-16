@@ -6,16 +6,16 @@ import {
   DialogTitle,
   DialogClose,
 } from "@/components/ui/dialog";
-import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
+import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 import { useAccount } from "@starknet-react/core";
 import { Leaderboard, Tournament } from "@/generated/models.gen";
 import { padAddress, feltToString, getOrdinalSuffix } from "@/lib/utils";
-import { useConnectToSelectedChain } from "@/dojo/hooks/useChain";
+import { useConnectToSelectedChain } from "@/chain/hooks/useChain";
 import { useGameTokens } from "@/hooks/useDenshokanQueries";
 import { getSubmittableScores } from "@/lib/utils/formatting";
 import { useState, useMemo } from "react";
 import { LoadingSpinner } from "@/components/ui/spinner";
-import { useDojo } from "@/context/dojo";
+import { useChainConfig } from "@/context/chain";
 import { useGetTournamentRegistrations } from "@/hooks/useBudokanQueries";
 
 interface SubmitScoresDialogProps {
@@ -34,7 +34,7 @@ export function SubmitScoresDialog({
   const { address } = useAccount();
   const { connect } = useConnectToSelectedChain();
   const { submitScores, submitScoresBatched } = useSystemCalls();
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [batchProgress, setBatchProgress] = useState<{
     current: number;

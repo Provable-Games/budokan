@@ -2,8 +2,8 @@
  * Mapper utilities for converting API/SDK response shapes (camelCase JSON)
  * to the existing client TypeScript interfaces (BigNumberish, CairoOption wrappers).
  *
- * These mappers allow consuming components to remain unchanged during the
- * Dojo → SDK migration.
+ * These mappers allow consuming components to remain unchanged during
+ * API response mapping.
  */
 import {
   CairoOption,
@@ -43,7 +43,7 @@ function toCairoOption<T>(value: T | null | undefined): CairoOption<T> {
 }
 
 /**
- * Convert API tournament to Dojo-compatible Tournament model shape.
+ * Convert API tournament to Tournament model shape.
  * This preserves the snake_case field names and CairoOption wrappers
  * that existing components expect.
  */
@@ -129,7 +129,7 @@ export function mapApiTournamentToModel(t: ApiTournament): Tournament & {
 }
 
 /**
- * Convert API registration to Dojo-compatible Registration model shape.
+ * Convert API registration to Registration model shape.
  */
 export function mapApiRegistrationToModel(r: ApiRegistration): Registration {
   return {
@@ -142,8 +142,8 @@ export function mapApiRegistrationToModel(r: ApiRegistration): Registration {
 }
 
 /**
- * Convert API leaderboard entries to Dojo-compatible Leaderboard model.
- * The Dojo model has token_ids as an array; API returns individual entries.
+ * Convert API leaderboard entries to Leaderboard model.
+ * The model has token_ids as an array; API returns individual entries.
  */
 export function mapApiLeaderboardToModel(
   tournamentId: string,
@@ -156,7 +156,7 @@ export function mapApiLeaderboardToModel(
 }
 
 /**
- * Convert API prize to Dojo-compatible Prize model shape.
+ * Convert API prize to Prize model shape.
  */
 export function mapApiPrizeToModel(p: ApiPrize): Prize {
   // Build token_type as CairoCustomEnum
@@ -190,7 +190,7 @@ export function mapApiPrizeToModel(p: ApiPrize): Prize {
 }
 
 /**
- * Convert API platform stats to Dojo-compatible PlatformMetrics model.
+ * Convert API platform stats to PlatformMetrics model.
  */
 export function mapApiPlatformStatsToModel(stats: ApiPlatformStats): PlatformMetrics {
   return {

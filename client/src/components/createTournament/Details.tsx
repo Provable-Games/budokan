@@ -25,15 +25,15 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { getGameDefaults, getGamesForChain } from "@/assets/games";
-import { useDojo } from "@/context/dojo";
-import { ChainId } from "@/dojo/setup/networks";
+import { useChainConfig } from "@/context/chain";
+import { ChainId } from "@/chain/setup/networks";
 import { mainnetTokens } from "@/lib/mainnetTokens";
 import { sepoliaTokens } from "@/lib/sepoliaTokens";
 import { FormToken } from "@/lib/types";
 
 const Details = ({ form }: StepProps) => {
   const { gameData } = useUIStore();
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
   const [isMobileDialogOpen, setIsMobileDialogOpen] = useState(false);
   const [isMarkdownPreviewOpen, setIsMarkdownPreviewOpen] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);

@@ -23,7 +23,7 @@ import { displayAddress, feltToString, indexAddress } from "@/lib/utils";
 import TokenGameIcon from "@/components/icons/TokenGameIcon";
 import { Search } from "lucide-react";
 import TokenDialog from "@/components/dialogs/Token";
-import { useDojo } from "@/context/dojo";
+import { useChainConfig } from "@/context/chain";
 import {
   useGetTournaments,
   useGetTournamentsCount,
@@ -58,7 +58,7 @@ import { OpusTrovesConfig } from "./extensions/OpusTrovesConfig";
 import { CustomExtensionConfig } from "./extensions/CustomExtensionConfig";
 
 const EntryRequirements = ({ form }: StepProps) => {
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
   const [newAddress, setNewAddress] = React.useState("");
   const [tournamentSearchQuery, setTournamentSearchQuery] = useState("");
   const [gameFilters, setGameFilters] = useState<string[]>([]);

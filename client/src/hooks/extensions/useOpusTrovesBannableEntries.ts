@@ -1,12 +1,7 @@
 import { useMemo } from "react";
 import { useOpusTroveDebts } from "../useOpusTroveDebts";
-
-interface OpusTrovesConfig {
-  assetAddresses: string[];
-  threshold: bigint;
-  valuePerEntry: bigint;
-  maxEntries: number;
-}
+import { findAllBannableEntries } from "@/lib/utils";
+import type { OpusTrovesValidatorConfig } from "@/lib/utils";
 
 interface Game {
   token_id: number | bigint;
@@ -15,7 +10,7 @@ interface Game {
 
 interface UseOpusTrovesBannableEntriesParams {
   games: Game[];
-  config: OpusTrovesConfig;
+  config: OpusTrovesValidatorConfig;
   enabled: boolean;
 }
 
@@ -27,12 +22,8 @@ interface UseOpusTrovesBannableEntriesResult {
 }
 
 /**
- * Hook to calculate bannable entries for Opus Troves extension
- *
- * Logic:
- * - Proportional mode (valuePerEntry > 0): entries based on (debt - threshold) / valuePerEntry
- * - Fixed mode (valuePerEntry = 0): if debt >= threshold, allow maxEntries
- * - Cap at maxEntries if specified
+ * Hook to calculate bannable entries for Opus Troves extension.
+ * Uses metagame-sdk's findAllBannableEntries for the core math.
  */
 export const useOpusTrovesBannableEntries = ({
   games,
@@ -45,9 +36,7 @@ export const useOpusTrovesBannableEntries = ({
     games.forEach((game) => {
       const owner = game?.owner;
       if (!owner) return;
-      if (!groups.has(owner)) {
-        groups.set(owner, []);
-      }
+      if (!groups.has(owner)) groups.set(owner, []);
       groups.get(owner)!.push(game);
     });
     return groups;
@@ -56,72 +45,29 @@ export const useOpusTrovesBannableEntries = ({
   // Get unique player addresses
   const playerAddresses = useMemo(
     () => Array.from(playerGroups.keys()),
-    [playerGroups]
+    [playerGroups],
   );
 
-  // Fetch trove debts for all players
+  // Fetch trove debts for all players (RPC calls — stays in budokan)
   const { debts: troveDebts, isLoading } = useOpusTroveDebts({
     userAddresses: playerAddresses,
     assetAddresses: config.assetAddresses,
     enabled: enabled && playerAddresses.length > 0,
   });
 
-  // Calculate bannable entries
+  // Calculate bannable entries using SDK math
   const bannableEntries = useMemo(() => {
-    const bannable = new Set<string>();
+    if (!enabled || isLoading) return new Set<string>();
 
-    if (!enabled || isLoading) {
-      return bannable;
-    }
-
-    // Calculate bannable entries for each player
+    const players = new Map<string, { debt: bigint; registeredTokenIds: string[] }>();
     for (const [owner, ownerGames] of playerGroups.entries()) {
-      const debt = troveDebts.get(owner) || 0n;
-      const threshold = config.threshold;
-      const valuePerEntry = config.valuePerEntry;
-
-      let totalEntriesAllowed = 0;
-
-      if (valuePerEntry > 0n) {
-        // Proportional mode: entries based on CASH borrowed per entry value
-        if (debt > threshold) {
-          totalEntriesAllowed = Number((debt - threshold) / valuePerEntry);
-        }
-      } else {
-        // Fixed mode: if debt meets threshold, allow maxEntries
-        if (debt >= threshold && config.maxEntries > 0) {
-          totalEntriesAllowed = config.maxEntries;
-        }
-      }
-
-      // Cap at max entries if specified
-      if (config.maxEntries > 0) {
-        totalEntriesAllowed = Math.min(
-          totalEntriesAllowed,
-          config.maxEntries
-        );
-      }
-
-      const totalEntriesRegistered = ownerGames.length;
-      const bannableCount = Math.max(
-        0,
-        totalEntriesRegistered - totalEntriesAllowed
-      );
-
-      // Mark the first N entries as bannable (sorted by token_id)
-      if (bannableCount > 0) {
-        const sortedGames = [...ownerGames].sort((a, b) => {
-          const aId = typeof a.token_id === 'bigint' ? Number(a.token_id) : a.token_id;
-          const bId = typeof b.token_id === 'bigint' ? Number(b.token_id) : b.token_id;
-          return aId - bId;
-        });
-        for (let i = 0; i < bannableCount; i++) {
-          bannable.add(sortedGames[i].token_id.toString());
-        }
-      }
+      players.set(owner, {
+        debt: troveDebts.get(owner) ?? 0n,
+        registeredTokenIds: ownerGames.map((g) => g.token_id.toString()),
+      });
     }
 
-    return bannable;
+    return findAllBannableEntries(players, config);
   }, [enabled, isLoading, playerGroups, troveDebts, config]);
 
   return {

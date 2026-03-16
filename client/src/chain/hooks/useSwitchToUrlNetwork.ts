@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useAccount, useNetwork } from "@starknet-react/core";
 import { feltToString } from "@/lib/utils";
-import { ChainId, getDefaultChainId } from "@/dojo/setup/networks";
+import { ChainId, getDefaultChainId } from "@/chain/setup/networks";
 import { useSwitchNetwork } from "./useChain";
 
 /**

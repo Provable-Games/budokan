@@ -26,7 +26,7 @@ import {
 import { useAccountTokenIds } from "@/hooks/useDenshokanQueries";
 import { useSubscribeTournaments } from "@/hooks/useBudokanWebSocket";
 import { indexAddress } from "@/lib/utils";
-import { useDojo } from "@/context/dojo";
+import { useChainConfig } from "@/context/chain";
 import EmptyResults from "@/components/overview/tournaments/EmptyResults";
 import { TournamentCard } from "@/components/overview/TournamanentCard";
 import TournamentSkeletons from "@/components/overview/TournamentSkeletons";
@@ -36,7 +36,7 @@ import useTournamentStore, { TournamentTab } from "@/hooks/tournamentStore";
 import { EXCLUDED_TOURNAMENT_IDS } from "@/lib/constants";
 import { LoadingSpinner } from "@/components/ui/spinner";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
-import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
+import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 
 const SORT_OPTIONS = {
   upcoming: [
@@ -59,7 +59,7 @@ const SORT_OPTIONS = {
 } as const;
 
 const Overview = () => {
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
   const { address } = useAccount();
   const { chain } = useNetwork();
   const { getTokenDecimals } = useSystemCalls();

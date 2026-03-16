@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { useDojo } from "@/context/dojo";
-import { ChainId } from "@/dojo/setup/networks";
+import { useChainConfig } from "@/context/chain";
+import { ChainId } from "@/chain/setup/networks";
 import { indexAddress } from "@/lib/utils";
 
 export interface TokenPrices {
@@ -80,7 +80,7 @@ export const useEkuboPrices = ({
   maxRetries = 5,
   retryDelayMs = 5000,
 }: EkuboPriceProps) => {
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
   const [prices, setPrices] = useState<TokenPrices>({});
   const [isLoading, setIsLoading] = useState(true);
   const [errorTokens, setErrorTokens] = useState<Set<string>>(new Set());

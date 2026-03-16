@@ -11,9 +11,9 @@ import { BigNumberish, addAddressPadding } from "starknet";
 import { useGameTokens } from "@/hooks/useDenshokanQueries";
 import { REFRESH, USER } from "@/components/Icons";
 import { useGetTournamentRegistrations } from "@/hooks/useBudokanQueries";
-import { useDojo } from "@/context/dojo";
+import { useChainConfig } from "@/context/chain";
 import { Tournament } from "@/generated/models.gen";
-import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
+import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 import { displayAddress, indexAddress } from "@/lib/utils";
 import {
   getExtensionProof,
@@ -22,7 +22,7 @@ import {
 import { useAccount } from "@starknet-react/core";
 import { OpusTrovesPlayerDetails } from "./extensions/OpusTrovesPlayerDetails";
 import { useOpusTrovesBannableEntries } from "@/hooks/extensions/useOpusTrovesBannableEntries";
-import { useEntityUpdates } from "@/dojo/hooks/useEntityUpdates";
+import { useEntityUpdates } from "@/chain/hooks/useEntityUpdates";
 
 interface BanManagementDialogProps {
   open: boolean;
@@ -53,7 +53,7 @@ export const BanManagementDialog = ({
   extensionAddress,
   onBanComplete,
 }: BanManagementDialogProps) => {
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
   const { address } = useAccount();
   const tournamentAddress = selectedChainConfig.budokanAddress!;
   const [bannableEntries, setBannableEntries] = useState<Set<string>>(

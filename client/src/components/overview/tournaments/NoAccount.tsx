@@ -1,6 +1,6 @@
 import { CONTROLLER } from "@/components/Icons";
 import { Button } from "@/components/ui/button";
-import { useConnectToSelectedChain } from "@/dojo/hooks/useChain";
+import { useConnectToSelectedChain } from "@/chain/hooks/useChain";
 
 const NoAccount = () => {
   const { connect } = useConnectToSelectedChain();

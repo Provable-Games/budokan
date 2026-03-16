@@ -27,7 +27,7 @@ type ChainExplorers = {
 //
 // chain config
 //
-export type DojoChainConfig = {
+export type ChainConfig = {
   chain?: Chain;
   chainId?: ChainId;
   name?: string;
@@ -55,7 +55,7 @@ export type DojoChainConfig = {
   denshokanApiUrl?: string;
 };
 
-const snSepoliaConfig: DojoChainConfig = {
+const snSepoliaConfig: ChainConfig = {
   chain: { ...sepolia },
   chainId: ChainId.SN_SEPOLIA,
   name: "Starknet Sepolia",
@@ -74,14 +74,14 @@ const snSepoliaConfig: DojoChainConfig = {
   ethAddress: sepolia.nativeCurrency.address,
   connectorIds: [supportedConnectorIds.CONTROLLER],
   denshokanAddress:
-    "0x02334dc9c950c74c3228e2a343d495ae36f0b4edf06767a679569e9f9de08776",
+    "0x0142712722e62a38f9c40fcc904610e1a14c70125876ecaaf25d803556734467",
   budokanAddress:
-    "0x027649a648ce25712cf90a3b32b9f15f86edb21293227d0b3cc689987c77a02b",
-  budokanApiUrl: "https://budokan-api-sepolia.provable.games",
-  denshokanApiUrl: "https://denshokan-api-sepolia.provable.games",
+    "0x00f242153fdc1a4bd1f3e8f179cdb2e1c51ffcd33b3bce0d533c45167162ebe0",
+  budokanApiUrl: "https://budokan-api-sepolia.up.railway.app",
+  denshokanApiUrl: "https://denshokan-api-sepolia.up.railway.app",
 };
 
-const snMainnetConfig: DojoChainConfig = {
+const snMainnetConfig: ChainConfig = {
   chain: { ...mainnet },
   chainId: ChainId.SN_MAIN,
   name: "Mainnet",
@@ -102,16 +102,16 @@ const snMainnetConfig: DojoChainConfig = {
     "0x036017e69d21d6d8c13e266eabb73ef1f1d02722d86bdcabe5f168f8e549d3cd",
   budokanAddress:
     "0x051f5fc1ddcffcb0bf548378e0166a5e5328fb4894efbab170e3fb1a4c0cdfdf",
-  budokanApiUrl: "https://budokan-api.provable.games",
-  denshokanApiUrl: "https://denshokan-api.provable.games",
+  budokanApiUrl: "https://budokan-api-production.up.railway.app",
+  denshokanApiUrl: "https://denshokan-api-production.up.railway.app",
 } as const;
 
 //--------------------------------
 // Available chains
 //
 
-const makeDojoChainConfig = (config: DojoChainConfig): DojoChainConfig => {
-  let chain = { ...config };
+const makeChainConfig = (config: ChainConfig): ChainConfig => {
+  const chain = { ...config };
   //
   // derive starknet Chain
   if (!chain.chain) {
@@ -142,9 +142,17 @@ const makeDojoChainConfig = (config: DojoChainConfig): DojoChainConfig => {
   return chain;
 };
 
-export const CHAINS: Record<ChainId, DojoChainConfig> = {
-  [ChainId.SN_MAIN]: makeDojoChainConfig(snMainnetConfig),
-  [ChainId.SN_SEPOLIA]: makeDojoChainConfig(snSepoliaConfig),
+export const CHAINS: Record<ChainId, ChainConfig> = {
+  [ChainId.SN_MAIN]: makeChainConfig(snMainnetConfig),
+  [ChainId.SN_SEPOLIA]: makeChainConfig(snSepoliaConfig),
+};
+
+// Maps legacy VITE_CHAIN_ID values (MAINNET, SEPOLIA) to ChainId enum values
+const CHAIN_ID_ALIASES: Record<string, ChainId> = {
+  MAINNET: ChainId.SN_MAIN,
+  SN_MAIN: ChainId.SN_MAIN,
+  SEPOLIA: ChainId.SN_SEPOLIA,
+  SN_SEPOLIA: ChainId.SN_SEPOLIA,
 };
 
 export const getDefaultChainId = (): ChainId => {
@@ -159,13 +167,19 @@ export const getDefaultChainId = (): ChainId => {
   }
 
   // Fall back to environment variable
-  const envChainId = import.meta.env.VITE_CHAIN_ID as ChainId;
+  const envValue = import.meta.env.VITE_CHAIN_ID as string;
 
-  if (envChainId && !isChainIdSupported(envChainId)) {
-    throw new Error(`Unsupported chain ID in environment: ${envChainId}`);
+  if (envValue) {
+    const resolved = CHAIN_ID_ALIASES[envValue];
+    if (!resolved) {
+      throw new Error(
+        `Unsupported VITE_CHAIN_ID: "${envValue}". Use one of: ${Object.keys(CHAIN_ID_ALIASES).join(", ")}`,
+      );
+    }
+    return resolved;
   }
 
-  return envChainId || ChainId.SN_MAIN;
+  return ChainId.SN_MAIN;
 };
 
 const isChainIdSupported = (chainId: ChainId): boolean => {

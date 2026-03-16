@@ -16,7 +16,7 @@ import { FormToken } from "@/lib/types";
 import { X } from "@/components/Icons";
 import { getTokenByAddress } from "@/lib/tokenUtils";
 import { indexAddress } from "@/lib/utils";
-import { useDojo } from "@/context/dojo";
+import { useChainConfig } from "@/context/chain";
 import { getExtensionAddresses } from "@/lib/extensionConfig";
 
 interface OpusTrovesConfigProps {
@@ -28,7 +28,7 @@ export const OpusTrovesConfig = ({
   allowedAssetAddresses,
   extensionError,
 }: OpusTrovesConfigProps) => {
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
   const form = useFormContext();
 
   // Local state for managing the config values

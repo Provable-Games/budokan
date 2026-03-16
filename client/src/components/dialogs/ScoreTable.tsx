@@ -20,9 +20,9 @@ import { BigNumberish, addAddressPadding } from "starknet";
 import { useGameTokens } from "@/hooks/useDenshokanQueries";
 import { REFRESH, VERIFIED } from "@/components/Icons";
 import { Search, Ban } from "lucide-react";
-import { useDebounce } from "@/hooks/useDebounce";
+import { useDebounce } from "@provable-games/metagame-sdk/react";
 import { useGetTournamentRegistrations } from "@/hooks/useBudokanQueries";
-import { useDojo } from "@/context/dojo";
+import { useChainConfig } from "@/context/chain";
 
 interface ScoreTableDialogProps {
   open: boolean;
@@ -43,7 +43,7 @@ export const ScoreTableDialog = ({
   isEnded,
   banRefreshTrigger,
 }: ScoreTableDialogProps) => {
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
   const tournamentAddress = selectedChainConfig.budokanAddress!;
   const [searchQuery, setSearchQuery] = useState("");
 

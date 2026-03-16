@@ -1,6 +1,6 @@
 import { getTokenLogoUrl } from "@/lib/tokensMeta";
 import { formatNumber } from "@/lib/utils";
-import { useDojo } from "@/context/dojo";
+import { useChainConfig } from "@/context/chain";
 
 interface TokenValueProps {
   amount: number;
@@ -17,7 +17,7 @@ export const TokenValue = ({
   isLoading = false,
   className = "",
 }: TokenValueProps) => {
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
   const chainId = selectedChainConfig?.chainId ?? "";
 
   if (isLoading) {

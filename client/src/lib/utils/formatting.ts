@@ -62,9 +62,9 @@ export const processTournamentData = (
   const gameStartDelay = Math.max(0, gameStartTimestamp - now);
   const gameEndDelay = gameStartDelay + formData.duration;
 
-  // Registration delays
-  let registrationStartDelay = 60; // default: 1 minute after creation
-  let registrationEndDelay = gameStartDelay; // default: registration ends when game starts
+  // Registration delays - 0 means "open" (no registration period)
+  let registrationStartDelay = 0;
+  let registrationEndDelay = 0;
 
   if (formData.type === "fixed" && formData.registrationStartTime) {
     const regStartTimestamp = Math.floor(

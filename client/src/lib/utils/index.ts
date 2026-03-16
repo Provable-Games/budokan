@@ -4,6 +4,118 @@ import { BigNumberish, shortString } from "starknet";
 import { Prize } from "@/generated/models.gen";
 import { TOKEN_ADDRESSES } from "@/lib/constants";
 
+// Import from SDK and re-export so all existing `from "@/lib/utils"` imports continue to work
+import {
+  indexAddress,
+  padAddress,
+  displayAddress,
+  bigintToHex as sdkBigintToHex,
+  formatNumber,
+  formatPrizeAmount,
+  formatUsdValue,
+  formatScore,
+  formatTime,
+  getOrdinalSuffix,
+  calculatePayouts,
+  calculateDistribution,
+  isBefore,
+} from "@provable-games/metagame-sdk";
+
+export {
+  indexAddress,
+  padAddress,
+  displayAddress,
+  formatNumber,
+  formatPrizeAmount,
+  formatUsdValue,
+  formatScore,
+  formatTime,
+  getOrdinalSuffix,
+  calculatePayouts,
+  calculateDistribution,
+  isBefore,
+};
+export type { DistributionType } from "@provable-games/metagame-sdk";
+
+// Re-export new metagame-sdk prize/entry-fee utilities
+export {
+  aggregatePrizesByPosition,
+  aggregatePrizesBySponsor,
+  filterClaimablePrizes,
+  filterZeroPrizes,
+  calculateEntryFeeBreakdown,
+  distributePool,
+  parseNFTBulkInput,
+} from "@provable-games/metagame-sdk";
+export type {
+  PositionPrizeGroup,
+  SponsorContribution,
+  EntryFeeBreakdown,
+  EntryFeeShares,
+  NftPrizeInput,
+  NftParseResult,
+} from "@provable-games/metagame-sdk";
+
+// Re-export extension utilities and qualification evaluation
+export {
+  getExtensionAddresses,
+  identifyExtensionType,
+  parseTournamentValidatorConfig,
+  parseERC20BalanceValidatorConfig,
+  parseOpusTrovesValidatorConfig,
+  parseSnapshotValidatorConfig,
+  parseExtensionConfig,
+  getQualifyingModeInfo,
+  formatTokenAmount,
+  formatCashToUSD,
+  evaluateTokenQualification,
+  evaluateAllowlistQualification,
+  evaluateExtensionQualification,
+  evaluateQualification,
+} from "@provable-games/metagame-sdk";
+export type {
+  EntryRequirementVariant,
+  ExtensionType,
+  TournamentValidatorConfig,
+  ERC20BalanceValidatorConfig,
+  OpusTrovesValidatorConfig,
+  SnapshotValidatorConfig,
+  QualifyingModeInfo,
+  QualificationResult,
+  QualificationEntry,
+  QualificationProof,
+  TokenQualificationInput,
+  AllowlistQualificationInput,
+  ExtensionQualificationInput,
+} from "@provable-games/metagame-sdk";
+export { QualifyingMode } from "@provable-games/metagame-sdk";
+export {
+  buildQualificationProof,
+  buildNFTProof,
+  buildAddressProof,
+  buildTournamentExtensionProof,
+  buildExtensionProof,
+  buildParticipationMap,
+  buildWinMap,
+  resolveTournamentQualifications,
+} from "@provable-games/metagame-sdk";
+export type {
+  TournamentRegistration,
+  TournamentLeaderboard,
+  TournamentQualificationInput,
+} from "@provable-games/metagame-sdk";
+export {
+  calculateOpusTrovesEntries,
+  findBannableEntries,
+  findAllBannableEntries,
+} from "@provable-games/metagame-sdk";
+
+// Wrap SDK's bigintToHex to preserve the `0x${string}` return type expected by consumers
+export const bigintToHex = (v: BigNumberish): `0x${string}` =>
+  sdkBigintToHex(v) as `0x${string}`;
+
+// --- Client-specific utilities (not in SDK) ---
+
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
@@ -16,17 +128,6 @@ export function displayPrice(num: number): string {
   } else {
     return "0";
   }
-}
-
-/**
- * Format a USD value, handling small amounts appropriately
- * - Values >= $0.01: show 2 decimal places
- * - Values < $0.01 but > 0: show "<$0.01"
- */
-export function formatUsdValue(value: number): string {
-  if (value === 0) return "0.00";
-  if (value < 0.01 && value > 0) return "<0.01";
-  return value.toFixed(2);
 }
 
 export function roundUSDPrice(price: number): string {
@@ -64,71 +165,6 @@ export function roundUSDPrice(price: number): string {
   }
 }
 
-export function formatNumber(num: number): string {
-  if (Math.abs(num) >= 1000000) {
-    return parseFloat((num / 1000000).toFixed(2)) + "m";
-  } else if (Math.abs(num) >= 1000) {
-    return parseFloat((num / 1000).toFixed(2)) + "k";
-  } else if (Math.abs(num) >= 1) {
-    return num.toFixed(0);
-  } else if (Math.abs(num) >= 0.1) {
-    return num.toFixed(1);
-  } else if (Math.abs(num) >= 0.01) {
-    return num.toFixed(2);
-  } else if (Math.abs(num) >= 0.001) {
-    return num.toFixed(3);
-  } else if (num === 0) {
-    return "0";
-  } else {
-    return num.toFixed(4);
-  }
-}
-
-/**
- * Format prize amounts with smart decimal precision to show meaningful differences
- * Shows more decimals for values >= 1 to distinguish between similar amounts
- */
-export function formatPrizeAmount(num: number): string {
-  if (Math.abs(num) >= 1000000) {
-    return parseFloat((num / 1000000).toFixed(2)) + "m";
-  } else if (Math.abs(num) >= 1000) {
-    return parseFloat((num / 1000).toFixed(2)) + "k";
-  } else if (Math.abs(num) >= 100) {
-    // For 100+, show 1 decimal to distinguish (e.g., 150.5 vs 149.2)
-    return num.toFixed(1);
-  } else if (Math.abs(num) >= 10) {
-    // For 10-99, show 2 decimals (e.g., 15.42 vs 14.78)
-    return num.toFixed(2);
-  } else if (Math.abs(num) >= 1) {
-    // For 1-9, show 2 decimals (e.g., 1.50 vs 0.85)
-    return num.toFixed(2);
-  } else if (Math.abs(num) >= 0.1) {
-    return num.toFixed(2);
-  } else if (Math.abs(num) >= 0.01) {
-    return num.toFixed(3);
-  } else if (Math.abs(num) >= 0.001) {
-    return num.toFixed(4);
-  } else if (num === 0) {
-    return "0";
-  } else {
-    return num.toFixed(5);
-  }
-}
-
-export function formatScore(num: number): string {
-  if (Math.abs(num) >= 1000000) {
-    return parseFloat((num / 1000000).toFixed(2)) + "m";
-  } else if (Math.abs(num) >= 1000) {
-    return parseFloat((num / 1000).toFixed(2)) + "k";
-  } else if (Math.abs(num) >= 10) {
-    return num.toFixed(0);
-  } else if (Math.abs(num) > 0) {
-    return num.toFixed(0);
-  } else {
-    return "0";
-  }
-}
-
 export function formatEth(num: number): string {
   if (Math.abs(num) >= 0.01) {
     return num.toFixed(2);
@@ -136,25 +172,6 @@ export function formatEth(num: number): string {
     return num.toFixed(4);
   } else {
     return "0";
-  }
-}
-
-export function indexAddress(address: string) {
-  return address.replace(/^0x0+/, "0x");
-}
-
-export function padAddress(address: string) {
-  if (address && address !== "") {
-    const length = address.length;
-    const neededLength = 66 - length;
-    let zeros = "";
-    for (var i = 0; i < neededLength; i++) {
-      zeros += "0";
-    }
-    const newHex = address.substring(0, 2) + zeros + address.substring(2);
-    return newHex;
-  } else {
-    return "";
   }
 }
 
@@ -174,20 +191,12 @@ export function padU64(num: bigint): string {
   return "0x" + hex.padStart(16, "0");
 }
 
-export function displayAddress(string: string) {
-  if (string === undefined) return "unknown";
-  return string.substring(0, 6) + "..." + string.substring(string.length - 4);
-}
-
 export const stringToFelt = (v: string): BigNumberish =>
   v ? shortString.encodeShortString(v) : "0x0";
 
 export const feltToString = (v: BigNumberish): string => {
   return BigInt(v) > 0n ? shortString.decodeShortString(bigintToHex(v)) : "";
 };
-
-export const bigintToHex = (v: BigNumberish): `0x${string}` =>
-  !v ? "0x0" : `0x${BigInt(v).toString(16)}`;
 
 export const isPositiveBigint = (v: BigNumberish | null): boolean => {
   try {
@@ -196,26 +205,6 @@ export const isPositiveBigint = (v: BigNumberish | null): boolean => {
     return false;
   }
 };
-
-export const formatTime = (seconds: number): string => {
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
-
-  if (days > 0) {
-    return `${days} Day${days > 1 ? "s" : ""}`;
-  } else if (hours > 0) {
-    return `${hours} Hour${hours > 1 ? "s" : ""}`;
-  } else if (minutes > 0) {
-    return `${minutes} Min${minutes > 1 ? "s" : ""}`;
-  } else {
-    return `${seconds.toFixed(0)} Sec${seconds > 1 ? "s" : ""}`;
-  }
-};
-// Add a utility function to check if a date is before another date
-export function isBefore(date1: Date, date2: Date) {
-  return date1.getTime() < date2.getTime();
-}
 
 export function formatBalance(num: BigNumberish): number {
   return Number(num) / 10 ** 18;
@@ -250,40 +239,6 @@ export const cleanObject = (obj: any): any =>
     return acc;
   }, {} as { [key: string]: any });
 
-export const calculatePayouts = (
-  totalPlaces: number,
-  weightingFactor: number
-): number[] => {
-  // Calculate the weights for each place
-  const weights: number[] = [];
-  for (let i = 1; i <= totalPlaces; i++) {
-    weights.push(1 / Math.pow(i, weightingFactor));
-  }
-
-  // Calculate the total weight
-  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
-
-  // Calculate the percentage payouts
-  const payouts: number[] = weights.map((weight) =>
-    Math.floor((weight / totalWeight) * 100)
-  );
-
-  // Calculate the sum of rounded payouts
-  const totalPayout = payouts.reduce((sum, payout) => sum + payout, 0);
-
-  // Distribute the remaining percentage points
-  // to the highest weighted positions until we reach 100
-  let remaining = 100 - totalPayout;
-  let index = 0;
-  while (remaining > 0) {
-    payouts[index] += 1;
-    remaining -= 1;
-    index = (index + 1) % totalPlaces;
-  }
-
-  return payouts;
-};
-
 export const getRandomInt = (min: number, max: number): number => {
   min = Math.ceil(min);
   max = Math.floor(max);
@@ -306,14 +261,6 @@ export const getPrizesByToken = (prizes: Prize[]) => {
       return acc;
     }, {} as Record<string, typeof prizes>)
   );
-};
-
-export const getOrdinalSuffix = (position: number) => {
-  const formatPosition = isNaN(position) ? 0 : position;
-  if (formatPosition % 10 === 1 && formatPosition !== 11) return "st";
-  if (formatPosition % 10 === 2 && formatPosition !== 12) return "nd";
-  if (position % 10 === 3 && position !== 13) return "rd";
-  return "th";
 };
 
 // pixel borders
@@ -484,84 +431,4 @@ export const adjustColorOpacity = (color: string, opacity: number): string => {
   // If the format isn't recognized, return the original color
   console.warn(`Color format not recognized for: ${color}`);
   return color;
-};
-
-export type DistributionType = "linear" | "exponential" | "uniform";
-
-export const calculateDistribution = (
-  positions: number,
-  weight: number,
-  creatorFee?: number,
-  gameFee?: number,
-  refundShare?: number,
-  distributionType: DistributionType = "exponential"
-): number[] => {
-  // Handle invalid inputs
-  if (positions <= 0) {
-    return [];
-  }
-
-  const safeCreatorFee = creatorFee ?? 0;
-  const safeGameFee = gameFee ?? 0;
-  const safeRefundShare = refundShare ?? 0;
-  const prizePoolPercentage = 100 - safeCreatorFee - safeGameFee - safeRefundShare;
-
-  // If there's nothing to distribute, return array of zeros
-  if (prizePoolPercentage <= 0) {
-    return Array(positions).fill(0);
-  }
-
-  let rawDistributions: number[] = [];
-
-  if (distributionType === "uniform") {
-    // Uniform distribution - everyone gets equal share
-    rawDistributions = Array(positions).fill(1);
-  } else if (distributionType === "linear") {
-    // Linear distribution with adjustable steepness
-    // Formula: share = 1 + (positionValue - 1) * weight
-    // Weight = 0: Uniform (everyone gets 1)
-    // Weight = 1: Standard linear (1st gets n, 2nd gets n-1, etc.)
-    // Weight > 1: Steeper (1st place gets proportionally more)
-    // Weight < 1: Flatter (more equal distribution)
-    for (let i = 0; i < positions; i++) {
-      const positionValue = positions - i; // For i=0 (1st place): n, i=1 (2nd): n-1, etc.
-      const share = 1 + (positionValue - 1) * (weight / 10);
-      rawDistributions.push(share);
-    }
-  } else {
-    // Exponential distribution (default)
-    for (let i = 0; i < positions; i++) {
-      const share = Math.pow(1 - i / positions, weight);
-      rawDistributions.push(share);
-    }
-  }
-
-  // Normalize to get the sum of all raw shares
-  const total = rawDistributions.reduce((a, b) => a + b, 0);
-
-  // Prevent division by zero
-  if (total === 0) {
-    return Array(positions).fill(0);
-  }
-
-  // Calculate each position's share in basis points (matching contract behavior)
-  // Contract uses: (raw_share / total_raw) * 10000 and truncates to u16
-  // We must match this exactly to avoid showing unclaimable prizes
-  const basisPointShares = rawDistributions.map((d) => {
-    const ratio = d / total;
-    const basisPoints = ratio * 10000; // 10000 basis points = 100%
-    return Math.floor(basisPoints); // Truncate like contract (not round!)
-  });
-
-  // Calculate remaining dust (like contract does)
-  const totalBasisPoints = basisPointShares.reduce((a, b) => a + b, 0);
-  const remainingBasisPoints = 10000 - totalBasisPoints;
-
-  // Add dust to position 1 (winner) to match contract behavior
-  if (remainingBasisPoints !== 0 && positions > 0) {
-    basisPointShares[0] = basisPointShares[0] + remainingBasisPoints;
-  }
-
-  // Convert back to percentages for display
-  return basisPointShares.map(bp => bp / 100);
 };
