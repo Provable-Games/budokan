@@ -146,6 +146,8 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
         `Block ${blockNumber} | ${events.length} events | finality: ${finality}`,
       );
 
+      try {
+
       // Accumulate rows per table for batch inserts
       const tournamentRows: (typeof tournaments.$inferInsert)[] = [];
       const registrationRows: (typeof registrations.$inferInsert)[] = [];
@@ -176,10 +178,12 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
         // -----------------------------------------------------------------
         if (selector === SELECTORS.TournamentCreated) {
           try {
+            logger.info(`  Decoding TournamentCreated: keys=${JSON.stringify(event.keys)}, data_len=${(event.data as string[]).length}`);
             const decoded = decodeTournamentCreated(
               event.keys as string[],
               event.data as string[],
             );
+            logger.info(`  Decoded tournament ${decoded.tournamentId}: name="${decoded.name}", game=${decoded.gameAddress}`);
 
             tournamentRows.push({
               tournamentId: decoded.tournamentId,
@@ -208,10 +212,13 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
             });
 
             newTournaments++;
+            logger.info(`  TournamentCreated row queued for insert`);
           } catch (err) {
-            logger.warn(
+            logger.error(
               `Failed to decode TournamentCreated at block ${blockNumber}: ${err}`,
             );
+            logger.error(`  Event keys: ${JSON.stringify(event.keys)}`);
+            logger.error(`  Event data: ${JSON.stringify(event.data)}`);
           }
         }
 
@@ -557,6 +564,10 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
             },
           });
       }
+    } catch (transformErr) {
+      logger.error(`Transform failed at block ${blockNumber}: ${transformErr}`);
+      throw transformErr; // Re-throw so apibara knows the block failed
+    }
     },
   });
 }
