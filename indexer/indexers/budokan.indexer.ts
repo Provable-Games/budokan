@@ -173,6 +173,14 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
         const txHash = event.transactionHash ?? null;
         const eventIdx = event.eventIndex ?? null;
 
+        // Debug: log selector comparison on first event
+        if (events.indexOf(event) === 0) {
+          logger.info(`  Event selector: ${selector} (type: ${typeof selector})`);
+          logger.info(`  Expected TournamentCreated: ${SELECTORS.TournamentCreated} (type: ${typeof SELECTORS.TournamentCreated})`);
+          logger.info(`  Match: ${selector === SELECTORS.TournamentCreated}`);
+          logger.info(`  BigInt match: ${BigInt(selector as string) === BigInt(SELECTORS.TournamentCreated)}`);
+        }
+
         // -----------------------------------------------------------------
         // TournamentCreated
         // -----------------------------------------------------------------
