@@ -541,6 +541,15 @@ async function fetchPrizeAggregation(
 // ─── Serialization helpers ───────────────────────────────────────────────────
 
 function serializeTournament(t: typeof tournaments.$inferSelect) {
+  // Compute absolute timestamps from created_at + schedule delays
+  const sched = t.schedule as Record<string, number> | null;
+  const base = Number(t.createdAt ?? 0);
+  const regStartDelay = sched?.registration_start_delay ?? 0;
+  const regEndDelay = sched?.registration_end_delay ?? 0;
+  const gameStartDelay = sched?.game_start_delay ?? 0;
+  const gameEndDelay = sched?.game_end_delay ?? 0;
+  const submissionDuration = sched?.submission_duration ?? 0;
+
   return {
     id: t.tournamentId.toString(),
     gameAddress: t.gameAddress,
@@ -559,6 +568,12 @@ function serializeTournament(t: typeof tournaments.$inferSelect) {
     createdAt: t.createdAt?.toString() ?? null,
     createdAtBlock: t.createdAtBlock?.toString() ?? null,
     txHash: t.txHash,
+    // Computed absolute timestamps (Unix seconds)
+    registrationStartTime: regStartDelay > 0 ? String(base + regStartDelay) : null,
+    registrationEndTime: regEndDelay > 0 ? String(base + regEndDelay) : null,
+    gameStartTime: String(base + gameStartDelay),
+    gameEndTime: String(base + gameEndDelay),
+    submissionEndTime: String(base + gameEndDelay + submissionDuration),
   };
 }
 
