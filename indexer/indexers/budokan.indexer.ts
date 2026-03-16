@@ -31,9 +31,18 @@ import {
 } from "../src/lib/decoder.js";
 
 // ---------------------------------------------------------------------------
-// Selector constants (computed once at module level)
+// Selector constants (computed once at module level, as BigInt for reliable comparison)
+// DNA stream may zero-pad hex strings differently from getSelectorFromName()
 // ---------------------------------------------------------------------------
-const SELECTORS = getEventSelectors();
+const RAW_SELECTORS = getEventSelectors();
+const SELECTORS = {
+  TournamentCreated: BigInt(RAW_SELECTORS.TournamentCreated),
+  TournamentRegistration: BigInt(RAW_SELECTORS.TournamentRegistration),
+  LeaderboardUpdated: BigInt(RAW_SELECTORS.LeaderboardUpdated),
+  PrizeAdded: BigInt(RAW_SELECTORS.PrizeAdded),
+  RewardClaimed: BigInt(RAW_SELECTORS.RewardClaimed),
+  QualificationEntriesUpdated: BigInt(RAW_SELECTORS.QualificationEntriesUpdated),
+};
 
 // ---------------------------------------------------------------------------
 // Indexer definition
@@ -98,32 +107,32 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
       events: [
         {
           address: contractAddress,
-          keys: [SELECTORS.TournamentCreated],
+          keys: [RAW_SELECTORS.TournamentCreated],
           includeTransaction: true,
         },
         {
           address: contractAddress,
-          keys: [SELECTORS.TournamentRegistration],
+          keys: [RAW_SELECTORS.TournamentRegistration],
           includeTransaction: true,
         },
         {
           address: contractAddress,
-          keys: [SELECTORS.LeaderboardUpdated],
+          keys: [RAW_SELECTORS.LeaderboardUpdated],
           includeTransaction: true,
         },
         {
           address: contractAddress,
-          keys: [SELECTORS.PrizeAdded],
+          keys: [RAW_SELECTORS.PrizeAdded],
           includeTransaction: true,
         },
         {
           address: contractAddress,
-          keys: [SELECTORS.RewardClaimed],
+          keys: [RAW_SELECTORS.RewardClaimed],
           includeTransaction: true,
         },
         {
           address: contractAddress,
-          keys: [SELECTORS.QualificationEntriesUpdated],
+          keys: [RAW_SELECTORS.QualificationEntriesUpdated],
           includeTransaction: true,
         },
       ],
@@ -169,22 +178,17 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
       let newSubmissions = 0;
 
       for (const event of events) {
-        const selector = event.keys[0];
+        // Normalize selector to BigInt for comparison — DNA stream may
+        // zero-pad hex strings differently from getSelectorFromName()
+        const rawSelector = event.keys[0] as string;
+        const selectorBigInt = BigInt(rawSelector);
         const txHash = event.transactionHash ?? null;
         const eventIdx = event.eventIndex ?? null;
-
-        // Debug: log selector comparison on first event
-        if (events.indexOf(event) === 0) {
-          logger.info(`  Event selector: ${selector} (type: ${typeof selector})`);
-          logger.info(`  Expected TournamentCreated: ${SELECTORS.TournamentCreated} (type: ${typeof SELECTORS.TournamentCreated})`);
-          logger.info(`  Match: ${selector === SELECTORS.TournamentCreated}`);
-          logger.info(`  BigInt match: ${BigInt(selector as string) === BigInt(SELECTORS.TournamentCreated)}`);
-        }
 
         // -----------------------------------------------------------------
         // TournamentCreated
         // -----------------------------------------------------------------
-        if (selector === SELECTORS.TournamentCreated) {
+        if (selectorBigInt === SELECTORS.TournamentCreated) {
           try {
             logger.info(`  Decoding TournamentCreated: keys=${JSON.stringify(event.keys)}, data_len=${(event.data as string[]).length}`);
             const decoded = decodeTournamentCreated(
@@ -233,7 +237,7 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
         // -----------------------------------------------------------------
         // TournamentRegistration
         // -----------------------------------------------------------------
-        else if (selector === SELECTORS.TournamentRegistration) {
+        else if (selectorBigInt === SELECTORS.TournamentRegistration) {
           try {
             const decoded = decodeTournamentRegistration(
               event.keys as string[],
@@ -281,7 +285,7 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
         // -----------------------------------------------------------------
         // LeaderboardUpdated
         // -----------------------------------------------------------------
-        else if (selector === SELECTORS.LeaderboardUpdated) {
+        else if (selectorBigInt === SELECTORS.LeaderboardUpdated) {
           try {
             const decoded = decodeLeaderboardUpdated(
               event.keys as string[],
@@ -310,7 +314,7 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
         // -----------------------------------------------------------------
         // PrizeAdded
         // -----------------------------------------------------------------
-        else if (selector === SELECTORS.PrizeAdded) {
+        else if (selectorBigInt === SELECTORS.PrizeAdded) {
           try {
             const decoded = decodePrizeAdded(
               event.keys as string[],
@@ -349,7 +353,7 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
         // -----------------------------------------------------------------
         // RewardClaimed
         // -----------------------------------------------------------------
-        else if (selector === SELECTORS.RewardClaimed) {
+        else if (selectorBigInt === SELECTORS.RewardClaimed) {
           try {
             const decoded = decodeRewardClaimed(
               event.keys as string[],
@@ -383,7 +387,7 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
         // -----------------------------------------------------------------
         // QualificationEntriesUpdated
         // -----------------------------------------------------------------
-        else if (selector === SELECTORS.QualificationEntriesUpdated) {
+        else if (selectorBigInt === SELECTORS.QualificationEntriesUpdated) {
           try {
             const decoded = decodeQualificationEntriesUpdated(
               event.keys as string[],
