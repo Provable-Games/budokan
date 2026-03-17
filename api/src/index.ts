@@ -6,7 +6,7 @@ import { createNodeWebSocket } from "@hono/node-ws";
 import { serve } from "@hono/node-server";
 
 import { healthCheck, shutdown as dbShutdown } from "./db/client.js";
-import { rateLimit, cleanupTimer } from "./middleware/rateLimit.js";
+import { cleanupTimer } from "./middleware/rateLimit.js";
 import { createWSEvents, initWebSocket, shutdownWebSocket } from "./ws/subscriptions.js";
 
 import tournamentRoutes from "./routes/tournaments.js";
@@ -33,15 +33,7 @@ app.use(
   })
 );
 
-// Default rate limit: 100 req/min for most endpoints
-app.use("/tournaments/*", rateLimit(100));
-app.use("/players/*", rateLimit(100));
-app.use("/activity/*", rateLimit(100));
-
-// Tighter rate limit for stats endpoints (30 req/min)
-app.use("/games/*/stats", rateLimit(30));
-app.use("/players/*/stats", rateLimit(30));
-app.use("/games/*/tournaments", rateLimit(100));
+// Rate limiting disabled for now — re-enable when client request volume is optimized
 
 // ─── Health check ────────────────────────────────────────────────────────────
 
