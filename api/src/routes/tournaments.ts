@@ -19,10 +19,11 @@ import {
 const app = new Hono();
 
 // SQL helpers for computing absolute timestamps from created_at + schedule delays
+// Registration delays of 0 mean "no registration period" — treat as NULL
 const gameStartTime = sql`(${tournaments.createdAt} + (${tournaments.schedule}->>'game_start_delay')::bigint)`;
 const gameEndTime = sql`(${tournaments.createdAt} + (${tournaments.schedule}->>'game_end_delay')::bigint)`;
-const regStartTime = sql`(${tournaments.createdAt} + (${tournaments.schedule}->>'registration_start_delay')::bigint)`;
-const regEndTime = sql`(${tournaments.createdAt} + (${tournaments.schedule}->>'registration_end_delay')::bigint)`;
+const regStartTime = sql`CASE WHEN (${tournaments.schedule}->>'registration_start_delay')::bigint > 0 THEN (${tournaments.createdAt} + (${tournaments.schedule}->>'registration_start_delay')::bigint) ELSE NULL END`;
+const regEndTime = sql`CASE WHEN (${tournaments.schedule}->>'registration_end_delay')::bigint > 0 THEN (${tournaments.createdAt} + (${tournaments.schedule}->>'registration_end_delay')::bigint) ELSE NULL END`;
 const submissionEndTime = sql`(${tournaments.createdAt} + (${tournaments.schedule}->>'game_end_delay')::bigint + (${tournaments.schedule}->>'submission_duration')::bigint)`;
 
 // ─── GET / ── List tournaments ──────────────────────────────────────────────
@@ -99,12 +100,18 @@ app.get("/", async (c) => {
         break;
     }
 
+    // For finalized phase, put submission-phase tournaments first (still accepting scores)
+    const now = sql`EXTRACT(EPOCH FROM NOW())::bigint`;
+    const submissionFirst = phase === "finalized"
+      ? desc(sql`CASE WHEN ${submissionEndTime} > ${now} THEN 1 ELSE 0 END`)
+      : undefined;
+
     const [rows, countResult] = await Promise.all([
       db
         .select()
         .from(tournaments)
         .where(where)
-        .orderBy(orderByClause)
+        .orderBy(...(submissionFirst ? [submissionFirst, orderByClause] : [orderByClause]))
         .limit(limit)
         .offset(offset),
       db
@@ -483,8 +490,10 @@ export function applyPhaseCondition(phase: string, conditions: SQL[]): void {
       );
       break;
     case "finalized":
+      // Includes both submission phase and fully finalized tournaments
+      // Submission-phase tournaments appear first (still accepting scores)
       conditions.push(
-        sql`${submissionEndTime} <= ${now}`
+        sql`${gameEndTime} <= ${now}`
       );
       break;
   }
