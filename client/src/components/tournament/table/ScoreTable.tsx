@@ -22,7 +22,7 @@ import { padAddress } from "@/lib/utils";
 import { ScoreTableDialog } from "@/components/dialogs/ScoreTable";
 import { BanManagementDialog } from "@/components/dialogs/BanManagement";
 import { useChainConfig } from "@/context/chain";
-import { Tournament } from "@/generated/models.gen";
+import type { Tournament } from "@provable-games/budokan-sdk";
 import { Ban } from "lucide-react";
 
 interface ScoreTableProps {
@@ -53,12 +53,13 @@ const ScoreTable = ({
   const tournamentAddress = selectedChainConfig.budokanAddress!;
 
   // Check if this tournament has extension requirements that support banning
-  const hasEntryRequirement = tournamentModel?.entry_requirement.isSome();
-  const requirementVariant =
-    tournamentModel?.entry_requirement.Some?.entry_requirement_type?.activeVariant();
-  const extensionConfig =
-    tournamentModel?.entry_requirement.Some?.entry_requirement_type?.variant
-      ?.extension;
+  const entryReq = (tournamentModel as any)?.entryRequirement;
+  const hasEntryRequirement = !!entryReq;
+  const reqType = entryReq?.entryRequirementType;
+  const requirementVariant = reqType?.type as string | undefined;
+  const extensionConfig = requirementVariant === "extension"
+    ? { address: reqType?.address, config: reqType?.config }
+    : undefined;
 
   // Only show ban button if:
   // 1. Tournament hasn't started
@@ -253,7 +254,7 @@ const ScoreTable = ({
                       usernames={usernames}
                       isStarted={isStarted}
                       isEnded={isEnded}
-                      gameAddress={tournamentModel?.game_config.game_address}
+                      gameAddress={tournamentModel?.gameAddress}
                       setSelectedPlayer={setSelectedPlayer}
                       setIsMobileDialogOpen={setIsMobileDialogOpen}
                     />
@@ -289,7 +290,7 @@ const ScoreTable = ({
         ownerAddress={ownerAddresses?.[selectedPlayer?.index ?? 0]}
         isStarted={isStarted}
         isEnded={isEnded}
-        gameAddress={tournamentModel?.game_config.game_address}
+        gameAddress={tournamentModel?.gameAddress}
       />
 
       {/* Table dialog for scores */}

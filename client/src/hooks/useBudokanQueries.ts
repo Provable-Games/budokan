@@ -7,18 +7,11 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useBudokanClient } from "@/context/budokan";
 import type {
-  Tournament as ApiTournament,
+  Tournament,
   TournamentListParams,
   Phase,
 } from "@provable-games/budokan-sdk";
-import {
-  mapApiTournamentToModel,
-  mapApiRegistrationToModel,
-  mapApiLeaderboardToModel,
-  mapApiPrizeToModel,
-  mapApiPlatformStatsToModel,
-} from "@/lib/utils/apiMappers";
-import type { Tournament } from "@/generated/models.gen";
+// apiMappers removed — hooks now return SDK types directly
 
 // ─── Tab-to-phase mapping ─────────────────────────────────────────────────
 
@@ -217,7 +210,7 @@ export function useGetTournaments({
     client
       .getTournaments(params)
       .then((result) => {
-        setData(result.data.map(mapApiTournamentToModel));
+        setData(result.data);
         setTotal(result.total ?? result.data.length);
       })
       .catch((err) => {
@@ -262,7 +255,7 @@ export function useGetMyTournaments({
       .getPlayerTournaments(playerAddress, { phase, gameTokenIds, limit, offset })
       .then((result) => {
         // PlayerTournament includes both registration and tournament data
-        const tournaments = result.data.map((pt) => mapApiTournamentToModel(pt as unknown as ApiTournament));
+        const tournaments = result.data;
         setData(tournaments);
         setTotal(result.total ?? result.data.length);
       })
@@ -285,7 +278,7 @@ export function useGetTournament(tournamentId?: string) {
   const client = useBudokanClient();
   return useAsyncQuery(
     tournamentId
-      ? () => client.getTournament(tournamentId).then(mapApiTournamentToModel)
+      ? () => client.getTournament(tournamentId)
       : null,
     [tournamentId],
   );
@@ -297,7 +290,7 @@ export function useGetTournamentLeaderboard(tournamentId?: string) {
     tournamentId
       ? () =>
           client.getTournamentLeaderboard(tournamentId).then((entries) =>
-            mapApiLeaderboardToModel(tournamentId, entries),
+            entries,
           )
       : null,
     [tournamentId],
@@ -314,7 +307,7 @@ export function useGetTournamentRegistrations(
       ? () =>
           client
             .getTournamentRegistrations(tournamentId, params)
-            .then((result) => result.data.map(mapApiRegistrationToModel))
+            .then((result) => result.data)
       : null,
     [tournamentId, JSON.stringify(params)],
   );
@@ -324,7 +317,7 @@ export function useGetTournamentPrizes(tournamentId?: string) {
   const client = useBudokanClient();
   return useAsyncQuery(
     tournamentId
-      ? () => client.getTournamentPrizes(tournamentId).then((prizes) => prizes.map(mapApiPrizeToModel))
+      ? () => client.getTournamentPrizes(tournamentId)
       : null,
     [tournamentId],
   );
@@ -398,7 +391,7 @@ export function useGetPlatformStats({ active = false }: { active?: boolean }) {
 export function useGetPlatformMetrics({ active = false }: { active?: boolean }) {
   const client = useBudokanClient();
   return useAsyncQuery(
-    active ? () => client.getActivityStats().then(mapApiPlatformStatsToModel) : null,
+    active ? () => client.getActivityStats() : null,
     [active],
   );
 }

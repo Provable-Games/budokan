@@ -9,7 +9,8 @@ import {
 } from "@/components/ui/dialog";
 import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 import { useAccount } from "@starknet-react/core";
-import { Tournament, RewardClaim } from "@/generated/models.gen";
+import { RewardClaim } from "@/generated/models.gen";
+import type { Tournament } from "@provable-games/budokan-sdk";
 import { feltToString, formatNumber, getOrdinalSuffix, indexAddress } from "@/lib/utils";
 import {
   extractEntryFeePrizes,
@@ -72,9 +73,10 @@ export function ClaimPrizesDialog({
   const claimedRewards: RewardClaim[] = (rewardClaimsData ||
     []) as RewardClaim[];
 
+  const entryFeeData = (tournamentModel as any)?.entryFee;
   const leaderboardSize =
-    Number(tournamentModel?.entry_fee?.Some?.distribution_count ?? 0) > 0
-      ? Number(tournamentModel!.entry_fee.Some!.distribution_count)
+    Number(entryFeeData?.distributionCount ?? 0) > 0
+      ? Number(entryFeeData.distributionCount)
       : entryCount;
 
   // Calculate entry fee prizes based on tournament settings
@@ -83,11 +85,11 @@ export function ClaimPrizesDialog({
       () =>
         extractEntryFeePrizes(
           tournamentModel?.id,
-          tournamentModel?.entry_fee,
+          entryFeeData,
           BigInt(entryCount || 0),
           leaderboardSize
         ),
-      [tournamentModel?.id, tournamentModel?.entry_fee, entryCount]
+      [tournamentModel?.id, entryFeeData, entryCount]
     );
 
   // Expand distributed sponsored prizes into individual positions

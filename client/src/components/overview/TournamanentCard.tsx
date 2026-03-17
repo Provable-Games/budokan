@@ -1,17 +1,12 @@
 import { useMemo } from "react";
 import { Card } from "@/components/ui/card";
-import { feltToString, formatNumber, indexAddress } from "@/lib/utils";
+import { formatNumber, indexAddress } from "@/lib/utils";
 import TokenGameIcon from "@/components/icons/TokenGameIcon";
 import { useNavigate } from "react-router-dom";
 import Countdown from "@/components/Countdown";
-import { Tournament, Prize } from "@/generated/models.gen";
+import type { Tournament, Prize } from "@provable-games/budokan-sdk";
 import { TokenMetadata } from "@/lib/types";
 import { useChainConfig } from "@/context/chain";
-import {
-  groupPrizesByTokens,
-  extractEntryFeePrizes,
-  computeAbsoluteTimes,
-} from "@/lib/utils/formatting";
 import { TabType } from "@/components/overview/TournamentTabs";
 import {
   Tooltip,
@@ -65,83 +60,81 @@ export const TournamentCard = ({
   const navigate = useNavigate();
   const { gameData, getGameImage } = useUIStore();
 
-  const entryFeeToken = tournament?.entry_fee.Some?.token_address;
+  const entryFeeData = tournament.entryFee;
+  const entryFeeToken = entryFeeData?.tokenAddress ?? null;
   const entryFeeTokenSymbol = tokens.find(
     (t) => indexAddress(t.token_address) === indexAddress(entryFeeToken ?? ""),
   )?.symbol;
 
-  // Use distribution_count from entry fee if available, otherwise use entry count
-  const leaderboardSize =
-    Number(tournament?.entry_fee?.Some?.distribution_count ?? 0) > 0
-      ? Number(tournament!.entry_fee.Some!.distribution_count)
-      : entryCount;
+  // Compute entry fee pool value directly from SDK data
+  const entryFeePoolValue = useMemo(() => {
+    if (!entryFeeData || !entryFeeToken || entryCount === 0) return 0;
+    const amount = BigInt(entryFeeData.amount ?? "0");
+    if (amount === 0n) return 0;
+    const totalCollected = amount * BigInt(entryCount);
+    const creatorShare = Number(entryFeeData.tournamentCreatorShare ?? 0);
+    const gameShare = Number(entryFeeData.gameCreatorShare ?? 0);
+    const refundShare = Number(entryFeeData.refundShare ?? 0);
+    const poolBps = 10000 - creatorShare - gameShare - refundShare;
+    const poolAmount = poolBps > 0 ? (totalCollected * BigInt(poolBps)) / 10000n : 0n;
+    const normalizedAddr = indexAddress(entryFeeToken);
+    const decimals = tokenDecimals[normalizedAddr] || 18;
+    const price = tokenPrices[normalizedAddr] ?? 0;
+    return (Number(poolAmount) / 10 ** decimals) * price;
+  }, [entryFeeData, entryFeeToken, entryCount, tokenDecimals, tokenPrices]);
 
-  const { distributionPrizes } = extractEntryFeePrizes(
-    tournament?.id,
-    tournament?.entry_fee,
-    entryCount,
-    leaderboardSize,
-  );
-
-  const allPrizes = [...distributionPrizes, ...(prizes ?? [])];
-
-  const groupedPrizes = groupPrizesByTokens(allPrizes, tokens);
-
-  // Calculate total prize value using the hook
+  // Calculate total prize value from aggregations + entry fee pool
   const totalPrizesValueUSD = useTournamentPrizeValue({
     aggregations,
-    distributionPrizes,
+    distributionPrizes: [],
     tokenPrices,
     pricesLoading,
     tokenDecimals,
-  });
+  }) + entryFeePoolValue;
 
-  // Get unique tokens from all prizes (ERC20 + ERC721) for logo display
+  // Get unique tokens for logo display
   const uniquePrizeTokens = useMemo(() => {
-    const tokenMap = new Map<
-      string,
-      { address: string; symbol: string; logo?: string; type: string }
-    >();
-
-    Object.entries(groupedPrizes).forEach(([, prize]) => {
-      const token = tokens.find(
-        (t) => indexAddress(t.token_address) === indexAddress(prize.address),
-      );
-      if (token && !tokenMap.has(token.token_address)) {
-        const logo = getTokenLogoUrl(
-          selectedChainConfig.chainId ?? ChainId.SN_MAIN,
-          token.token_address,
-        );
-        tokenMap.set(token.token_address, {
+    const tokenSet = new Map<string, { address: string; symbol: string; logo?: string; type: string }>();
+    // From entry fee
+    if (entryFeeToken) {
+      const token = tokens.find((tk) => indexAddress(tk.token_address) === indexAddress(entryFeeToken));
+      if (token) {
+        tokenSet.set(token.token_address, {
           address: token.token_address,
           symbol: token.symbol,
-          logo,
-          type: prize.type,
+          logo: getTokenLogoUrl(selectedChainConfig.chainId ?? ChainId.SN_MAIN, token.token_address),
+          type: "erc20",
         });
       }
-    });
+    }
+    // From aggregation prize data
+    if (aggregations?.token_totals) {
+      for (const total of aggregations.token_totals) {
+        const token = tokens.find((tk) => indexAddress(tk.token_address) === indexAddress(total.tokenAddress));
+        if (token && !tokenSet.has(token.token_address)) {
+          tokenSet.set(token.token_address, {
+            address: token.token_address,
+            symbol: token.symbol,
+            logo: getTokenLogoUrl(selectedChainConfig.chainId ?? ChainId.SN_MAIN, token.token_address),
+            type: total.tokenType,
+          });
+        }
+      }
+    }
+    return Array.from(tokenSet.values());
+  }, [entryFeeToken, tokens, aggregations, selectedChainConfig.chainId]);
 
-    return Array.from(tokenMap.values());
-  }, [groupedPrizes, tokens, selectedChainConfig.chainId]);
 
+  // Use pre-computed timestamps from SDK
+  const gameStart = Number(tournament.gameStartTime ?? 0);
+  const gameEnd = Number(tournament.gameEndTime ?? 0);
+  const registrationStart = tournament.registrationStartTime ? Number(tournament.registrationStartTime) : null;
+  const registrationEnd = tournament.registrationEndTime ? Number(tournament.registrationEndTime) : null;
+  const submissionEnd = tournament.submissionEndTime ? Number(tournament.submissionEndTime) : null;
 
-  const absoluteTimes = computeAbsoluteTimes(tournament.created_at, tournament.schedule);
-  const startDate = new Date(absoluteTimes.gameStartTime * 1000);
+  const startDate = new Date(gameStart * 1000);
   const currentDate = new Date();
   const currentTimestamp = Math.floor(currentDate.getTime() / 1000);
-
-  // Determine tournament status based on schedule
-  const registrationStart = absoluteTimes.registrationStartTime > Number(tournament.created_at)
-    ? absoluteTimes.registrationStartTime
-    : null;
-  const registrationEnd = absoluteTimes.registrationEndTime > Number(tournament.created_at)
-    ? absoluteTimes.registrationEndTime
-    : null;
-  const gameStart = absoluteTimes.gameStartTime;
-  const gameEnd = absoluteTimes.gameEndTime;
-  const submissionEnd = Number(tournament.schedule.submission_duration) > 0
-    ? absoluteTimes.submissionEndTime
-    : null;
 
   const getTournamentStatus = () => {
     // Registration phase
@@ -182,16 +175,16 @@ export const TournamentCard = ({
 
   const tournamentStatus = getTournamentStatus();
 
-  const gameAddress = tournament.game_config.game_address;
+  const gameAddress = tournament.gameAddress;
   const gameName = gameData.find(
     (game) => game.contract_address === gameAddress,
   )?.name;
   const gameImage = getGameImage(gameAddress);
 
-  const hasEntryFee = tournament?.entry_fee.isSome();
+  const hasEntryFee = !!entryFeeData;
 
   const entryFeeInfo = useMemo(() => {
-    if (!tournament?.entry_fee.isSome()) {
+    if (!!!entryFeeData) {
       return { type: "free" as const };
     }
 
@@ -201,7 +194,7 @@ export const TournamentCard = ({
       ? tokenPrices[normalizedEntryFeeToken]
       : undefined;
 
-    const amount = Number(tournament?.entry_fee.Some?.amount!);
+    const amount = Number(entryFeeData?.amount!);
     const humanAmount = amount / 10 ** entryFeeDecimals;
 
     // Return token amount if price is not available
@@ -218,14 +211,14 @@ export const TournamentCard = ({
       usdAmount: (humanAmount * entryFeePrice).toFixed(2),
     };
   }, [
-    tournament?.entry_fee,
+    entryFeeData,
     entryFeeToken,
     entryFeeTokenSymbol,
     tokenDecimals,
     tokenPrices,
   ]);
 
-  const isRestricted = tournament?.entry_requirement.isSome();
+  const isRestricted = !!tournament.entryRequirement;
 
   // Compute countdown info once for reuse
   const countdownInfo = useMemo(() => {
@@ -269,7 +262,7 @@ export const TournamentCard = ({
               <Lock className="w-3 h-3 text-brand-muted flex-shrink-0" />
             )}
             <p className="truncate min-w-0 font-brand text-sm sm:text-base">
-              {feltToString(tournament?.metadata?.name!)}
+              {tournament.name ?? tournament.metadata?.name}
             </p>
           </div>
           <div className="flex-shrink-0">

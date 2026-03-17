@@ -5,7 +5,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useAccount } from "@starknet-react/core";
 import { BigNumberish } from "starknet";
 import EntryCard from "@/components/tournament/myEntries/EntryCard";
-import { Tournament } from "@/generated/models.gen";
+import type { Tournament } from "@provable-games/budokan-sdk";
 import { Button } from "@/components/ui/button";
 import {
   TournamentCard,

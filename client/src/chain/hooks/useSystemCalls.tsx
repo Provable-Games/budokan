@@ -4,7 +4,6 @@ import { useChainConfig } from "@/context/chain";
 import {
   Tournament,
   Prize,
-  EntryFee,
   QualificationProofEnum,
   TokenTypeDataEnum,
   ERC20Data,
@@ -69,10 +68,10 @@ export const useSystemCalls = () => {
   // Tournament
 
   const approveAndEnterTournament = async (
-    entryFeeToken: CairoOption<EntryFee>,
+    entryFeeData: { tokenAddress: string; amount: string } | null | undefined,
     tournamentId: BigNumberish,
     tournamentName: string,
-    tournamentModel: Tournament,
+    tournamentModel: any,
     player_name: BigNumberish,
     player_address: BigNumberish,
     qualification: CairoOption<QualificationProofEnum>,
@@ -82,9 +81,9 @@ export const useSystemCalls = () => {
     prizeTotalUsd: number,
     prependCalls?: { contractAddress: string; entrypoint: string; calldata: string[] }[]
   ) => {
-    const gameStartTime = Number(tournamentModel.created_at) + Number(tournamentModel.schedule.game_start_delay);
+    const gameStartTime = Number(tournamentModel.gameStartTime ?? 0);
     const startsIn = gameStartTime - Date.now() / 1000;
-    const game = getGameName(tournamentModel.game_config.game_address);
+    const game = getGameName(tournamentModel.gameAddress);
 
     const budokanContract = initializeBudokanContract();
 
@@ -105,13 +104,13 @@ export const useSystemCalls = () => {
       }
 
       // Always add approve call for entry fee token (after swap or directly)
-      if (entryFeeToken.isSome()) {
+      if (entryFeeData?.tokenAddress) {
         calls.push({
-          contractAddress: entryFeeToken.Some?.token_address!,
+          contractAddress: entryFeeData.tokenAddress,
           entrypoint: "approve",
           calldata: CallData.compile([
             tournamentAddress,
-            entryFeeToken.Some?.amount!,
+            entryFeeData.amount,
             "0",
           ]),
         });
@@ -131,7 +130,7 @@ export const useSystemCalls = () => {
           tournamentName,
           game,
           entryFeeUsdCost,
-          hasEntryFee: entryFeeToken.isSome(),
+          hasEntryFee: !!entryFeeData?.tokenAddress,
           startsIn,
           duration,
           prizeTotalUsd,

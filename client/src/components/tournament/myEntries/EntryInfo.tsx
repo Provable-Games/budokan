@@ -1,5 +1,5 @@
 import { HoverCardContent } from "@/components/ui/hover-card";
-import { Tournament } from "@/generated/models.gen";
+import type { Tournament } from "@provable-games/budokan-sdk";
 import { useMemo } from "react";
 
 interface EntryInfoProps {
@@ -14,7 +14,7 @@ const EntryInfo = ({
   tournamentModel,
 }: EntryInfoProps) => {
   const settings =
-    tournamentModel?.game_config?.settings_id === 0 ? "Default" : "Custom";
+    (tournamentModel as any)?.gameConfig?.settingsId === 0 ? "Default" : "Custom";
   const parsedImage = useMemo(
     () => (tokenMetadata ? JSON.parse(tokenMetadata)?.image : ""),
     [tokenMetadata]

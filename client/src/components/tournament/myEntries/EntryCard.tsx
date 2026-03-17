@@ -12,7 +12,7 @@ import { TooltipTrigger } from "@/components/ui/tooltip";
 import { Tooltip } from "@/components/ui/tooltip";
 import useUIStore from "@/hooks/useUIStore";
 import { GameTokenData } from "@/lib/types";
-import { Tournament } from "@/generated/models.gen";
+import type { Tournament } from "@provable-games/budokan-sdk";
 
 interface EntryCardProps {
   gameAddress: string;

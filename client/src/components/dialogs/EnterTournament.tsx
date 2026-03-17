@@ -24,11 +24,10 @@ import {
 } from "@/components/ui/tooltip";
 import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 import { useAccount, useConnect, useProvider } from "@starknet-react/core";
-import { Tournament } from "@/generated/models.gen";
+import type { Tournament } from "@provable-games/budokan-sdk";
 import { TokenMetadata } from "@/lib/types";
 import { OPUS } from "@/components/Icons";
 import {
-  feltToString,
   indexAddress,
   bigintToHex,
   displayAddress,
@@ -66,7 +65,7 @@ import {
 } from "@/hooks/useBudokanQueries";
 import { useGameTokens } from "@/hooks/useDenshokanQueries";
 import { useChainConfig } from "@/context/chain";
-import { computeAbsoluteTimes } from "@/lib/utils/formatting";
+// computeAbsoluteTimes no longer needed — SDK provides pre-computed timestamps
 import { buildQualificationProof } from "@/lib/utils";
 import type { QualificationProof as SdkQualificationProof } from "@/lib/utils";
 import { getTokenLogoUrl, getTokenDecimals } from "@/lib/tokensMeta";
@@ -238,9 +237,9 @@ export function EnterTournamentDialog({
       }
 
       await approveAndEnterTournament(
-        tournamentModel?.entry_fee,
+        entryFeeData,
         tournamentModel?.id,
-        feltToString(tournamentModel?.metadata.name),
+        tournamentModel?.name,
         tournamentModel,
         stringToFelt(finalPlayerName),
         addAddressPadding(targetAddress),
@@ -318,13 +317,14 @@ export function EnterTournamentDialog({
     };
   }, [controllerUsername, isController]);
 
-  const entryToken = tournamentModel?.entry_fee?.Some?.token_address;
-  const entryAmount = tournamentModel?.entry_fee?.Some?.amount;
+  const entryFeeData = (tournamentModel as any)?.entryFee;
+  const entryToken = entryFeeData?.tokenAddress;
+  const entryAmount = entryFeeData?.amount;
   const entryTokenDecimals = entryToken
     ? getTokenDecimals(chainId, entryToken)
     : 18;
   const entryFeeUsdCost = entryToken
-    ? (Number(tournamentModel?.entry_fee.Some?.amount ?? 0) /
+    ? (Number(entryFeeData?.amount ?? 0) /
         10 ** entryTokenDecimals) *
       Number(entryFeePrice)
     : 0;
@@ -508,18 +508,16 @@ export function EnterTournamentDialog({
     tokenBalances,
   ]);
 
-  const hasEntryRequirement = tournamentModel?.entry_requirement.isSome();
+  const entryReq = (tournamentModel as any)?.entryRequirement;
+  const hasEntryRequirement = !!entryReq;
+  const entryReqType = entryReq?.entryRequirementType;
 
-  const hasEntryLimit =
-    Number(tournamentModel?.entry_requirement.Some?.entry_limit) > 0;
-  const entryLimit = tournamentModel?.entry_requirement.Some?.entry_limit;
+  const hasEntryLimit = Number(entryReq?.entryLimit) > 0;
+  const entryLimit = entryReq?.entryLimit;
 
-  const requirementVariant =
-    tournamentModel?.entry_requirement.Some?.entry_requirement_type?.activeVariant();
+  const requirementVariant = entryReqType?.type as string | undefined;
 
-  const requiredTokenAddress =
-    tournamentModel?.entry_requirement.Some?.entry_requirement_type?.variant
-      ?.token;
+  const requiredTokenAddress = entryReqType?.tokenAddress;
 
   // Get token data from static tokens - same approach as EntryRequirements.tsx
   const token = useMemo(() => {
@@ -544,13 +542,11 @@ export function EnterTournamentDialog({
     ? [indexAddress(requiredTokenAddress ?? "")]
     : [];
 
-  const allowlistAddresses =
-    tournamentModel?.entry_requirement.Some?.entry_requirement_type?.variant
-      ?.allowlist;
+  const allowlistAddresses = entryReqType?.addresses;
 
-  const extensionConfig =
-    tournamentModel?.entry_requirement.Some?.entry_requirement_type?.variant
-      ?.extension;
+  const extensionConfig = requirementVariant === "extension"
+    ? { address: entryReqType?.address, config: entryReqType?.config }
+    : undefined;
 
   // Identify extension type using metagame-sdk
   const extensionType = useMemo(
@@ -767,7 +763,7 @@ export function EnterTournamentDialog({
           (t) => t.id.toString() === lb.tournament_id.toString(),
         );
         const finalizedTime = lbTournament
-          ? BigInt(computeAbsoluteTimes(lbTournament.created_at, lbTournament.schedule).submissionEndTime)
+          ? BigInt(lbTournament.submissionEndTime ?? 0)
           : 0n;
         const tokenIds = Array.isArray(lb.token_ids)
           ? lb.token_ids.map((id: any) => String(Number(addAddressPadding(bigintToHex(BigInt(id))))))
@@ -786,7 +782,7 @@ export function EnterTournamentDialog({
   const tournamentNames = useMemo(() => {
     const names: Record<string, string> = {};
     for (const t of validatorTournaments) {
-      names[t.id.toString()] = feltToString(t.metadata.name);
+      names[t.id.toString()] = t.name ?? "";
     }
     return names;
   }, [validatorTournaments]);
@@ -914,15 +910,9 @@ export function EnterTournamentDialog({
   // display the entry fee distribution
   // Shares are now in basis points (10000 = 100%) to allow 2 decimal precision
 
-  const creatorShare = Number(
-    tournamentModel?.entry_fee.Some?.tournament_creator_share ?? 0,
-  );
-  const gameShare = Number(
-    tournamentModel?.entry_fee.Some?.game_creator_share ?? 0,
-  );
-  const refundShare = Number(
-    tournamentModel?.entry_fee.Some?.refund_share ?? 0,
-  );
+  const creatorShare = Number(entryFeeData?.tournamentCreatorShare ?? 0);
+  const gameShare = Number(entryFeeData?.gameCreatorShare ?? 0);
+  const refundShare = Number(entryFeeData?.refundShare ?? 0);
   const prizePoolShare = 10000 - creatorShare - gameShare - refundShare;
 
   return (
@@ -1287,7 +1277,7 @@ export function EnterTournamentDialog({
                     <div className="flex flex-col gap-2 px-4">
                       {validatorTournaments.map((tournament) => {
                         const tournamentFinalizedTime =
-                          BigInt(computeAbsoluteTimes(tournament.created_at, tournament.schedule).submissionEndTime);
+                          BigInt(tournament.submissionEndTime ?? 0);
                         const hasTournamentFinalized =
                           tournamentFinalizedTime < currentTime;
                         return (
@@ -1296,7 +1286,7 @@ export function EnterTournamentDialog({
                             className="flex flex-row items-center justify-between border border-brand-muted rounded-md p-2"
                           >
                             <span>
-                              {feltToString(tournament.metadata.name)}
+                              {tournament.name}
                             </span>
                             {tournamentValidatorConfig.requirementType ===
                             "won" ? (

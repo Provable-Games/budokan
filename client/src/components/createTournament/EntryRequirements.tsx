@@ -93,7 +93,7 @@ const EntryRequirements = ({ form }: StepProps) => {
     return {
       tournament: tournament,
       prizes: [],
-      entryCount: Number(tournament.entry_count ?? 0),
+      entryCount: Number(tournament.entryCount ?? 0),
     };
   });
 
@@ -675,9 +675,7 @@ const EntryRequirements = ({ form }: StepProps) => {
                                           className="inline-flex items-center gap-2 p-2 border border-brand-muted rounded w-fit"
                                         >
                                           <span>
-                                            {feltToString(
-                                              selectedTournament.metadata.name
-                                            )}{" "}
+                                            {selectedTournament.name}{" "}
                                             -{" "}
                                             {Number(
                                               selectedTournament.id
@@ -794,15 +792,16 @@ const EntryRequirements = ({ form }: StepProps) => {
                                       {tournamentsData?.length > 0 ? (
                                         tournamentsData.map(
                                           (tournament, index) => {
-                                            const tAbsTimes = computeAbsoluteTimes(tournament?.tournament.created_at, tournament?.tournament.schedule);
+                                            const tGameStartTime = Number(tournament?.tournament.gameStartTime ?? 0);
                                             const isStarted =
-                                              tAbsTimes.gameStartTime <
+                                              tGameStartTime <
                                               Number(
                                                 BigInt(Date.now()) / 1000n
                                               );
 
+                                            const tGameEndTime = Number(tournament?.tournament.gameEndTime ?? 0);
                                             const isEnded =
-                                              tAbsTimes.gameEndTime <
+                                              tGameEndTime <
                                               Number(
                                                 BigInt(Date.now()) / 1000n
                                               );
@@ -863,10 +862,7 @@ const EntryRequirements = ({ form }: StepProps) => {
                                               >
                                                 <div className="flex flex-row items-center gap-2">
                                                   <span className="font-brand">
-                                                    {feltToString(
-                                                      tournament.tournament
-                                                        .metadata.name
-                                                    )}
+                                                    {tournament.tournament.name}
                                                   </span>
                                                   -
                                                   <span className="font-brand">

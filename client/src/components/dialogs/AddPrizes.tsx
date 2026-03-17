@@ -11,7 +11,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { FormToken } from "@/lib/types";
-import { Prize, ERC20Data, ERC721Data, Tournament } from "@/generated/models.gen";
+import { Prize, ERC20Data, ERC721Data } from "@/generated/models.gen";
+import type { Tournament } from "@provable-games/budokan-sdk";
 import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 import { BigNumberish } from "starknet";
 import { CairoCustomEnum, CairoOption, CairoOptionVariant } from "starknet";

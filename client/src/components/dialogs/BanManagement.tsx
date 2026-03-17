@@ -12,7 +12,7 @@ import { useGameTokens } from "@/hooks/useDenshokanQueries";
 import { REFRESH, USER } from "@/components/Icons";
 import { useGetTournamentRegistrations } from "@/hooks/useBudokanQueries";
 import { useChainConfig } from "@/context/chain";
-import { Tournament } from "@/generated/models.gen";
+import type { Tournament } from "@provable-games/budokan-sdk";
 import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 import { displayAddress, indexAddress } from "@/lib/utils";
 import {
@@ -99,17 +99,17 @@ export const BanManagementDialog = ({
 
   // Parse Opus Troves validator config
   const opusTrovesValidatorConfig = useMemo(() => {
+    const entryReq = (tournamentModel as any)?.entryRequirement;
+    const reqType = entryReq?.entryRequirementType;
     if (
       !isOpusTrovesValidatorExtension ||
-      !tournamentModel?.entry_requirement.Some?.entry_requirement_type?.variant
-        ?.extension?.config
+      reqType?.type !== "extension" ||
+      !reqType?.config
     ) {
       return null;
     }
 
-    const config =
-      tournamentModel.entry_requirement.Some.entry_requirement_type.variant
-        .extension.config;
+    const config = reqType.config;
     if (!config || config.length < 4) return null;
 
     const assetCount = Number(config[0]);

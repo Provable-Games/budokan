@@ -234,9 +234,9 @@ const Overview = () => {
     const addresses = new Set<string>();
 
     currentTournaments.forEach((item: any) => {
-      // Extract from entry fees
-      if (item.tournament?.entry_fee?.Some?.token_address) {
-        addresses.add(item.tournament.entry_fee.Some.token_address);
+      // Extract from entry fees (SDK returns entryFee as plain object)
+      if (item.tournament?.entryFee?.tokenAddress) {
+        addresses.add(item.tournament.entryFee.tokenAddress);
       }
       // Extract from prizes
       if (item.prizes && Array.isArray(item.prizes)) {
@@ -349,6 +349,8 @@ const Overview = () => {
     if (!tournamentsLoading && !myTournamentsLoading) {
       const rawTournaments = selectedTab === "my" ? myTournaments : tournaments;
 
+      console.log(`[Overview] tab=${selectedTab} loading=${tournamentsLoading} raw=`, rawTournaments);
+
       // Make sure we have data and we're on the right page
       if (
         rawTournaments &&
@@ -356,6 +358,7 @@ const Overview = () => {
         rawTournaments.length > 0
       ) {
         const processedTournaments = processTournamentsFromMapped(rawTournaments);
+        console.log(`[Overview] processed=`, processedTournaments);
 
         // For first page, replace all tournaments
         // For subsequent pages, add only new tournaments
@@ -365,6 +368,7 @@ const Overview = () => {
           addTournaments(selectedTab as TournamentTab, processedTournaments);
         }
       } else if (currentPage === 0) {
+        console.log(`[Overview] tab=${selectedTab} no data, clearing`);
         // If there are no results for the first page, clear the tournaments
         setTournaments(selectedTab as TournamentTab, []);
       }
@@ -637,7 +641,7 @@ const Overview = () => {
               <TournamentSkeletons
                 tournamentsCount={tournamentCounts[selectedTab]}
               />
-            ) : currentTournaments.length > 0 ? (
+            ) : (console.log(`[Overview] render: tab=${selectedTab} currentTournaments.length=${currentTournaments.length} isLoading=${isCurrentTabLoading}`), currentTournaments.length > 0) ? (
               <>
                 {currentTournaments.map((tournament, index) => (
                   <TournamentCard

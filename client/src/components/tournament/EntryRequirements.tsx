@@ -1,8 +1,7 @@
 import { Card } from "@/components/ui/card";
-import { Tournament } from "@/generated/models.gen";
+import type { Tournament } from "@provable-games/budokan-sdk";
 import {
   displayAddress,
-  feltToString,
   identifyExtensionType,
   parseTournamentValidatorConfig,
   parseERC20BalanceValidatorConfig,
@@ -36,7 +35,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Tournament as TournamentModel } from "@/generated/models.gen";
+// Tournament type now comes from SDK
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import {
@@ -68,7 +67,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { getTokenByAddress } from "@/lib/tokenUtils";
 import { getTokenDecimals } from "@/lib/tokensMeta";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
-import { computeAbsoluteTimes } from "@/lib/utils/formatting";
+// computeAbsoluteTimes no longer needed — SDK provides pre-computed timestamps
 
 // Helper component for Entry Limit display with info tooltip
 const EntryLimitInfo = ({ limit }: { limit: number }) => (
@@ -97,30 +96,29 @@ const EntryRequirements = ({
   tournamentModel,
   tournamentsData,
 }: {
-  tournamentModel: TournamentModel;
+  tournamentModel: Tournament;
   tournamentsData: Tournament[];
 }) => {
-  if (!tournamentModel?.entry_requirement?.isSome()) {
+  const entryRequirement = (tournamentModel as any)?.entryRequirement;
+  if (!entryRequirement) {
     return null;
   }
   const { selectedChainConfig } = useChainConfig();
 
   const navigate = useNavigate();
 
-  const entryRequirement = useMemo(
-    () => tournamentModel.entry_requirement.Some,
-    [tournamentModel]
-  );
-  const entryLimit = entryRequirement?.entry_limit;
+  // SDK shape: { entryLimit, entryRequirementType: { type, tokenAddress?, addresses?, address?, config? } }
+  const reqType = entryRequirement?.entryRequirementType;
+  const entryLimit = entryRequirement?.entryLimit;
   const hasEntryLimit = Number(entryLimit) > 0;
   const activeVariant = useMemo(
-    () => entryRequirement?.entry_requirement_type.activeVariant(),
-    [entryRequirement]
+    () => reqType?.type as string | undefined,
+    [reqType]
   );
 
   const tokenAddress = useMemo(
-    () => entryRequirement?.entry_requirement_type?.variant.token,
-    [entryRequirement]
+    () => reqType?.tokenAddress,
+    [reqType]
   );
 
   // Get token data from static tokens
@@ -140,13 +138,13 @@ const EntryRequirements = ({
   const tokenLoading = false; // No loading needed for static data
 
   const allowlist = useMemo(
-    () => entryRequirement?.entry_requirement_type?.variant?.allowlist,
-    [entryRequirement]
+    () => reqType?.addresses,
+    [reqType]
   );
 
   const extensionConfig = useMemo(
-    () => entryRequirement?.entry_requirement_type?.variant?.extension,
-    [entryRequirement]
+    () => reqType?.type === "extension" ? { address: reqType?.address, config: reqType?.config } : undefined,
+    [reqType]
   );
 
   // Identify extension type using SDK utility
@@ -747,9 +745,10 @@ const EntryRequirements = ({
                   </TableHeader>
                   <TableBody>
                     {validatorTournaments.map((tournament, index) => {
-                      const absoluteTimes = computeAbsoluteTimes(tournament.created_at, tournament.schedule);
+                      // SDK tournaments have pre-computed absolute timestamps
+                      const gameEndTime = Number(tournament.gameEndTime ?? 0);
                       const tournamentEnded =
-                        BigInt(absoluteTimes.gameEndTime) < BigInt(Date.now()) / 1000n;
+                        gameEndTime > 0 && gameEndTime < Math.floor(Date.now() / 1000);
                       return (
                         <TableRow
                           key={index}
@@ -759,7 +758,7 @@ const EntryRequirements = ({
                           }}
                         >
                           <TableCell className="p-2 text-xs font-medium">
-                            {feltToString(tournament.metadata.name)}
+                            {tournament.name}
                           </TableCell>
                           <TableCell className="p-2 text-right">
                             <div className="flex flex-row items-center justify-end gap-1">

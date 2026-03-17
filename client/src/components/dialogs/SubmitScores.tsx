@@ -8,7 +8,8 @@ import {
 } from "@/components/ui/dialog";
 import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 import { useAccount } from "@starknet-react/core";
-import { Leaderboard, Tournament } from "@/generated/models.gen";
+import { Leaderboard } from "@/generated/models.gen";
+import type { Tournament } from "@provable-games/budokan-sdk";
 import { padAddress, feltToString, getOrdinalSuffix } from "@/lib/utils";
 import { useConnectToSelectedChain } from "@/chain/hooks/useChain";
 import { useGameTokens } from "@/hooks/useDenshokanQueries";
@@ -43,8 +44,9 @@ export function SubmitScoresDialog({
   const tournamentAddress = selectedChainConfig.budokanAddress!;
 
   // Calculate leaderboard size from entry fee distribution count, or default to 10
-  const leaderboardSize = tournamentModel?.entry_fee && 'Some' in tournamentModel.entry_fee && Number(tournamentModel.entry_fee.Some?.distribution_count ?? 0) > 0
-    ? Number(tournamentModel.entry_fee.Some!.distribution_count)
+  const entryFee = (tournamentModel as any)?.entryFee;
+  const leaderboardSize = entryFee && Number(entryFee.distributionCount ?? 0) > 0
+    ? Number(entryFee.distributionCount)
     : 10;
 
   // Fetch extra games beyond leaderboard size to account for banned entries
