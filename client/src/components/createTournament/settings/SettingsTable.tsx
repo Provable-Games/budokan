@@ -17,7 +17,7 @@ const SettingsTable = ({ hasSettings, settings }: SettingsTableProps) => {
   }
 
   // Convert settings object to array of { key, value }
-  const entries = Object.entries(settings);
+  const entries = Object.entries(settings ?? {});
 
   return (
     <div className="overflow-y-auto flex flex-col border border-brand rounded-lg p-5 gap-2 h-[250px]">

@@ -17,12 +17,18 @@ import { useChainConfig } from "@/context/chain";
 import { TokenSelector } from "@/components/createTournament/inputs/TokenSelector";
 import { TokenAmountInput } from "@/components/createTournament/inputs/TokenAmountInput";
 import { ChainId } from "@/chain/setup/networks";
+import { OptionalSection } from "@/components/createTournament/containers/OptionalSection";
+import { getGameDefaults } from "@/assets/games";
 
 const EntryFees = ({ form }: StepProps) => {
   const { selectedChainConfig } = useChainConfig();
 
   const chainId = selectedChainConfig?.chainId ?? "";
   const isSepolia = selectedChainConfig?.chainId === ChainId.SN_SEPOLIA;
+
+  const enableEntryFees = form.watch("enableEntryFees");
+  const gameAddress = form.watch("game");
+  const gameDefaults = gameAddress ? getGameDefaults(gameAddress, chainId) : null;
 
   // Quick select token addresses for mainnet
   const MAINNET_QUICK_SELECT_ADDRESSES = [
@@ -118,18 +124,30 @@ const EntryFees = ({ form }: StepProps) => {
   }, [hasTokenSelected, tokenEverSelected]);
 
   return (
-    <div className="flex flex-col sm:p-4 gap-4">
-      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-5">
-        <FormLabel className="font-brand text-lg sm:text-xl lg:text-2xl 2xl:text-3xl font-bold">
-          Entry Fees
-        </FormLabel>
-        <FormDescription className="sm:text-sm xl:text-base">
-          Tournament entry fee configuration
-        </FormDescription>
-      </div>
+    <FormField
+      control={form.control}
+      name="enableEntryFees"
+      render={({ field }) => (
+        <FormItem className="flex flex-col sm:p-4">
+          <OptionalSection
+            label="Entry Fees"
+            description="Charge players a fee to enter the tournament"
+            checked={field.value}
+            onCheckedChange={field.onChange}
+          />
 
-      <div className="w-full h-0.5 bg-brand/25" />
-      <div className="space-y-4">
+          <div className="w-full h-0.5 bg-brand/25" />
+
+          {!enableEntryFees && gameDefaults?.averageGasCostUsd && (
+            <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-4">
+              <p className="text-sm text-yellow-500">
+                Note: This game costs approximately ${gameDefaults.averageGasCostUsd.toFixed(2)} in gas per play. Without entry fees, players only pay gas costs.
+              </p>
+            </div>
+          )}
+
+          {enableEntryFees && (
+          <div className="space-y-4">
         {/* Token Selection and Amount in a row */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:divide-x lg:divide-brand/25">
           {/* Token Selection */}
@@ -253,7 +271,10 @@ const EntryFees = ({ form }: StepProps) => {
           </>
         )}
       </div>
-    </div>
+          )}
+        </FormItem>
+      )}
+    />
   );
 };
 

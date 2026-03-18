@@ -180,8 +180,8 @@ const CreateTournament = () => {
         },
       },
       entryFees: {
-        value: 1,
-        minEntryFeeUsd: 1,
+        value: 0.25,
+        minEntryFeeUsd: 0.25,
         creatorFeePercentage: 0,
         gameFeePercentage: 1,
         minGameFeePercentage: 1,
@@ -204,7 +204,7 @@ const CreateTournament = () => {
     active: true,
   });
 
-  const tournamentCount = Number(platformMetricsModel?.total_tournaments ?? 0);
+  const tournamentCount = Number(platformMetricsModel?.totalTournaments ?? 0);
   const prizeCount = Number(platformStats?.totalPrizes ?? 0);
 
   // Add state for current step
@@ -382,11 +382,13 @@ const CreateTournament = () => {
         enabled: getValue("enableGating") === true,
       },
       fees: {
-        complete: !!(
-          getValue("entryFees.token") &&
-          getValue("entryFees.amount") &&
-          getValue("entryFees.amount") > 0
-        ),
+        complete:
+          getValue("enableEntryFees") === false ||
+          !!(
+            getValue("entryFees.token") &&
+            getValue("entryFees.amount") &&
+            getValue("entryFees.amount") > 0
+          ),
         enabled: true,
       },
       prizes: {

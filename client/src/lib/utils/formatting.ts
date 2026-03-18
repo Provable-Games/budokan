@@ -1084,80 +1084,76 @@ export const processQualificationProof = (
  * Similar to how entry fee distributions are expanded
  */
 export const expandDistributedPrizes = (
-  prizes: Prize[]
+  prizes: any[]
 ): DisplayPrize[] => {
   const expanded: DisplayPrize[] = [];
 
   prizes.forEach((prize) => {
-    const tokenType = prize.token_type;
+    // Support both CairoCustomEnum (token_type with .activeVariant()) and SDK plain objects (tokenType)
+    const tokenType = prize.token_type ?? prize.tokenType;
+    if (!tokenType) {
+      expanded.push({ ...prize, position: prize.position ?? prize.payoutPosition ?? 0, type: "sponsored_single" } as DisplayPrize);
+      return;
+    }
 
-    if (tokenType.activeVariant?.() === "erc20") {
-      const erc20Data = tokenType.variant?.erc20;
+    // Detect if ERC20: CairoCustomEnum uses .activeVariant(), SDK uses plain object keys
+    const isErc20 = typeof tokenType.activeVariant === "function"
+      ? tokenType.activeVariant() === "erc20"
+      : !!(tokenType.erc20 || tokenType.type === "erc20");
 
-      // Check if this prize has distribution_count - handle both SDK format (isSome method) and manual format (Some property)
-      const hasDistributionCount = erc20Data?.distribution_count?.isSome?.() || erc20Data?.distribution_count?.Some !== undefined;
-      const hasDistribution = erc20Data.distribution?.isSome?.() || erc20Data.distribution?.Some;
+    if (isErc20) {
+      const erc20Data = tokenType.variant?.erc20 ?? tokenType.erc20 ?? tokenType;
+      if (!erc20Data?.amount) {
+        expanded.push({ ...prize, position: prize.position ?? prize.payoutPosition ?? 0, type: "sponsored_single" } as DisplayPrize);
+        return;
+      }
 
-      if (hasDistributionCount) {
-        const distributionCount = Number(erc20Data.distribution_count.Some);
+      // Get distribution count from various formats
+      const rawDistCount = erc20Data.distribution_count ?? erc20Data.distributionCount;
+      const distributionCount = typeof rawDistCount === "object" && rawDistCount !== null
+        ? (rawDistCount.isSome?.() ? Number(rawDistCount.Some) : (rawDistCount.Some !== undefined ? Number(rawDistCount.Some) : 0))
+        : Number(rawDistCount ?? 0);
+
+      if (distributionCount > 0) {
         const totalAmount = BigInt(erc20Data.amount);
 
-        // Calculate distribution percentages
+        // Get distribution type from various formats
+        const rawDist = erc20Data.distribution;
         let distributionPercentages: number[] = [];
 
-        if (hasDistribution) {
-          const dist = erc20Data.distribution.Some;
+        if (rawDist) {
+          const distType = typeof rawDist === "object" && rawDist !== null
+            ? (rawDist.activeVariant?.() ?? rawDist.type ?? (rawDist.Some?.activeVariant?.() ? rawDist.Some.activeVariant() : null))
+            : rawDist;
+          const distValue = typeof rawDist === "object" && rawDist !== null
+            ? (rawDist.unwrap?.() ?? rawDist.weight ?? rawDist.Some?.unwrap?.() ?? rawDist.Some)
+            : undefined;
 
-          if (dist.activeVariant() === "Linear") {
-            const weight = (dist.unwrap() as number) / 10;
-            distributionPercentages = calculateDistribution(
-              distributionCount,
-              weight,
-              0, 0, 0,
-              "linear"
-            );
-          } else if (dist.activeVariant() === "Exponential") {
-            const weight = (dist.unwrap() as number) / 10;
-            distributionPercentages = calculateDistribution(
-              distributionCount,
-              weight,
-              0, 0, 0,
-              "exponential"
-            );
-          } else if (dist.activeVariant() === "Uniform") {
-            distributionPercentages = calculateDistribution(
-              distributionCount,
-              1,
-              0, 0, 0,
-              "uniform"
-            );
-          } else if (dist.activeVariant() === "Custom") {
-            distributionPercentages = (dist.unwrap() as number[]).map(v => v / 100);
+          if (distType === "Linear" || distType === "linear") {
+            distributionPercentages = calculateDistribution(distributionCount, Number(distValue ?? 10) / 10, 0, 0, 0, "linear");
+          } else if (distType === "Exponential" || distType === "exponential") {
+            distributionPercentages = calculateDistribution(distributionCount, Number(distValue ?? 10) / 10, 0, 0, 0, "exponential");
+          } else if (distType === "Uniform" || distType === "uniform") {
+            distributionPercentages = calculateDistribution(distributionCount, 1, 0, 0, 0, "uniform");
+          } else if (distType === "Custom" || distType === "custom") {
+            distributionPercentages = ((distValue ?? []) as number[]).map(v => v / 100);
+          } else {
+            distributionPercentages = calculateDistribution(distributionCount, 1, 0, 0, 0, "uniform");
           }
         } else {
-          // Default to uniform if no distribution specified
-          distributionPercentages = calculateDistribution(
-            distributionCount,
-            1,
-            0, 0, 0,
-            "uniform"
-          );
+          distributionPercentages = calculateDistribution(distributionCount, 1, 0, 0, 0, "uniform");
         }
 
-        // Create a DisplayPrize for each position
         distributionPercentages.forEach((percentage, index) => {
           if (percentage === 0) return;
-
           const amount = (totalAmount * BigInt(Math.floor(percentage * 100))) / 10000n;
-
-          // Skip prizes with 0 amount (now accurately reflects contract calculation)
           if (amount === 0n) return;
 
           expanded.push({
-            id: prize.id,
-            context_id: prize.context_id,
+            id: prize.id ?? prize.prizeId,
+            context_id: prize.context_id ?? prize.tournamentId,
             position: index + 1,
-            token_address: prize.token_address,
+            token_address: prize.token_address ?? prize.tokenAddress,
             token_type: new CairoCustomEnum({
               erc20: {
                 amount: amount.toString(),
@@ -1166,23 +1162,23 @@ export const expandDistributedPrizes = (
               } as ERC20Data,
               erc721: undefined,
             }),
-            sponsor_address: prize.sponsor_address,
+            sponsor_address: prize.sponsor_address ?? prize.sponsorAddress,
             type: "sponsored_distributed",
           } as DisplayPrize);
         });
       } else {
-        // Single prize, no distribution
         expanded.push({
           ...prize,
-          position: 0, // Position 0 for non-distributed prizes
+          position: prize.position ?? prize.payoutPosition ?? 0,
+          token_address: prize.token_address ?? prize.tokenAddress,
           type: "sponsored_single",
         } as DisplayPrize);
       }
     } else {
-      // ERC721 prizes are always single
       expanded.push({
         ...prize,
-        position: 0,
+        position: prize.position ?? prize.payoutPosition ?? 0,
+        token_address: prize.token_address ?? prize.tokenAddress,
         type: "sponsored_single",
       } as DisplayPrize);
     }

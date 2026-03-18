@@ -17,9 +17,7 @@ import { addAddressPadding } from "starknet";
 import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 import type { Tournament as SdkTournament } from "@provable-games/budokan-sdk";
 import { useChainConfig } from "@/context/chain";
-import {
-  expandDistributedPrizes,
-} from "@/lib/utils/formatting";
+import { expandDistributedPrizes } from "@/lib/utils/formatting";
 import { EnterTournamentDialog } from "@/components/dialogs/EnterTournament";
 import ScoreTable from "@/components/tournament/table/ScoreTable";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
@@ -61,9 +59,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useGameSetting } from "@/hooks/useDenshokanQueries";
-import {
-  EXCLUDED_TOURNAMENT_IDS,
-} from "@/lib/constants";
+import { EXCLUDED_TOURNAMENT_IDS } from "@/lib/constants";
 import GeoBlockedDialog from "@/components/dialogs/GeoBlocked";
 import { useGeoBlock } from "@/hooks/useGeoBlock";
 
@@ -92,8 +88,11 @@ const Tournament = () => {
   const [banRefreshTrigger, setBanRefreshTrigger] = useState(0);
 
   // Fetch tournament data via new SDK hook
-  const { data: tournamentData, loading: tournamentLoading, refetch: refetchTournament } =
-    useGetTournament(id);
+  const {
+    data: tournamentData,
+    loading: tournamentLoading,
+    refetch: refetchTournament,
+  } = useGetTournament(id);
 
   const tournamentModel = tournamentData;
 
@@ -105,7 +104,8 @@ const Tournament = () => {
 
   // Platform metrics for prize count tracking
   const { data: platformMetrics } = useGetPlatformMetrics({ active: true });
-  const subscribedPrizeCount = Number(platformMetrics?.total_tournaments ?? 0);
+  console.log(platformMetrics);
+  const subscribedPrizeCount = Number(platformMetrics?.totalTournaments ?? 0);
 
   // Fetch leaderboard via new SDK hook (returns a single Leaderboard object)
   const { data: leaderboardModel } = useGetTournamentLeaderboard(id);
@@ -146,20 +146,21 @@ const Tournament = () => {
       : entryCount;
 
   // Fetch registrations via new SDK hook
-  const { data: allRegistrants, refetch: refetchRegistrations } = useGetTournamentRegistrations(id);
+  const { data: allRegistrants, refetch: refetchRegistrations } =
+    useGetTournamentRegistrations(id);
 
   // Calculate non-banned entry count
   const nonBannedEntryCount = useMemo(() => {
     if (!allRegistrants || allRegistrants.length === 0) return entryCount;
 
-    const bannedCount = allRegistrants.filter(
-      (reg) => reg.is_banned,
-    ).length;
+    const bannedCount = allRegistrants.filter((reg) => reg.isBanned).length;
 
     return entryCount - bannedCount;
   }, [allRegistrants, entryCount]);
 
-  const totalSubmissions = Array.isArray(leaderboardModel) ? leaderboardModel.length : 0;
+  const totalSubmissions = Array.isArray(leaderboardModel)
+    ? leaderboardModel.length
+    : 0;
 
   // Check if all non-banned games have been submitted
   const allSubmitted =
@@ -227,10 +228,11 @@ const Tournament = () => {
       BigInt(tournamentModel?.schedule?.gameStartDelay ?? 0n),
   );
 
-  const registrationType = Number(tournamentModel?.schedule?.registrationStartDelay ?? 0) === 0
-      && Number(tournamentModel?.schedule?.registrationEndDelay ?? 0) === 0
-    ? "open"
-    : "fixed";
+  const registrationType =
+    Number(tournamentModel?.schedule?.registrationStartDelay ?? 0) === 0 &&
+    Number(tournamentModel?.schedule?.registrationEndDelay ?? 0) === 0
+      ? "open"
+      : "fixed";
 
   const hasEntryFee = !!tournamentModel?.entryFee;
 
@@ -249,18 +251,22 @@ const Tournament = () => {
     return {
       token_totals: rawAggregations.map((a: any) => ({
         tokenAddress: a.tokenAddress,
-        tokenType: typeof a.tokenType === "object" && a.tokenType
-          ? ("erc20" in a.tokenType ? "erc20" : "erc721")
-          : "erc20",
+        tokenType:
+          typeof a.tokenType === "object" && a.tokenType
+            ? "erc20" in a.tokenType
+              ? "erc20"
+              : "erc721"
+            : "erc20",
         totalAmount: Number(a.totalAmount),
       })),
       total_prizes: rawAggregations.length,
     };
   }, [rawAggregations]);
 
-
   // Fetch ALL sponsored prizes via new SDK hook (returns pre-mapped Prize objects)
   const { data: sponsoredPrizes } = useGetTournamentPrizes(id);
+
+  console.log(sponsoredPrizes);
 
   // Expand distributed sponsored prizes into individual positions
   const expandedSponsoredPrizes = useMemo(
@@ -279,7 +285,12 @@ const Tournament = () => {
     }
     // Fallback: estimate from entry fee prizes + sponsored prizes
     return entryFeePrizesCount + (expandedSponsoredPrizes?.length ?? 0);
-  }, [tournamentModel, rewardClaimsSummary, entryFeePrizesCount, expandedSponsoredPrizes]);
+  }, [
+    tournamentModel,
+    rewardClaimsSummary,
+    entryFeePrizesCount,
+    expandedSponsoredPrizes,
+  ]);
 
   // useEffect(() => {
 
@@ -360,10 +371,7 @@ const Tournament = () => {
   }, [uniqueTokenAddresses, selectedChainConfig]);
 
   // Fetch prices for all ERC20 tokens
-  const {
-    prices: ownPrices,
-    isLoading: ownPricesLoading,
-  } = useEkuboPrices({
+  const { prices: ownPrices, isLoading: ownPricesLoading } = useEkuboPrices({
     tokens: uniqueTokenAddresses,
   });
 
@@ -411,18 +419,20 @@ const Tournament = () => {
       const decimalsMap: Record<string, number> = { ...tokenDecimals };
 
       // Fetch decimals in parallel (use original address for RPC call, normalized for storage)
-      const decimalsPromises = missingAddresses.map(async (normalizedAddress) => {
-        try {
-          const decimals = await getTokenDecimals(normalizedAddress);
-          return { address: normalizedAddress, decimals };
-        } catch (error) {
-          console.error(
-            `Failed to fetch decimals for token ${normalizedAddress}:`,
-            error,
-          );
-          return { address: normalizedAddress, decimals: 18 }; // Default to 18
-        }
-      });
+      const decimalsPromises = missingAddresses.map(
+        async (normalizedAddress) => {
+          try {
+            const decimals = await getTokenDecimals(normalizedAddress);
+            return { address: normalizedAddress, decimals };
+          } catch (error) {
+            console.error(
+              `Failed to fetch decimals for token ${normalizedAddress}:`,
+              error,
+            );
+            return { address: normalizedAddress, decimals: 18 }; // Default to 18
+          }
+        },
+      );
 
       const results = await Promise.all(decimalsPromises);
       results.forEach(({ address, decimals }) => {
@@ -504,14 +514,17 @@ const Tournament = () => {
   const entryFeeInfo = hasEntryFee
     ? (() => {
         const entryFeeDecimals = tokenDecimals[normalizedEntryFeeToken] || 18;
-        const amount = Number((tournamentModel?.entryFee)?.amount!);
+        const amount = Number(tournamentModel?.entryFee?.amount!);
         const humanAmount = amount / 10 ** entryFeeDecimals;
 
         if (!entryFeePrice || isNaN(entryFeePrice)) {
           return { type: "token" as const, display: formatNumber(humanAmount) };
         }
 
-        return { type: "usd" as const, display: `$${(humanAmount * entryFeePrice).toFixed(2)}` };
+        return {
+          type: "usd" as const,
+          display: `$${(humanAmount * entryFeePrice).toFixed(2)}`,
+        };
       })()
     : { type: "free" as const, display: "Free" };
 
@@ -523,19 +536,26 @@ const Tournament = () => {
     : undefined;
 
   // Use pre-computed timestamps from SDK (already absolute Unix seconds)
-  const absoluteTimes = tournamentModel ? {
-    gameStartTime: Number(tournamentModel.gameStartTime ?? 0),
-    gameEndTime: Number(tournamentModel.gameEndTime ?? 0),
-    submissionEndTime: Number(tournamentModel.submissionEndTime ?? 0),
-    registrationStartTime: tournamentModel.registrationStartTime ? Number(tournamentModel.registrationStartTime) : 0,
-    registrationEndTime: tournamentModel.registrationEndTime ? Number(tournamentModel.registrationEndTime) : 0,
-  } : null;
+  const absoluteTimes = tournamentModel
+    ? {
+        gameStartTime: Number(tournamentModel.gameStartTime ?? 0),
+        gameEndTime: Number(tournamentModel.gameEndTime ?? 0),
+        submissionEndTime: Number(tournamentModel.submissionEndTime ?? 0),
+        registrationStartTime: tournamentModel.registrationStartTime
+          ? Number(tournamentModel.registrationStartTime)
+          : 0,
+        registrationEndTime: tournamentModel.registrationEndTime
+          ? Number(tournamentModel.registrationEndTime)
+          : 0,
+      }
+    : null;
 
   const nowSeconds = Math.floor(Date.now() / 1000);
 
   const isStarted = (absoluteTimes?.gameStartTime ?? Infinity) < nowSeconds;
   const isEnded = (absoluteTimes?.gameEndTime ?? Infinity) < nowSeconds;
-  const isSubmitted = (absoluteTimes?.submissionEndTime ?? Infinity) < nowSeconds;
+  const isSubmitted =
+    (absoluteTimes?.submissionEndTime ?? Infinity) < nowSeconds;
 
   // Detect preparation period (break between registration end and tournament start)
   const registrationEndTime = absoluteTimes?.registrationEndTime;
@@ -574,7 +594,8 @@ const Tournament = () => {
   // handle fetching of tournament data if there is a tournament validator extension requirement
 
   // SDK entryRequirement is { entryLimit, entryRequirementType: { type, address?, config? } }
-  const entryReqType = (tournamentModel?.entryRequirement as any)?.entryRequirementType;
+  const entryReqType = (tournamentModel?.entryRequirement as any)
+    ?.entryRequirementType;
   const isExtensionRequirement = entryReqType?.type === "extension";
 
   const tournamentIdsQuery = useMemo(() => {
@@ -599,9 +620,7 @@ const Tournament = () => {
   const tournamentsData = useMemo(() => {
     if (!extensionTournaments || tournamentIdsQuery.length === 0) return [];
     const idSet = new Set(tournamentIdsQuery.map((tid: string) => tid));
-    return extensionTournaments.filter((t) =>
-      idSet.has(padU64(BigInt(t.id))),
-    );
+    return extensionTournaments.filter((t) => idSet.has(padU64(BigInt(t.id))));
   }, [extensionTournaments, tournamentIdsQuery]);
 
   const { data: settingsData } = useGameSetting({
@@ -612,13 +631,15 @@ const Tournament = () => {
   // Map SDK shape to legacy GameSettings shape and wrap in array for backward compatibility
   const settings = useMemo(() => {
     if (!settingsData) return [];
-    return [{
-      settings_id: settingsData.id,
-      game_address: settingsData.gameAddress,
-      name: settingsData.name,
-      description: settingsData.description,
-      settings: settingsData.settings,
-    }];
+    return [
+      {
+        settings_id: settingsData.id,
+        game_address: settingsData.gameAddress,
+        name: settingsData.name,
+        description: settingsData.description,
+        settings: settingsData.settings,
+      },
+    ];
   }, [settingsData]);
 
   if (loading || tournamentLoading) {
@@ -974,7 +995,9 @@ const Tournament = () => {
                 submissionPeriod={Number(
                   tournamentModel?.schedule?.submissionDuration ?? 0,
                 )}
-                registrationStartTime={absoluteTimes?.registrationStartTime ?? 0}
+                registrationStartTime={
+                  absoluteTimes?.registrationStartTime ?? 0
+                }
                 registrationEndTime={absoluteTimes?.registrationEndTime ?? 0}
                 pulse={true}
               />

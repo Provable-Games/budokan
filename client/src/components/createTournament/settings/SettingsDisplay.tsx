@@ -23,6 +23,7 @@ const SettingsDisplay = ({
   selectable,
 }: SettingsDisplayProps) => {
   const isSelected = currentSettingId === Number(value);
+  if (!currentSetting) return null;
   return (
     <div className="relative flex flex-col gap-2 border border-brand-subtle rounded-lg p-5">
       {selectable && (
@@ -38,7 +39,7 @@ const SettingsDisplay = ({
           {currentSetting.description}
         </p>
       </div>
-      <SettingsTable hasSettings={true} settings={currentSetting.data} />
+      <SettingsTable hasSettings={true} settings={currentSetting.settings ?? currentSetting.data} />
       {selectable && (
         <Button
           onClick={() => {

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useState, useMemo, useEffect } from "react";
 import { TableProperties } from "lucide-react";
 import { BigNumberish } from "starknet";
-import { useGameTokens } from "@/hooks/useDenshokanQueries";
+import { useTokens } from "@provable-games/denshokan-sdk/react";
 import { useGetTournamentRegistrations } from "@/hooks/useBudokanQueries";
 import { useGetUsernames } from "@/hooks/useController";
 import { MobilePlayerCard } from "@/components/tournament/table/PlayerCard";
@@ -57,9 +57,10 @@ const ScoreTable = ({
   const hasEntryRequirement = !!entryReq;
   const reqType = entryReq?.entryRequirementType;
   const requirementVariant = reqType?.type as string | undefined;
-  const extensionConfig = requirementVariant === "extension"
-    ? { address: reqType?.address, config: reqType?.config }
-    : undefined;
+  const extensionConfig =
+    requirementVariant === "extension"
+      ? { address: reqType?.address, config: reqType?.config }
+      : undefined;
 
   // Only show ban button if:
   // 1. Tournament hasn't started
@@ -75,16 +76,14 @@ const ScoreTable = ({
   const [currentPage, setCurrentPageNum] = useState(1);
   const pageSize = 10;
 
+  // 1. Registrations from budokan — tells us which tokens belong to this tournament
   const {
-    data: games,
+    data: registrants,
     refetch,
     loading,
-  } = useGameTokens({
-    owner: padAddress(tournamentAddress),
-    gameId: Number(tournamentId),
+  } = useGetTournamentRegistrations(tournamentId?.toString(), {
     limit: pageSize,
     offset: (currentPage - 1) * pageSize,
-    active: true,
   });
 
   const totalPages = Math.ceil(entryCount / pageSize);
@@ -93,30 +92,87 @@ const ScoreTable = ({
   const nextPage = () => setCurrentPageNum((p) => Math.min(p + 1, totalPages));
   const previousPage = () => setCurrentPageNum((p) => Math.max(p - 1, 1));
 
-  const gameTokens = games ?? [];
-
-  const { data: registrants } = useGetTournamentRegistrations(
-    tournamentId?.toString(),
-    {
-      limit: pageSize,
-    },
+  // Extract token IDs from registrations, normalized to hex for matching SDK tokens
+  const registrantTokenIds = useMemo(
+    () =>
+      ((registrants as any[]) ?? []).map((r: any) => {
+        const raw = (r.gameTokenId ?? r.game_token_id)?.toString();
+        if (!raw) return "";
+        return raw.startsWith("0x") ? raw : "0x" + BigInt(raw).toString(16);
+      }),
+    [registrants],
   );
 
-  // Map registrants to match the order of games
-  const orderedRegistrants = useMemo(() => {
-    if (!registrants || !gameTokens.length) return [];
+  // 2. Fetch game tokens from denshokan for scores/names/metadata
+  const { data: allGamesResult } = useTokens(
+    registrantTokenIds.length > 0
+      ? {
+          contextId: Number(tournamentId),
+          minterAddress: padAddress(tournamentAddress),
+          sort: { field: "score", direction: "desc" },
+          limit: 100,
+          includeUri: true,
+        }
+      : undefined,
+  );
 
-    return gameTokens.map((game) => {
-      const tokenId = Number(game.token_id);
-      return (
-        registrants.find((reg: any) => Number(reg.game_token_id) === tokenId) || null
+  // 3. Build game tokens: keep all SDK data, add legacy aliases for downstream components
+  const gameTokens = useMemo(() => {
+    if (!registrantTokenIds.length) return [];
+
+    const gamesMap = new Map(
+      (allGamesResult?.data ?? []).map((g) => [g.tokenId?.toString(), g]),
+    );
+
+    return registrantTokenIds.map((tokenId: string) => {
+      const sdkToken = gamesMap.get(tokenId);
+      const reg = (registrants as any[])?.find(
+        (r: any) => (r.gameTokenId ?? r.game_token_id)?.toString() === tokenId
+          || ("0x" + BigInt(r.gameTokenId ?? r.game_token_id ?? 0).toString(16)) === tokenId,
       );
+
+      if (sdkToken) {
+        let metadata = "";
+        if (sdkToken.tokenUri) {
+          try {
+            const match = sdkToken.tokenUri.match(/^data:application\/json;base64,(.+)$/);
+            metadata = match ? atob(match[1]) : sdkToken.tokenUri;
+          } catch { /* ignore */ }
+        }
+
+        return {
+          ...sdkToken,
+          token_id: sdkToken.tokenId,
+          game_id: sdkToken.gameId,
+          player_name: sdkToken.playerName || reg?.playerName || "",
+          game_over: sdkToken.gameOver,
+          lifecycle: {
+            start: BigInt(sdkToken.startDelay ?? 0),
+            end: BigInt(sdkToken.endDelay ?? 0),
+          },
+          metadata,
+        };
+      }
+
+      return {
+        tokenId: tokenId,
+        token_id: tokenId,
+        game_id: 0,
+        owner: reg?.playerAddress ?? reg?.player_address ?? "0x0",
+        player_name: reg?.playerName ?? "",
+        score: 0,
+        game_over: false,
+        lifecycle: { start: 0n, end: 0n },
+        metadata: "",
+      };
     });
-  }, [gameTokens, registrants]);
+  }, [registrantTokenIds, allGamesResult, registrants]);
+
+  const orderedRegistrants = (registrants as any[]) ?? [];
 
   const ownerAddresses = useMemo(
-    () => gameTokens.map((game) => game?.owner ?? "0x0"),
-    [gameTokens]
+    () => gameTokens.map((game: any) => game?.owner ?? "0x0"),
+    [gameTokens],
   );
   const { usernames } = useGetUsernames(ownerAddresses);
 
@@ -241,38 +297,44 @@ const ScoreTable = ({
               {colIndex === 0 && gameTokens.length > 5 && (
                 <div className="absolute right-0 top-0 bottom-0 w-0.5 bg-brand/25 h-full" />
               )}
-              {gameTokens.slice(colIndex * 5, colIndex * 5 + 5).map((_, index) => (
-                <>
-                  {isStarted ? (
-                    <ScoreRow
-                      key={index}
-                      index={index}
-                      colIndex={colIndex}
-                      currentPage={currentPage}
-                      game={gameTokens[index + colIndex * 5]}
-                      registration={orderedRegistrants?.[index + colIndex * 5]}
-                      usernames={usernames}
-                      isStarted={isStarted}
-                      isEnded={isEnded}
-                      gameAddress={tournamentModel?.gameAddress}
-                      setSelectedPlayer={setSelectedPlayer}
-                      setIsMobileDialogOpen={setIsMobileDialogOpen}
-                    />
-                  ) : (
-                    <EntrantRow
-                      key={index}
-                      game={gameTokens[index + colIndex * 5]}
-                      index={index}
-                      colIndex={colIndex}
-                      currentPage={currentPage}
-                      setSelectedPlayer={setSelectedPlayer}
-                      setIsMobileDialogOpen={setIsMobileDialogOpen}
-                      usernames={usernames}
-                      registration={orderedRegistrants?.[index + colIndex * 5]}
-                    />
-                  )}
-                </>
-              ))}
+              {gameTokens
+                .slice(colIndex * 5, colIndex * 5 + 5)
+                .map((_, index) => (
+                  <>
+                    {isStarted ? (
+                      <ScoreRow
+                        key={index}
+                        index={index}
+                        colIndex={colIndex}
+                        currentPage={currentPage}
+                        game={gameTokens[index + colIndex * 5]}
+                        registration={
+                          orderedRegistrants?.[index + colIndex * 5]
+                        }
+                        usernames={usernames}
+                        isStarted={isStarted}
+                        isEnded={isEnded}
+                        gameAddress={tournamentModel?.gameAddress}
+                        setSelectedPlayer={setSelectedPlayer}
+                        setIsMobileDialogOpen={setIsMobileDialogOpen}
+                      />
+                    ) : (
+                      <EntrantRow
+                        key={index}
+                        game={gameTokens[index + colIndex * 5]}
+                        index={index}
+                        colIndex={colIndex}
+                        currentPage={currentPage}
+                        setSelectedPlayer={setSelectedPlayer}
+                        setIsMobileDialogOpen={setIsMobileDialogOpen}
+                        usernames={usernames}
+                        registration={
+                          orderedRegistrants?.[index + colIndex * 5]
+                        }
+                      />
+                    )}
+                  </>
+                ))}
             </div>
           ))}
         </div>
