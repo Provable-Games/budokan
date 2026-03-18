@@ -577,20 +577,22 @@ function decodeTokenTypeData(
     consumed++;
 
     // distribution: Option<Distribution>
+    // Cairo Serde: Option::Some = variant 0, Option::None = variant 1
     const distVariant = Number(hexToBigInt(data[idx + consumed]));
     consumed++;
     let distribution: Record<string, unknown> | null = null;
-    if (distVariant === 1) {
+    if (distVariant === 0) {
       const dist = decodeDistribution(data, idx + consumed);
       distribution = dist.value;
       consumed += dist.consumed;
     }
 
     // distribution_count: Option<u32>
+    // Cairo Serde: Option::Some = variant 0, Option::None = variant 1
     const dcVariant = Number(hexToBigInt(data[idx + consumed]));
     consumed++;
     let distributionCount: number | null = null;
-    if (dcVariant === 1) {
+    if (dcVariant === 0) {
       distributionCount = Number(hexToBigInt(data[idx + consumed]));
       consumed++;
     }
