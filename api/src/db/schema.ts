@@ -63,7 +63,7 @@ export const registrations = pgTable(
   {
     id: serial("id").notNull(),
     tournamentId: bigint("tournament_id", { mode: "bigint" }).notNull(),
-    gameTokenId: bigint("game_token_id", { mode: "bigint" }).notNull(),
+    gameTokenId: text("game_token_id").notNull(),
     gameAddress: text("game_address"),
     playerAddress: text("player_address"),
     entryNumber: integer("entry_number"),
@@ -93,7 +93,7 @@ export const leaderboards = pgTable(
     id: serial("id").notNull(),
     tournamentId: bigint("tournament_id", { mode: "bigint" }).notNull(),
     position: integer("position").notNull(),
-    tokenId: bigint("token_id", { mode: "bigint" }).notNull(),
+    tokenId: text("token_id").notNull(),
   },
   (table) => ({
     pk: primaryKey({ columns: [table.tournamentId, table.position] }),

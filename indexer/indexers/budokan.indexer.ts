@@ -246,7 +246,7 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
 
             registrationRows.push({
               tournamentId: decoded.tournamentId,
-              gameTokenId: decoded.gameTokenId,
+              gameTokenId: decoded.gameTokenId.toString(),
               gameAddress: decoded.gameAddress,
               playerAddress: decoded.playerAddress,
               entryNumber: decoded.entryNumber,
@@ -470,7 +470,7 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
               tokenIds.map((tokenId, index) => ({
                 tournamentId,
                 position: index + 1,
-                tokenId,
+                tokenId: tokenId.toString(),
               }));
 
             await tx.insert(leaderboards).values(leaderboardRows);

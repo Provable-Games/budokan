@@ -44,7 +44,7 @@ CREATE INDEX IF NOT EXISTS tournaments_created_by_idx ON tournaments (created_by
 CREATE TABLE IF NOT EXISTS registrations (
   id SERIAL NOT NULL,
   tournament_id BIGINT NOT NULL,
-  game_token_id BIGINT NOT NULL,
+  game_token_id TEXT NOT NULL,
   game_address TEXT,
   player_address TEXT,
   entry_number INTEGER,
@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS leaderboards (
   id SERIAL NOT NULL,
   tournament_id BIGINT NOT NULL,
   position INTEGER NOT NULL,
-  token_id BIGINT NOT NULL,
+  token_id TEXT NOT NULL,
   PRIMARY KEY (tournament_id, position)
 );
 
