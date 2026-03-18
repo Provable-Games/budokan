@@ -58,6 +58,7 @@ pub mod Budokan {
     use game_components_metagame::prize::prize_component::PrizeComponent::PrizeInternalTrait;
     use game_components_metagame::registration::registration_component::RegistrationComponent;
     use game_components_metagame::registration::registration_component::RegistrationComponent::RegistrationInternalTrait;
+    use game_components_utilities::utils::encoding::u128_to_ascii_felt;
     use game_components_utilities::distribution::calculator;
     use game_components_utilities::distribution::structs::{
         BASIS_POINTS, DIST_TYPE_CUSTOM, DIST_TYPE_EXPONENTIAL, DIST_TYPE_LINEAR, DIST_TYPE_UNIFORM,
@@ -233,7 +234,7 @@ pub mod Budokan {
     impl GameContextDetailsImpl of IMetagameContextDetails<ContractState> {
         fn context_details(self: @ContractState, token_id: felt252) -> GameContextDetails {
             let tournament_id = self.token_context_id.entry(token_id).read();
-            let context = array![GameContext { name: 'Tournament ID', value: tournament_id.into() }]
+            let context = array![GameContext { name: 'Tournament ID', value: u128_to_ascii_felt(tournament_id.into()) }]
                 .span();
             GameContextDetails {
                 name: "Budokan",
@@ -1829,7 +1830,7 @@ pub mod Budokan {
         }
 
         fn _create_context(self: @ContractState, tournament_id: u64) -> GameContextDetails {
-            let context = array![GameContext { name: 'Tournament ID', value: tournament_id.into() }]
+            let context = array![GameContext { name: 'Tournament ID', value: u128_to_ascii_felt(tournament_id.into()) }]
                 .span();
             GameContextDetails {
                 name: "Budokan",
