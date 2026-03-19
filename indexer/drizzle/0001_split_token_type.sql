@@ -1,32 +1,43 @@
 -- Migration: Split prizes.token_type JSONB into typed columns
 -- Replaces the untyped JSONB column with explicit columns for ERC20/ERC721 data.
+-- Idempotent: safe to run on fresh installs where 0000 already has the new schema.
 
--- Step 1: Add new columns
-ALTER TABLE prizes ADD COLUMN token_type_name TEXT;
-ALTER TABLE prizes ADD COLUMN amount TEXT;
-ALTER TABLE prizes ADD COLUMN token_id TEXT;
-ALTER TABLE prizes ADD COLUMN distribution_type TEXT;
-ALTER TABLE prizes ADD COLUMN distribution_weight INTEGER;
-ALTER TABLE prizes ADD COLUMN distribution_count INTEGER;
+-- Step 1: Add new columns (skip if they already exist)
+ALTER TABLE prizes ADD COLUMN IF NOT EXISTS token_type_name TEXT;
+ALTER TABLE prizes ADD COLUMN IF NOT EXISTS amount TEXT;
+ALTER TABLE prizes ADD COLUMN IF NOT EXISTS token_id TEXT;
+ALTER TABLE prizes ADD COLUMN IF NOT EXISTS distribution_type TEXT;
+ALTER TABLE prizes ADD COLUMN IF NOT EXISTS distribution_weight INTEGER;
+ALTER TABLE prizes ADD COLUMN IF NOT EXISTS distribution_count INTEGER;
 
--- Step 2: Migrate existing data from JSONB
-UPDATE prizes SET
-  token_type_name = token_type->>'type',
-  amount = CASE WHEN token_type->>'type' = 'erc20' THEN token_type->>'amount' ELSE NULL END,
-  token_id = CASE WHEN token_type->>'type' = 'erc721' THEN token_type->>'id' ELSE NULL END,
-  distribution_type = CASE WHEN token_type->>'type' = 'erc20' THEN token_type->'distribution'->>'type' ELSE NULL END,
-  distribution_weight = CASE WHEN token_type->>'type' = 'erc20' THEN (token_type->'distribution'->>'weight')::integer ELSE NULL END,
-  distribution_count = CASE WHEN token_type->>'type' = 'erc20' THEN (token_type->>'distribution_count')::integer ELSE NULL END
-WHERE token_type IS NOT NULL;
+-- Step 2: Migrate existing data from JSONB (only if old column exists)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'prizes' AND column_name = 'token_type'
+  ) THEN
+    UPDATE prizes SET
+      token_type_name = token_type->>'type',
+      amount = CASE WHEN token_type->>'type' = 'erc20' THEN token_type->>'amount' ELSE NULL END,
+      token_id = CASE WHEN token_type->>'type' = 'erc721' THEN token_type->>'id' ELSE NULL END,
+      distribution_type = CASE WHEN token_type->>'type' = 'erc20' THEN token_type->'distribution'->>'type' ELSE NULL END,
+      distribution_weight = CASE WHEN token_type->>'type' = 'erc20' THEN (token_type->'distribution'->>'weight')::integer ELSE NULL END,
+      distribution_count = CASE WHEN token_type->>'type' = 'erc20' THEN (token_type->>'distribution_count')::integer ELSE NULL END
+    WHERE token_type IS NOT NULL;
 
--- Step 3: Default any remaining NULL token_type_name rows and set NOT NULL
-UPDATE prizes SET token_type_name = 'erc20' WHERE token_type_name IS NULL;
+    -- Default any remaining NULL token_type_name rows
+    UPDATE prizes SET token_type_name = 'erc20' WHERE token_type_name IS NULL;
+
+    -- Drop the old JSONB column
+    ALTER TABLE prizes DROP COLUMN token_type;
+  END IF;
+END $$;
+
+-- Step 3: Ensure NOT NULL constraint
 ALTER TABLE prizes ALTER COLUMN token_type_name SET NOT NULL;
 
--- Step 4: Drop the old JSONB column
-ALTER TABLE prizes DROP COLUMN token_type;
-
--- Step 5: Recreate the notify function with new column references
+-- Step 4: Recreate the notify function with new column references
 CREATE OR REPLACE FUNCTION notify_prize_added()
 RETURNS trigger AS $$
 DECLARE

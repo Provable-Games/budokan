@@ -73,7 +73,12 @@ CREATE TABLE IF NOT EXISTS prizes (
   tournament_id BIGINT NOT NULL,
   payout_position INTEGER,
   token_address TEXT,
-  token_type JSONB,
+  token_type_name TEXT NOT NULL,
+  amount TEXT,
+  token_id TEXT,
+  distribution_type TEXT,
+  distribution_weight INTEGER,
+  distribution_count INTEGER,
   sponsor_address TEXT,
   created_at_block BIGINT,
   tx_hash TEXT
@@ -232,14 +237,18 @@ DECLARE
   payload jsonb;
 BEGIN
   payload := jsonb_build_object(
-    'prize_id',        NEW.prize_id,
-    'tournament_id',   NEW.tournament_id,
-    'payout_position', NEW.payout_position,
-    'token_address',   NEW.token_address,
-    'token_type',      NEW.token_type,
-    'sponsor_address', NEW.sponsor_address,
-    'created_at_block', NEW.created_at_block,
-    'tx_hash',         NEW.tx_hash
+    'prize_id',          NEW.prize_id,
+    'tournament_id',     NEW.tournament_id,
+    'payout_position',   NEW.payout_position,
+    'token_address',     NEW.token_address,
+    'token_type_name',   NEW.token_type_name,
+    'amount',            NEW.amount,
+    'token_id',          NEW.token_id,
+    'distribution_type', NEW.distribution_type,
+    'distribution_count', NEW.distribution_count,
+    'sponsor_address',   NEW.sponsor_address,
+    'created_at_block',  NEW.created_at_block,
+    'tx_hash',           NEW.tx_hash
   );
   PERFORM pg_notify('prize_updates', payload::text);
   RETURN NEW;
