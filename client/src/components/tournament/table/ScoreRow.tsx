@@ -65,7 +65,7 @@ const ScoreRow = ({
                 <USER />
               </span>
               <span className="flex-none lg:max-w-20 xl:max-w-24 2xl:max-w-28 3xl:max-w-44 group-hover:text-brand transition-colors duration-200 text-ellipsis overflow-hidden whitespace-nowrap">
-                {username}
+                {playerName || username}
               </span>
               {isBanned && (
                 <Ban className="w-3 h-3 3xl:w-4 3xl:h-4 text-destructive flex-shrink-0" />
@@ -97,7 +97,6 @@ const ScoreRow = ({
             <PlayerDetails
               playerName={game.playerName ?? "Unknown Player"}
               username={username}
-              metadata={typeof game.metadata === 'string' ? game.metadata : JSON.stringify(game.metadata)}
               isStarted={isStarted}
               isEnded={isEnded}
               hasSubmitted={hasSubmitted}

@@ -16,11 +16,16 @@ import { Button } from "@/components/ui/button";
 import Pagination from "@/components/table/Pagination";
 import { useState, useEffect, useMemo } from "react";
 import { BigNumberish, addAddressPadding } from "starknet";
-import { useLiveLeaderboard } from "@provable-games/denshokan-sdk/react";
+import { useTokens } from "@provable-games/denshokan-sdk/react";
 import { REFRESH, VERIFIED } from "@/components/Icons";
 import { Ban } from "lucide-react";
 import { useGetTournamentRegistrations } from "@/hooks/useBudokanQueries";
 import { useChainConfig } from "@/context/chain";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface ScoreTableDialogProps {
   open: boolean;
@@ -30,6 +35,18 @@ interface ScoreTableDialogProps {
   isStarted: boolean;
   isEnded: boolean;
   banRefreshTrigger?: number;
+}
+
+/** Parse a base64 data URI token URI into the image URL */
+function parseTokenUriImage(raw?: string): string {
+  if (!raw) return "";
+  try {
+    const match = raw.match(/^data:application\/json;base64,(.+)$/);
+    const json = match ? atob(match[1]) : raw;
+    return JSON.parse(json)?.image ?? "";
+  } catch {
+    return "";
+  }
 }
 
 export const ScoreTableDialog = ({
@@ -47,24 +64,26 @@ export const ScoreTableDialog = ({
   const [currentPage, setCurrentPage] = useState(0);
   const pageSize = 10;
 
-  // Server-side paginated leaderboard
+  // Paginated tokens with URI
   const {
-    entries: pageEntries,
-    total: leaderboardTotal,
-    refetch,
+    data: tokensResult,
     isLoading: loading,
-  } = useLiveLeaderboard({
-    contextId: Number(tournamentId),
-    minterAddress: addAddressPadding(tournamentAddress),
-    sort: { field: "score", direction: "desc" },
-    limit: pageSize,
-    offset: currentPage * pageSize,
-    enabled: open,
-    liveScores: isStarted,
-    liveGameOver: isStarted,
-  });
+    refetch,
+  } = useTokens(
+    open
+      ? {
+          contextId: Number(tournamentId),
+          minterAddress: addAddressPadding(tournamentAddress),
+          sort: { field: "score", direction: "desc" },
+          limit: pageSize,
+          offset: currentPage * pageSize,
+          includeUri: true,
+        }
+      : undefined,
+  );
 
-  const totalCount = leaderboardTotal || entryCount;
+  const pageEntries = tokensResult?.data ?? [];
+  const totalCount = tokensResult?.total || entryCount;
   const totalPages = Math.ceil(totalCount / pageSize);
   const hasNextPage = currentPage < totalPages - 1;
   const hasPreviousPage = currentPage > 0;
@@ -81,9 +100,11 @@ export const ScoreTableDialog = ({
   // Build registration lookup
   const regMap = useMemo(() => {
     const map = new Map<string, any>();
-    for (const r of ((registrants as any[]) ?? [])) {
-      const raw = (r.gameTokenId)?.toString();
-      const hex = raw?.startsWith("0x") ? raw : "0x" + BigInt(raw ?? 0).toString(16);
+    for (const r of (registrants as any[]) ?? []) {
+      const raw = r.gameTokenId?.toString();
+      const hex = raw?.startsWith("0x")
+        ? raw
+        : "0x" + BigInt(raw ?? 0).toString(16);
       map.set(hex, r);
     }
     return map;
@@ -106,43 +127,24 @@ export const ScoreTableDialog = ({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="h-[600px] flex flex-col p-0 overflow-hidden">
-        <DialogHeader className="flex-shrink-0 border-b border-border">
-          <DialogTitle className="p-4 pb-2">
-            {isStarted ? "Scores" : "Entrants"} Table
-          </DialogTitle>
-          <div className="px-4 pb-2">
-            <span className="text-sm text-muted-foreground">
-              {loading ? (
-                "Loading..."
-              ) : (
-                <>
-                  {totalCount} {totalCount === 1 ? "entry" : "entries"}
-                </>
-              )}
-            </span>
-          </div>
-          <div className="px-4 pb-4 flex gap-3 justify-end">
-            {/* Mobile refresh button */}
-            <Button
-              onClick={refetch}
-              disabled={loading}
-              size="xs"
-              variant="outline"
-              className="sm:hidden"
-            >
-              <REFRESH className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} />
-            </Button>
-            {/* Desktop refresh button */}
-            <Button
-              onClick={refetch}
-              disabled={loading}
-              size="sm"
-              variant="outline"
-              className="hidden sm:flex items-center gap-2"
-            >
-              <REFRESH className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-              <span>Refresh</span>
-            </Button>
+        <DialogHeader className="flex-shrink-0 border-b border-border p-4">
+          <div className="flex items-center justify-between">
+            <DialogTitle>
+              {isStarted ? "Scores" : "Entrants"} Table
+            </DialogTitle>
+            <div className="flex items-center gap-3 mr-6">
+              <Button
+                onClick={refetch}
+                disabled={loading}
+                size="xs"
+                variant="outline"
+              >
+                <REFRESH className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} />
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                {loading ? "Loading..." : `${totalCount} ${totalCount === 1 ? "entry" : "entries"}`}
+              </span>
+            </div>
           </div>
         </DialogHeader>
 
@@ -156,22 +158,25 @@ export const ScoreTableDialog = ({
                 {isEnded && (
                   <TableHead className="text-center">Submitted</TableHead>
                 )}
+                <TableHead className="w-16">Image</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody className="overflow-y-auto">
               {pageEntries.length > 0 ? (
-                pageEntries.map((entry) => {
+                pageEntries.map((entry: any, index: number) => {
                   const playerName = entry.playerName || "";
                   const ownerAddress = entry.owner ?? "0x0";
                   const shortAddress = `${ownerAddress?.slice(0, 6)}...${ownerAddress?.slice(-4)}`;
                   const reg = regMap.get(entry.tokenId);
                   const hasSubmitted = !!reg?.hasSubmitted;
                   const isBanned = !!reg?.isBanned;
+                  const rank = currentPage * pageSize + index + 1;
+                  const image = parseTokenUriImage(entry.tokenUri);
 
                   return (
                     <TableRow key={entry.tokenId} className={isBanned ? "opacity-60" : ""}>
                       <TableCell className="text-center font-medium">
-                        {entry.rank}
+                        {rank}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
@@ -206,13 +211,51 @@ export const ScoreTableDialog = ({
                           )}
                         </TableCell>
                       )}
+                      <TableCell className="p-1">
+                        {image ? (
+                          <Tooltip delayDuration={50}>
+                            <TooltipTrigger asChild>
+                              <div className="w-14 h-14 cursor-pointer">
+                                <object
+                                  data={image}
+                                  type="image/svg+xml"
+                                  className="w-14 h-14 rounded-md pointer-events-none"
+                                >
+                                  <img
+                                    src={image}
+                                    alt=""
+                                    className="w-14 h-14 rounded-md"
+                                  />
+                                </object>
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent
+                              className="bg-black p-2 border border-brand/20 z-[9999]"
+                              side="left"
+                              sideOffset={10}
+                            >
+                              <object
+                                data={image}
+                                type="image/svg+xml"
+                                className="w-[280px] h-auto rounded-md"
+                              >
+                                <img
+                                  src={image}
+                                  alt=""
+                                  className="w-[280px] h-auto rounded-md"
+                                />
+                              </object>
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : null}
+                      </TableCell>
                     </TableRow>
                   );
                 })
               ) : (
                 <TableRow>
                   <TableCell
-                    colSpan={isEnded ? 4 : 3}
+                    colSpan={isEnded ? 5 : 4}
                     className="text-center text-muted-foreground py-8"
                   >
                     {loading ? "Loading..." : "No entries yet"}

@@ -24,7 +24,7 @@ const STRK_ADDRESS =
 
 export const getGameDefaults = (
   gameAddress: string,
-  chainId: string
+  chainId: string,
 ): {
   minEntryFeeUsd: number;
   defaultEntryFeeToken: string;
@@ -118,7 +118,7 @@ export const getGamesForChain = (chainId: string): Game[] => {
       },
       {
         contract_address:
-          "0x4484ca347cd957b9d591890ac7488ce0c0cd7920819f0c6376aedb953458a38",
+          "0x70ce27ec32c1e70b9034d63eb64dd35243564d2b7c96414a4d46b1d715527d8",
         name: "Fun Factory",
         url: "https://funfactory.gg",
         playUrl: "https://funfactory.gg/tokens/{tokenId}/play",
@@ -164,7 +164,7 @@ export const getGamesForChain = (chainId: string): Game[] => {
         minEntryFeeUsd: 0.25,
         defaultEntryFeeToken: STRK_ADDRESS,
         defaultGameFeePercentage: 5,
-        averageGasCostUsd: 0.50,
+        averageGasCostUsd: 0.5,
       },
       {
         contract_address:

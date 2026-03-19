@@ -74,9 +74,9 @@ const snSepoliaConfig: ChainConfig = {
   ethAddress: sepolia.nativeCurrency.address,
   connectorIds: [supportedConnectorIds.CONTROLLER],
   denshokanAddress:
-    "0x0142712722e62a38f9c40fcc904610e1a14c70125876ecaaf25d803556734467",
+    "0x05178014ac8150207c795a9e426cfcbb0546ba1e033e869b04e0b6d8c2791e64",
   budokanAddress:
-    "0x00f242153fdc1a4bd1f3e8f179cdb2e1c51ffcd33b3bce0d533c45167162ebe0",
+    "0x04a845177b5158c54b7f44bd5031c7bd336aa7436967c8d03a2fc91375bb7a54",
   budokanApiUrl: "https://budokan-api-sepolia.up.railway.app",
   denshokanApiUrl: "https://denshokan-api-sepolia.up.railway.app",
 };

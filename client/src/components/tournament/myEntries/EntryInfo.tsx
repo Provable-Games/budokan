@@ -33,8 +33,6 @@ const EntryInfo = ({
     }
   }, [tokenUri]);
 
-  console.log(parsedImage);
-
   return (
     <HoverCardContent
       className="w-80 py-4 px-0 text-sm z-50"
@@ -55,11 +53,13 @@ const EntryInfo = ({
         {isLoading ? (
           <span className="text-center text-neutral">Loading...</span>
         ) : parsedImage ? (
-          <img
-            src={parsedImage}
-            alt="metadata"
+          <object
+            data={parsedImage}
+            type="image/svg+xml"
             className="w-full h-auto px-4"
-          />
+          >
+            <img src={parsedImage} alt="metadata" className="w-full h-auto px-4" />
+          </object>
         ) : (
           <span className="text-center text-neutral">No Token URI</span>
         )}

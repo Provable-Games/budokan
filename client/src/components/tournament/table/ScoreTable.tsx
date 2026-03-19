@@ -90,7 +90,6 @@ const ScoreTable = ({
     sort: { field: "score", direction: "desc" },
     limit: pageSize,
     offset: (currentPage - 1) * pageSize,
-    includeUri: true,
     enabled: entryCount > 0,
     liveScores: isStarted,
     liveGameOver: isStarted,
