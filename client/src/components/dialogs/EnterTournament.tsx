@@ -720,7 +720,7 @@ export function EnterTournamentDialog({
   });
 
   const ownedGameIds = useMemo(() => {
-    return games?.map((game) => game.token_id).filter(Boolean);
+    return games?.map((game) => game.tokenId).filter(Boolean);
   }, [games]);
 
   const enterTournamentId = tournamentModel?.id ? String(tournamentModel.id) : undefined;

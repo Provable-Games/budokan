@@ -373,9 +373,9 @@ export const getSubmittableScores = (
   // Filter out already submitted scores but keep their positions intact
   // Only return scores that haven't been submitted yet
   const newSubmissions = leaderboardWithPositions
-    .filter((game) => !submittedTokenIdSet.has(game.token_id.toString()))
+    .filter((game) => !submittedTokenIdSet.has(game.tokenId.toString()))
     .map((game) => ({
-      tokenId: game.token_id,
+      tokenId: game.tokenId,
       position: game.position, // Keep the original position based on score ranking
     }));
 
@@ -1093,6 +1093,77 @@ export const expandDistributedPrizes = (
     const tokenType = prize.token_type ?? prize.tokenType;
     if (!tokenType) {
       expanded.push({ ...prize, position: prize.position ?? prize.payoutPosition ?? 0, type: "sponsored_single" } as DisplayPrize);
+      return;
+    }
+
+    // SDK flat format: tokenType is a plain string
+    if (typeof tokenType === "string") {
+      const isErc20 = tokenType === "erc20";
+      if (!isErc20) {
+        expanded.push({
+          ...prize,
+          id: prize.id ?? prize.prizeId,
+          context_id: prize.context_id ?? prize.tournamentId,
+          position: prize.position ?? prize.payoutPosition ?? 0,
+          token_address: prize.token_address ?? prize.tokenAddress,
+          sponsor_address: prize.sponsor_address ?? prize.sponsorAddress,
+          type: "sponsored_single",
+        } as DisplayPrize);
+        return;
+      }
+
+      const distCount = Number(prize.distributionCount ?? prize.distribution_count ?? 0);
+      if (distCount <= 0) {
+        expanded.push({
+          ...prize,
+          id: prize.id ?? prize.prizeId,
+          context_id: prize.context_id ?? prize.tournamentId,
+          position: prize.position ?? prize.payoutPosition ?? 0,
+          token_address: prize.token_address ?? prize.tokenAddress,
+          sponsor_address: prize.sponsor_address ?? prize.sponsorAddress,
+          type: "sponsored_single",
+        } as DisplayPrize);
+        return;
+      }
+
+      const totalAmount = BigInt(prize.amount ?? 0);
+      const distType = (prize.distributionType ?? prize.distribution_type ?? "uniform").toLowerCase();
+      const weight = Number(prize.distributionWeight ?? prize.distribution_weight ?? 100);
+
+      let distributionPercentages: number[];
+      if (distType === "custom") {
+        distributionPercentages = calculateDistribution(distCount, 1, 0, 0, 0, "uniform");
+      } else {
+        distributionPercentages = calculateDistribution(
+          distCount,
+          weight / 10,
+          0, 0, 0,
+          distType as "linear" | "exponential" | "uniform"
+        );
+      }
+
+      distributionPercentages.forEach((percentage, index) => {
+        if (percentage === 0) return;
+        const amount = (totalAmount * BigInt(Math.floor(percentage * 100))) / 10000n;
+        if (amount === 0n) return;
+
+        expanded.push({
+          id: prize.id ?? prize.prizeId,
+          context_id: prize.context_id ?? prize.tournamentId,
+          position: index + 1,
+          token_address: prize.token_address ?? prize.tokenAddress,
+          token_type: new CairoCustomEnum({
+            erc20: {
+              amount: amount.toString(),
+              distribution: new CairoOption(CairoOptionVariant.None),
+              distribution_count: new CairoOption(CairoOptionVariant.None),
+            } as ERC20Data,
+            erc721: undefined,
+          }),
+          sponsor_address: prize.sponsor_address ?? prize.sponsorAddress,
+          type: "sponsored_distributed",
+        } as DisplayPrize);
+      });
       return;
     }
 

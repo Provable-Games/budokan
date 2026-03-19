@@ -63,6 +63,8 @@ const PrizesContainer = ({
     tournamentId ? tournamentId.toString() : undefined,
   );
 
+  console.log(prizesData);
+
   useEffect(() => {
     refetchPrizes();
   }, [subscibedPrizeCount]);
@@ -106,17 +108,19 @@ const PrizesContainer = ({
       if (!acc[positionKey]) acc[positionKey] = {};
 
       const isErc20 =
-        prize.token_type?.variant?.erc20 || prize.token_type === "erc20";
+        prize.token_type?.variant?.erc20 || prize.token_type === "erc20" || prize.tokenType === "erc20";
       const isErc721 =
-        prize.token_type?.variant?.erc721 || prize.token_type === "erc721";
+        prize.token_type?.variant?.erc721 || prize.token_type === "erc721" || prize.tokenType === "erc721";
       const tokenType = isErc20 ? "erc20" : isErc721 ? "erc721" : "erc20";
-      const tokenKey = `${prize.token_address}_${tokenType}`;
+      const prizeAddress = prize.token_address ?? prize.tokenAddress;
+      const tokenKey = `${prizeAddress}_${tokenType}`;
 
       if (tokenType === "erc20") {
         // For ERC20, sum the amounts
         const amount = BigInt(
           prize.token_type?.variant?.erc20?.amount ||
             prize["token_type.erc20.amount"] ||
+            prize.amount ||
             0,
         );
 
@@ -127,7 +131,7 @@ const PrizesContainer = ({
           acc[positionKey][tokenKey] = {
             type: "erc20",
             payout_position: position,
-            address: prize.token_address,
+            address: prizeAddress,
             value: amount,
           };
         }
@@ -136,6 +140,7 @@ const PrizesContainer = ({
         const tokenId = BigInt(
           prize.token_type?.variant?.erc721?.token_id ||
             prize["token_type.erc721.id"] ||
+            prize.tokenId ||
             0,
         );
 
@@ -155,7 +160,7 @@ const PrizesContainer = ({
           acc[positionKey][tokenKey] = {
             type: "erc721",
             payout_position: position,
-            address: prize.token_address,
+            address: prizeAddress,
             value: tokenId,
           };
         }
@@ -164,6 +169,8 @@ const PrizesContainer = ({
       return acc;
     }, {});
   }, [prizesData, entryFeePrizes]);
+
+  console.log(groupedPrizes);
 
   // Filter out prizes with 0 value
   const filteredGroupedPrizes: PositionPrizes = useMemo(() => {

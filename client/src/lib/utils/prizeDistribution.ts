@@ -2,14 +2,73 @@ import { calculateDistribution } from "@/lib/utils";
 
 /**
  * Helper function to expand distributed prizes into individual position prizes
- * Handles both nested object format (DisplayPrize) and SQL flat format (from Torii)
+ * Handles three formats:
+ * 1. SDK flat format (from budokan-sdk API) - tokenType is a string, flat fields
+ * 2. Nested object format (DisplayPrize) - token_type.variant.erc20
+ * 3. SQL flat format (from Torii) - dot-notation keys
  */
 export function expandDistributedPrize(prize: any): any[] {
-  const payoutPosition = prize.position ?? prize.payout_position ?? 0;
+  const payoutPosition =
+    prize.position ?? prize.payout_position ?? prize.payoutPosition ?? 0;
 
   // If not a distributed prize (position !== 0), return as-is
   if (payoutPosition !== 0) {
     return [prize];
+  }
+
+  // SDK flat format (from API via budokan-sdk)
+  // tokenType is a plain string "erc20" or "erc721" with flat amount/tokenId fields
+  if (
+    typeof prize.tokenType === "string" ||
+    typeof prize.token_type === "string"
+  ) {
+    const isErc20 = (prize.tokenType ?? prize.token_type) === "erc20";
+    if (!isErc20) return [prize];
+
+    const distCount = Number(
+      prize.distributionCount ?? prize.distribution_count ?? 0
+    );
+    if (distCount <= 0) return [prize];
+
+    const totalAmount = BigInt(prize.amount ?? 0);
+    const distType = (
+      prize.distributionType ??
+      prize.distribution_type ??
+      "uniform"
+    ).toLowerCase();
+    const weight = Number(
+      prize.distributionWeight ?? prize.distribution_weight ?? 100
+    );
+
+    let percentages: number[];
+    if (distType === "custom") {
+      percentages = calculateDistribution(distCount, 1, 0, 0, 0, "uniform");
+    } else {
+      percentages = calculateDistribution(
+        distCount,
+        weight / 10,
+        0,
+        0,
+        0,
+        distType as "linear" | "exponential" | "uniform"
+      );
+    }
+
+    return percentages.map((percentage, index) => {
+      const positionAmount =
+        (totalAmount * BigInt(Math.floor(percentage * 100))) / 10000n;
+      return {
+        ...prize,
+        position: index + 1,
+        payout_position: index + 1,
+        payoutPosition: index + 1,
+        amount: positionAmount.toString(),
+        tokenType: "erc20",
+        token_type: "erc20",
+        distributionCount: null,
+        distribution_count: null,
+      };
+    });
   }
 
   // Check if it's an ERC20 prize - handle both nested and SQL flat formats

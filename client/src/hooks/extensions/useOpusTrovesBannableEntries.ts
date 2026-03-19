@@ -4,7 +4,7 @@ import { findAllBannableEntries } from "@/lib/utils";
 import type { OpusTrovesValidatorConfig } from "@/lib/utils";
 
 interface Game {
-  token_id: number | bigint;
+  tokenId: number | bigint;
   owner?: string;
 }
 
@@ -63,7 +63,7 @@ export const useOpusTrovesBannableEntries = ({
     for (const [owner, ownerGames] of playerGroups.entries()) {
       players.set(owner, {
         debt: troveDebts.get(owner) ?? 0n,
-        registeredTokenIds: ownerGames.map((g) => g.token_id.toString()),
+        registeredTokenIds: ownerGames.map((g) => g.tokenId.toString()),
       });
     }
 

@@ -2,7 +2,7 @@
  * Adapters that convert budokan prize data into metagame-sdk Prize type.
  *
  * Budokan prizes come in multiple formats:
- * 1. budokan-sdk API: { prizeId, tokenAddress, tokenType: { erc20: { amount } } | { erc721: { id } }, ... }
+ * 1. budokan-sdk API: { prizeId, tokenAddress, tokenType: "erc20"|"erc721", amount, tokenId, ... }
  * 2. Generated models: { id, token_address, token_type: CairoCustomEnum, ... }
  * 3. DisplayPrize: extends generated model with position and type fields
  *
@@ -16,49 +16,21 @@ import type { Prize as ContractPrize } from "@/generated/models.gen";
 import type { DisplayPrize } from "@/lib/types";
 
 /**
- * Extract token type string and amount from budokan-sdk's tokenType field.
- * The SDK returns tokenType as `unknown` which can be:
- * - An object: { erc20: { amount: string, ... } } or { erc721: { id: string } }
- * - A string: "erc20" or "erc721" (from some API responses)
- */
-function parseTokenType(tokenType: unknown): {
-  type: "erc20" | "erc721";
-  amount: string;
-} {
-  if (typeof tokenType === "string") {
-    return { type: tokenType as "erc20" | "erc721", amount: "0" };
-  }
-
-  if (tokenType && typeof tokenType === "object") {
-    const tt = tokenType as Record<string, any>;
-    if ("erc20" in tt && tt.erc20) {
-      return {
-        type: "erc20",
-        amount: String(tt.erc20.amount ?? "0"),
-      };
-    }
-    if ("erc721" in tt && tt.erc721) {
-      return {
-        type: "erc721",
-        amount: String(tt.erc721.id ?? "0"),
-      };
-    }
-  }
-
-  return { type: "erc20", amount: "0" };
-}
-
-/**
  * Convert a budokan-sdk Prize to metagame-sdk Prize.
+ *
+ * The SDK now returns flat fields: tokenType is "erc20"|"erc721",
+ * amount and tokenId are separate top-level fields.
  */
 export function adaptSdkPrize(p: BudokanSdkPrize): MetagamePrize {
-  const { type, amount } = parseTokenType(p.tokenType);
   return {
     id: p.prizeId,
     position: p.payoutPosition,
     tokenAddress: p.tokenAddress,
-    tokenType: type,
-    amount,
+    tokenType: p.tokenType as "erc20" | "erc721",
+    amount:
+      p.tokenType === "erc20"
+        ? (p.amount ?? "0")
+        : (p.tokenId ?? "0"),
     sponsorAddress: p.sponsorAddress,
   };
 }

@@ -59,22 +59,19 @@ export function SubmitScoresDialog({
     active: !!tournamentModel?.id,
   });
 
-  // Sort games by score (desc) and then by token_id (asc) for equal scores
+  // Sort games by score (desc) and then by tokenId (asc) for equal scores
   const sortedGames = useMemo(() => {
     if (!games) return [];
     return [...games].sort((a, b) => {
-      // First sort by score (descending)
       const scoreDiff = Number(b.score) - Number(a.score);
       if (scoreDiff !== 0) return scoreDiff;
-
-      // If scores are equal, sort by token_id (ascending - lower token_id = higher position)
-      return Number(a.token_id) - Number(b.token_id);
+      return Number(a.tokenId) - Number(b.tokenId);
     });
   }, [games]);
 
   // Fetch game IDs for registration data
   const gameIds = useMemo(
-    () => sortedGames?.map((game) => Number(game.token_id)) || [],
+    () => sortedGames?.map((game) => Number(game.tokenId)) || [],
     [sortedGames]
   );
 
@@ -92,10 +89,10 @@ export function SubmitScoresDialog({
 
     const filtered = sortedGames.filter((game) => {
       const registration = registrants.find(
-        (reg) => Number(reg.game_token_id) === Number(game.token_id)
+        (reg) => Number(reg.gameTokenId) === Number(game.tokenId)
       );
       // Filter out if banned
-      return !registration?.is_banned;
+      return !registration?.isBanned;
     });
 
     // Take only top leaderboardSize entries to ensure correct number of submissions
@@ -173,7 +170,7 @@ export function SubmitScoresDialog({
                   {index + 1}
                   {getOrdinalSuffix(index + 1)}
                 </span>
-                <span>{game.player_name}</span>
+                <span>{game.playerName}</span>
                 <p
                   className="flex-1 h-[2px] bg-repeat-x"
                   style={{

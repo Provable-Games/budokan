@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useState, useMemo, useEffect } from "react";
 import { TableProperties } from "lucide-react";
 import { BigNumberish } from "starknet";
-import { useTokens } from "@provable-games/denshokan-sdk/react";
+import { useLiveLeaderboard } from "@provable-games/denshokan-sdk/react";
 import { useGetTournamentRegistrations } from "@/hooks/useBudokanQueries";
 import { useGetUsernames } from "@/hooks/useController";
 import { MobilePlayerCard } from "@/components/tournament/table/PlayerCard";
@@ -22,7 +22,7 @@ import { padAddress } from "@/lib/utils";
 import { ScoreTableDialog } from "@/components/dialogs/ScoreTable";
 import { BanManagementDialog } from "@/components/dialogs/BanManagement";
 import { useChainConfig } from "@/context/chain";
-import type { Tournament } from "@provable-games/budokan-sdk";
+import type { Tournament, WSEventMessage } from "@provable-games/budokan-sdk";
 import { Ban } from "lucide-react";
 
 interface ScoreTableProps {
@@ -32,6 +32,7 @@ interface ScoreTableProps {
   isEnded: boolean;
   tournamentModel?: Tournament;
   onBanComplete?: () => void;
+  lastMessage?: WSEventMessage | null;
 }
 
 const ScoreTable = ({
@@ -41,6 +42,7 @@ const ScoreTable = ({
   isEnded,
   tournamentModel,
   onBanComplete,
+  lastMessage,
 }: ScoreTableProps) => {
   const { selectedChainConfig } = useChainConfig();
   const [showScores, setShowScores] = useState(false);
@@ -76,99 +78,68 @@ const ScoreTable = ({
   const [currentPage, setCurrentPageNum] = useState(1);
   const pageSize = 10;
 
-  // 1. Registrations from budokan — tells us which tokens belong to this tournament
+  // 1. Leaderboard with server-side pagination — this drives the view
   const {
-    data: registrants,
-    refetch,
-    loading,
-  } = useGetTournamentRegistrations(tournamentId?.toString(), {
+    entries: pageEntries,
+    total: leaderboardTotal,
+    isLoading: tokensLoading,
+    refetch: refetchTokens,
+  } = useLiveLeaderboard({
+    contextId: Number(tournamentId),
+    minterAddress: padAddress(tournamentAddress),
+    sort: { field: "score", direction: "desc" },
     limit: pageSize,
     offset: (currentPage - 1) * pageSize,
+    includeUri: true,
+    enabled: entryCount > 0,
+    liveScores: isStarted,
+    liveGameOver: isStarted,
   });
 
-  const totalPages = Math.ceil(entryCount / pageSize);
+  const totalEntries = leaderboardTotal || entryCount;
+  const totalPages = Math.ceil(totalEntries / pageSize);
   const hasNextPage = currentPage < totalPages;
   const hasPreviousPage = currentPage > 1;
   const nextPage = () => setCurrentPageNum((p) => Math.min(p + 1, totalPages));
   const previousPage = () => setCurrentPageNum((p) => Math.max(p - 1, 1));
 
-  // Extract token IDs from registrations, normalized to hex for matching SDK tokens
-  const registrantTokenIds = useMemo(
-    () =>
-      ((registrants as any[]) ?? []).map((r: any) => {
-        const raw = (r.gameTokenId ?? r.game_token_id)?.toString();
-        if (!raw) return "";
-        return raw.startsWith("0x") ? raw : "0x" + BigInt(raw).toString(16);
-      }),
-    [registrants],
+  // 2. Fetch registrations for the current page's tokens (for isBanned, hasSubmitted)
+  const pageTokenIds = useMemo(
+    () => pageEntries.map((e) => e.tokenId),
+    [pageEntries],
+  );
+  const {
+    data: registrants,
+    refetch: refetchRegistrations,
+  } = useGetTournamentRegistrations(
+    pageTokenIds.length > 0 ? tournamentId?.toString() : undefined,
+    { limit: 1000 },
   );
 
-  // 2. Fetch game tokens from denshokan for scores/names/metadata
-  const { data: allGamesResult } = useTokens(
-    registrantTokenIds.length > 0
-      ? {
-          contextId: Number(tournamentId),
-          minterAddress: padAddress(tournamentAddress),
-          sort: { field: "score", direction: "desc" },
-          limit: 100,
-          includeUri: true,
-        }
-      : undefined,
-  );
-
-  // 3. Build game tokens: keep all SDK data, add legacy aliases for downstream components
+  // 3. Enrich leaderboard entries with registration metadata
   const gameTokens = useMemo(() => {
-    if (!registrantTokenIds.length) return [];
+    if (!pageEntries.length) return [];
 
-    const gamesMap = new Map(
-      (allGamesResult?.data ?? []).map((g) => [g.tokenId?.toString(), g]),
+    const regMap = new Map(
+      ((registrants as any[]) ?? []).map((r: any) => {
+        const raw = (r.gameTokenId)?.toString();
+        const hex = raw?.startsWith("0x") ? raw : "0x" + BigInt(raw ?? 0).toString(16);
+        return [hex, r];
+      }),
     );
 
-    return registrantTokenIds.map((tokenId: string) => {
-      const sdkToken = gamesMap.get(tokenId);
-      const reg = (registrants as any[])?.find(
-        (r: any) => (r.gameTokenId ?? r.game_token_id)?.toString() === tokenId
-          || ("0x" + BigInt(r.gameTokenId ?? r.game_token_id ?? 0).toString(16)) === tokenId,
-      );
-
-      if (sdkToken) {
-        let metadata = "";
-        if (sdkToken.tokenUri) {
-          try {
-            const match = sdkToken.tokenUri.match(/^data:application\/json;base64,(.+)$/);
-            metadata = match ? atob(match[1]) : sdkToken.tokenUri;
-          } catch { /* ignore */ }
-        }
-
-        return {
-          ...sdkToken,
-          token_id: sdkToken.tokenId,
-          game_id: sdkToken.gameId,
-          player_name: sdkToken.playerName || reg?.playerName || "",
-          game_over: sdkToken.gameOver,
-          lifecycle: {
-            start: BigInt(sdkToken.startDelay ?? 0),
-            end: BigInt(sdkToken.endDelay ?? 0),
-          },
-          metadata,
-        };
-      }
-
+    return pageEntries.map((entry) => {
+      const reg = regMap.get(entry.tokenId);
       return {
-        tokenId: tokenId,
-        token_id: tokenId,
-        game_id: 0,
-        owner: reg?.playerAddress ?? reg?.player_address ?? "0x0",
-        player_name: reg?.playerName ?? "",
-        score: 0,
-        game_over: false,
+        ...entry,
+        playerName: entry.playerName || reg?.playerName || "",
         lifecycle: { start: 0n, end: 0n },
         metadata: "",
+        isBanned: !!reg?.isBanned,
+        hasSubmitted: !!reg?.hasSubmitted,
       };
     });
-  }, [registrantTokenIds, allGamesResult, registrants]);
-
-  const orderedRegistrants = (registrants as any[]) ?? [];
+  }, [pageEntries, registrants]);
 
   const ownerAddresses = useMemo(
     () => gameTokens.map((game: any) => game?.owner ?? "0x0"),
@@ -183,9 +154,14 @@ const ScoreTable = ({
     }
   }, [gameTokens, hasInitialized]);
 
+  // Refetch registrations on budokan WS events (bans, submissions)
   useEffect(() => {
-    refetch();
-  }, [entryCount]);
+    if (lastMessage?.channel === "registrations") {
+      refetchRegistrations();
+    }
+  }, [lastMessage, refetchRegistrations]);
+
+  const loading = tokensLoading;
 
   return (
     <TournamentCard showCard={showScores}>
@@ -193,9 +169,9 @@ const ScoreTable = ({
         <TournamentCardTitle>
           {isStarted ? "Scores" : "Entrants"}
         </TournamentCardTitle>
-        {showScores && entryCount > 10 && (
+        {showScores && totalEntries > pageSize && (
           <Pagination
-            totalPages={Math.ceil(entryCount / 10)}
+            totalPages={totalPages}
             currentPage={currentPage}
             nextPage={nextPage}
             previousPage={previousPage}
@@ -206,7 +182,7 @@ const ScoreTable = ({
         <div className="flex flex-row items-center gap-2">
           {/* Desktop refresh button */}
           <Button
-            onClick={refetch}
+            onClick={refetchTokens}
             disabled={loading}
             size="sm"
             variant="outline"
@@ -219,7 +195,7 @@ const ScoreTable = ({
               {/* Mobile buttons together */}
               <div className="flex sm:hidden">
                 <Button
-                  onClick={refetch}
+                  onClick={refetchTokens}
                   disabled={loading}
                   size="xs"
                   variant="outline"
@@ -281,11 +257,10 @@ const ScoreTable = ({
             checkedLabel="Hide"
             uncheckedLabel="Show Scores"
           />
-          <TournamentCardMetric icon={<USER />} metric={entryCount} />
+          <TournamentCardMetric icon={<USER />} metric={totalEntries} />
         </div>
       </TournamentCardHeader>
       <TournamentCardContent showContent={showScores}>
-        {/* {!loading ? ( */}
         <div className="flex flex-row py-2">
           {[0, 1].map((colIndex) => (
             <div
@@ -299,48 +274,41 @@ const ScoreTable = ({
               )}
               {gameTokens
                 .slice(colIndex * 5, colIndex * 5 + 5)
-                .map((_, index) => (
-                  <>
-                    {isStarted ? (
-                      <ScoreRow
-                        key={index}
-                        index={index}
-                        colIndex={colIndex}
-                        currentPage={currentPage}
-                        game={gameTokens[index + colIndex * 5]}
-                        registration={
-                          orderedRegistrants?.[index + colIndex * 5]
-                        }
-                        usernames={usernames}
-                        isStarted={isStarted}
-                        isEnded={isEnded}
-                        gameAddress={tournamentModel?.gameAddress}
-                        setSelectedPlayer={setSelectedPlayer}
-                        setIsMobileDialogOpen={setIsMobileDialogOpen}
-                      />
-                    ) : (
-                      <EntrantRow
-                        key={index}
-                        game={gameTokens[index + colIndex * 5]}
-                        index={index}
-                        colIndex={colIndex}
-                        currentPage={currentPage}
-                        setSelectedPlayer={setSelectedPlayer}
-                        setIsMobileDialogOpen={setIsMobileDialogOpen}
-                        usernames={usernames}
-                        registration={
-                          orderedRegistrants?.[index + colIndex * 5]
-                        }
-                      />
-                    )}
-                  </>
-                ))}
+                .map((_, index) => {
+                  const game = gameTokens[index + colIndex * 5];
+                  if (!game) return null;
+                  return isStarted ? (
+                    <ScoreRow
+                      key={game.tokenId}
+                      index={index}
+                      colIndex={colIndex}
+                      currentPage={currentPage}
+                      game={game}
+                      registration={game}
+                      usernames={usernames}
+                      isStarted={isStarted}
+                      isEnded={isEnded}
+                      gameAddress={tournamentModel?.gameAddress}
+                      setSelectedPlayer={setSelectedPlayer}
+                      setIsMobileDialogOpen={setIsMobileDialogOpen}
+                    />
+                  ) : (
+                    <EntrantRow
+                      key={game.tokenId}
+                      game={game}
+                      index={index}
+                      colIndex={colIndex}
+                      currentPage={currentPage}
+                      setSelectedPlayer={setSelectedPlayer}
+                      setIsMobileDialogOpen={setIsMobileDialogOpen}
+                      usernames={usernames}
+                      registration={game}
+                    />
+                  );
+                })}
             </div>
           ))}
         </div>
-        {/* ) : (
-          <TableSkeleton entryCount={entryCount} offset={offset} />
-        )} */}
       </TournamentCardContent>
 
       {/* Mobile dialog for player details */}
@@ -360,7 +328,7 @@ const ScoreTable = ({
         open={showTableDialog}
         onOpenChange={setShowTableDialog}
         tournamentId={tournamentId}
-        entryCount={entryCount}
+        entryCount={totalEntries}
         isStarted={isStarted}
         isEnded={isEnded}
         banRefreshTrigger={localBanRefreshTrigger}
@@ -375,7 +343,8 @@ const ScoreTable = ({
           tournamentModel={tournamentModel}
           extensionAddress={extensionConfig?.address}
           onBanComplete={() => {
-            refetch();
+            refetchTokens();
+            refetchRegistrations();
             setLocalBanRefreshTrigger((prev) => prev + 1);
             if (onBanComplete) {
               onBanComplete();

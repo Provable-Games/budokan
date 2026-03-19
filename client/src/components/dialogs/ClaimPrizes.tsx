@@ -150,13 +150,14 @@ export function ClaimPrizesDialog({
   // Helper function to get prize amount
   const getPrizeAmount = (prize: any): bigint => {
     const isErc20 =
-      prize.token_type?.variant?.erc20 || prize.token_type === "erc20";
+      prize.token_type?.variant?.erc20 || prize.token_type === "erc20" || prize.tokenType === "erc20";
 
     if (!isErc20) return 1n; // NFTs are considered non-zero
 
     const amount =
       prize.token_type?.variant?.erc20?.amount ||
       prize["token_type.erc20.amount"] ||
+      prize.amount ||
       "0";
 
     return BigInt(amount);

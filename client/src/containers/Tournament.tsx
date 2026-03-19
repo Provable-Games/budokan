@@ -78,8 +78,7 @@ const Tournament = () => {
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [showGeoBlock, setShowGeoBlock] = useState(false);
   const { isBlocked: isGeoBlocked } = useGeoBlock();
-  const [loading, setLoading] = useState(true);
-  const [tournamentExists, setTournamentExists] = useState(false);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
   const [tokenDecimals, setTokenDecimals] = useState<Record<string, number>>(
     {},
   );
@@ -110,34 +109,30 @@ const Tournament = () => {
   // Fetch leaderboard via new SDK hook (returns a single Leaderboard object)
   const { data: leaderboardModel } = useGetTournamentLeaderboard(id);
 
+  // Mark initial load done once the first fetch completes (loading goes false after being true)
+  const hasStartedFetch = useRef(false);
   useEffect(() => {
-    let timeoutId: number;
-
-    const tournamentId = Number(id || 0);
-
-    // Check if tournament is excluded
-    if (EXCLUDED_TOURNAMENT_IDS.includes(tournamentId)) {
-      setTournamentExists(false);
-      setLoading(false);
-      return;
+    if (tournamentLoading) {
+      hasStartedFetch.current = true;
+    } else if (hasStartedFetch.current && !initialLoadDone) {
+      setInitialLoadDone(true);
     }
+  }, [tournamentLoading, initialLoadDone]);
 
-    // Derive existence from fetched data
-    if (!tournamentLoading) {
-      setTournamentExists(tournamentData !== null);
-      setLoading(false);
-    } else {
-      // Set a timeout to consider the tournament as "not found" if data doesn't load
-      timeoutId = window.setTimeout(() => {
-        setTournamentExists(false);
-        setLoading(false);
-      }, 20000);
-    }
+  // Fallback timeout in case the fetch never completes
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      if (!initialLoadDone) {
+        setInitialLoadDone(true);
+      }
+    }, 20000);
+    return () => clearTimeout(timeoutId);
+  }, [id]);
 
-    return () => {
-      if (timeoutId) window.clearTimeout(timeoutId);
-    };
-  }, [id, tournamentLoading, tournamentData]);
+  // Derive loading and existence from query state — no effect-based sync needed
+  const loading = !initialLoadDone;
+  const tournamentId = Number(id || 0);
+  const tournamentExists = !EXCLUDED_TOURNAMENT_IDS.includes(tournamentId) && tournamentData !== null;
 
   // Get leaderboard size from distribution_count if specified, otherwise use entry count
   const leaderboardSize =
@@ -146,7 +141,7 @@ const Tournament = () => {
       : entryCount;
 
   // Fetch registrations via new SDK hook
-  const { data: allRegistrants, refetch: refetchRegistrations } =
+  const { data: allRegistrants } =
     useGetTournamentRegistrations(id);
 
   // Calculate non-banned entry count
@@ -251,12 +246,7 @@ const Tournament = () => {
     return {
       token_totals: rawAggregations.map((a: any) => ({
         tokenAddress: a.tokenAddress,
-        tokenType:
-          typeof a.tokenType === "object" && a.tokenType
-            ? "erc20" in a.tokenType
-              ? "erc20"
-              : "erc721"
-            : "erc20",
+        tokenType: a.tokenType ?? "erc20",
         totalAmount: Number(a.totalAmount),
       })),
       total_prizes: rawAggregations.length,
@@ -273,6 +263,8 @@ const Tournament = () => {
     () => expandDistributedPrizes(sponsoredPrizes ?? []),
     [sponsoredPrizes],
   );
+
+  console.log(expandedSponsoredPrizes)
 
   // Fetch reward claims summary via new SDK hook
   const { data: rewardClaimsSummary } = useGetTournamentRewardClaimsSummary(id);
@@ -297,12 +289,16 @@ const Tournament = () => {
   // Note: We no longer use reward claims aggregations since we calculate
   // actual claimable count directly from filtered prizes
 
-  // Refetch data when WebSocket messages arrive
+  // Refetch data when WebSocket messages arrive — only what the channel indicates changed.
+  // ScoreTable and MyEntries handle their own registration/token refetches via lastMessage prop.
   useEffect(() => {
-    if (lastMessage) {
-      refetchTournament();
+    if (!lastMessage) return;
+    const ch = lastMessage.channel;
+    if (ch === "tournaments" || ch === "registrations") {
+      refetchTournament(); // entryCount lives on the tournament model
+    }
+    if (ch === "prizes") {
       refetchAggregations();
-      refetchRegistrations();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastMessage]);
@@ -326,19 +322,8 @@ const Tournament = () => {
   // Use the actual claimable count (after filtering 0-amount prizes)
   const claimablePrizesCount = actualClaimablePrizesCount;
 
-  // Calculate paid places from entry fee distribution count + sponsored prize positions
-  const paidPlaces = useMemo(() => {
-    const positions = new Set<number>();
-    // Entry fee distribution positions
-    const distCount = Number(tournamentModel?.entryFee?.distributionCount ?? 0);
-    for (let i = 1; i <= distCount; i++) positions.add(i);
-    // Sponsored prize positions
-    expandedSponsoredPrizes.forEach((prize: any) => {
-      const pos = Number(prize.position ?? 0);
-      if (pos > 0) positions.add(pos);
-    });
-    return positions.size;
-  }, [tournamentModel?.entryFee, expandedSponsoredPrizes]);
+  // Use paidPlaces from API (computed server-side from prize positions + entry fee distribution)
+  const paidPlaces = Number((tournamentModel as any)?.paidPlaces ?? 0);
 
   // Extract unique token addresses for fetching token data (normalized)
   const uniqueTokenAddresses = useMemo(() => {
@@ -642,7 +627,7 @@ const Tournament = () => {
     ];
   }, [settingsData]);
 
-  if (loading || tournamentLoading) {
+  if (loading) {
     return <LoadingPage message={`Loading tournament...`} />;
   }
 
@@ -1024,13 +1009,17 @@ const Tournament = () => {
               isEnded={isEnded}
               tournamentModel={tournamentModel}
               onBanComplete={() => setBanRefreshTrigger((prev) => prev + 1)}
+              lastMessage={lastMessage}
             />
             <MyEntries
               tournamentId={tournamentModel?.id}
               gameAddress={tournamentModel?.gameAddress}
               tournamentModel={tournamentModel}
               totalEntryCount={entryCount}
+              isStarted={isStarted}
+              isEnded={isEnded}
               banRefreshTrigger={banRefreshTrigger}
+              lastMessage={lastMessage}
             />
           </div>
         </div>

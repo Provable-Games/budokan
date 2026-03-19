@@ -25,10 +25,11 @@ const GameSettingsField = ({ form, field }: GameSettingsFieldProps) => {
 
   const gameAddress = form.watch("game");
 
+  const settingsId = Number(field.value) || undefined;
   const { data: singleSetting } = useGameSetting({
     gameAddress,
-    settingsId: field.value,
-    active: !!gameAddress && field.value !== undefined,
+    settingsId,
+    active: !!gameAddress && settingsId !== undefined,
   });
   const setting = singleSetting ? [singleSetting] : [];
 

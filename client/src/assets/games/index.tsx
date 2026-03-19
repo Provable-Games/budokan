@@ -118,6 +118,16 @@ export const getGamesForChain = (chainId: string): Game[] => {
       },
       {
         contract_address:
+          "0x4484ca347cd957b9d591890ac7488ce0c0cd7920819f0c6376aedb953458a38",
+        name: "Fun Factory",
+        url: "https://funfactory.gg",
+        playUrl: "https://funfactory.gg/tokens/{tokenId}/play",
+        controllerOnly: true,
+        minEntryFeeUsd: 0.25,
+        defaultEntryFeeToken: STRK_ADDRESS,
+      },
+      {
+        contract_address:
           "0x063410083d205c7e66cd2cdcd59614a233b682b9394f46d44e838d3a32048a7a",
         name: "zKube",
         url: "https://localhost:5173/",

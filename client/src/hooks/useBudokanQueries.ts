@@ -4,7 +4,7 @@
  * These hooks provide the same { data, loading, error, refetch } interface
  * that the old useSqlQueries hooks used, making consumer migration seamless.
  */
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useBudokanClient } from "@/context/budokan";
 import type {
   Tournament,
@@ -37,12 +37,15 @@ function useAsyncQuery<T>(
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const requestIdRef = { current: 0 };
+  const requestIdRef = useRef(0);
+  const fetcherRef = useRef(fetcher);
+  fetcherRef.current = fetcher;
 
   const depsKey = JSON.stringify(deps);
 
   const fetch = useCallback(() => {
-    if (!fetcher) {
+    const currentFetcher = fetcherRef.current;
+    if (!currentFetcher) {
       setData(null);
       setLoading(false);
       setError(null);
@@ -51,14 +54,14 @@ function useAsyncQuery<T>(
     setLoading(true);
     setError(null);
     const id = ++requestIdRef.current;
-    fetcher()
+    currentFetcher()
       .then((result) => {
         if (id === requestIdRef.current) setData(result);
       })
       .catch((err) => {
         if (id === requestIdRef.current) {
           setError(err instanceof Error ? err.message : "Unknown error");
-          setData(null);
+          // Preserve last successful data on refetch errors
         }
       })
       .finally(() => {
@@ -346,15 +349,12 @@ export function useGetTournamentPrizeAggregation(tournamentId?: string) {
             .getTournamentPrizes(tournamentId)
             .then((prizes) => {
               // Aggregate prizes by token_address + token_type client-side
-              const aggregation = new Map<string, { tokenAddress: string; tokenType: unknown; totalAmount: bigint; nftCount: number }>();
+              const aggregation = new Map<string, { tokenAddress: string; tokenType: string; totalAmount: bigint; nftCount: number }>();
               for (const p of prizes) {
-                const key = p.tokenAddress;
+                const key = `${p.tokenAddress}_${p.tokenType}`;
                 const existing = aggregation.get(key);
-                const tokenType = p.tokenType as Record<string, unknown> | null;
-                const isErc20 = tokenType && "erc20" in tokenType;
-                const amount = isErc20
-                  ? BigInt((tokenType!.erc20 as Record<string, string>)?.amount ?? "0")
-                  : 0n;
+                const isErc20 = p.tokenType === "erc20";
+                const amount = isErc20 ? BigInt(p.amount ?? "0") : 0n;
 
                 if (existing) {
                   existing.totalAmount += amount;

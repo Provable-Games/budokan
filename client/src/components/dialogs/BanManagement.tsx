@@ -72,7 +72,7 @@ export const BanManagementDialog = ({
   });
 
   const gameIds = useMemo(
-    () => games?.map((game) => Number(game.token_id)) || [],
+    () => games?.map((game) => Number(game.tokenId)) || [],
     [games]
   );
 
@@ -149,7 +149,7 @@ export const BanManagementDialog = ({
   // Use Opus Troves hook for bannable entries calculation
   const { bannableEntries: opusBannableEntries, troveDebts } =
     useOpusTrovesBannableEntries({
-      games: (games || []).map((g) => ({ token_id: Number(g.token_id), owner: g.owner })),
+      games: (games || []).map((g) => ({ tokenId: Number(g.tokenId), owner: g.owner })),
       config: opusTrovesValidatorConfig
         ? {
             assetAddresses: opusTrovesValidatorConfig.assetAddresses,
@@ -203,18 +203,18 @@ export const BanManagementDialog = ({
             const shouldBan = await checkShouldBan(
               extensionAddress,
               tournamentId,
-              game.token_id.toString(),
+              game.tokenId.toString(),
               owner,
               qualification
             );
 
             if (shouldBan) {
-              bannable.add(game.token_id.toString());
+              bannable.add(game.tokenId.toString());
             }
           } catch (error) {
             console.error(
               "Error checking ban-ability for game:",
-              game.token_id,
+              game.tokenId,
               error
             );
           }
@@ -241,12 +241,12 @@ export const BanManagementDialog = ({
 
     games.forEach((game) => {
       const ownerAddress = game?.owner ?? "0x0";
-      const playerName = game?.player_name || "";
+      const playerName = game?.playerName || "";
       const registration = registrants.find(
-        (reg) => Number(reg.game_token_id) === Number(game.token_id)
+        (reg) => Number(reg.gameTokenId) === Number(game.tokenId)
       );
-      const isBanned = !!registration?.is_banned;
-      const isBannable = bannableEntries.has(game.token_id.toString());
+      const isBanned = !!registration?.isBanned;
+      const isBannable = bannableEntries.has(game.tokenId.toString());
 
       // Only include bannable entries that aren't already banned
       if (!isBannable || isBanned) return;
@@ -261,7 +261,7 @@ export const BanManagementDialog = ({
 
       const group = groups.get(ownerAddress)!;
       group.entries.push({
-        gameTokenId: game.token_id.toString(),
+        gameTokenId: game.tokenId.toString(),
         playerName: playerName || displayAddress(ownerAddress),
         isBanned,
         isBannable,

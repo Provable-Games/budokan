@@ -35,12 +35,12 @@ const ScoreRow = ({
   setSelectedPlayer,
   setIsMobileDialogOpen,
 }: ScoreRowProps) => {
-  const playerName = game.player_name;
+  const playerName = game.playerName;
   const score = game.score;
   const ownerAddress = game.owner;
 
-  const hasSubmitted = registration?.has_submitted === 1 ? true : false;
-  const isBanned = registration?.is_banned === 1 ? true : false;
+  const hasSubmitted = !!registration?.hasSubmitted;
+  const isBanned = !!registration?.isBanned;
 
   //TODO: revert after devconnect
   const username =
@@ -59,7 +59,7 @@ const ScoreRow = ({
               } ${isBanned ? "opacity-60" : ""}`}
             >
               <span className="w-4 flex-none font-brand">
-                {index + 1 + colIndex * 5 + currentPage * 10}.
+                {game.rank || (index + 1 + colIndex * 5 + (currentPage - 1) * 10)}.
               </span>
               <span className="w-6 3xl:w-8 flex-none">
                 <USER />
@@ -95,7 +95,7 @@ const ScoreRow = ({
             side="top"
           >
             <PlayerDetails
-              playerName={game.player_name ?? "Unknown Player"}
+              playerName={game.playerName ?? "Unknown Player"}
               username={username}
               metadata={typeof game.metadata === 'string' ? game.metadata : JSON.stringify(game.metadata)}
               isStarted={isStarted}
@@ -103,7 +103,7 @@ const ScoreRow = ({
               hasSubmitted={hasSubmitted}
               isBanned={isBanned}
               gameAddress={gameAddress}
-              tokenId={game.token_id?.toString()}
+              tokenId={game.tokenId?.toString()}
             />
           </HoverCardContent>
         </HoverCard>
@@ -124,7 +124,7 @@ const ScoreRow = ({
         }}
       >
         <span className="w-4 flex-none font-brand">
-          {index + 1 + colIndex * 5 + currentPage * 10}.
+          {game.rank || (index + 1 + colIndex * 5 + (currentPage - 1) * 10)}.
         </span>
         <span className="w-6 flex-none">
           <USER />

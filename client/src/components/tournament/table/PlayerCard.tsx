@@ -127,7 +127,7 @@ export const MobilePlayerCard = ({
   const username =
     usernames?.get(indexAddress(ownerAddress ?? "0x0")) ||
     displayAddress(ownerAddress ?? "0x0");
-  const isBanned = selectedPlayer?.registration?.is_banned === 1;
+  const isBanned = !!selectedPlayer?.registration?.isBanned;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:hidden">
@@ -137,15 +137,15 @@ export const MobilePlayerCard = ({
 
         {selectedPlayer && (
           <PlayerDetails
-            playerName={selectedPlayer.game?.player_name}
+            playerName={selectedPlayer.game?.playerName}
             username={username}
             metadata={selectedPlayer.game?.metadata}
             isStarted={isStarted}
             isEnded={isEnded}
-            hasSubmitted={selectedPlayer.game?.has_submitted}
+            hasSubmitted={selectedPlayer.game?.hasSubmitted}
             isBanned={isBanned}
             gameAddress={gameAddress}
-            tokenId={selectedPlayer.game?.token_id?.toString()}
+            tokenId={selectedPlayer.game?.tokenId?.toString()}
           />
         )}
       </DialogContent>

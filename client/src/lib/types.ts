@@ -86,17 +86,18 @@ export type FormToken = {
  * Game token data shape (replaces metagame-sdk GameTokenData).
  */
 export interface GameTokenData {
-  token_id: string;
-  game_id: number;
+  tokenId: string;
+  gameId: number;
   owner: string;
-  player_name: string;
+  playerName: string;
   score: number;
-  game_over: boolean;
+  gameOver: boolean;
   lifecycle: {
     start: bigint;
     end: bigint;
   };
-  metadata: Record<string, unknown>;
+  metadata: Record<string, unknown> | string;
+  rank?: number;
 }
 
 /**
