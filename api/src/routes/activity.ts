@@ -102,12 +102,12 @@ app.get("/prize-stats", async (c) => {
     const rows = await db.execute(sql`
       SELECT
         token_address,
-        token_type->>'type' AS token_type_name,
+        token_type_name,
         COUNT(*)::int AS prize_count,
-        COALESCE(SUM((token_type->>'amount')::numeric), 0)::text AS total_amount
+        COALESCE(SUM(amount::numeric), 0)::text AS total_amount
       FROM prizes
-      GROUP BY token_address, token_type->>'type'
-      ORDER BY COALESCE(SUM((token_type->>'amount')::numeric), 0) DESC
+      GROUP BY token_address, token_type_name
+      ORDER BY COALESCE(SUM(amount::numeric), 0) DESC
     `);
 
     return c.json({

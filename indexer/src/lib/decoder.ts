@@ -218,7 +218,12 @@ export interface DecodedPrizeAdded {
   prizeId: bigint;
   payoutPosition: number;
   tokenAddress: string;
-  tokenType: Record<string, unknown>;
+  tokenTypeName: string;
+  amount: string | null;
+  tokenId: string | null;
+  distributionType: string | null;
+  distributionWeight: number | null;
+  distributionCount: number | null;
   sponsorAddress: string;
 }
 
@@ -934,6 +939,10 @@ export function decodePrizeAdded(
   const tokenType = decodeTokenTypeData(data, idx);
   idx += tokenType.consumed;
 
+  // Flatten token type data into individual fields
+  const tt = tokenType.value;
+  const dist = tt.distribution as Record<string, unknown> | null;
+
   // sponsor_address: ContractAddress
   const sponsorAddress = feltToHex(data[idx]);
 
@@ -942,7 +951,12 @@ export function decodePrizeAdded(
     prizeId,
     payoutPosition,
     tokenAddress,
-    tokenType: tokenType.value,
+    tokenTypeName: tt.type as string,
+    amount: (tt.type as string) === "erc20" ? (tt.amount as string) : null,
+    tokenId: (tt.type as string) === "erc721" ? (tt.id as string) : null,
+    distributionType: dist ? (dist.type as string) : null,
+    distributionWeight: dist?.weight != null ? Number(dist.weight) : null,
+    distributionCount: tt.distribution_count != null ? Number(tt.distribution_count) : null,
     sponsorAddress,
   };
 }
