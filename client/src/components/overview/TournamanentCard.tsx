@@ -61,27 +61,29 @@ export const TournamentCard = ({
   const { gameData, getGameImage } = useUIStore();
 
   const entryFeeData = tournament.entryFee;
-  const entryFeeToken = entryFeeData?.tokenAddress ?? null;
+  // Fall back to flat summary fields when full JSONB isn't available (e.g. list endpoint)
+  const entryFeeToken = entryFeeData?.tokenAddress ?? tournament.entryFeeToken ?? null;
+  const entryFeeAmount = entryFeeData?.amount ?? tournament.entryFeeAmount ?? null;
   const entryFeeTokenSymbol = tokens.find(
     (t) => indexAddress(t.token_address) === indexAddress(entryFeeToken ?? ""),
   )?.symbol;
 
   // Compute entry fee pool value directly from SDK data
   const entryFeePoolValue = useMemo(() => {
-    if (!entryFeeData || !entryFeeToken || entryCount === 0) return 0;
-    const amount = BigInt(entryFeeData.amount ?? "0");
+    if (!entryFeeToken || !entryFeeAmount || entryCount === 0) return 0;
+    const amount = BigInt(entryFeeAmount);
     if (amount === 0n) return 0;
     const totalCollected = amount * BigInt(entryCount);
-    const creatorShare = Number(entryFeeData.tournamentCreatorShare ?? 0);
-    const gameShare = Number(entryFeeData.gameCreatorShare ?? 0);
-    const refundShare = Number(entryFeeData.refundShare ?? 0);
+    const creatorShare = Number(entryFeeData?.tournamentCreatorShare ?? 0);
+    const gameShare = Number(entryFeeData?.gameCreatorShare ?? 0);
+    const refundShare = Number(entryFeeData?.refundShare ?? 0);
     const poolBps = 10000 - creatorShare - gameShare - refundShare;
     const poolAmount = poolBps > 0 ? (totalCollected * BigInt(poolBps)) / 10000n : 0n;
     const normalizedAddr = indexAddress(entryFeeToken);
     const decimals = tokenDecimals[normalizedAddr] || 18;
     const price = tokenPrices[normalizedAddr] ?? 0;
     return (Number(poolAmount) / 10 ** decimals) * price;
-  }, [entryFeeData, entryFeeToken, entryCount, tokenDecimals, tokenPrices]);
+  }, [entryFeeData, entryFeeToken, entryFeeAmount, entryCount, tokenDecimals, tokenPrices]);
 
   // Calculate total prize value from aggregations + entry fee pool
   const totalPrizesValueUSD = useTournamentPrizeValue({
@@ -181,20 +183,18 @@ export const TournamentCard = ({
   )?.name;
   const gameImage = getGameImage(gameAddress);
 
-  const hasEntryFee = !!entryFeeData;
+  const hasEntryFee = !!entryFeeToken && !!entryFeeAmount;
 
   const entryFeeInfo = useMemo(() => {
-    if (!!!entryFeeData) {
+    if (!entryFeeToken || !entryFeeAmount) {
       return { type: "free" as const };
     }
 
-    const normalizedEntryFeeToken = indexAddress(entryFeeToken ?? "");
+    const normalizedEntryFeeToken = indexAddress(entryFeeToken);
     const entryFeeDecimals = tokenDecimals[normalizedEntryFeeToken] || 18;
-    const entryFeePrice = entryFeeToken
-      ? tokenPrices[normalizedEntryFeeToken]
-      : undefined;
+    const entryFeePrice = tokenPrices[normalizedEntryFeeToken];
 
-    const amount = Number(entryFeeData?.amount!);
+    const amount = Number(entryFeeAmount);
     const humanAmount = amount / 10 ** entryFeeDecimals;
 
     // Return token amount if price is not available
@@ -211,8 +211,8 @@ export const TournamentCard = ({
       usdAmount: (humanAmount * entryFeePrice).toFixed(2),
     };
   }, [
-    entryFeeData,
     entryFeeToken,
+    entryFeeAmount,
     entryFeeTokenSymbol,
     tokenDecimals,
     tokenPrices,

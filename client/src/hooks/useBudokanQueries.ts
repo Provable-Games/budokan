@@ -200,6 +200,7 @@ export function useGetTournaments({
       offset,
       excludeIds,
       whitelistedExtensions,
+      includePrizeSummary: "summary" as const,
     }),
     [phase, gameAddress, sort, limit, offset, JSON.stringify(excludeIds), JSON.stringify(whitelistedExtensions)],
   );

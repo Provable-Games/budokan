@@ -12,7 +12,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useProvider } from "@starknet-react/core";
 import TournamentTimeline from "@/components/TournamentTimeline";
 import Countdown from "@/components/Countdown";
-import { feltToString, indexAddress, padU64, formatNumber } from "@/lib/utils";
+import { feltToString, indexAddress, padU64, formatNumber, calculateDistribution } from "@/lib/utils";
+import type { DisplayPrize } from "@/lib/types";
 import { addAddressPadding } from "starknet";
 import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 import type { Tournament as SdkTournament } from "@provable-games/budokan-sdk";
@@ -364,14 +365,95 @@ const Tournament = () => {
   const prices = ownPrices;
   const pricesLoading = ownPricesLoading;
 
-  // Calculate total value in USD using aggregated data
+  // Compute entry fee pool value (USD) from SDK data
+  const entryFeePoolValue = useMemo(() => {
+    const ef = tournamentModel?.entryFee;
+    if (!ef || !entryFeeToken || entryCount === 0) return 0;
+    const amount = BigInt(ef.amount ?? "0");
+    if (amount === 0n) return 0;
+    const totalCollected = amount * BigInt(entryCount);
+    const creatorShare = Number(ef.tournamentCreatorShare ?? 0);
+    const gameShare = Number(ef.gameCreatorShare ?? 0);
+    const refundShare = Number(ef.refundShare ?? 0);
+    const poolBps = 10000 - creatorShare - gameShare - refundShare;
+    const poolAmount = poolBps > 0 ? (totalCollected * BigInt(poolBps)) / 10000n : 0n;
+    const normalizedAddr = indexAddress(entryFeeToken);
+    const decimals = tokenDecimals[normalizedAddr] || 18;
+    const price = prices[normalizedAddr] ?? 0;
+    return (Number(poolAmount) / 10 ** decimals) * price;
+  }, [tournamentModel?.entryFee, entryFeeToken, entryCount, tokenDecimals, prices]);
+
+  // Build entry fee prizes as DisplayPrize[] for PrizesContainer position breakdown
+  const entryFeePrizes: DisplayPrize[] = useMemo(() => {
+    const ef = tournamentModel?.entryFee;
+    if (!ef || !entryFeeToken || entryCount === 0) return [];
+    const amount = BigInt(ef.amount ?? "0");
+    if (amount === 0n) return [];
+    const totalCollected = amount * BigInt(entryCount);
+    const creatorShare = Number(ef.tournamentCreatorShare ?? 0);
+    const gameShare = Number(ef.gameCreatorShare ?? 0);
+    const refundShare = Number(ef.refundShare ?? 0);
+    const poolBps = 10000 - creatorShare - gameShare - refundShare;
+    const poolAmount = poolBps > 0 ? (totalCollected * BigInt(poolBps)) / 10000n : 0n;
+    if (poolAmount === 0n) return [];
+
+    const distCount = Number(ef.distributionCount ?? 0);
+    if (distCount <= 0) return [];
+
+    // Parse distribution type from the raw Cairo enum
+    let distType: "linear" | "exponential" | "uniform" = "uniform";
+    let weight = 10;
+    const dist = ef.distribution as any;
+    if (dist) {
+      if (dist.variant?.Linear !== undefined) {
+        distType = "linear";
+        weight = Number(dist.variant.Linear);
+      } else if (dist.variant?.Exponential !== undefined) {
+        distType = "exponential";
+        weight = Number(dist.variant.Exponential);
+      } else if (dist.variant?.Uniform !== undefined) {
+        distType = "uniform";
+      } else if (dist.Linear !== undefined) {
+        distType = "linear";
+        weight = Number(dist.Linear);
+      } else if (dist.Exponential !== undefined) {
+        distType = "exponential";
+        weight = Number(dist.Exponential);
+      } else if (dist.Uniform !== undefined) {
+        distType = "uniform";
+      }
+    }
+
+    const percentages = calculateDistribution(
+      distCount,
+      weight / 10,
+      0, 0, 0,
+      distType,
+    );
+
+    return percentages.map((pct, i) => {
+      const posAmount = (poolAmount * BigInt(Math.floor(pct * 100))) / 10000n;
+      return {
+        id: 0,
+        tournament_id: Number(tournamentModel?.id ?? 0),
+        payout_position: i + 1,
+        token_address: entryFeeToken,
+        token_type: { variant: { erc20: { amount: posAmount.toString() } } },
+        position: i + 1,
+        type: "entry_fee",
+        sponsor_address: "",
+      } as DisplayPrize;
+    });
+  }, [tournamentModel?.entryFee, tournamentModel?.id, entryFeeToken, entryCount]);
+
+  // Calculate total value in USD using aggregated data + entry fee pool
   const totalPrizesValueUSD = useTournamentPrizeValue({
     aggregations,
     distributionPrizes: [],
     tokenPrices: prices,
     pricesLoading,
     tokenDecimals,
-  });
+  }) + entryFeePoolValue;
 
   // Fetch token decimals only for tokens used in this tournament (normalized addresses)
   useEffect(() => {
@@ -991,7 +1073,7 @@ const Tournament = () => {
               tournamentId={tournamentModel?.id}
               tokens={tournamentTokens}
               tokenDecimals={tokenDecimals}
-              entryFeePrizes={[]}
+              entryFeePrizes={entryFeePrizes}
               prices={prices}
               pricesLoading={pricesLoading}
               aggregations={aggregations}
