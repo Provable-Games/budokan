@@ -47,11 +47,11 @@ import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { PRESET_EXTENSIONS } from "@/lib/extensionPresets";
 import {
-  PRESET_EXTENSIONS,
   getExtensionAddresses,
   getOpusSupportedAssets,
-} from "@/lib/extensionConfig";
+} from "@provable-games/metagame-sdk";
 import { SnapshotConfig } from "./extensions/SnapshotConfig";
 import { ERC20BalanceConfig } from "./extensions/ERC20BalanceConfig";
 import { OpusTrovesConfig } from "./extensions/OpusTrovesConfig";

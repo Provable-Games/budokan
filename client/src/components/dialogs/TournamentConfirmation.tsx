@@ -29,7 +29,7 @@ import { useChainConfig } from "@/context/chain";
 // import { calculateTotalValue } from "@/lib/utils/formatting";
 import { LoadingSpinner } from "@/components/ui/spinner";
 import { useGameSetting } from "@/hooks/useDenshokanQueries";
-import { getExtensionAddresses } from "@/lib/extensionConfig";
+import { getExtensionAddresses } from "@provable-games/metagame-sdk";
 import { getTokenByAddress } from "@/lib/tokenUtils";
 import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 import { OPUS } from "@/components/Icons";

@@ -20,7 +20,6 @@ import {
 } from "@/generated/models.gen";
 import { PositionPrizes, TokenPrizes } from "@/lib/types";
 import { TokenPrices } from "@/hooks/useEkuboPrices";
-import { getExtensionProof } from "@/lib/extensionConfig";
 import type { Schedule } from "@/generated/models.gen";
 
 /**
@@ -1005,8 +1004,8 @@ export const processQualificationProof = (
   requirementVariant: string,
   proof: any,
   address: string,
-  extensionAddress?: string,
-  extensionContext?: any
+  _extensionAddress?: string,
+  _extensionContext?: unknown,
 ): CairoOption<QualificationProofEnum> => {
   if (requirementVariant === "token") {
     return new CairoOption(
@@ -1059,10 +1058,8 @@ export const processQualificationProof = (
       );
     }
 
-    // Generic extension - get proof from extension config
-    const extensionProofData = extensionAddress
-      ? getExtensionProof(extensionAddress, address, extensionContext)
-      : [address]; // Fallback to address if no extension address provided
+    // Generic extension — proof is always empty (extensions validate on-chain)
+    const extensionProofData: string[] = [];
 
     return new CairoOption(
       CairoOptionVariant.Some,

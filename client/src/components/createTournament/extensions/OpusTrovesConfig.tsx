@@ -17,7 +17,7 @@ import { X } from "@/components/Icons";
 import { getTokenByAddress } from "@/lib/tokenUtils";
 import { indexAddress } from "@/lib/utils";
 import { useChainConfig } from "@/context/chain";
-import { getExtensionAddresses } from "@/lib/extensionConfig";
+import { getExtensionAddresses } from "@provable-games/metagame-sdk";
 
 interface OpusTrovesConfigProps {
   allowedAssetAddresses: string[];

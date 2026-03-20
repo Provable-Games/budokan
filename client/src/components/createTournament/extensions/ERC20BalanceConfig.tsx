@@ -12,7 +12,7 @@ import { FormToken } from "@/lib/types";
 import { getTokenByAddress } from "@/lib/tokenUtils";
 import { indexAddress } from "@/lib/utils";
 import { useChainConfig } from "@/context/chain";
-import { getExtensionAddresses } from "@/lib/extensionConfig";
+import { getExtensionAddresses } from "@provable-games/metagame-sdk";
 
 interface ERC20BalanceConfigProps {
   extensionError?: string;

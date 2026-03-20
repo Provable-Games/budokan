@@ -15,13 +15,10 @@ import { useChainConfig } from "@/context/chain";
 import type { Tournament } from "@provable-games/budokan-sdk";
 import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 import { displayAddress, indexAddress } from "@/lib/utils";
-import {
-  getExtensionProof,
-  getExtensionAddresses,
-} from "@/lib/extensionConfig";
-import { useAccount } from "@starknet-react/core";
+import { getExtensionAddresses } from "@provable-games/metagame-sdk";
+import { useOpusTrovesBannableEntries } from "@provable-games/metagame-sdk/react";
+import { useAccount, useProvider } from "@starknet-react/core";
 import { OpusTrovesPlayerDetails } from "./extensions/OpusTrovesPlayerDetails";
-import { useOpusTrovesBannableEntries } from "@/hooks/extensions/useOpusTrovesBannableEntries";
 import { useEntityUpdates } from "@/chain/hooks/useEntityUpdates";
 
 interface BanManagementDialogProps {
@@ -55,6 +52,7 @@ export const BanManagementDialog = ({
 }: BanManagementDialogProps) => {
   const { selectedChainConfig } = useChainConfig();
   const { address } = useAccount();
+  const { provider } = useProvider();
   const tournamentAddress = selectedChainConfig.budokanAddress!;
   const [bannableEntries, setBannableEntries] = useState<Set<string>>(
     new Set()
@@ -148,23 +146,20 @@ export const BanManagementDialog = ({
 
   // Use Opus Troves hook for bannable entries calculation
   const { bannableEntries: opusBannableEntries, troveDebts } =
-    useOpusTrovesBannableEntries({
-      games: (games || []).map((g) => ({ tokenId: Number(g.tokenId), owner: g.owner })),
-      config: opusTrovesValidatorConfig
+    useOpusTrovesBannableEntries(
+      provider,
+      (games || []).map((g) => ({ tokenId: Number(g.tokenId), owner: g.owner })),
+      opusTrovesValidatorConfig
         ? {
+            assetCount: opusTrovesValidatorConfig.assetCount,
             assetAddresses: opusTrovesValidatorConfig.assetAddresses,
             threshold: opusTrovesValidatorConfig.threshold,
             valuePerEntry: opusTrovesValidatorConfig.valuePerEntry,
             maxEntries: opusTrovesValidatorConfig.maxEntries,
           }
-        : {
-            assetAddresses: [],
-            threshold: 0n,
-            valuePerEntry: 0n,
-            maxEntries: 0,
-          },
-      enabled: isOpusTrovesValidatorExtension && open,
-    });
+        : undefined,
+      isOpusTrovesValidatorExtension && open,
+    );
 
   // Create stable reference for opusBannableEntries to avoid infinite rerenders
   const opusBannableEntriesKey = useMemo(
@@ -194,11 +189,7 @@ export const BanManagementDialog = ({
             const owner = game?.owner;
             if (!owner) return;
 
-            const qualification = getExtensionProof(
-              extensionAddress,
-              owner,
-              {}
-            );
+            const qualification: string[] = [];
 
             const shouldBan = await checkShouldBan(
               extensionAddress,
@@ -282,11 +273,7 @@ export const BanManagementDialog = ({
     try {
       // Ban all entries for this player
       for (const entry of playerGroup.entries) {
-        const qualification = getExtensionProof(
-          extensionAddress,
-          playerGroup.address,
-          {}
-        );
+        const qualification: string[] = [];
 
         await banEntry(tournamentId, entry.gameTokenId, qualification);
 

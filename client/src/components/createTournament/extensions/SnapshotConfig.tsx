@@ -9,7 +9,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { useChainConfig } from "@/context/chain";
-import { getExtensionAddresses } from "@/lib/extensionConfig";
+import { getExtensionAddresses } from "@provable-games/metagame-sdk";
 
 interface SnapshotConfigProps {
   extensionError?: string;

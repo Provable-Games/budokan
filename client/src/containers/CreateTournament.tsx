@@ -25,7 +25,7 @@ import {
   useGetPlatformMetrics,
   useGetPlatformStats,
 } from "@/hooks/useBudokanQueries";
-import { getExtensionAddresses } from "@/lib/extensionConfig";
+import { getExtensionAddresses } from "@provable-games/metagame-sdk";
 
 export type TournamentFormData = z.infer<typeof formSchema>;
 

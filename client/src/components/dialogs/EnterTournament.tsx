@@ -70,14 +70,11 @@ import { buildQualificationProof } from "@/lib/utils";
 import type { QualificationProof as SdkQualificationProof } from "@/lib/utils";
 import { getTokenLogoUrl, getTokenDecimals } from "@/lib/tokensMeta";
 import { LoadingSpinner } from "@/components/ui/spinner";
-import {
-  getExtensionProof,
-} from "@/lib/extensionConfig";
 import { getTokenByAddress } from "@/lib/tokenUtils";
 import { useVoyagerNfts } from "@/hooks/useVoyagerNfts";
 import {
   useExtensionQualification,
-} from "@/chain/hooks/useExtensionQualification";
+} from "@provable-games/metagame-sdk/react";
 import { useVoyagerTokenBalances } from "@/hooks/useVoyagerTokenBalances";
 import {
   useEkuboQuotes,
@@ -197,9 +194,7 @@ export function EnterTournamentDialog({
             position: proof.position,
             address,
             extensionProof: requirementVariant === "extension" && !proof.tournamentId
-              ? (extensionConfig?.address
-                ? getExtensionProof(extensionConfig.address, address, {})
-                : [])
+              ? []
               : undefined,
           }
         : null;
@@ -613,8 +608,8 @@ export function EnterTournamentDialog({
             return;
           }
 
-          // Generic extension - use SDK RPC calls
-          const qualification = getExtensionProof(extensionAddress, address, {});
+          // Generic extension — proof is always empty (extensions validate on-chain)
+          const qualification: string[] = [];
 
           const [validEntry, entriesLeft] = await Promise.all([
             sdkCheckValidEntry(provider, extensionAddress, tournamentModel?.id, address, qualification),
@@ -804,6 +799,7 @@ export function EnterTournamentDialog({
     bestQualification: extensionBestQualification,
     loading: extensionQualificationsLoading,
   } = useExtensionQualification(
+    provider,
     extensionConfig?.address,
     tournamentModel?.id.toString(),
     address,
