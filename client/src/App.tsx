@@ -155,9 +155,9 @@ function App() {
 
   return (
     <TooltipProvider>
-      <div className="flex flex-col min-h-screen h-screen overflow-hidden">
+      <div className="flex flex-col min-h-[100dvh] h-[100dvh] overflow-hidden">
         <Header />
-        <main className="flex-1 px-4 pt-4 xl:px-10 xl:pt-10 2xl:px-20 2xl:pt-20 overflow-hidden">
+        <main className="flex-1 px-4 pt-4 xl:px-8 xl:pt-8 2xl:px-16 2xl:pt-12 overflow-hidden">
           <Routes>
             <Route
               path="/"

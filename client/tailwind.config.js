@@ -30,18 +30,34 @@ export default {
         'warning': withOpacityValue('--color-warning'),
         'success': withOpacityValue('--color-success'),
         'neutral': withOpacityValue('--color-neutral'),
+        'surface': withOpacityValue('--color-surface'),
+        'surface-elevated': withOpacityValue('--color-surface-elevated'),
       },
       fontFamily: {
         'brand': 'var(--font-brand)',
+        'body': 'var(--font-body)',
       },
       screens: {
-        '3xl': '1920px',  // Full HD
-        '4xl': '2560px',  // 2K / QHD
-        '5xl': '3440px',  // Ultrawide
-        '6xl': '3840px',  // 4K / UHD
-      }
+        '3xl': '1920px',
+        '4xl': '2560px',
+        '5xl': '3440px',
+        '6xl': '3840px',
+      },
+      keyframes: {
+        'shimmer': {
+          '0%': { backgroundPosition: '-200% 0' },
+          '100%': { backgroundPosition: '200% 0' },
+        },
+        'fade-up': {
+          '0%': { opacity: '0', transform: 'translateY(8px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+      },
+      animation: {
+        'shimmer': 'shimmer 2s ease-in-out infinite',
+        'fade-up': 'fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+      },
     }
   },
   plugins: [require("tailwindcss-animate"), require("@tailwindcss/typography")],
 }
-

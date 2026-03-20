@@ -109,14 +109,14 @@ const Header = () => {
       />
       <GeoBlockedDialog open={showGeoBlock} onOpenChange={setShowGeoBlock} />
 
-      <div className="flex flex-row items-center justify-between px-5 sm:py-5 sm:px-10 h-[60px] sm:h-[80px]">
+      <nav className="glass-surface flex flex-row items-center justify-between px-5 sm:py-4 sm:px-8 h-[56px] sm:h-[72px] border-b border-brand/6 z-40">
         {/* Hamburger menu for small screens */}
         {isHomeScreen && (
           <div className="sm:hidden">
             <Sheet>
               <SheetTrigger asChild>
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="icon"
                   className="p-0 flex items-center justify-center"
                 >
@@ -128,7 +128,7 @@ const Header = () => {
               <SheetContent side="left" className="w-[250px] sm:w-[300px]">
                 <div className="flex flex-col gap-4 py-4">
                   <div
-                    className="text-3xl font-brand hover:cursor-pointer hover:text-brand-muted transition-colors duration-200"
+                    className="text-2xl font-brand tracking-tight hover:cursor-pointer hover:text-brand-muted transition-colors duration-200"
                     onClick={() => navigate("/")}
                   >
                     Games
@@ -162,15 +162,15 @@ const Header = () => {
         )}
 
         <div
-          className="font-brand hover:cursor-pointer hover:text-brand-muted transition-colors duration-200 h-full flex items-center"
+          className="font-brand hover:cursor-pointer transition-opacity duration-200 h-full flex items-center"
           onClick={() => {
             navigate("/");
           }}
         >
           <img
-            className="h-8 max-w-32 sm:max-w-none sm:h-10 xl:h-12 hover:opacity-80 transition-opacity duration-200 object-contain"
+            className="h-7 max-w-28 sm:max-w-none sm:h-9 xl:h-10 hover:opacity-75 transition-opacity duration-200 object-contain"
             src={logoImage}
-            alt="logo"
+            alt="Budokan"
           />
         </div>
 
@@ -178,31 +178,31 @@ const Header = () => {
           {/* Navigation buttons - only visible on larger screens */}
           <div className="hidden sm:flex sm:flex-row sm:items-center sm:gap-2">
             <Button
-              variant="outline"
+              variant="ghost"
               onClick={() => {
                 window.open("https://discord.gg/lootsurvivor", "_blank");
               }}
             >
               <span className="flex flex-row items-center gap-2">
                 <DISCORD />
-                Support
+                <span className="hidden lg:inline">Support</span>
               </span>
             </Button>
             {account && (
               <DropdownMenu>
                 <DropdownMenuTrigger>
-                  <Button variant="outline">
+                  <Button variant="outline" size="sm">
                     <STARKNET />
-                    {NetworkId[selectedChainConfig.chainId as ChainId]}
+                    <span className="hidden lg:inline">{NetworkId[selectedChainConfig.chainId as ChainId]}</span>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent className="bg-black border-2 border-brand-muted">
+                <DropdownMenuContent className="glass-surface-elevated border-brand/10">
                   <DropdownMenuItem
                     key="mainnet"
                     active={selectedChainConfig.chainId === ChainId.SN_MAIN}
                     onClick={() => switchToMainnet()}
                   >
-                    <span className="[&_svg]:w-8 [&_svg]:h-8">
+                    <span className="[&_svg]:w-6 [&_svg]:h-6">
                       <STARKNET />
                     </span>
                     {NetworkId[ChainId.SN_MAIN]}
@@ -212,7 +212,7 @@ const Header = () => {
                     active={selectedChainConfig.chainId === ChainId.SN_SEPOLIA}
                     onClick={() => switchToSepolia()}
                   >
-                    <span className="[&_svg]:w-8 [&_svg]:h-8">
+                    <span className="[&_svg]:w-6 [&_svg]:h-6">
                       <STARKNET />
                     </span>
                     {NetworkId[ChainId.SN_SEPOLIA]}
@@ -222,6 +222,7 @@ const Header = () => {
             )}
             {!isMainnet && !isSepolia && location.pathname !== "/play" && (
               <Button
+                variant="outline"
                 onClick={() => {
                   navigate("/play");
                 }}
@@ -233,7 +234,6 @@ const Header = () => {
               </Button>
             )}
             {location.pathname !== "/create-tournament" && (
-              // && isAdmin
               <Button
                 onClick={() => {
                   if (isGeoBlocked) {
@@ -245,7 +245,8 @@ const Header = () => {
               >
                 <span className="flex flex-row items-center gap-2">
                   <TROPHY_LINE />
-                  Create Tournament
+                  <span className="hidden lg:inline">Create Tournament</span>
+                  <span className="lg:hidden">Create</span>
                 </span>
               </Button>
             )}
@@ -253,12 +254,13 @@ const Header = () => {
 
           {/* Connect button - visible on all screen sizes */}
           <Button
+            variant={account ? "outline" : "default"}
             onClick={() => {
               if (!account) {
                 setShowWallets(true);
               }
             }}
-            className="px-2"
+            className="px-3"
           >
             <span className="flex flex-row items-center gap-2">
               <span
@@ -271,11 +273,11 @@ const Header = () => {
               >
                 {account &&
                   (walletIcon ? (
-                    <img src={walletIcon} alt="wallet" className="w-4 h-4" />
+                    <img src={walletIcon} alt="wallet" className="w-4 h-4 rounded-sm" />
                   ) : (
                     <CONTROLLER />
                   ))}
-                <span>
+                <span className="text-sm">
                   {account ? (
                     username ? (
                       <span className="text-ellipsis overflow-hidden whitespace-nowrap max-w-[100px]">
@@ -291,7 +293,7 @@ const Header = () => {
               </span>
               {account && (
                 <span
-                  className="hidden sm:block hover:bg-brand-muted p-1"
+                  className="hidden sm:flex items-center p-1 rounded hover:bg-brand/10 transition-colors"
                   onClick={() => {
                     disconnect();
                   }}
@@ -302,7 +304,7 @@ const Header = () => {
             </span>
           </Button>
         </div>
-      </div>
+      </nav>
     </div>
   );
 };

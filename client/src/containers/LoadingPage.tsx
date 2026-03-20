@@ -4,13 +4,13 @@ interface LoadingPageProps {
 
 const LoadingPage = ({ message }: LoadingPageProps) => {
   return (
-    <div className="fixed inset-0 flex flex-col items-center justify-center gap-6 bg-black/20 backdrop-blur-sm z-50">
-      <div className="relative w-16 h-16">
-        <div className="absolute w-full h-full border-4 border-brand rounded-full animate-ping opacity-75"></div>
-        <div className="absolute w-full h-full border-4 border-brand-muted rounded-full animate-pulse"></div>
+    <div className="fixed inset-0 flex flex-col items-center justify-center gap-8 bg-[rgb(var(--color-background))]/80 backdrop-blur-md z-50">
+      <div className="relative w-12 h-12">
+        <div className="absolute w-full h-full border-2 border-brand/30 rounded-full"></div>
+        <div className="absolute w-full h-full border-2 border-transparent border-t-brand rounded-full animate-spin"></div>
       </div>
       {message && (
-        <span className="font-brand text-2xl text-brand-muted animate-pulse">
+        <span className="text-sm text-brand-muted font-medium tracking-wide">
           {message}
         </span>
       )}

@@ -22,13 +22,10 @@ interface UseTournamentPrizeValueParams {
 }
 
 /**
- * Hook to calculate total tournament prize value in USD
+ * Hook to calculate sponsored prize value in USD from aggregated database data.
  *
- * Combines:
- * - Aggregated database prizes (subscribed prizes)
- * - Entry fee distribution prizes (calculated from entry fees)
- *
- * Returns 0 if any required price is missing to avoid showing partial totals
+ * Entry fee prize value should be calculated separately using
+ * calculateTotalPrizeValueUSD from metagame-sdk.
  */
 export const useTournamentPrizeValue = ({
   aggregations,
@@ -38,7 +35,6 @@ export const useTournamentPrizeValue = ({
   tokenDecimals,
 }: UseTournamentPrizeValueParams): number => {
   return useMemo(() => {
-    // Return 0 if prices are loading OR if prices object is empty
     if (
       pricesLoading ||
       !tokenPrices ||
@@ -56,13 +52,9 @@ export const useTournamentPrizeValue = ({
           if (tokenTotal.tokenType === "erc20" && tokenTotal.totalAmount) {
             const normalizedAddress = indexAddress(tokenTotal.tokenAddress);
             const price = tokenPrices[normalizedAddress];
-            // Skip tokens without prices
-            if (price === undefined) {
-              return sum;
-            }
+            if (price === undefined) return sum;
             const decimals = tokenDecimals[normalizedAddress] || 18;
             const amount = tokenTotal.totalAmount;
-
             return sum + (amount / 10 ** decimals) * price;
           }
           return sum;
@@ -71,19 +63,14 @@ export const useTournamentPrizeValue = ({
       );
     }
 
-    // Calculate USD from entry fee prizes (ERC20 only)
-    // Only include distributionPrizes - not creator/game shares as those are fees, not prizes
+    // Calculate USD from distribution prizes (ERC20 only)
     distributionPrizes.forEach((prize) => {
       if (prize.token_type?.variant?.erc20) {
         const normalizedAddress = indexAddress(prize.token_address);
         const price = tokenPrices[normalizedAddress];
-        // Skip tokens without prices
-        if (price === undefined) {
-          return;
-        }
+        if (price === undefined) return;
         const amount = prize.token_type.variant.erc20.amount || 0;
         const decimals = tokenDecimals[normalizedAddress] || 18;
-
         total += (amount / 10 ** decimals) * price;
       }
     });

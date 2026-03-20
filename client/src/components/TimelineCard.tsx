@@ -37,11 +37,11 @@ const TimelineCard = ({
         <TooltipTrigger asChild>
           <Card
             variant={completed ? "default" : "outline"}
-            className={`p-1.5 sm:p-2 bg-black ${
+            className={`p-1.5 sm:p-2 ${
               completed
-                ? "text-black bg-brand-muted"
+                ? "text-brand-subtle bg-brand-muted"
                 : highlighted
-                ? "text-brand border-brand shadow-lg shadow-brand/20 bg-gradient-to-br from-brand/20 to-black"
+                ? "text-brand border-brand/30 shadow-[0_0_16px_-4px_rgba(var(--color-brand),0.3)] bg-gradient-to-br from-brand/15 to-transparent"
                 : "text-brand-muted"
             } h-8 w-8 sm:h-10 sm:w-10 lg:h-12 lg:w-12 3xl:h-16 3xl:w-16 flex items-center justify-center z-20 cursor-pointer transition-all duration-300`}
           >
@@ -49,7 +49,7 @@ const TimelineCard = ({
           </Card>
         </TooltipTrigger>
         {(date || label) && (
-          <TooltipContent className="border-brand-muted bg-black text-brand 3xl:text-lg">
+          <TooltipContent className="glass-surface-elevated border-brand/10 text-brand 3xl:text-lg">
             <div className="flex flex-col gap-1">
               {label && (
                 <span className="font-bold text-brand">
