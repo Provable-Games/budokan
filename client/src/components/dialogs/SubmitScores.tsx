@@ -10,9 +10,10 @@ import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 import { useAccount } from "@starknet-react/core";
 import { Leaderboard } from "@/generated/models.gen";
 import type { Tournament } from "@provable-games/budokan-sdk";
-import { padAddress, feltToString, getOrdinalSuffix } from "@/lib/utils";
+import { feltToString, getOrdinalSuffix } from "@/lib/utils";
+import { addAddressPadding } from "starknet";
 import { useConnectToSelectedChain } from "@/chain/hooks/useChain";
-import { useGameTokens } from "@/hooks/useDenshokanQueries";
+import { useTokens } from "@provable-games/denshokan-sdk/react";
 import { getSubmittableScores } from "@/lib/utils/formatting";
 import { useState, useMemo } from "react";
 import { LoadingSpinner } from "@/components/ui/spinner";
@@ -52,22 +53,18 @@ export function SubmitScoresDialog({
   // Fetch extra games beyond leaderboard size to account for banned entries
   const fetchSize = (leaderboardSize || 10) + 10;
 
-  const { data: games } = useGameTokens({
-    owner: padAddress(tournamentAddress),
-    gameId: Number(tournamentModel?.id) ?? 0,
-    limit: fetchSize,
-    active: !!tournamentModel?.id,
-  });
+  const { data: tokensResult } = useTokens(
+    tournamentModel?.id
+      ? {
+          contextId: Number(tournamentModel.id),
+          minterAddress: addAddressPadding(tournamentAddress),
+          sort: { field: "score", direction: "desc" },
+          limit: fetchSize,
+        }
+      : undefined,
+  );
 
-  // Sort games by score (desc) and then by tokenId (asc) for equal scores
-  const sortedGames = useMemo(() => {
-    if (!games) return [];
-    return [...games].sort((a, b) => {
-      const scoreDiff = Number(b.score) - Number(a.score);
-      if (scoreDiff !== 0) return scoreDiff;
-      return Number(a.tokenId) - Number(b.tokenId);
-    });
-  }, [games]);
+  const sortedGames = tokensResult?.data ?? [];
 
   // Fetch game IDs for registration data
   const gameIds = useMemo(
