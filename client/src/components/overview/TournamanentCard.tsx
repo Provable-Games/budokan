@@ -46,7 +46,7 @@ interface TournamentCardProps {
 
 export const TournamentCard = ({
   tournament,
-  index: _index,
+  index,
   status,
   prizes,
   entryCount,
@@ -239,6 +239,9 @@ export const TournamentCard = ({
     return null;
   }, [submissionEnd, currentTimestamp, gameEnd, gameStart]);
 
+  // Stagger animation delay based on card index
+  const animationDelay = `${Math.min(index * 50, 300)}ms`;
+
   return (
     <Card
       variant="outline"
@@ -246,22 +249,23 @@ export const TournamentCard = ({
       onClick={() => {
         navigate(`/tournament/${Number(tournament.id).toString()}`);
       }}
-      className="h-36 sm:h-44 w-full whitespace-normal animate-in fade-in zoom-in duration-300 ease-out overflow-hidden"
+      className="h-36 sm:h-44 w-full whitespace-normal overflow-hidden opacity-0 animate-fade-up"
+      style={{ animationDelay, animationFillMode: "forwards" }}
     >
       <div className="flex flex-col h-full">
-        {/* Zone A — Header Bar */}
+        {/* Header */}
         <div className="flex flex-row justify-between items-center gap-2">
           <div className="flex flex-row items-center gap-1.5 min-w-0 flex-1">
             <Badge
               variant={tournamentStatus.variant}
-              className="text-[10px] sm:text-xs px-1.5 py-0 sm:py-0.5 rounded-md h-5 flex-shrink-0"
+              className="text-[10px] sm:text-xs px-1.5 py-0 sm:py-0.5 h-5 flex-shrink-0"
             >
               {tournamentStatus.text}
             </Badge>
             {isRestricted && (
               <Lock className="w-3 h-3 text-brand-muted flex-shrink-0" />
             )}
-            <p className="truncate min-w-0 font-brand text-sm sm:text-base">
+            <p className="truncate min-w-0 font-brand text-sm sm:text-base tracking-tight">
               {tournament.name ?? tournament.metadata?.name}
             </p>
           </div>
@@ -280,20 +284,20 @@ export const TournamentCard = ({
         </div>
 
         {/* Divider */}
-        <div className="w-full h-px bg-brand/15 my-0.5 sm:my-1" />
+        <div className="w-full h-px bg-brand/8 my-1" />
 
-        {/* Zone B — Hero Area (Prize Pool) */}
+        {/* Prize Pool */}
         <div className="flex flex-col items-center justify-center flex-1 min-h-0 overflow-hidden">
           {totalPrizesValueUSD > 0 || uniquePrizeTokens.length > 0 ? (
             <>
-              <div className="flex flex-row items-center gap-1">
+              <div className="flex flex-row items-center gap-1.5">
                 {uniquePrizeTokens.length > 0 && (
                   <div className="flex flex-row items-center">
                     {uniquePrizeTokens.slice(0, 3).map((token, idx) => (
                       <Tooltip key={idx} delayDuration={50}>
                         <TooltipTrigger asChild>
                           <div
-                            className="relative rounded-full border border-background"
+                            className="relative rounded-full border border-surface"
                             style={{
                               marginLeft: idx > 0 ? "-4px" : 0,
                               zIndex: 3 - idx,
@@ -306,7 +310,7 @@ export const TournamentCard = ({
                                 className="w-4 h-4 sm:w-6 sm:h-6 rounded-full"
                               />
                             ) : (
-                              <div className="w-4 h-4 sm:w-6 sm:h-6 rounded-full bg-brand/20 flex items-center justify-center text-[7px] sm:text-[10px]">
+                              <div className="w-4 h-4 sm:w-6 sm:h-6 rounded-full bg-brand/10 flex items-center justify-center text-[7px] sm:text-[10px] font-medium">
                                 {token.symbol.slice(0, 2)}
                               </div>
                             )}
@@ -319,7 +323,7 @@ export const TournamentCard = ({
                     ))}
                     {uniquePrizeTokens.length > 3 && (
                       <div
-                        className="w-4 h-4 sm:w-6 sm:h-6 rounded-full bg-brand/20 flex items-center justify-center text-[7px] sm:text-[10px] border border-background"
+                        className="w-4 h-4 sm:w-6 sm:h-6 rounded-full bg-brand/10 flex items-center justify-center text-[7px] sm:text-[10px] font-medium border border-surface"
                         style={{ marginLeft: "-4px", zIndex: 0 }}
                       >
                         +{uniquePrizeTokens.length - 3}
@@ -328,21 +332,21 @@ export const TournamentCard = ({
                   </div>
                 )}
                 {totalPrizesValueUSD > 0 && (
-                  <span className="font-brand text-lg sm:text-2xl text-brand">
+                  <span className="font-brand text-lg sm:text-2xl text-brand tracking-tight tabular-nums">
                     ${formatNumber(totalPrizesValueUSD)}
                   </span>
                 )}
               </div>
-              <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-brand-muted">
+              <span className="text-[9px] sm:text-[10px] uppercase tracking-widest text-brand-muted font-medium mt-0.5">
                 Prize Pool
               </span>
             </>
           ) : (
             <>
-              <span className="font-brand text-lg sm:text-2xl text-brand-muted">
-                -
+              <span className="font-brand text-lg sm:text-2xl text-brand-muted/50">
+                --
               </span>
-              <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-brand-muted">
+              <span className="text-[9px] sm:text-[10px] uppercase tracking-widest text-brand-muted font-medium mt-0.5">
                 Prize Pool
               </span>
             </>
@@ -350,13 +354,13 @@ export const TournamentCard = ({
         </div>
 
         {/* Divider */}
-        <div className="w-full h-px bg-brand/15 my-0.5 sm:my-1" />
+        <div className="w-full h-px bg-brand/8 my-1" />
 
-        {/* Zone C — Footer Bar */}
+        {/* Footer */}
         <div className="flex flex-row justify-between items-center">
           {/* Entry Fee */}
           <div className="flex flex-col items-center">
-            <span className="text-xs sm:text-sm font-medium">
+            <span className="text-xs sm:text-sm font-medium tabular-nums">
               {hasEntryFee ? (
                 entryFeeInfo.type === "usd" ? (
                   `$${entryFeeInfo.usdAmount}`
@@ -388,18 +392,18 @@ export const TournamentCard = ({
                   "FREE"
                 )
               ) : (
-                <span className="text-success">FREE</span>
+                <span className="text-success font-medium">FREE</span>
               )}
             </span>
-            <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-brand-muted">
+            <span className="text-[9px] sm:text-[10px] uppercase tracking-widest text-brand-muted">
               Entry
             </span>
           </div>
 
           {/* Entries Count */}
           <div className="flex flex-col items-center">
-            <span className="text-xs sm:text-sm font-medium">{entryCount}</span>
-            <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-brand-muted">
+            <span className="text-xs sm:text-sm font-medium tabular-nums">{entryCount}</span>
+            <span className="text-[9px] sm:text-[10px] uppercase tracking-widest text-brand-muted">
               Entries
             </span>
           </div>
@@ -429,7 +433,7 @@ export const TournamentCard = ({
               <>
                 <Tooltip delayDuration={50}>
                   <TooltipTrigger asChild>
-                    <span className="text-xs sm:text-sm font-medium">
+                    <span className="text-xs sm:text-sm font-medium tabular-nums">
                       {startDate.toLocaleDateString(undefined, {
                         month: "numeric",
                         day: "numeric",
@@ -451,12 +455,12 @@ export const TournamentCard = ({
                     </p>
                   </TooltipContent>
                 </Tooltip>
-                <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-brand-muted">
+                <span className="text-[9px] sm:text-[10px] uppercase tracking-widest text-brand-muted">
                   Ended
                 </span>
               </>
             ) : (
-              <span className="text-xs sm:text-sm text-brand-muted">-</span>
+              <span className="text-xs sm:text-sm text-brand-muted">--</span>
             )}
           </div>
         </div>

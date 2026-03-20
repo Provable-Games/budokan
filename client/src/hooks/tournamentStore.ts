@@ -176,6 +176,15 @@ const useTournamentStore = create<TournamentState>((set, get) => ({
       tournament: t,
       prizes: [],
       entryCount: t.entryCount ?? 0,
+      aggregations: t.prizeAggregation
+        ? {
+            token_totals: t.prizeAggregation.map((pa) => ({
+              tokenAddress: pa.tokenAddress,
+              tokenType: pa.tokenType,
+              totalAmount: Number(pa.totalAmount),
+            })),
+          }
+        : undefined,
     }));
   },
 }));

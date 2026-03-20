@@ -566,7 +566,7 @@ const Overview = () => {
           <div className="flex flex-row gap-4 items-center">
             <span className="hidden 2xl:block">Sort By:</span>
             <DropdownMenu>
-              <DropdownMenuTrigger className="bg-black border-2 border-brand-muted px-2 min-w-[100px] h-8">
+              <DropdownMenuTrigger className="bg-surface/60 border border-brand/15 rounded-lg px-3 min-w-[100px] h-8 transition-colors hover:border-brand/25">
                 <div className="flex flex-row items-center justify-between capitalize text-sm 2xl:text-base w-full sm:gap-2">
                   {
                     SORT_OPTIONS[selectedTab].find(
@@ -578,7 +578,7 @@ const Overview = () => {
                   </span>
                 </div>
               </DropdownMenuTrigger>
-              <DropdownMenuContent className="bg-black border-2 border-brand-muted">
+              <DropdownMenuContent className="glass-surface-elevated border-brand/10">
                 <DropdownMenuLabel className="text-brand">
                   Options
                 </DropdownMenuLabel>
@@ -610,7 +610,7 @@ const Overview = () => {
                 {gameFilters.map((filter) => (
                   <div
                     key={filter}
-                    className="flex flex-row items-center gap-2 sm:gap-4 bg-black border-2 border-brand-muted py-2 px-4 shrink-0"
+                    className="flex flex-row items-center gap-2 sm:gap-4 glass-surface border-brand/10 py-2 px-4 rounded-lg shrink-0"
                   >
                     <GameIcon image={getGameImage(filter)} />
                     <span className="text-lg 2xl:text-2xl font-brand">

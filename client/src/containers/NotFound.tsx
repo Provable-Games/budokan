@@ -11,20 +11,21 @@ const NotFound: React.FC<NotFoundProps> = ({ message = "Page not found" }) => {
   const navigate = useNavigate();
 
   return (
-    <div className="w-3/4 mx-auto flex flex-col gap-5">
-      <div className="flex flex-row justify-between">
-        <Button variant="outline" onClick={() => navigate("/")}>
-          <ARROW_LEFT />
-          Back
-        </Button>
-      </div>
-      <div className="flex flex-col items-center gap-2">
-        <span className="font-brand text-3xl text-retro-red">
-          Oops! {message}
+    <div className="max-w-xl mx-auto flex flex-col gap-8 pt-20">
+      <div className="flex flex-col items-center gap-4 text-center">
+        <span className="text-6xl font-brand tracking-tighter text-brand/20">
+          404
         </span>
-        <p className="text-brand-muted">
+        <span className="text-lg font-medium text-brand">
+          {message}
+        </span>
+        <p className="text-sm text-brand-muted max-w-[45ch]">
           The page you're looking for doesn't exist or has been removed.
         </p>
+        <Button variant="outline" onClick={() => navigate("/")} className="mt-2">
+          <ARROW_LEFT />
+          Back to tournaments
+        </Button>
       </div>
     </div>
   );

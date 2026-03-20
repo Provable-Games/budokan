@@ -1,40 +1,42 @@
 import * as React from "react";
-import BorderImage from "@/components/icons/BorderImage";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const cardVariants = cva(
-  "inline-flex flex-col gap-2 whitespace-nowrap rounded-xl text-sm font-medium transition-colors [border-style:solid] [border-image-slice:4] [border-image-width:4px] relative",
+  "flex flex-col gap-2 text-sm font-medium transition-all duration-200 ease-out rounded-xl relative",
   {
     variants: {
       variant: {
-        default: "bg-brand text-black border-2",
-        destructive: "bg-destructive text-neutral-50 border-2",
-        outline: "bg-black text-brand border-2 border-brand",
+        default:
+          "bg-brand text-brand-subtle border border-brand/20",
+        destructive:
+          "bg-destructive/10 text-neutral-50 border border-destructive/20",
+        outline:
+          "glass-surface text-brand",
       },
       size: {
         default: "p-4",
-        sm: "p-2",
+        sm: "p-2.5",
         lg: "p-6",
       },
     },
     defaultVariants: {
-      variant: "default",
+      variant: "outline",
       size: "default",
     },
   }
 );
 
 const interactiveVariants = {
-  default: "hover:bg-brand/90 hover:cursor-pointer",
-  destructive: "hover:bg-destructive/90 hover:cursor-pointer",
-  outline: "hover:bg-brand/10 hover:cursor-pointer",
+  default: "hover:brightness-105 hover:cursor-pointer active:scale-[0.99]",
+  destructive: "hover:bg-destructive/15 hover:cursor-pointer active:scale-[0.99]",
+  outline: "hover:bg-surface/80 hover:border-brand/15 hover:cursor-pointer active:scale-[0.99] hover:shadow-[0_8px_32px_-8px_rgba(0,0,0,0.4)]",
 } as const;
 
 const disabledVariants = {
-  default: "opacity-50 cursor-not-allowed",
-  destructive: "opacity-50 cursor-not-allowed",
-  outline: "opacity-50 cursor-not-allowed",
+  default: "opacity-40 cursor-not-allowed",
+  destructive: "opacity-40 cursor-not-allowed",
+  outline: "opacity-40 cursor-not-allowed",
 } as const;
 
 export interface CardProps
@@ -48,7 +50,7 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
   (
     {
       className,
-      variant,
+      variant = "outline",
       size,
       interactive = false,
       disabled = false,
@@ -63,11 +65,6 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
       onClick?.(e);
     };
 
-    // Generate the border image dynamically
-    const borderImage = `url("data:image/svg+xml,${BorderImage({
-      variant: variant || "default",
-    })}")`;
-
     return (
       <div
         className={cn(
@@ -76,9 +73,6 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
           disabled && variant ? disabledVariants[variant] : ""
         )}
         ref={ref}
-        style={{
-          borderImageSource: `${borderImage}`,
-        }}
         onClick={handleClick}
         {...(disabled ? { "aria-disabled": true } : {})}
         {...props}

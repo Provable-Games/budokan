@@ -33,8 +33,8 @@ const MobileFooter = () => {
       const parentLeft =
         activeTab.parentElement?.getBoundingClientRect().left || 0;
 
-      // Make indicator 60% of the button width
-      const indicatorWidth = width * 0.8;
+      // Make indicator 50% of the button width
+      const indicatorWidth = width * 0.5;
 
       // Center the indicator under the button
       const indicatorLeft = left - parentLeft + (width - indicatorWidth) / 2;
@@ -45,58 +45,61 @@ const MobileFooter = () => {
   }, [activeTabIndex]);
 
   return (
-    <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-black flex flex-row items-stretch h-12 z-50 relative">
+    <div className="sm:hidden fixed bottom-0 left-0 right-0 glass-surface-elevated flex flex-row items-stretch h-14 z-50 border-t border-brand/8">
       {/* Animated indicator */}
       <motion.div
-        className="absolute top-0 h-1 bg-brand"
+        className="absolute top-0 h-0.5 bg-brand rounded-full"
         initial={false}
         animate={{
           width: indicatorWidth,
           left: indicatorLeft,
         }}
-        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+        transition={{ type: "spring", stiffness: 400, damping: 35 }}
       />
 
       <button
         ref={(el) => (tabRefs.current[0] = el)}
-        className={`flex flex-col items-center justify-center flex-1 ${
-          activeTabIndex === 0 ? "text-brand" : "text-gray-400"
+        className={`flex flex-col items-center justify-center flex-1 transition-colors duration-200 ${
+          activeTabIndex === 0 ? "text-brand" : "text-neutral"
         }`}
         onClick={() => {
           navigate("/");
           setSelectedTab("upcoming");
         }}
       >
-        <span className="h-10 w-10">
+        <span className="h-8 w-8">
           <GLOBE />
         </span>
+        <span className="text-[10px] mt-0.5 font-medium">Browse</span>
       </button>
 
       <button
         ref={(el) => (tabRefs.current[1] = el)}
-        className={`flex flex-col items-center justify-center flex-1 ${
-          activeTabIndex === 1 ? "text-brand" : "text-gray-400"
+        className={`flex flex-col items-center justify-center flex-1 transition-colors duration-200 ${
+          activeTabIndex === 1 ? "text-brand" : "text-neutral"
         }`}
         onClick={() => {
           navigate("/");
           setSelectedTab("my");
         }}
       >
-        <span className="h-10 w-10">
+        <span className="h-8 w-8">
           <USER />
         </span>
+        <span className="text-[10px] mt-0.5 font-medium">Mine</span>
       </button>
 
       <button
         ref={(el) => (tabRefs.current[2] = el)}
-        className={`flex flex-col items-center justify-center flex-1 ${
-          activeTabIndex === 2 ? "text-brand" : "text-gray-400"
+        className={`flex flex-col items-center justify-center flex-1 transition-colors duration-200 ${
+          activeTabIndex === 2 ? "text-brand" : "text-neutral"
         }`}
         onClick={() => navigate("/create-tournament")}
       >
-        <span className="h-10 w-10">
+        <span className="h-8 w-8">
           <TROPHY />
         </span>
+        <span className="text-[10px] mt-0.5 font-medium">Create</span>
       </button>
     </div>
   );

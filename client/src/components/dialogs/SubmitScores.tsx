@@ -12,7 +12,7 @@ import { Leaderboard } from "@/generated/models.gen";
 import type { Tournament } from "@provable-games/budokan-sdk";
 import { padAddress, feltToString, getOrdinalSuffix } from "@/lib/utils";
 import { useConnectToSelectedChain } from "@/chain/hooks/useChain";
-import { useGameTokens } from "@/hooks/useDenshokanQueries";
+import { useTokens } from "@provable-games/denshokan-sdk/react";
 import { getSubmittableScores } from "@/lib/utils/formatting";
 import { useState, useMemo } from "react";
 import { LoadingSpinner } from "@/components/ui/spinner";
@@ -52,22 +52,31 @@ export function SubmitScoresDialog({
   // Fetch extra games beyond leaderboard size to account for banned entries
   const fetchSize = (leaderboardSize || 10) + 10;
 
-  const { data: games } = useGameTokens({
-    owner: padAddress(tournamentAddress),
-    gameId: Number(tournamentModel?.id) ?? 0,
-    limit: fetchSize,
-    active: !!tournamentModel?.id,
-  });
+  const { data: tokensResult } = useTokens(
+    open && tournamentModel?.id
+      ? {
+          contextId: Number(tournamentModel.id),
+          minterAddress: padAddress(tournamentAddress),
+          sort: { field: "score", direction: "desc" },
+          limit: fetchSize,
+        }
+      : undefined,
+  );
 
-  // Sort games by score (desc) and then by tokenId (asc) for equal scores
+  // Map to GameTokenData shape expected by downstream code
   const sortedGames = useMemo(() => {
-    if (!games) return [];
-    return [...games].sort((a, b) => {
-      const scoreDiff = Number(b.score) - Number(a.score);
-      if (scoreDiff !== 0) return scoreDiff;
-      return Number(a.tokenId) - Number(b.tokenId);
-    });
-  }, [games]);
+    if (!tokensResult?.data) return [];
+    return tokensResult.data.map((token: any) => ({
+      tokenId: token.tokenId,
+      gameId: token.gameId,
+      owner: token.owner,
+      playerName: token.playerName,
+      score: token.score,
+      gameOver: token.gameOver,
+      lifecycle: { start: 0n, end: 0n },
+      metadata: "",
+    }));
+  }, [tokensResult]);
 
   // Fetch game IDs for registration data
   const gameIds = useMemo(
@@ -112,7 +121,7 @@ export function SubmitScoresDialog({
       if (submittableScores.length > 10) {
         await submitScoresBatched(
           tournamentModel?.id,
-          feltToString(tournamentModel?.metadata.name),
+          tournamentModel?.name ?? "",
           submittableScores,
           10, // batch size
           (current, total) => setBatchProgress({ current, total })
@@ -120,7 +129,7 @@ export function SubmitScoresDialog({
       } else {
         await submitScores(
           tournamentModel?.id,
-          feltToString(tournamentModel?.metadata.name),
+          tournamentModel?.name ?? "",
           submittableScores
         );
       }

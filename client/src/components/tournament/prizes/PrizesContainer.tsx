@@ -27,7 +27,7 @@ interface PrizesContainerProps {
   tournamentId?: BigNumberish;
   tokens: TokenMetadata[];
   tokenDecimals: Record<string, number>;
-  entryFeePrizes?: DisplayPrize[];
+  entryFeePrizes?: any[];
   prices?: TokenPrices;
   pricesLoading?: boolean;
   aggregations: any;
@@ -76,17 +76,12 @@ const PrizesContainer = ({
     // Combine paginated prizes with entry fee prizes that fit in current page
     const currentPagePrizes = prizesData || [];
 
-    // Filter entry fee prizes for top 5 positions
-    const relevantEntryFeePrizes = entryFeePrizes.filter(
-      (p) => Number(p.position ?? 0) >= 1 && Number(p.position ?? 0) <= 5,
-    );
-
     // Expand distributed prizes (payout_position = 0) into individual position prizes
     const expandedDatabasePrizes = currentPagePrizes.flatMap((prize) =>
       expandDistributedPrize(prize),
     );
 
-    const expandedEntryFeePrizes = relevantEntryFeePrizes.flatMap((prize) =>
+    const expandedEntryFeePrizes = entryFeePrizes.flatMap((prize) =>
       expandDistributedPrize(prize),
     );
 

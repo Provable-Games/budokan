@@ -13,6 +13,8 @@ import { useProvider } from "@starknet-react/core";
 import TournamentTimeline from "@/components/TournamentTimeline";
 import Countdown from "@/components/Countdown";
 import { feltToString, indexAddress, padU64, formatNumber } from "@/lib/utils";
+import type { DisplayPrize } from "@/lib/types";
+import { buildEntryFeePrizes, calculateTotalPrizeValueUSD, type EntryFeeConfig } from "@provable-games/metagame-sdk";
 import { addAddressPadding } from "starknet";
 import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 import type { Tournament as SdkTournament } from "@provable-games/budokan-sdk";
@@ -161,15 +163,19 @@ const Tournament = () => {
   const allSubmitted =
     totalSubmissions === Math.min(nonBannedEntryCount, leaderboardSize);
 
-  // Calculate entry fee prize breakdown using plain SDK data
+  // Build entry fee prizes using metagame-sdk
+  const entryFeePrizes = useMemo(() => {
+    const ef = tournamentModel?.entryFee;
+    if (!ef || !ef.amount || entryCount === 0) return [];
+    return buildEntryFeePrizes(ef as EntryFeeConfig, entryCount);
+  }, [tournamentModel?.entryFee, entryCount]);
+
   const entryFeePrizesCount = useMemo(() => {
     const ef = tournamentModel?.entryFee;
     if (!ef || !ef.amount || entryCount === 0) return 0;
     let count = 0;
-    // Distribution positions
     const distCount = Number(ef.distributionCount ?? 0);
     if (distCount > 0) count += distCount;
-    // Creator shares (if non-zero)
     if (Number(ef.tournamentCreatorShare ?? 0) > 0) count++;
     if (Number(ef.gameCreatorShare ?? 0) > 0) count++;
     return count;
@@ -364,14 +370,21 @@ const Tournament = () => {
   const prices = ownPrices;
   const pricesLoading = ownPricesLoading;
 
-  // Calculate total value in USD using aggregated data
-  const totalPrizesValueUSD = useTournamentPrizeValue({
+  // Calculate total value in USD using aggregated data + entry fee prizes
+  const entryFeeValueUSD = useMemo(() => {
+    if (!entryFeePrizes.length || pricesLoading || !prices || Object.keys(prices).length === 0) return 0;
+    return calculateTotalPrizeValueUSD(entryFeePrizes, prices, tokenDecimals, indexAddress);
+  }, [entryFeePrizes, prices, pricesLoading, tokenDecimals]);
+
+  const sponsoredPrizesValueUSD = useTournamentPrizeValue({
     aggregations,
     distributionPrizes: [],
     tokenPrices: prices,
     pricesLoading,
     tokenDecimals,
   });
+
+  const totalPrizesValueUSD = sponsoredPrizesValueUSD + entryFeeValueUSD;
 
   // Fetch token decimals only for tokens used in this tournament (normalized addresses)
   useEffect(() => {
@@ -666,14 +679,14 @@ const Tournament = () => {
               side="top"
               align="center"
               sideOffset={5}
-              className="bg-black text-neutral border border-brand-muted px-2 py-1 rounded text-sm z-50"
+              className="glass-surface-elevated text-brand-muted border-brand/10 px-2 py-1 rounded-lg text-sm z-50"
             >
               {gameName ? gameName : "Unknown"}
             </TooltipContent>
           </Tooltip>
           {settings[0] && (
             <div
-              className="hidden sm:flex h-10 text-brand flex-row items-center gap-1 w-full border-2 border-brand-muted p-2 bg-black rounded-lg hover:cursor-pointer"
+              className="hidden sm:flex h-10 text-brand flex-row items-center gap-1 w-full border border-brand/15 p-2 bg-surface/60 rounded-lg hover:cursor-pointer hover:border-brand/25 transition-colors"
               onClick={() => setSettingsDialogOpen(true)}
             >
               <span className="w-8">
@@ -991,7 +1004,7 @@ const Tournament = () => {
               tournamentId={tournamentModel?.id}
               tokens={tournamentTokens}
               tokenDecimals={tokenDecimals}
-              entryFeePrizes={[]}
+              entryFeePrizes={entryFeePrizes}
               prices={prices}
               pricesLoading={pricesLoading}
               aggregations={aggregations}
@@ -1028,7 +1041,7 @@ const Tournament = () => {
         open={isDescriptionDialogOpen}
         onOpenChange={setIsDescriptionDialogOpen}
       >
-        <DialogContent className="bg-black border border-brand p-6 rounded-lg max-w-[90vw] sm:max-w-[80vw] md:max-w-[70vw] lg:max-w-[60vw] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="glass-surface-elevated border-brand/10 p-6 rounded-xl max-w-[90vw] sm:max-w-[80vw] md:max-w-[70vw] lg:max-w-[60vw] max-h-[90vh] overflow-y-auto">
           <div className="flex flex-col gap-4">
             <h3 className="font-brand text-xl text-brand">Description</h3>
             <div className="w-full h-0.5 bg-brand/25" />
