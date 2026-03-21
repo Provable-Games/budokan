@@ -273,7 +273,10 @@ const Tournament = () => {
   // Calculate actual claimable prizes from summary
   const actualClaimablePrizesCount = useMemo(() => {
     if (!tournamentModel) return 0;
-    if (rewardClaimsSummary) {
+    // Only trust the summary if the API actually tracked prizes (totalPrizes > 0).
+    // The reward-claims/summary endpoint returns all zeros when the API hasn't
+    // indexed the tournament's prizes yet — in that case fall through to local count.
+    if (rewardClaimsSummary && (rewardClaimsSummary.totalPrizes ?? 0) > 0) {
       return rewardClaimsSummary.totalUnclaimed ?? 0;
     }
     // Fallback: estimate from entry fee prizes + sponsored prizes
@@ -316,9 +319,13 @@ const Tournament = () => {
   const totalPotentialPrizes =
     entryFeePrizesCount + (aggregations?.total_prizes || 0);
 
-  // Determine if all prizes have been claimed using actual claimable count
+  // Determine if all prizes have been claimed using actual claimable count.
+  // Require totalClaimed > 0 so we don't show "Prizes Claimed" when the
+  // summary API returns 0/0 (no claims tracked yet).
   const allClaimed =
-    actualClaimablePrizesCount === 0 && totalPotentialPrizes > 0;
+    actualClaimablePrizesCount === 0 &&
+    totalPotentialPrizes > 0 &&
+    (rewardClaimsSummary?.totalClaimed ?? 0) > 0;
 
   // Use the actual claimable count (after filtering 0-amount prizes)
   const claimablePrizesCount = actualClaimablePrizesCount;

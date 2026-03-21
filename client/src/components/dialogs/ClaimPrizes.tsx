@@ -28,7 +28,7 @@ import { useChainConfig } from "@/context/chain";
 import { LoadingSpinner } from "@/components/ui/spinner";
 import {
   useGetTournamentPrizes,
-  useGetTournamentRewardClaimsSummary,
+  useGetTournamentRewardClaims,
 } from "@/hooks/useBudokanQueries";
 
 interface ClaimPrizesDialogProps {
@@ -65,8 +65,8 @@ export function ClaimPrizesDialog({
     open ? tournamentId : undefined,
   );
 
-  // Fetch claimed rewards using API
-  const { data: rewardClaimsData } = useGetTournamentRewardClaimsSummary(
+  // Fetch claimed rewards list (individual claim records, not summary)
+  const { data: rewardClaimsData } = useGetTournamentRewardClaims(
     open ? tournamentId : undefined,
   );
 

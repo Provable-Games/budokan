@@ -329,6 +329,19 @@ export function useGetTournamentPrizes(tournamentId?: string) {
 
 // ─── Reward Claims ─────────────────────────────────────────────────────────
 
+export function useGetTournamentRewardClaims(tournamentId?: string) {
+  const client = useBudokanClient();
+  return useAsyncQuery(
+    tournamentId
+      ? () =>
+          client
+            .getTournamentRewardClaims(tournamentId, { limit: 100 })
+            .then((result) => result.data)
+      : null,
+    [tournamentId],
+  );
+}
+
 export function useGetTournamentRewardClaimsSummary(tournamentId?: string) {
   const client = useBudokanClient();
   return useAsyncQuery(
