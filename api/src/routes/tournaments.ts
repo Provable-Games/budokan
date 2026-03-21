@@ -122,9 +122,13 @@ app.get("/", async (c) => {
 
     // Prize aggregation when requested
     let prizeAggregationMap: Map<string, PrizeAggregation[]> | null = null;
+    let paidPlacesMap: Map<string, number> | null = null;
     if (includePrizes === "summary" && rows.length > 0) {
       const tournamentIds = rows.map((r) => r.tournamentId);
-      prizeAggregationMap = await fetchPrizeAggregation(tournamentIds);
+      [prizeAggregationMap, paidPlacesMap] = await Promise.all([
+        fetchPrizeAggregation(tournamentIds),
+        fetchPaidPlaces(tournamentIds),
+      ]);
     }
 
     return c.json({
@@ -134,6 +138,7 @@ app.get("/", async (c) => {
           return {
             ...serialized,
             prizeAggregation: prizeAggregationMap.get(serialized.id) ?? [],
+            paidPlaces: paidPlacesMap?.get(serialized.id) ?? 0,
           };
         }
         return serialized;
@@ -158,7 +163,7 @@ app.get("/:id", async (c) => {
       return c.json({ error: "Invalid tournament ID" }, 400);
     }
 
-    const [tournamentRows, registrationCount, prizeCount, leaderboardRows, prizeAggMap] =
+    const [tournamentRows, registrationCount, prizeCount, leaderboardRows, prizeAggMap, paidPlacesMap] =
       await Promise.all([
         db
           .select()
@@ -180,6 +185,7 @@ app.get("/:id", async (c) => {
           .orderBy(asc(leaderboards.position))
           .limit(50),
         fetchPrizeAggregation([tournamentId]),
+        fetchPaidPlaces([tournamentId]),
       ]);
 
     if (tournamentRows.length === 0) {
@@ -187,6 +193,10 @@ app.get("/:id", async (c) => {
     }
 
     const tid = tournamentId.toString();
+    const paidPlacesFromPrizes = paidPlacesMap.get(tid) ?? 0;
+    const entryFeeDistCount = Number((tournamentRows[0].entryFee as any)?.distribution_count ?? 0);
+    const paidPlaces = Math.max(paidPlacesFromPrizes, entryFeeDistCount);
+
     return c.json({
       data: {
         ...serializeTournament(tournamentRows[0]),
@@ -194,6 +204,7 @@ app.get("/:id", async (c) => {
         prizeCount: prizeCount[0]?.count ?? 0,
         leaderboard: leaderboardRows.map(serializeLeaderboardEntry),
         prizeAggregation: prizeAggMap.get(tid) ?? [],
+        paidPlaces,
       },
     });
   } catch (err) {
@@ -518,12 +529,12 @@ async function fetchPrizeAggregation(
     SELECT
       tournament_id,
       token_address,
-      token_type->>'type' AS token_type_name,
-      COALESCE(SUM((token_type->>'amount')::numeric), 0)::text AS total_amount,
+      token_type_name,
+      COALESCE(SUM(amount::numeric), 0)::text AS total_amount,
       COUNT(*)::int AS nft_count
     FROM prizes
     WHERE tournament_id IN (${idList})
-    GROUP BY tournament_id, token_address, token_type->>'type'
+    GROUP BY tournament_id, token_address, token_type_name
     ORDER BY tournament_id, token_address
   `);
 
@@ -543,6 +554,33 @@ async function fetchPrizeAggregation(
       totalAmount: row.total_amount,
       nftCount: row.nft_count,
     });
+  }
+  return map;
+}
+
+// ─── Paid places helper ─────────────────────────────────────────────────────
+
+async function fetchPaidPlaces(
+  tournamentIds: bigint[],
+): Promise<Map<string, number>> {
+  if (tournamentIds.length === 0) return new Map();
+
+  const idList = sql.join(tournamentIds.map(id => sql`${id}`), sql`, `);
+  const rows = await db.execute(sql`
+    SELECT tournament_id, COUNT(DISTINCT pos)::int AS paid_places
+    FROM (
+      SELECT tournament_id, payout_position AS pos FROM prizes
+      WHERE tournament_id IN (${idList}) AND payout_position > 0
+      UNION
+      SELECT tournament_id, generate_series(1, distribution_count) AS pos FROM prizes
+      WHERE tournament_id IN (${idList}) AND payout_position = 0 AND distribution_count > 0
+    ) t
+    GROUP BY tournament_id
+  `);
+
+  const map = new Map<string, number>();
+  for (const row of rows.rows as Array<{ tournament_id: string; paid_places: number }>) {
+    map.set(row.tournament_id.toString(), row.paid_places);
   }
   return map;
 }
@@ -612,7 +650,12 @@ function serializePrize(p: typeof prizes.$inferSelect) {
     tournamentId: p.tournamentId.toString(),
     payoutPosition: p.payoutPosition,
     tokenAddress: p.tokenAddress,
-    tokenType: p.tokenType,
+    tokenType: p.tokenTypeName,
+    amount: p.amount,
+    tokenId: p.tokenId,
+    distributionType: p.distributionType,
+    distributionWeight: p.distributionWeight,
+    distributionCount: p.distributionCount,
     sponsorAddress: p.sponsorAddress,
     createdAtBlock: p.createdAtBlock?.toString() ?? null,
     txHash: p.txHash,

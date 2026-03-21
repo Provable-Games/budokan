@@ -218,7 +218,12 @@ export interface DecodedPrizeAdded {
   prizeId: bigint;
   payoutPosition: number;
   tokenAddress: string;
-  tokenType: Record<string, unknown>;
+  tokenTypeName: string;
+  amount: string | null;
+  tokenId: string | null;
+  distributionType: string | null;
+  distributionWeight: number | null;
+  distributionCount: number | null;
   sponsorAddress: string;
 }
 
@@ -296,7 +301,8 @@ function decodeOptionByteArray(
   idx: number,
 ): { value: string | null; consumed: number } {
   const variant = Number(hexToBigInt(data[idx]));
-  if (variant === 0) {
+  // Cairo serde: Option::Some = 0, Option::None = 1
+  if (variant === 1) {
     return { value: null, consumed: 1 };
   }
   const byteArray = decodeByteArray(data, idx + 1);
@@ -305,14 +311,15 @@ function decodeOptionByteArray(
 
 /**
  * Decode an Option<ContractAddress> from data starting at idx.
- * Option variant (0=None, 1=Some), then felt252 if Some.
+ * Cairo serde: Option::Some = 0, Option::None = 1.
  */
 function decodeOptionAddress(
   data: readonly string[],
   idx: number,
 ): { value: string | null; consumed: number } {
   const variant = Number(hexToBigInt(data[idx]));
-  if (variant === 0) {
+  // Cairo serde: Option::Some = 0, Option::None = 1
+  if (variant === 1) {
     return { value: null, consumed: 1 };
   }
   return { value: feltToHex(data[idx + 1]), consumed: 2 };
@@ -423,7 +430,8 @@ function decodeOptionEntryFee(
   idx: number,
 ): { value: Record<string, unknown> | null; consumed: number } {
   const variant = Number(hexToBigInt(data[idx]));
-  if (variant === 0) {
+  // Cairo serde: Option::Some = 0, Option::None = 1
+  if (variant === 1) {
     return { value: null, consumed: 1 };
   }
 
@@ -485,7 +493,8 @@ function decodeOptionEntryRequirement(
   idx: number,
 ): { value: Record<string, unknown> | null; consumed: number } {
   const variant = Number(hexToBigInt(data[idx]));
-  if (variant === 0) {
+  // Cairo serde: Option::Some = 0, Option::None = 1
+  if (variant === 1) {
     return { value: null, consumed: 1 };
   }
 
@@ -573,20 +582,22 @@ function decodeTokenTypeData(
     consumed++;
 
     // distribution: Option<Distribution>
+    // Cairo Serde: Option::Some = variant 0, Option::None = variant 1
     const distVariant = Number(hexToBigInt(data[idx + consumed]));
     consumed++;
     let distribution: Record<string, unknown> | null = null;
-    if (distVariant === 1) {
+    if (distVariant === 0) {
       const dist = decodeDistribution(data, idx + consumed);
       distribution = dist.value;
       consumed += dist.consumed;
     }
 
     // distribution_count: Option<u32>
+    // Cairo Serde: Option::Some = variant 0, Option::None = variant 1
     const dcVariant = Number(hexToBigInt(data[idx + consumed]));
     consumed++;
     let distributionCount: number | null = null;
-    if (dcVariant === 1) {
+    if (dcVariant === 0) {
       distributionCount = Number(hexToBigInt(data[idx + consumed]));
       consumed++;
     }
@@ -928,6 +939,10 @@ export function decodePrizeAdded(
   const tokenType = decodeTokenTypeData(data, idx);
   idx += tokenType.consumed;
 
+  // Flatten token type data into individual fields
+  const tt = tokenType.value;
+  const dist = tt.distribution as Record<string, unknown> | null;
+
   // sponsor_address: ContractAddress
   const sponsorAddress = feltToHex(data[idx]);
 
@@ -936,7 +951,12 @@ export function decodePrizeAdded(
     prizeId,
     payoutPosition,
     tokenAddress,
-    tokenType: tokenType.value,
+    tokenTypeName: tt.type as string,
+    amount: (tt.type as string) === "erc20" ? (tt.amount as string) : null,
+    tokenId: (tt.type as string) === "erc721" ? (tt.id as string) : null,
+    distributionType: dist ? (dist.type as string) : null,
+    distributionWeight: dist?.weight != null ? Number(dist.weight) : null,
+    distributionCount: tt.distribution_count != null ? Number(tt.distribution_count) : null,
     sponsorAddress,
   };
 }
