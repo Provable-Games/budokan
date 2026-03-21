@@ -11,7 +11,7 @@ import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 import { useAccount } from "@starknet-react/core";
 import { RewardClaim } from "@/generated/models.gen";
 import type { Tournament } from "@provable-games/budokan-sdk";
-import { feltToString, formatNumber, getOrdinalSuffix, indexAddress } from "@/lib/utils";
+import { formatNumber, getOrdinalSuffix, indexAddress } from "@/lib/utils";
 import {
   extractEntryFeePrizes,
   getClaimablePrizes,
@@ -128,7 +128,7 @@ export function ClaimPrizesDialog({
       if (claimableRewardTypes.length > 20) {
         await claimPrizesBatched(
           tournamentModel?.id,
-          feltToString(tournamentModel?.metadata.name),
+          tournamentModel?.name ?? "",
           claimableRewardTypes,
           20, // batch size
           (current, total) => setBatchProgress({ current, total })
@@ -136,7 +136,7 @@ export function ClaimPrizesDialog({
       } else {
         await claimPrizes(
           tournamentModel?.id,
-          feltToString(tournamentModel?.metadata.name),
+          tournamentModel?.name ?? "",
           claimableRewardTypes
         );
       }
