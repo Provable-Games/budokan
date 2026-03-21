@@ -387,6 +387,9 @@ app.get("/:id/reward-claims", async (c) => {
 });
 
 // ─── GET /:id/reward-claims/summary ── Reward claims summary ────────────────
+//
+// Computes total claimable rewards from tournament entry fees + sponsored
+// prizes, then subtracts actual claims from the reward_claims table.
 app.get("/:id/reward-claims/summary", async (c) => {
   try {
     const tournamentId = parseTournamentId(c.req.param("id"));
@@ -394,27 +397,58 @@ app.get("/:id/reward-claims/summary", async (c) => {
       return c.json({ error: "Invalid tournament ID" }, 400);
     }
 
-    const where = eq(rewardClaims.tournamentId, tournamentId);
+    const tid = eq(tournaments.tournamentId, tournamentId);
 
-    const [totalResult, claimedResult] = await Promise.all([
+    const [tournamentRows, prizeRows, claimedResult] = await Promise.all([
+      db
+        .select({
+          entryFee: tournaments.entryFee,
+          entryCount: tournaments.entryCount,
+        })
+        .from(tournaments)
+        .where(tid)
+        .limit(1),
+      db
+        .select({
+          distributionCount: prizes.distributionCount,
+        })
+        .from(prizes)
+        .where(eq(prizes.tournamentId, tournamentId)),
       db
         .select({ count: sql<number>`count(*)::int` })
         .from(rewardClaims)
-        .where(where),
-      db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(rewardClaims)
-        .where(and(where, eq(rewardClaims.claimed, true))),
+        .where(eq(rewardClaims.tournamentId, tournamentId)),
     ]);
 
-    const totalPrizes = totalResult[0]?.count ?? 0;
+    // Count entry fee prize slots
+    let entryFeePrizeCount = 0;
+    const t = tournamentRows[0];
+    if (t) {
+      const ef = t.entryFee as Record<string, unknown> | null;
+      const entryCount = t.entryCount ?? 0;
+      if (ef && Number(ef.amount ?? 0) > 0 && entryCount > 0) {
+        const distCount = Number(ef.distribution_count ?? 0);
+        if (distCount > 0) entryFeePrizeCount += distCount;
+        if (Number(ef.tournament_creator_share ?? 0) > 0) entryFeePrizeCount++;
+        if (Number(ef.game_creator_share ?? 0) > 0) entryFeePrizeCount++;
+      }
+    }
+
+    // Count sponsored prize slots (distributed prizes expand to N positions)
+    let sponsoredPrizeCount = 0;
+    for (const p of prizeRows) {
+      const dc = p.distributionCount ?? 0;
+      sponsoredPrizeCount += dc > 0 ? dc : 1;
+    }
+
+    const totalPrizes = entryFeePrizeCount + sponsoredPrizeCount;
     const totalClaimed = claimedResult[0]?.count ?? 0;
 
     return c.json({
       data: {
         totalPrizes,
         totalClaimed,
-        totalUnclaimed: totalPrizes - totalClaimed,
+        totalUnclaimed: Math.max(0, totalPrizes - totalClaimed),
       },
     });
   } catch (err) {
