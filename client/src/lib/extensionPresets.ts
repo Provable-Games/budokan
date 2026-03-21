@@ -28,4 +28,14 @@ export const PRESET_EXTENSIONS: Record<string, ExtensionPreset> = {
     description: "Validates entry based on Opus Trove collateral",
     isPreset: true,
   },
+  zk_passport: {
+    name: "ZK Passport",
+    description: "Validates entry using zero-knowledge passport proofs",
+    isPreset: true,
+  },
+  governance: {
+    name: "Governance",
+    description: "Validates entry based on governance participation or token balance",
+    isPreset: true,
+  },
 };

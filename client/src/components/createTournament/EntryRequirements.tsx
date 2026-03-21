@@ -55,6 +55,8 @@ import {
 import { SnapshotConfig } from "./extensions/SnapshotConfig";
 import { ERC20BalanceConfig } from "./extensions/ERC20BalanceConfig";
 import { OpusTrovesConfig } from "./extensions/OpusTrovesConfig";
+import { ZkPassportConfig } from "./extensions/ZkPassportConfig";
+import { GovernanceConfig } from "./extensions/GovernanceConfig";
 import { CustomExtensionConfig } from "./extensions/CustomExtensionConfig";
 
 const EntryRequirements = ({ form }: StepProps) => {
@@ -142,17 +144,16 @@ const EntryRequirements = ({ form }: StepProps) => {
           selectedChainConfig?.chainId ?? ""
         );
 
-        // Check if it's ERC20 balance validator
         const normalizedAddress = indexAddress(extensionAddress);
         if (normalizedAddress === indexAddress(extensionAddresses.erc20BalanceValidator ?? "")) {
           setSelectedPreset("erc20_balance");
-        } else if (
-          normalizedAddress === indexAddress(extensionAddresses.opusTrovesValidator ?? "")
-        ) {
-          // Check if it's Opus Troves validator
+        } else if (normalizedAddress === indexAddress(extensionAddresses.opusTrovesValidator ?? "")) {
           setSelectedPreset("opus_troves");
+        } else if (normalizedAddress === indexAddress(extensionAddresses.zkPassportValidator ?? "")) {
+          setSelectedPreset("zk_passport");
+        } else if (normalizedAddress === indexAddress(extensionAddresses.governanceValidator ?? "")) {
+          setSelectedPreset("governance");
         } else {
-          // Custom contract
           setSelectedPreset(null);
         }
       } else if (extensionConfig && !extensionAddress) {
@@ -230,7 +231,6 @@ const EntryRequirements = ({ form }: StepProps) => {
                         Whitelist{" "}
                         <span className="hidden sm:inline">Addresses</span>
                       </Button>
-                      {/* Tournament and Extension options temporarily disabled
                       <Button
                         type="button"
                         variant={
@@ -242,7 +242,6 @@ const EntryRequirements = ({ form }: StepProps) => {
                       >
                         Extension
                       </Button>
-                      */}
                     </div>
                   </div>
                   <div className="hidden sm:block w-0.5 h-full bg-brand/25" />
@@ -1192,6 +1191,16 @@ const EntryRequirements = ({ form }: StepProps) => {
                           )}
                           extensionError={extensionError}
                         />
+                      )}
+
+                      {/* ZK Passport Preset Configuration */}
+                      {selectedPreset === "zk_passport" && (
+                        <ZkPassportConfig extensionError={extensionError} />
+                      )}
+
+                      {/* Governance Preset Configuration */}
+                      {selectedPreset === "governance" && (
+                        <GovernanceConfig extensionError={extensionError} />
                       )}
 
                       {/* Custom Contract Configuration */}
