@@ -53,7 +53,21 @@ export const PRESET_EXTENSIONS: Record<string, ExtensionConfig> = {
     name: "Opus Troves",
     description: "Validates entry based on Opus Trove collateral",
     proofType: "custom",
-    extractProof: () => [], // No proof required
+    extractProof: () => [],
+    isPreset: true,
+  },
+  zk_passport: {
+    name: "ZK Passport",
+    description: "Validates entry using zero-knowledge passport proofs",
+    proofType: "custom",
+    extractProof: () => [],
+    isPreset: true,
+  },
+  governance: {
+    name: "Governance",
+    description: "Validates entry based on governance participation or token balance",
+    proofType: "custom",
+    extractProof: () => [],
     isPreset: true,
   },
 };
