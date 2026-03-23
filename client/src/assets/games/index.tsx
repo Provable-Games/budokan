@@ -1,5 +1,5 @@
-import { ChainId } from "@/dojo/setup/networks";
-import { useDojo } from "@/context/dojo";
+import { ChainId } from "@/chain/setup/networks";
+import { useChainConfig } from "@/context/chain";
 import lsLogo from "./ls-logo.png";
 
 export interface Game {
@@ -15,6 +15,7 @@ export interface Game {
   minEntryFeeUsd?: number;
   defaultEntryFeeToken?: string;
   defaultGameFeePercentage?: number;
+  averageGasCostUsd?: number;
 }
 
 // STRK token address (same on mainnet and sepolia)
@@ -23,18 +24,20 @@ const STRK_ADDRESS =
 
 export const getGameDefaults = (
   gameAddress: string,
-  chainId: string
+  chainId: string,
 ): {
   minEntryFeeUsd: number;
   defaultEntryFeeToken: string;
   defaultGameFeePercentage: number;
+  averageGasCostUsd: number | undefined;
 } => {
   const games = getGamesForChain(chainId);
   const game = games.find((g) => g.contract_address === gameAddress);
   return {
-    minEntryFeeUsd: game?.minEntryFeeUsd ?? 1,
+    minEntryFeeUsd: game?.minEntryFeeUsd ?? 0.25,
     defaultEntryFeeToken: game?.defaultEntryFeeToken ?? STRK_ADDRESS,
     defaultGameFeePercentage: game?.defaultGameFeePercentage ?? 1,
+    averageGasCostUsd: game?.averageGasCostUsd,
   };
 };
 
@@ -89,7 +92,7 @@ export const getGamesForChain = (chainId: string): Game[] => {
         image: "https://darkshuffle.dev/favicon.svg",
         url: "https://darkshuffle.dev",
         controllerOnly: true,
-        minEntryFeeUsd: 1,
+        minEntryFeeUsd: 0.25,
         defaultEntryFeeToken: STRK_ADDRESS,
       },
       {
@@ -100,7 +103,7 @@ export const getGamesForChain = (chainId: string): Game[] => {
         url: "https://lootsurvivor.io/",
         playUrl: "https://lootsurvivor.io/survivor/play?id=",
         controllerOnly: true,
-        minEntryFeeUsd: 1,
+        minEntryFeeUsd: 0.25,
         defaultEntryFeeToken: STRK_ADDRESS,
       },
       {
@@ -110,7 +113,17 @@ export const getGamesForChain = (chainId: string): Game[] => {
         url: "https://nums-blond.vercel.app/",
         playUrl: "https://nums-blond.vercel.app/",
         controllerOnly: true,
-        minEntryFeeUsd: 1,
+        minEntryFeeUsd: 0.25,
+        defaultEntryFeeToken: STRK_ADDRESS,
+      },
+      {
+        contract_address:
+          "0x70ce27ec32c1e70b9034d63eb64dd35243564d2b7c96414a4d46b1d715527d8",
+        name: "Fun Factory",
+        url: "https://funfactory.gg",
+        playUrl: "https://funfactory.gg/tokens/{tokenId}/play",
+        controllerOnly: true,
+        minEntryFeeUsd: 0.25,
         defaultEntryFeeToken: STRK_ADDRESS,
       },
       {
@@ -120,7 +133,7 @@ export const getGamesForChain = (chainId: string): Game[] => {
         url: "https://localhost:5173/",
         playUrl: "https://localhost:5173/play/",
         controllerOnly: true,
-        minEntryFeeUsd: 1,
+        minEntryFeeUsd: 0.25,
         defaultEntryFeeToken: STRK_ADDRESS,
       },
     ];
@@ -135,7 +148,7 @@ export const getGamesForChain = (chainId: string): Game[] => {
         playUrl: "https://darkshuffle.io/play/",
         controllerOnly: true,
         disabled: true, // Temporarily disabled
-        minEntryFeeUsd: 1,
+        minEntryFeeUsd: 0.25,
         defaultEntryFeeToken: STRK_ADDRESS,
       },
       {
@@ -148,9 +161,10 @@ export const getGamesForChain = (chainId: string): Game[] => {
         controllerOnly: true,
         watchLink: "https://lootsurvivor.io/budokan/watch?id=",
         replayLink: "https://lootsurvivor.io/budokan/replay?id=",
-        minEntryFeeUsd: 1,
+        minEntryFeeUsd: 0.25,
         defaultEntryFeeToken: STRK_ADDRESS,
         defaultGameFeePercentage: 5,
+        averageGasCostUsd: 0.5,
       },
       {
         contract_address:
@@ -160,7 +174,7 @@ export const getGamesForChain = (chainId: string): Game[] => {
         playUrl: "https://dopewars-kappa.vercel.app/",
         controllerOnly: true,
         disabled: true, // Temporarily disabled
-        minEntryFeeUsd: 1,
+        minEntryFeeUsd: 0.25,
         defaultEntryFeeToken: STRK_ADDRESS,
       },
       {
@@ -172,7 +186,7 @@ export const getGamesForChain = (chainId: string): Game[] => {
         playUrl: "https://app.zkube.xyz/play/",
         controllerOnly: true,
         disabled: true, // Temporarily disabled
-        minEntryFeeUsd: 1,
+        minEntryFeeUsd: 0.25,
         defaultEntryFeeToken: STRK_ADDRESS,
       },
       {
@@ -183,7 +197,7 @@ export const getGamesForChain = (chainId: string): Game[] => {
         playUrl: "https://nums.gg/",
         controllerOnly: true,
         disabled: true, // Temporarily disabled
-        minEntryFeeUsd: 1,
+        minEntryFeeUsd: 0.25,
         defaultEntryFeeToken: STRK_ADDRESS,
       },
     ];
@@ -195,7 +209,7 @@ export const getGamesForChain = (chainId: string): Game[] => {
         name: "Loot Survivor",
         image: lsLogo,
         url: "https://lootsurvivor.io",
-        minEntryFeeUsd: 1,
+        minEntryFeeUsd: 0.25,
         defaultEntryFeeToken: STRK_ADDRESS,
         defaultGameFeePercentage: 5,
       },
@@ -205,7 +219,7 @@ export const getGamesForChain = (chainId: string): Game[] => {
         name: "Dark Shuffle",
         image: "https://darkshuffle.io/favicon.svg",
         url: "https://darkshuffle.io",
-        minEntryFeeUsd: 1,
+        minEntryFeeUsd: 0.25,
         defaultEntryFeeToken: STRK_ADDRESS,
       },
       {
@@ -214,7 +228,7 @@ export const getGamesForChain = (chainId: string): Game[] => {
         name: "zKube",
         image: "https://zkube.io/favicon.svg",
         url: "https://zkube.io",
-        minEntryFeeUsd: 1,
+        minEntryFeeUsd: 0.25,
         defaultEntryFeeToken: STRK_ADDRESS,
       },
       {
@@ -223,7 +237,7 @@ export const getGamesForChain = (chainId: string): Game[] => {
         name: "Dope Wars",
         image: "https://dopewars.gg/favicon.ico",
         url: "https://dopewars.gg",
-        minEntryFeeUsd: 1,
+        minEntryFeeUsd: 0.25,
         defaultEntryFeeToken: STRK_ADDRESS,
       },
       {
@@ -232,7 +246,7 @@ export const getGamesForChain = (chainId: string): Game[] => {
         name: "Jokers of Neon",
         image: "https://jokersofneon.com/icon.png",
         url: "https://jokersofneon.com",
-        minEntryFeeUsd: 1,
+        minEntryFeeUsd: 0.25,
         defaultEntryFeeToken: STRK_ADDRESS,
       },
     ];
@@ -248,6 +262,6 @@ export const getGamesForChain = (chainId: string): Game[] => {
 };
 
 export const getGames = (): Game[] => {
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
   return getGamesForChain(selectedChainConfig.chainId ?? "");
 };

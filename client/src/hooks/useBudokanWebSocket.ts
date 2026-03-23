@@ -1,7 +1,7 @@
 /**
  * WebSocket subscription hooks wrapping budokan-sdk.
  *
- * These replace the Dojo SDK subscription hooks (useSubscribeTournamentsQuery,
+ * These replace the old subscription hooks (useSubscribeTournamentsQuery,
  * useSubscribeTournamentQuery, useSubscribePrizesQuery, useSubscribeMetricsQuery).
  */
 import { useEffect, useState } from "react";

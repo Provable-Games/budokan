@@ -4,21 +4,14 @@
  * These hooks provide the same { data, loading, error, refetch } interface
  * that the old useSqlQueries hooks used, making consumer migration seamless.
  */
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useBudokanClient } from "@/context/budokan";
 import type {
-  Tournament as ApiTournament,
+  Tournament,
   TournamentListParams,
   Phase,
 } from "@provable-games/budokan-sdk";
-import {
-  mapApiTournamentToModel,
-  mapApiRegistrationToModel,
-  mapApiLeaderboardToModel,
-  mapApiPrizeToModel,
-  mapApiPlatformStatsToModel,
-} from "@/lib/utils/apiMappers";
-import type { Tournament } from "@/generated/models.gen";
+// apiMappers removed — hooks now return SDK types directly
 
 // ─── Tab-to-phase mapping ─────────────────────────────────────────────────
 
@@ -44,12 +37,15 @@ function useAsyncQuery<T>(
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const requestIdRef = { current: 0 };
+  const requestIdRef = useRef(0);
+  const fetcherRef = useRef(fetcher);
+  fetcherRef.current = fetcher;
 
   const depsKey = JSON.stringify(deps);
 
   const fetch = useCallback(() => {
-    if (!fetcher) {
+    const currentFetcher = fetcherRef.current;
+    if (!currentFetcher) {
       setData(null);
       setLoading(false);
       setError(null);
@@ -58,14 +54,14 @@ function useAsyncQuery<T>(
     setLoading(true);
     setError(null);
     const id = ++requestIdRef.current;
-    fetcher()
+    currentFetcher()
       .then((result) => {
         if (id === requestIdRef.current) setData(result);
       })
       .catch((err) => {
         if (id === requestIdRef.current) {
           setError(err instanceof Error ? err.message : "Unknown error");
-          setData(null);
+          // Preserve last successful data on refetch errors
         }
       })
       .finally(() => {
@@ -156,11 +152,7 @@ export function useGetMyLiveTournamentsCount({
 
 // ─── Tournament Listing Hooks ──────────────────────────────────────────────
 
-type MappedTournament = Tournament & {
-  entry_count: number;
-  prize_count: number;
-  submission_count: number;
-};
+type MappedTournament = Tournament;
 
 interface TournamentListResult {
   data: MappedTournament[];
@@ -204,6 +196,7 @@ export function useGetTournaments({
       offset,
       excludeIds,
       whitelistedExtensions,
+      includePrizeSummary: "summary" as const,
     }),
     [phase, gameAddress, sort, limit, offset, JSON.stringify(excludeIds), JSON.stringify(whitelistedExtensions)],
   );
@@ -217,7 +210,7 @@ export function useGetTournaments({
     client
       .getTournaments(params)
       .then((result) => {
-        setData(result.data.map(mapApiTournamentToModel));
+        setData(result.data);
         setTotal(result.total ?? result.data.length);
       })
       .catch((err) => {
@@ -262,7 +255,7 @@ export function useGetMyTournaments({
       .getPlayerTournaments(playerAddress, { phase, gameTokenIds, limit, offset })
       .then((result) => {
         // PlayerTournament includes both registration and tournament data
-        const tournaments = result.data.map((pt) => mapApiTournamentToModel(pt as unknown as ApiTournament));
+        const tournaments = result.data;
         setData(tournaments);
         setTotal(result.total ?? result.data.length);
       })
@@ -285,7 +278,7 @@ export function useGetTournament(tournamentId?: string) {
   const client = useBudokanClient();
   return useAsyncQuery(
     tournamentId
-      ? () => client.getTournament(tournamentId).then(mapApiTournamentToModel)
+      ? () => client.getTournament(tournamentId)
       : null,
     [tournamentId],
   );
@@ -297,7 +290,7 @@ export function useGetTournamentLeaderboard(tournamentId?: string) {
     tournamentId
       ? () =>
           client.getTournamentLeaderboard(tournamentId).then((entries) =>
-            mapApiLeaderboardToModel(tournamentId, entries),
+            entries,
           )
       : null,
     [tournamentId],
@@ -314,7 +307,7 @@ export function useGetTournamentRegistrations(
       ? () =>
           client
             .getTournamentRegistrations(tournamentId, params)
-            .then((result) => result.data.map(mapApiRegistrationToModel))
+            .then((result) => result.data)
       : null,
     [tournamentId, JSON.stringify(params)],
   );
@@ -324,7 +317,7 @@ export function useGetTournamentPrizes(tournamentId?: string) {
   const client = useBudokanClient();
   return useAsyncQuery(
     tournamentId
-      ? () => client.getTournamentPrizes(tournamentId).then((prizes) => prizes.map(mapApiPrizeToModel))
+      ? () => client.getTournamentPrizes(tournamentId)
       : null,
     [tournamentId],
   );
@@ -366,15 +359,12 @@ export function useGetTournamentPrizeAggregation(tournamentId?: string) {
             .getTournamentPrizes(tournamentId)
             .then((prizes) => {
               // Aggregate prizes by token_address + token_type client-side
-              const aggregation = new Map<string, { tokenAddress: string; tokenType: unknown; totalAmount: bigint; nftCount: number }>();
+              const aggregation = new Map<string, { tokenAddress: string; tokenType: string; totalAmount: bigint; nftCount: number }>();
               for (const p of prizes) {
-                const key = p.tokenAddress;
+                const key = `${p.tokenAddress}_${p.tokenType}`;
                 const existing = aggregation.get(key);
-                const tokenType = p.tokenType as Record<string, unknown> | null;
-                const isErc20 = tokenType && "erc20" in tokenType;
-                const amount = isErc20
-                  ? BigInt((tokenType!.erc20 as Record<string, string>)?.amount ?? "0")
-                  : 0n;
+                const isErc20 = p.tokenType === "erc20";
+                const amount = isErc20 ? BigInt(p.amount ?? "0") : 0n;
 
                 if (existing) {
                   existing.totalAmount += amount;
@@ -411,7 +401,7 @@ export function useGetPlatformStats({ active = false }: { active?: boolean }) {
 export function useGetPlatformMetrics({ active = false }: { active?: boolean }) {
   const client = useBudokanClient();
   return useAsyncQuery(
-    active ? () => client.getActivityStats().then(mapApiPlatformStatsToModel) : null,
+    active ? () => client.getActivityStats() : null,
     [active],
   );
 }

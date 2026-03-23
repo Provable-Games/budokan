@@ -1,24 +1,38 @@
 import { HoverCardContent } from "@/components/ui/hover-card";
-import { Tournament } from "@/generated/models.gen";
+import type { Tournament } from "@provable-games/budokan-sdk";
 import { useMemo } from "react";
+import { useTokenUri } from "@provable-games/denshokan-sdk/react";
 
 interface EntryInfoProps {
   entryNumber: string;
-  tokenMetadata: string;
+  tokenId: string;
   tournamentModel: Tournament;
 }
 
 const EntryInfo = ({
   entryNumber,
-  tokenMetadata,
+  tokenId,
   tournamentModel,
 }: EntryInfoProps) => {
   const settings =
-    tournamentModel?.game_config?.settings_id === 0 ? "Default" : "Custom";
-  const parsedImage = useMemo(
-    () => (tokenMetadata ? JSON.parse(tokenMetadata)?.image : ""),
-    [tokenMetadata]
-  );
+    (tournamentModel as any)?.gameConfig?.settingsId === 0
+      ? "Default"
+      : "Custom";
+
+  // Fetch token URI on demand (only when this HoverCard content mounts)
+  const { data: tokenUri, isLoading } = useTokenUri(tokenId);
+
+  const parsedImage = useMemo(() => {
+    if (!tokenUri) return "";
+    try {
+      const match = tokenUri.match(/^data:application\/json;base64,(.+)$/);
+      const json = match ? atob(match[1]) : tokenUri;
+      return JSON.parse(json)?.image ?? "";
+    } catch {
+      return "";
+    }
+  }, [tokenUri]);
+
   return (
     <HoverCardContent
       className="w-80 py-4 px-0 text-sm z-50"
@@ -36,12 +50,16 @@ const EntryInfo = ({
           </div>
         </div>
         <div className="w-full h-0.5 bg-brand/50" />
-        {tokenMetadata !== "" ? (
-          <img
-            src={parsedImage}
-            alt="metadata"
+        {isLoading ? (
+          <span className="text-center text-neutral">Loading...</span>
+        ) : parsedImage ? (
+          <object
+            data={parsedImage}
+            type="image/svg+xml"
             className="w-full h-auto px-4"
-          />
+          >
+            <img src={parsedImage} alt="metadata" className="w-full h-auto px-4" />
+          </object>
         ) : (
           <span className="text-center text-neutral">No Token URI</span>
         )}

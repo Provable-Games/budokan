@@ -6,16 +6,18 @@ import {
   DialogTitle,
   DialogClose,
 } from "@/components/ui/dialog";
-import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
+import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 import { useAccount } from "@starknet-react/core";
-import { Leaderboard, Tournament } from "@/generated/models.gen";
-import { padAddress, feltToString, getOrdinalSuffix } from "@/lib/utils";
-import { useConnectToSelectedChain } from "@/dojo/hooks/useChain";
-import { useGameTokens } from "@/hooks/useDenshokanQueries";
+import { Leaderboard } from "@/generated/models.gen";
+import type { Tournament } from "@provable-games/budokan-sdk";
+import { getOrdinalSuffix } from "@/lib/utils";
+import { addAddressPadding } from "starknet";
+import { useConnectToSelectedChain } from "@/chain/hooks/useChain";
+import { useTokens } from "@provable-games/denshokan-sdk/react";
 import { getSubmittableScores } from "@/lib/utils/formatting";
 import { useState, useMemo } from "react";
 import { LoadingSpinner } from "@/components/ui/spinner";
-import { useDojo } from "@/context/dojo";
+import { useChainConfig } from "@/context/chain";
 import { useGetTournamentRegistrations } from "@/hooks/useBudokanQueries";
 
 interface SubmitScoresDialogProps {
@@ -34,7 +36,7 @@ export function SubmitScoresDialog({
   const { address } = useAccount();
   const { connect } = useConnectToSelectedChain();
   const { submitScores, submitScoresBatched } = useSystemCalls();
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [batchProgress, setBatchProgress] = useState<{
     current: number;
@@ -43,36 +45,30 @@ export function SubmitScoresDialog({
   const tournamentAddress = selectedChainConfig.budokanAddress!;
 
   // Calculate leaderboard size from entry fee distribution count, or default to 10
-  const leaderboardSize = tournamentModel?.entry_fee && 'Some' in tournamentModel.entry_fee && Number(tournamentModel.entry_fee.Some?.distribution_count ?? 0) > 0
-    ? Number(tournamentModel.entry_fee.Some!.distribution_count)
+  const entryFee = (tournamentModel as any)?.entryFee;
+  const leaderboardSize = entryFee && Number(entryFee.distributionCount ?? 0) > 0
+    ? Number(entryFee.distributionCount)
     : 10;
 
   // Fetch extra games beyond leaderboard size to account for banned entries
   const fetchSize = (leaderboardSize || 10) + 10;
 
-  const { data: games } = useGameTokens({
-    owner: padAddress(tournamentAddress),
-    gameId: Number(tournamentModel?.id) ?? 0,
-    limit: fetchSize,
-    active: !!tournamentModel?.id,
-  });
+  const { data: tokensResult } = useTokens(
+    tournamentModel?.id
+      ? {
+          contextId: Number(tournamentModel.id),
+          minterAddress: addAddressPadding(tournamentAddress),
+          sort: { field: "score", direction: "desc" },
+          limit: fetchSize,
+        }
+      : undefined,
+  );
 
-  // Sort games by score (desc) and then by token_id (asc) for equal scores
-  const sortedGames = useMemo(() => {
-    if (!games) return [];
-    return [...games].sort((a, b) => {
-      // First sort by score (descending)
-      const scoreDiff = Number(b.score) - Number(a.score);
-      if (scoreDiff !== 0) return scoreDiff;
-
-      // If scores are equal, sort by token_id (ascending - lower token_id = higher position)
-      return Number(a.token_id) - Number(b.token_id);
-    });
-  }, [games]);
+  const sortedGames = tokensResult?.data ?? [];
 
   // Fetch game IDs for registration data
   const gameIds = useMemo(
-    () => sortedGames?.map((game) => Number(game.token_id)) || [],
+    () => sortedGames?.map((game) => Number(game.tokenId)) || [],
     [sortedGames]
   );
 
@@ -90,10 +86,10 @@ export function SubmitScoresDialog({
 
     const filtered = sortedGames.filter((game) => {
       const registration = registrants.find(
-        (reg) => Number(reg.game_token_id) === Number(game.token_id)
+        (reg) => Number(reg.gameTokenId) === Number(game.tokenId)
       );
       // Filter out if banned
-      return !registration?.is_banned;
+      return !registration?.isBanned;
     });
 
     // Take only top leaderboardSize entries to ensure correct number of submissions
@@ -113,7 +109,7 @@ export function SubmitScoresDialog({
       if (submittableScores.length > 10) {
         await submitScoresBatched(
           tournamentModel?.id,
-          feltToString(tournamentModel?.metadata.name),
+          tournamentModel?.name ?? "",
           submittableScores,
           10, // batch size
           (current, total) => setBatchProgress({ current, total })
@@ -121,7 +117,7 @@ export function SubmitScoresDialog({
       } else {
         await submitScores(
           tournamentModel?.id,
-          feltToString(tournamentModel?.metadata.name),
+          tournamentModel?.name ?? "",
           submittableScores
         );
       }
@@ -171,7 +167,7 @@ export function SubmitScoresDialog({
                   {index + 1}
                   {getOrdinalSuffix(index + 1)}
                 </span>
-                <span>{game.player_name}</span>
+                <span>{game.playerName}</span>
                 <p
                   className="flex-1 h-[2px] bg-repeat-x"
                   style={{

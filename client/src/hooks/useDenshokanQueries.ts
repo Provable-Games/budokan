@@ -4,7 +4,7 @@
  * These hooks replace the metagame-sdk hooks (useMiniGames, useGameTokens,
  * useSettings, etc.) used throughout the client.
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useDenshokanClient } from "@/context/denshokan";
 import type { GameTokenData } from "@/lib/types";
 
@@ -24,12 +24,15 @@ function useAsyncQuery<T>(
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const requestIdRef = { current: 0 };
+  const requestIdRef = useRef(0);
+  const fetcherRef = useRef(fetcher);
+  fetcherRef.current = fetcher;
 
   const depsKey = JSON.stringify(deps);
 
   const fetch = useCallback(() => {
-    if (!fetcher) {
+    const currentFetcher = fetcherRef.current;
+    if (!currentFetcher) {
       setData(null);
       setLoading(false);
       setError(null);
@@ -38,14 +41,14 @@ function useAsyncQuery<T>(
     setLoading(true);
     setError(null);
     const id = ++requestIdRef.current;
-    fetcher()
+    currentFetcher()
       .then((result) => {
         if (id === requestIdRef.current) setData(result);
       })
       .catch((err: unknown) => {
         if (id === requestIdRef.current) {
           setError(err instanceof Error ? err.message : "Unknown error");
-          setData(null);
+          // Preserve last successful data on refetch errors
         }
       })
       .finally(() => {
@@ -108,14 +111,13 @@ export function useGameTokens({
     active && owner
       ? async () => {
           const result = await client.getPlayerTokens(owner, { gameId, limit, offset });
-          // Map SDK Token shape (camelCase) to GameTokenData shape (snake_case)
           return result.data.map((token) => ({
-            token_id: token.tokenId,
-            game_id: token.gameId,
+            tokenId: token.tokenId,
+            gameId: token.gameId,
             owner: token.owner,
-            player_name: token.playerName,
+            playerName: token.playerName,
             score: token.score,
-            game_over: token.gameOver,
+            gameOver: token.gameOver,
             lifecycle: {
               start: BigInt(token.startDelay),
               end: BigInt(token.endDelay),

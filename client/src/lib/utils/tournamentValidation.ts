@@ -3,7 +3,6 @@
  */
 
 import { TournamentFormData } from "@/containers/CreateTournament";
-import { Tournament } from "@/generated/models.gen";
 
 export interface ValidationResult {
   isValid: boolean;
@@ -79,21 +78,18 @@ export function validateTournamentCreation(
 }
 
 /**
- * Validates adding prizes to an existing tournament
+ * Validates adding prizes to an existing tournament (SDK data shape).
  */
 export function validatePrizeAddition(
-  tournament: Tournament,
+  tournament: Record<string, unknown>,
   additionalPrizeValueUSD: number,
   existingPrizeValueUSD: number,
   config?: PrizeValidationConfig
 ): ValidationResult {
   const totalPrizeValueUSD = additionalPrizeValueUSD + existingPrizeValueUSD;
 
-  // Check if tournament has entry fee
-  const hasEntryFee = tournament.entry_fee.isSome();
-
-  // Check if tournament has gating
-  const hasGating = tournament.entry_requirement.isSome();
+  const hasEntryFee = !!tournament.entryFee;
+  const hasGating = !!tournament.entryRequirement;
 
   return validateTournamentEntryBarriers(
     totalPrizeValueUSD,

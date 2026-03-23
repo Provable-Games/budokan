@@ -7,9 +7,10 @@ import {
   DialogTitle,
   DialogClose,
 } from "@/components/ui/dialog";
-import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
+import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 import { useAccount } from "@starknet-react/core";
-import { Tournament, RewardClaim } from "@/generated/models.gen";
+import { RewardClaim } from "@/generated/models.gen";
+import type { Tournament } from "@provable-games/budokan-sdk";
 import { formatNumber, getOrdinalSuffix, indexAddress } from "@/lib/utils";
 import {
   extractEntryFeePrizes,
@@ -17,13 +18,13 @@ import {
   expandDistributedPrizes,
   formatRewardTypes,
 } from "@/lib/utils/formatting";
-import { useConnectToSelectedChain } from "@/dojo/hooks/useChain";
+import { useConnectToSelectedChain } from "@/chain/hooks/useChain";
 import { TokenPrices } from "@/hooks/useEkuboPrices";
 import {
   getTokenLogoUrl,
   getTokenDecimals,
 } from "@/lib/tokensMeta";
-import { useDojo } from "@/context/dojo";
+import { useChainConfig } from "@/context/chain";
 import { LoadingSpinner } from "@/components/ui/spinner";
 import {
   useGetTournamentPrizes,
@@ -48,7 +49,7 @@ export function ClaimPrizesDialog({
   const { address } = useAccount();
   const { connect } = useConnectToSelectedChain();
   const { claimPrizes, claimPrizesBatched } = useSystemCalls();
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
   const [isProcessing, setIsProcessing] = useState(false);
   const [batchProgress, setBatchProgress] = useState<{
     current: number;
@@ -70,11 +71,12 @@ export function ClaimPrizesDialog({
   );
 
   const claimedRewards: RewardClaim[] = (rewardClaimsData ||
-    []) as RewardClaim[];
+    []) as unknown as RewardClaim[];
 
+  const entryFeeData = (tournamentModel as any)?.entryFee;
   const leaderboardSize =
-    Number(tournamentModel?.entry_fee?.Some?.distribution_count ?? 0) > 0
-      ? Number(tournamentModel!.entry_fee.Some!.distribution_count)
+    Number(entryFeeData?.distributionCount ?? 0) > 0
+      ? Number(entryFeeData.distributionCount)
       : entryCount;
 
   // Calculate entry fee prizes based on tournament settings
@@ -83,11 +85,11 @@ export function ClaimPrizesDialog({
       () =>
         extractEntryFeePrizes(
           tournamentModel?.id,
-          tournamentModel?.entry_fee,
+          entryFeeData,
           BigInt(entryCount || 0),
           leaderboardSize
         ),
-      [tournamentModel?.id, tournamentModel?.entry_fee, entryCount]
+      [tournamentModel?.id, entryFeeData, entryCount]
     );
 
   // Expand distributed sponsored prizes into individual positions
@@ -126,7 +128,7 @@ export function ClaimPrizesDialog({
       if (claimableRewardTypes.length > 20) {
         await claimPrizesBatched(
           tournamentModel?.id,
-          tournamentModel?.metadata?.name ?? tournamentModel?.name ?? "",
+          tournamentModel?.name ?? "",
           claimableRewardTypes,
           20, // batch size
           (current, total) => setBatchProgress({ current, total })
@@ -134,7 +136,7 @@ export function ClaimPrizesDialog({
       } else {
         await claimPrizes(
           tournamentModel?.id,
-          tournamentModel?.metadata?.name ?? tournamentModel?.name ?? "",
+          tournamentModel?.name ?? "",
           claimableRewardTypes
         );
       }
@@ -148,13 +150,14 @@ export function ClaimPrizesDialog({
   // Helper function to get prize amount
   const getPrizeAmount = (prize: any): bigint => {
     const isErc20 =
-      prize.token_type?.variant?.erc20 || prize.token_type === "erc20";
+      prize.token_type?.variant?.erc20 || prize.token_type === "erc20" || prize.tokenType === "erc20";
 
     if (!isErc20) return 1n; // NFTs are considered non-zero
 
     const amount =
       prize.token_type?.variant?.erc20?.amount ||
       prize["token_type.erc20.amount"] ||
+      prize.amount ||
       "0";
 
     return BigInt(amount);

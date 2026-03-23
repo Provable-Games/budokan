@@ -1,11 +1,10 @@
-// import { useGetTournamentLeaderboard } from "@/dojo/hooks/useSqlQueries";
-// import { useDojo } from "@/context/dojo";
+// import { useGetTournamentLeaderboard } from "@/chain/hooks/useSqlQueries";
 // import { Tournament } from "@/generated/models.gen";
-// import { useGameEndpoints } from "@/dojo/hooks/useGameEndpoints";
+// import { useGameEndpoints } from "@/chain/hooks/useGameEndpoints";
 // import { useState } from "react";
 // import { Input } from "@/components/ui/input";
 // import { Button } from "@/components/ui/button";
-// import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
+// import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 // import { useAccount } from "@starknet-react/core";
 // import { indexAddress } from "@/lib/utils";
 
@@ -15,7 +14,7 @@
 
 // const TournamentGames = ({ tournament }: TournamentGamesProps) => {
 //   const { address } = useAccount();
-//   const { namespace } = useDojo();
+//   const { namespace } = useChainConfig();
 //   const [currentPage, _setCurrentPage] = useState(1);
 //   const [scores, setScores] = useState<Record<string, number>>({});
 //   const { endGame } = useSystemCalls();

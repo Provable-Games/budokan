@@ -6,7 +6,7 @@ import { FormToken } from "@/lib/types";
 import { calculateDistribution, indexAddress } from "@/lib/utils";
 import { getTokenLogoUrl } from "@/lib/tokensMeta";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
-import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
+import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 
 interface NewPrize {
   token: FormToken;

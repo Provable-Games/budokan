@@ -12,13 +12,15 @@ import { TooltipTrigger } from "@/components/ui/tooltip";
 import { Tooltip } from "@/components/ui/tooltip";
 import useUIStore from "@/hooks/useUIStore";
 import { GameTokenData } from "@/lib/types";
-import { Tournament } from "@/generated/models.gen";
+import type { Tournament } from "@provable-games/budokan-sdk";
 
 interface EntryCardProps {
   gameAddress: string;
   game: GameTokenData;
   tournamentModel: Tournament;
   registration: any;
+  isStarted: boolean;
+  isEnded: boolean;
 }
 
 const EntryCard = ({
@@ -26,23 +28,21 @@ const EntryCard = ({
   game,
   tournamentModel,
   registration,
+  isStarted,
+  isEnded,
 }: EntryCardProps) => {
   const { getGameImage, getGameName } = useUIStore();
-  const currentDate = BigInt(new Date().getTime()) / 1000n;
-  const hasStarted = (game?.lifecycle.start ?? 0) < currentDate;
+  const gameOver = game?.gameOver;
 
-  const hasEnded = (game?.lifecycle.end ?? 0) < currentDate;
-  const gameOver = game?.game_over;
-
-  const isActive = hasStarted && !hasEnded;
+  const isActive = isStarted && !isEnded;
 
   const playUrl = getPlayUrl(gameAddress);
 
   const gameName = getGameName(gameAddress);
   const gameImage = getGameImage(gameAddress);
 
-  const entryNumber = registration?.entry_number;
-  const isBanned = registration?.is_banned === 1;
+  const entryNumber = registration?.entryNumber;
+  const isBanned = !!registration?.isBanned;
 
   if (!entryNumber) {
     return null;
@@ -93,14 +93,14 @@ const EntryCard = ({
           </HoverCardTrigger>
           <EntryInfo
             entryNumber={entryNumber.toString()}
-            tokenMetadata={typeof game.metadata === 'string' ? game.metadata : JSON.stringify(game.metadata)}
+            tokenId={game.tokenId?.toString() ?? ""}
             tournamentModel={tournamentModel}
           />
         </HoverCard>
         <Tooltip delayDuration={50}>
           <TooltipTrigger asChild>
             <p className="text-xs truncate text-brand-muted w-full text-center cursor-pointer">
-              {game.player_name}
+              {game.playerName}
             </p>
           </TooltipTrigger>
           <TooltipContent
@@ -108,7 +108,7 @@ const EntryCard = ({
             align="center"
             className="max-w-[300px] break-words"
           >
-            <p className="text-sm font-medium">{game.player_name ?? ""}</p>
+            <p className="text-sm font-medium">{game.playerName ?? ""}</p>
           </TooltipContent>
         </Tooltip>
         {isActive && !gameOver && !isBanned && (
@@ -116,14 +116,18 @@ const EntryCard = ({
             <Button
               size="sm"
               onClick={() => {
-                window.open(`${playUrl}${Number(game.token_id)}`, "_blank");
+                const tokenId = game.tokenId?.toString() ?? "0";
+                const url = playUrl.includes("{tokenId}")
+                  ? playUrl.replace("{tokenId}", tokenId.startsWith("0x") ? tokenId : "0x" + BigInt(tokenId).toString(16))
+                  : `${playUrl}${Number(tokenId)}`;
+                window.open(url, "_blank");
               }}
             >
               PLAY
             </Button>
           </div>
         )}
-        {hasStarted && (
+        {isStarted && (
           <div className="flex flex-row items-center justify-center gap-1 w-full px-0.5">
             <span className="text-[10px] text-neutral">Score:</span>
             <span>{formatScore(Number(game.score))}</span>
@@ -138,7 +142,7 @@ const EntryCard = ({
             <>
               <p className="text-xs 3xl:text-sm text-success">Active</p>
             </>
-          ) : hasEnded ? (
+          ) : isEnded ? (
             <p className="text-xs 3xl:text-sm text-warning">Ended</p>
           ) : (
             <p className="text-xs 3xl:text-sm text-warning">Not Started</p>

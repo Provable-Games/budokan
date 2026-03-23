@@ -11,8 +11,8 @@ import TokenDialog from "@/components/dialogs/Token";
 import { FormToken } from "@/lib/types";
 import { getTokenByAddress } from "@/lib/tokenUtils";
 import { indexAddress } from "@/lib/utils";
-import { useDojo } from "@/context/dojo";
-import { getExtensionAddresses } from "@/lib/extensionConfig";
+import { useChainConfig } from "@/context/chain";
+import { getExtensionAddresses } from "@provable-games/metagame-sdk";
 
 interface ERC20BalanceConfigProps {
   extensionError?: string;
@@ -21,7 +21,7 @@ interface ERC20BalanceConfigProps {
 export const ERC20BalanceConfig = ({
   extensionError,
 }: ERC20BalanceConfigProps) => {
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
   const form = useFormContext();
 
   // Local state for managing the config values

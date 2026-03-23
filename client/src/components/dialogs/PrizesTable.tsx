@@ -17,7 +17,7 @@ import { PositionPrizes, DisplayPrize, TokenMetadata } from "@/lib/types";
 import { formatNumber, getOrdinalSuffix, indexAddress } from "@/lib/utils";
 import { expandDistributedPrize } from "@/lib/utils/prizeDistribution";
 import { getTokenLogoUrl } from "@/lib/tokensMeta";
-import { useDojo } from "@/context/dojo";
+import { useChainConfig } from "@/context/chain";
 import { calculatePrizeValue } from "@/lib/utils/formatting";
 import { useState, useMemo } from "react";
 import { useGetTournamentPrizes } from "@/hooks/useBudokanQueries";
@@ -51,7 +51,7 @@ export const PrizesTableDialog = ({
   tournamentId,
   entryFeePrizes = [],
 }: PrizesTableDialogProps) => {
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
   const chainId = selectedChainConfig?.chainId ?? "";
   const [currentPage, setCurrentPage] = useState(0);
   const positionsPerPage = 5;
@@ -92,6 +92,8 @@ export const PrizesTableDialog = ({
           const distributionCount = Number(
             tokenType?.variant?.erc20?.distribution_count?.Some ??
             tokenType?.variant?.erc20?.distribution_count ??
+            distributedPrize.distributionCount ??
+            distributedPrize.distribution_count ??
             0
           );
           dbMaxPosition = distributionCount;
@@ -125,24 +127,26 @@ export const PrizesTableDialog = ({
       const isErc721 =
         prize.token_type?.variant?.erc721 ||
         prize.token_type === "erc721" ||
+        prize.tokenType === "erc721" ||
         prize.type === "erc721";
       if (isErc721) {
         const tokenId =
           prize.token_type?.variant?.erc721?.id ||
           prize["token_type.erc721.id"] ||
+          prize.tokenId ||
           prize.value;
 
         if (tokenId) {
           if (Array.isArray(tokenId)) {
             tokenId.forEach((id: bigint) => {
               nfts.push({
-                address: prize.token_address || prize.address,
+                address: prize.token_address || prize.tokenAddress || prize.address,
                 tokenId: id,
               });
             });
           } else {
             nfts.push({
-              address: prize.token_address || prize.address,
+              address: prize.token_address || prize.tokenAddress || prize.address,
               tokenId: BigInt(tokenId),
             });
           }
@@ -195,17 +199,19 @@ export const PrizesTableDialog = ({
       if (!acc[position]) acc[position] = {};
 
       const isErc20 =
-        prize.token_type?.variant?.erc20 || prize.token_type === "erc20";
+        prize.token_type?.variant?.erc20 || prize.token_type === "erc20" || prize.tokenType === "erc20";
       const isErc721 =
-        prize.token_type?.variant?.erc721 || prize.token_type === "erc721";
+        prize.token_type?.variant?.erc721 || prize.token_type === "erc721" || prize.tokenType === "erc721";
       const tokenType = isErc20 ? "erc20" : isErc721 ? "erc721" : "erc20";
-      const tokenKey = `${prize.token_address}_${tokenType}`;
+      const prizeAddress = prize.token_address ?? prize.tokenAddress;
+      const tokenKey = `${prizeAddress}_${tokenType}`;
 
       if (tokenType === "erc20") {
         // For ERC20, sum the amounts
         const amount = BigInt(
           prize.token_type?.variant?.erc20?.amount ||
             prize["token_type.erc20.amount"] ||
+            prize.amount ||
             0
         );
 
@@ -216,7 +222,7 @@ export const PrizesTableDialog = ({
           acc[position][tokenKey] = {
             type: "erc20",
             payout_position: position,
-            address: prize.token_address,
+            address: prizeAddress,
             value: amount,
           };
         }
@@ -225,6 +231,7 @@ export const PrizesTableDialog = ({
         const tokenId = BigInt(
           prize.token_type?.variant?.erc721?.token_id ||
             prize["token_type.erc721.id"] ||
+            prize.tokenId ||
             0
         );
 
@@ -241,7 +248,7 @@ export const PrizesTableDialog = ({
           acc[position][tokenKey] = {
             type: "erc721",
             payout_position: position,
-            address: prize.token_address,
+            address: prizeAddress,
             value: tokenId,
           };
         }

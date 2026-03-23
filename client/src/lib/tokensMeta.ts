@@ -2,7 +2,7 @@ import { indexAddress } from "./utils";
 import { mainnetTokens } from "./mainnetTokens";
 import { sepoliaTokens } from "./sepoliaTokens";
 import { mainnetNFTs, sepoliaNFTs } from "./nfts";
-import { ChainId } from "@/dojo/setup/networks";
+import { ChainId } from "@/chain/setup/networks";
 
 // Helper to get the token address
 const getTokenAddr = (token: { address: string }): string => token.address;

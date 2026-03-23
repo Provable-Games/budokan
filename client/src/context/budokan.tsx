@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { BudokanProvider as SdkBudokanProvider, useBudokanClient } from "@provable-games/budokan-sdk/react";
 import type { BudokanClientConfig } from "@provable-games/budokan-sdk";
 import { useNetwork } from "@starknet-react/core";
-import { CHAINS, ChainId, getDefaultChainId } from "@/dojo/setup/networks";
+import { CHAINS, ChainId, getDefaultChainId } from "@/chain/setup/networks";
 
 export { useBudokanClient };
 

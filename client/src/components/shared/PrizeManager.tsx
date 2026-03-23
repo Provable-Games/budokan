@@ -4,13 +4,18 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { getTokenLogoUrl } from "@/lib/tokensMeta";
 import { X } from "@/components/Icons";
-import { getOrdinalSuffix, formatNumber, indexAddress } from "@/lib/utils";
+import {
+  getOrdinalSuffix,
+  formatNumber,
+  indexAddress,
+  parseNFTBulkInput,
+} from "@/lib/utils";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
 import {
   PrizeSelector,
   PrizeSelectorData,
 } from "@/components/shared/PrizeSelector";
-import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
+import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 import { FormToken } from "@/lib/types";
 
 type Prize =
@@ -128,107 +133,34 @@ export function PrizeManager({
       return;
     }
 
-    try {
-      const trimmedInput = tokenIdsInput.trim();
-      const newNFTPrizes: Prize[] = [];
+    const { entries, errors } = parseNFTBulkInput(tokenIdsInput);
 
-      // Try to detect format
-      if (trimmedInput.startsWith("[") && trimmedInput.endsWith("]")) {
-        // JSON array format - array of objects only
-        const parsed = JSON.parse(trimmedInput);
-
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          if (
-            typeof parsed[0] === "object" &&
-            parsed[0].tokenId !== undefined
-          ) {
-            // Array of objects: [{ tokenId: 1, position: 1 }, ...]
-            newNFTPrizes.push(
-              ...parsed.map((item) => {
-                if (
-                  typeof item.tokenId !== "number" ||
-                  typeof item.position !== "number"
-                ) {
-                  throw new Error(
-                    "Invalid object format - each object must have tokenId and position as numbers"
-                  );
-                }
-                if (item.position < 1) {
-                  throw new Error(`Position ${item.position} must be >= 1`);
-                }
-                return {
-                  type: "ERC721" as const,
-                  token: selectedNFTToken,
-                  tokenId: item.tokenId,
-                  position: item.position,
-                };
-              })
-            );
-          } else {
-            throw new Error(
-              "JSON array must contain objects with tokenId and position fields"
-            );
-          }
-        }
-      } else if (trimmedInput.includes(":")) {
-        // Key-value format: tokenId:position (one per line or comma separated)
-        // Example: "1:1, 2:2, 3:3" or "1:1\n2:2\n3:3"
-        const lines = trimmedInput.split(/[\n,]+/);
-
-        newNFTPrizes.push(
-          ...lines
-            .map((line) => line.trim())
-            .filter((line) => line.length > 0)
-            .map((line) => {
-              const [tokenIdStr, positionStr] = line
-                .split(":")
-                .map((s) => s.trim());
-              const tokenId = parseInt(tokenIdStr);
-              const position = parseInt(positionStr);
-
-              if (isNaN(tokenId) || isNaN(position)) {
-                throw new Error(`Invalid format in line: ${line}`);
-              }
-
-              if (position < 1) {
-                throw new Error(`Position ${position} must be >= 1`);
-              }
-
-              return {
-                type: "ERC721" as const,
-                token: selectedNFTToken,
-                tokenId,
-                position,
-              };
-            })
-        );
-      } else {
-        throw new Error(
-          "Position information is required. Please use tokenId:position format or JSON object array format"
-        );
-      }
-
-      // Validate we have prizes to add
-      if (newNFTPrizes.length === 0) {
-        alert("No valid NFT prizes to add");
-        return;
-      }
-
-      // Add all NFT prizes
-      onPrizesChange([...prizes, ...newNFTPrizes]);
-
-      // Clear the input
-      setTokenIdsInput("");
-    } catch (error) {
+    if (errors.length > 0) {
       alert(
         `Invalid format. Supported formats:\n\n` +
           `1. Token:Position pairs (one per line or comma-separated):\n` +
           `   1:1, 2:2, 3:3\n\n` +
           `2. JSON array of objects:\n` +
           `   [{ "tokenId": 1, "position": 1 }, { "tokenId": 2, "position": 2 }]\n\n` +
-          `Error: ${error instanceof Error ? error.message : String(error)}`
+          `Errors:\n${errors.join("\n")}`
       );
+      return;
     }
+
+    if (entries.length === 0) {
+      alert("No valid NFT prizes to add");
+      return;
+    }
+
+    const newNFTPrizes: Prize[] = entries.map((entry) => ({
+      type: "ERC721" as const,
+      token: selectedNFTToken,
+      tokenId: Number(entry.tokenId),
+      position: entry.position,
+    }));
+
+    onPrizesChange([...prizes, ...newNFTPrizes]);
+    setTokenIdsInput("");
   };
 
   return (

@@ -1,5 +1,5 @@
 import { indexAddress } from "@/lib/utils";
-import { ChainId } from "@/dojo/setup/networks";
+import { ChainId } from "@/chain/setup/networks";
 
 /**
  * Extension Configuration

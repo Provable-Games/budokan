@@ -1,7 +1,17 @@
 import { Card } from "@/components/ui/card";
-import { Tournament } from "@/generated/models.gen";
-import { displayAddress, feltToString } from "@/lib/utils";
-import { useDojo } from "@/context/dojo";
+import type { Tournament } from "@provable-games/budokan-sdk";
+import {
+  displayAddress,
+  identifyExtensionType,
+  parseTournamentValidatorConfig,
+  parseERC20BalanceValidatorConfig,
+  parseOpusTrovesValidatorConfig,
+  parseSnapshotValidatorConfig,
+  getQualifyingModeInfo,
+  formatTokenAmount,
+  formatCashToUSD,
+} from "@/lib/utils";
+import { useChainConfig } from "@/context/chain";
 import {
   COIN,
   TROPHY,
@@ -25,7 +35,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Tournament as TournamentModel } from "@/generated/models.gen";
+// Tournament type now comes from SDK
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import {
@@ -37,6 +47,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useMemo, useState } from "react";
+import type {
+  TournamentValidatorConfig,
+  ERC20BalanceValidatorConfig,
+  OpusTrovesValidatorConfig,
+  SnapshotValidatorConfig,
+} from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -49,16 +65,9 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getTokenByAddress } from "@/lib/tokenUtils";
-import {
-  registerTournamentValidator,
-  registerERC20BalanceValidator,
-  getExtensionAddresses,
-} from "@/lib/extensionConfig";
-import { useEffect } from "react";
-import { indexAddress } from "@/lib/utils";
 import { getTokenDecimals } from "@/lib/tokensMeta";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
-import { computeAbsoluteTimes } from "@/lib/utils/formatting";
+// computeAbsoluteTimes no longer needed — SDK provides pre-computed timestamps
 
 // Helper component for Entry Limit display with info tooltip
 const EntryLimitInfo = ({ limit }: { limit: number }) => (
@@ -83,74 +92,33 @@ const EntryLimitInfo = ({ limit }: { limit: number }) => (
   </div>
 );
 
-// Helper to get qualifying mode label and description
-const getQualifyingModeInfo = (mode: number) => {
-  switch (mode) {
-    case 0:
-      return {
-        label: "At Least One",
-        description: "Qualify in at least one tournament",
-      };
-    case 1:
-      return {
-        label: "Cumulative per Tournament",
-        description: "Track entry limits separately for each tournament",
-      };
-    case 2:
-      return {
-        label: "All",
-        description: "Must qualify in all tournaments",
-      };
-    case 3:
-      return {
-        label: "Cumulative per Entry",
-        description: "Track entries per qualifying token ID",
-      };
-    case 4:
-      return {
-        label: "All Participate, Any Win",
-        description:
-          "Must participate in all tournaments, but only need to win in any one",
-      };
-    case 5:
-      return {
-        label: "All With Cumulative",
-        description:
-          "Must participate in all tournaments, entries multiply by tournament count",
-      };
-    default:
-      return { label: "Unknown", description: "" };
-  }
-};
-
 const EntryRequirements = ({
   tournamentModel,
   tournamentsData,
 }: {
-  tournamentModel: TournamentModel;
+  tournamentModel: Tournament;
   tournamentsData: Tournament[];
 }) => {
-  if (!tournamentModel?.entry_requirement?.isSome()) {
+  const entryRequirement = (tournamentModel as any)?.entryRequirement;
+  if (!entryRequirement) {
     return null;
   }
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
 
   const navigate = useNavigate();
 
-  const entryRequirement = useMemo(
-    () => tournamentModel.entry_requirement.Some,
-    [tournamentModel]
-  );
-  const entryLimit = entryRequirement?.entry_limit;
+  // SDK shape: { entryLimit, entryRequirementType: { type, tokenAddress?, addresses?, address?, config? } }
+  const reqType = entryRequirement?.entryRequirementType;
+  const entryLimit = entryRequirement?.entryLimit;
   const hasEntryLimit = Number(entryLimit) > 0;
   const activeVariant = useMemo(
-    () => entryRequirement?.entry_requirement_type.activeVariant(),
-    [entryRequirement]
+    () => reqType?.type as string | undefined,
+    [reqType]
   );
 
   const tokenAddress = useMemo(
-    () => entryRequirement?.entry_requirement_type?.variant.token,
-    [entryRequirement]
+    () => reqType?.tokenAddress,
+    [reqType]
   );
 
   // Get token data from static tokens
@@ -170,236 +138,106 @@ const EntryRequirements = ({
   const tokenLoading = false; // No loading needed for static data
 
   const allowlist = useMemo(
-    () => entryRequirement?.entry_requirement_type?.variant?.allowlist,
-    [entryRequirement]
+    () => reqType?.addresses,
+    [reqType]
   );
 
   const extensionConfig = useMemo(
-    () => entryRequirement?.entry_requirement_type?.variant?.extension,
-    [entryRequirement]
+    () => reqType?.type === "extension" ? { address: reqType?.address, config: reqType?.config } : undefined,
+    [reqType]
   );
 
-  // Get extension addresses for the current chain
-  const extensionAddresses = useMemo(
-    () => getExtensionAddresses(selectedChainConfig?.chainId ?? ""),
-    [selectedChainConfig?.chainId]
+  // Identify extension type using SDK utility
+  const extensionType = useMemo(
+    () =>
+      extensionConfig?.address
+        ? identifyExtensionType(
+            extensionConfig.address,
+            selectedChainConfig?.chainId ?? ""
+          )
+        : "unknown",
+    [extensionConfig?.address, selectedChainConfig?.chainId]
   );
 
-  // Register tournament validator when config loads
-  useEffect(() => {
-    if (extensionAddresses.tournamentValidator) {
-      registerTournamentValidator(extensionAddresses.tournamentValidator);
-    }
-  }, [extensionAddresses.tournamentValidator]);
+  const isTournamentValidatorExtension = extensionType === "tournament";
+  const isERC20BalanceValidatorExtension = extensionType === "erc20Balance";
+  const isOpusTrovesValidatorExtension = extensionType === "opusTroves";
+  const isSnapshotValidatorExtension = extensionType === "snapshot";
 
-  // Register ERC20 balance validator when config loads
-  useEffect(() => {
-    if (extensionAddresses.erc20BalanceValidator) {
-      registerERC20BalanceValidator(extensionAddresses.erc20BalanceValidator);
-    }
-  }, [extensionAddresses.erc20BalanceValidator]);
+  // Parse extension configs using SDK parsers
+  const snapshotValidatorConfig: SnapshotValidatorConfig | null = useMemo(
+    () =>
+      isSnapshotValidatorExtension && extensionConfig?.config
+        ? parseSnapshotValidatorConfig(extensionConfig.config)
+        : null,
+    [isSnapshotValidatorExtension, extensionConfig?.config]
+  );
 
-  // Check if this extension is a tournament validator
-  const isTournamentValidatorExtension = useMemo(() => {
-    if (!extensionConfig?.address || !extensionAddresses.tournamentValidator)
-      return false;
-    // Normalize both addresses for comparison
-    const normalizedExtensionAddress = indexAddress(extensionConfig.address);
-    const normalizedValidatorAddress = indexAddress(
-      extensionAddresses.tournamentValidator
-    );
-    return normalizedExtensionAddress === normalizedValidatorAddress;
-  }, [extensionConfig?.address, extensionAddresses.tournamentValidator]);
+  const tournamentValidatorConfig: TournamentValidatorConfig | null = useMemo(
+    () =>
+      isTournamentValidatorExtension && extensionConfig?.config
+        ? parseTournamentValidatorConfig(extensionConfig.config)
+        : null,
+    [isTournamentValidatorExtension, extensionConfig?.config]
+  );
 
-  // Check if this extension is an ERC20 balance validator
-  const isERC20BalanceValidatorExtension = useMemo(() => {
-    if (!extensionConfig?.address || !extensionAddresses.erc20BalanceValidator)
-      return false;
-    // Normalize both addresses for comparison
-    const normalizedExtensionAddress = indexAddress(extensionConfig.address);
-    const normalizedValidatorAddress = indexAddress(
-      extensionAddresses.erc20BalanceValidator
-    );
-    return normalizedExtensionAddress === normalizedValidatorAddress;
-  }, [extensionConfig?.address, extensionAddresses.erc20BalanceValidator]);
+  // Parse ERC20 balance validator config and add formatted display values
+  const rawErc20Config: ERC20BalanceValidatorConfig | null = useMemo(
+    () =>
+      isERC20BalanceValidatorExtension && extensionConfig?.config
+        ? parseERC20BalanceValidatorConfig(extensionConfig.config)
+        : null,
+    [isERC20BalanceValidatorExtension, extensionConfig?.config]
+  );
 
-  // Check if this extension is an Opus Troves validator
-  const isOpusTrovesValidatorExtension = useMemo(() => {
-    if (!extensionConfig?.address || !extensionAddresses.opusTrovesValidator)
-      return false;
-    // Normalize both addresses for comparison
-    const normalizedExtensionAddress = indexAddress(extensionConfig.address);
-    const normalizedValidatorAddress = indexAddress(
-      extensionAddresses.opusTrovesValidator
-    );
-    return normalizedExtensionAddress === normalizedValidatorAddress;
-  }, [extensionConfig?.address, extensionAddresses.opusTrovesValidator]);
-
-  // Check if this extension is a Snapshot validator
-  const isSnapshotValidatorExtension = useMemo(() => {
-    if (!extensionConfig?.address || !extensionAddresses.snapshotValidator)
-      return false;
-    const normalizedExtensionAddress = indexAddress(extensionConfig.address);
-    const normalizedValidatorAddress = indexAddress(
-      extensionAddresses.snapshotValidator
-    );
-    return normalizedExtensionAddress === normalizedValidatorAddress;
-  }, [extensionConfig?.address, extensionAddresses.snapshotValidator]);
-
-  // Parse Snapshot validator config: the config is the snapshot space ID
-  const snapshotValidatorConfig = useMemo(() => {
-    if (!isSnapshotValidatorExtension || !extensionConfig?.config) {
-      return null;
-    }
-    const config = extensionConfig.config;
-    if (!config || config.length === 0) return null;
-    return {
-      snapshotId: Number(BigInt(config[0] ?? "0")).toString(),
-    };
-  }, [isSnapshotValidatorExtension, extensionConfig?.config]);
-
-  // Parse tournament validator config: [qualifier_type, qualifying_mode, top_positions, ...tournament_ids]
-  const tournamentValidatorConfig = useMemo(() => {
-    if (!isTournamentValidatorExtension || !extensionConfig?.config) {
-      return null;
-    }
-
-    const config = extensionConfig.config;
-    if (!config || config.length < 3) return null;
-
-    const qualifierType = config[0]; // "0" = participated, "1" = won
-    const qualifyingMode = config[1]; // "0" = ANY, "1" = ANY_PER_TOURNAMENT, "2" = ALL
-    const topPositions = config[2]; // "0" = all positions, or number of top positions
-    const tournamentIds = config.slice(3); // Rest are tournament IDs
-
-    return {
-      requirementType: qualifierType === "1" ? "won" : "participated",
-      qualifyingMode: Number(qualifyingMode),
-      topPositions: Number(topPositions),
-      tournamentIds: tournamentIds.map((id: any) => BigInt(id)),
-    };
-  }, [isTournamentValidatorExtension, extensionConfig?.config]);
-
-  // Parse ERC20 balance validator config: [token_address, min_threshold_low, min_threshold_high, max_threshold_low, max_threshold_high, value_per_entry_low, value_per_entry_high, max_entries]
   const erc20BalanceValidatorConfig = useMemo(() => {
-    if (!isERC20BalanceValidatorExtension || !extensionConfig?.config) {
-      return null;
-    }
-
-    const config = extensionConfig.config;
-    if (!config || config.length < 8) return null;
-
-    const tokenAddress = config[0];
-    const minThresholdLow = BigInt(config[1]);
-    const minThresholdHigh = BigInt(config[2]);
-    const maxThresholdLow = BigInt(config[3]);
-    const maxThresholdHigh = BigInt(config[4]);
-    const valuePerEntryLow = BigInt(config[5]);
-    const valuePerEntryHigh = BigInt(config[6]);
-    const maxEntriesFromConfig = Number(config[7]);
-
-    // Combine high and low parts to form u256 values
-    const minThreshold = (minThresholdHigh << 128n) | minThresholdLow;
-    const maxThreshold = (maxThresholdHigh << 128n) | maxThresholdLow;
-    const valuePerEntry = (valuePerEntryHigh << 128n) | valuePerEntryLow;
-
-    // Get token decimals for formatting
+    if (!rawErc20Config) return null;
     const decimals =
-      getTokenDecimals(selectedChainConfig?.chainId ?? "", tokenAddress) || 18;
-    const divisor = BigInt(10 ** decimals);
-
-    // Convert wei values to human-readable format
-    const formatTokenAmount = (value: bigint) => {
-      if (value === 0n) return "0";
-      const integerPart = value / divisor;
-      const remainder = value % divisor;
-      if (remainder === 0n) {
-        return integerPart.toString();
-      }
-      // Format with decimals, removing trailing zeros
-      const decimalStr = remainder.toString().padStart(decimals, "0");
-      const trimmed = decimalStr.replace(/0+$/, "");
-      return trimmed ? `${integerPart}.${trimmed}` : integerPart.toString();
-    };
-
+      getTokenDecimals(
+        selectedChainConfig?.chainId ?? "",
+        rawErc20Config.tokenAddress
+      ) || 18;
     return {
-      tokenAddress,
-      minThreshold,
-      maxThreshold,
-      valuePerEntry,
-      maxEntries: maxEntriesFromConfig,
-      // Human-readable formatted values
-      minThresholdFormatted: formatTokenAmount(minThreshold),
-      maxThresholdFormatted: formatTokenAmount(maxThreshold),
-      valuePerEntryFormatted: formatTokenAmount(valuePerEntry),
+      ...rawErc20Config,
+      minThresholdFormatted: formatTokenAmount(
+        rawErc20Config.minThreshold,
+        decimals
+      ),
+      maxThresholdFormatted: formatTokenAmount(
+        rawErc20Config.maxThreshold,
+        decimals
+      ),
+      valuePerEntryFormatted: formatTokenAmount(
+        rawErc20Config.valuePerEntry,
+        decimals
+      ),
     };
-  }, [
-    isERC20BalanceValidatorExtension,
-    extensionConfig?.config,
-    selectedChainConfig?.chainId,
-  ]);
+  }, [rawErc20Config, selectedChainConfig?.chainId]);
 
-  // Parse Opus Troves validator config: [asset_count, ...asset_addresses, threshold, value_per_entry, max_entries]
+  // Parse Opus Troves validator config and add display values
+  const rawOpusConfig: OpusTrovesValidatorConfig | null = useMemo(
+    () =>
+      isOpusTrovesValidatorExtension && extensionConfig?.config
+        ? parseOpusTrovesValidatorConfig(extensionConfig.config)
+        : null,
+    [isOpusTrovesValidatorExtension, extensionConfig?.config]
+  );
+
   const opusTrovesValidatorConfig = useMemo(() => {
-    if (!isOpusTrovesValidatorExtension || !extensionConfig?.config) {
-      return null;
-    }
-
-    const config = extensionConfig.config;
-    if (!config || config.length < 4) return null;
-
-    const assetCount = Number(config[0]);
-
-    // Asset addresses are next N elements
-    const assetAddresses = config.slice(1, assetCount + 1);
-
-    // Remaining config elements
-    const threshold = BigInt(config[assetCount + 1] || "0");
-    const valuePerEntry = BigInt(config[assetCount + 2] || "0");
-    const maxEntriesFromConfig = Number(config[assetCount + 3] || "0");
-
-    // CASH uses 18 decimals, 1:1 USD parity
-    const CASH_DECIMALS = 18;
-    const divisor = BigInt(10 ** CASH_DECIMALS);
-
-    // Format CASH amount to USD
-    const formatCashToUSD = (value: bigint) => {
-      if (value === 0n) return "0";
-      const integerPart = value / divisor;
-      const remainder = value % divisor;
-      if (remainder === 0n) {
-        return integerPart.toString();
-      }
-      // Format with decimals, removing trailing zeros
-      const decimalStr = remainder.toString().padStart(CASH_DECIMALS, "0");
-      const trimmed = decimalStr.replace(/0+$/, "");
-      return trimmed ? `${integerPart}.${trimmed}` : integerPart.toString();
-    };
-
-    // Get token data for each asset
-    const assets = assetAddresses
-      .map((addr: any) =>
+    if (!rawOpusConfig) return null;
+    const assets = rawOpusConfig.assetAddresses
+      .map((addr) =>
         getTokenByAddress(addr, selectedChainConfig?.chainId ?? "")
       )
-      .filter((token: any) => token !== undefined);
-
+      .filter((t): t is NonNullable<typeof t> => t !== undefined);
     return {
-      assetCount,
-      assetAddresses,
+      ...rawOpusConfig,
       assets,
-      threshold,
-      valuePerEntry,
-      maxEntries: maxEntriesFromConfig,
-      // Human-readable formatted values
-      thresholdUSD: formatCashToUSD(threshold),
-      valuePerEntryUSD: formatCashToUSD(valuePerEntry),
-      isWildcard: assetCount === 0,
+      thresholdUSD: formatCashToUSD(rawOpusConfig.threshold),
+      valuePerEntryUSD: formatCashToUSD(rawOpusConfig.valuePerEntry),
+      isWildcard: rawOpusConfig.assetCount === 0,
     };
-  }, [
-    isOpusTrovesValidatorExtension,
-    extensionConfig?.config,
-    selectedChainConfig?.chainId,
-  ]);
+  }, [rawOpusConfig, selectedChainConfig?.chainId]);
 
   // Get tournament data for validator extensions
   const validatorTournaments = useMemo(() => {
@@ -411,7 +249,7 @@ const EntryRequirements = ({
       return [];
     return tournamentsData.filter((t) =>
       tournamentValidatorConfig.tournamentIds.some(
-        (id: any) => BigInt(t.id) === id
+        (id) => String(BigInt(t.id)) === id
       )
     );
   }, [tournamentValidatorConfig, tournamentsData]);
@@ -907,9 +745,10 @@ const EntryRequirements = ({
                   </TableHeader>
                   <TableBody>
                     {validatorTournaments.map((tournament, index) => {
-                      const absoluteTimes = computeAbsoluteTimes(tournament.created_at, tournament.schedule);
+                      // SDK tournaments have pre-computed absolute timestamps
+                      const gameEndTime = Number(tournament.gameEndTime ?? 0);
                       const tournamentEnded =
-                        BigInt(absoluteTimes.gameEndTime) < BigInt(Date.now()) / 1000n;
+                        gameEndTime > 0 && gameEndTime < Math.floor(Date.now() / 1000);
                       return (
                         <TableRow
                           key={index}
@@ -919,7 +758,7 @@ const EntryRequirements = ({
                           }}
                         >
                           <TableCell className="p-2 text-xs font-medium">
-                            {feltToString(tournament.metadata.name)}
+                            {tournament.name}
                           </TableCell>
                           <TableCell className="p-2 text-right">
                             <div className="flex flex-row items-center justify-end gap-1">

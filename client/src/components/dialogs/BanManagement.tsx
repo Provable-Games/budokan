@@ -11,18 +11,15 @@ import { BigNumberish, addAddressPadding } from "starknet";
 import { useGameTokens } from "@/hooks/useDenshokanQueries";
 import { REFRESH, USER } from "@/components/Icons";
 import { useGetTournamentRegistrations } from "@/hooks/useBudokanQueries";
-import { useDojo } from "@/context/dojo";
-import { Tournament } from "@/generated/models.gen";
-import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
+import { useChainConfig } from "@/context/chain";
+import type { Tournament } from "@provable-games/budokan-sdk";
+import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 import { displayAddress, indexAddress } from "@/lib/utils";
-import {
-  getExtensionProof,
-  getExtensionAddresses,
-} from "@/lib/extensionConfig";
-import { useAccount } from "@starknet-react/core";
+import { getExtensionAddresses } from "@provable-games/metagame-sdk";
+import { useOpusTrovesBannableEntries } from "@provable-games/metagame-sdk/react";
+import { useAccount, useProvider } from "@starknet-react/core";
 import { OpusTrovesPlayerDetails } from "./extensions/OpusTrovesPlayerDetails";
-import { useOpusTrovesBannableEntries } from "@/hooks/extensions/useOpusTrovesBannableEntries";
-import { useEntityUpdates } from "@/dojo/hooks/useEntityUpdates";
+import { useEntityUpdates } from "@/chain/hooks/useEntityUpdates";
 
 interface BanManagementDialogProps {
   open: boolean;
@@ -53,8 +50,9 @@ export const BanManagementDialog = ({
   extensionAddress,
   onBanComplete,
 }: BanManagementDialogProps) => {
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
   const { address } = useAccount();
+  const { provider } = useProvider();
   const tournamentAddress = selectedChainConfig.budokanAddress!;
   const [bannableEntries, setBannableEntries] = useState<Set<string>>(
     new Set()
@@ -72,7 +70,7 @@ export const BanManagementDialog = ({
   });
 
   const gameIds = useMemo(
-    () => games?.map((game) => Number(game.token_id)) || [],
+    () => games?.map((game) => Number(game.tokenId)) || [],
     [games]
   );
 
@@ -99,17 +97,17 @@ export const BanManagementDialog = ({
 
   // Parse Opus Troves validator config
   const opusTrovesValidatorConfig = useMemo(() => {
+    const entryReq = (tournamentModel as any)?.entryRequirement;
+    const reqType = entryReq?.entryRequirementType;
     if (
       !isOpusTrovesValidatorExtension ||
-      !tournamentModel?.entry_requirement.Some?.entry_requirement_type?.variant
-        ?.extension?.config
+      reqType?.type !== "extension" ||
+      !reqType?.config
     ) {
       return null;
     }
 
-    const config =
-      tournamentModel.entry_requirement.Some.entry_requirement_type.variant
-        .extension.config;
+    const config = reqType.config;
     if (!config || config.length < 4) return null;
 
     const assetCount = Number(config[0]);
@@ -148,23 +146,20 @@ export const BanManagementDialog = ({
 
   // Use Opus Troves hook for bannable entries calculation
   const { bannableEntries: opusBannableEntries, troveDebts } =
-    useOpusTrovesBannableEntries({
-      games: (games || []).map((g) => ({ token_id: Number(g.token_id), owner: g.owner })),
-      config: opusTrovesValidatorConfig
+    useOpusTrovesBannableEntries(
+      provider,
+      (games || []).map((g) => ({ tokenId: Number(g.tokenId), owner: g.owner })),
+      opusTrovesValidatorConfig
         ? {
+            assetCount: opusTrovesValidatorConfig.assetCount,
             assetAddresses: opusTrovesValidatorConfig.assetAddresses,
             threshold: opusTrovesValidatorConfig.threshold,
             valuePerEntry: opusTrovesValidatorConfig.valuePerEntry,
             maxEntries: opusTrovesValidatorConfig.maxEntries,
           }
-        : {
-            assetAddresses: [],
-            threshold: 0n,
-            valuePerEntry: 0n,
-            maxEntries: 0,
-          },
-      enabled: isOpusTrovesValidatorExtension && open,
-    });
+        : undefined,
+      isOpusTrovesValidatorExtension && open,
+    );
 
   // Create stable reference for opusBannableEntries to avoid infinite rerenders
   const opusBannableEntriesKey = useMemo(
@@ -194,27 +189,23 @@ export const BanManagementDialog = ({
             const owner = game?.owner;
             if (!owner) return;
 
-            const qualification = getExtensionProof(
-              extensionAddress,
-              owner,
-              {}
-            );
+            const qualification: string[] = [];
 
             const shouldBan = await checkShouldBan(
               extensionAddress,
               tournamentId,
-              game.token_id.toString(),
+              game.tokenId.toString(),
               owner,
               qualification
             );
 
             if (shouldBan) {
-              bannable.add(game.token_id.toString());
+              bannable.add(game.tokenId.toString());
             }
           } catch (error) {
             console.error(
               "Error checking ban-ability for game:",
-              game.token_id,
+              game.tokenId,
               error
             );
           }
@@ -241,12 +232,12 @@ export const BanManagementDialog = ({
 
     games.forEach((game) => {
       const ownerAddress = game?.owner ?? "0x0";
-      const playerName = game?.player_name || "";
+      const playerName = game?.playerName || "";
       const registration = registrants.find(
-        (reg) => Number(reg.game_token_id) === Number(game.token_id)
+        (reg) => Number(reg.gameTokenId) === Number(game.tokenId)
       );
-      const isBanned = !!registration?.is_banned;
-      const isBannable = bannableEntries.has(game.token_id.toString());
+      const isBanned = !!registration?.isBanned;
+      const isBannable = bannableEntries.has(game.tokenId.toString());
 
       // Only include bannable entries that aren't already banned
       if (!isBannable || isBanned) return;
@@ -261,7 +252,7 @@ export const BanManagementDialog = ({
 
       const group = groups.get(ownerAddress)!;
       group.entries.push({
-        gameTokenId: game.token_id.toString(),
+        gameTokenId: game.tokenId.toString(),
         playerName: playerName || displayAddress(ownerAddress),
         isBanned,
         isBannable,
@@ -282,11 +273,7 @@ export const BanManagementDialog = ({
     try {
       // Ban all entries for this player
       for (const entry of playerGroup.entries) {
-        const qualification = getExtensionProof(
-          extensionAddress,
-          playerGroup.address,
-          {}
-        );
+        const qualification: string[] = [];
 
         await banEntry(tournamentId, entry.gameTokenId, qualification);
 

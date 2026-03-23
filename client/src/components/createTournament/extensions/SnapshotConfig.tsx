@@ -8,8 +8,8 @@ import {
   FormDescription,
   FormMessage,
 } from "@/components/ui/form";
-import { useDojo } from "@/context/dojo";
-import { getExtensionAddresses } from "@/lib/extensionConfig";
+import { useChainConfig } from "@/context/chain";
+import { getExtensionAddresses } from "@provable-games/metagame-sdk";
 
 interface SnapshotConfigProps {
   extensionError?: string;
@@ -18,7 +18,7 @@ interface SnapshotConfigProps {
 export const SnapshotConfig = ({
   extensionError,
 }: SnapshotConfigProps) => {
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
   const form = useFormContext();
 
   // Local state for managing the config value

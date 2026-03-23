@@ -17,15 +17,15 @@ import BonusPrizes from "@/components/createTournament/BonusPrizes";
 import TournamentConfirmation from "@/components/dialogs/TournamentConfirmation";
 import { processPrizes, processTournamentData } from "@/lib/utils/formatting";
 import { useAccount } from "@starknet-react/core";
-import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
+import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 import { Tournament } from "@/generated/models.gen";
-import { useDojo } from "@/context/dojo";
+import { useChainConfig } from "@/context/chain";
 import { FormToken } from "@/lib/types";
 import {
   useGetPlatformMetrics,
   useGetPlatformStats,
 } from "@/hooks/useBudokanQueries";
-import { getExtensionAddresses } from "@/lib/extensionConfig";
+import { getExtensionAddresses } from "@provable-games/metagame-sdk";
 
 export type TournamentFormData = z.infer<typeof formSchema>;
 
@@ -134,7 +134,7 @@ const formSchema = z.object({
 const CreateTournament = () => {
   const navigate = useNavigate();
   const { address } = useAccount();
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
   const { createTournamentAndApproveAndAddPrizes } = useSystemCalls();
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -180,8 +180,8 @@ const CreateTournament = () => {
         },
       },
       entryFees: {
-        value: 1,
-        minEntryFeeUsd: 1,
+        value: 0.25,
+        minEntryFeeUsd: 0.25,
         creatorFeePercentage: 0,
         gameFeePercentage: 1,
         minGameFeePercentage: 1,
@@ -204,7 +204,7 @@ const CreateTournament = () => {
     active: true,
   });
 
-  const tournamentCount = Number(platformMetricsModel?.total_tournaments ?? 0);
+  const tournamentCount = Number(platformMetricsModel?.totalTournaments ?? 0);
   const prizeCount = Number(platformStats?.totalPrizes ?? 0);
 
   // Add state for current step
@@ -382,11 +382,13 @@ const CreateTournament = () => {
         enabled: getValue("enableGating") === true,
       },
       fees: {
-        complete: !!(
-          getValue("entryFees.token") &&
-          getValue("entryFees.amount") &&
-          getValue("entryFees.amount") > 0
-        ),
+        complete:
+          getValue("enableEntryFees") === false ||
+          !!(
+            getValue("entryFees.token") &&
+            getValue("entryFees.amount") &&
+            getValue("entryFees.amount") > 0
+          ),
         enabled: true,
       },
       prizes: {

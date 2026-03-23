@@ -13,9 +13,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TokenPrices } from "@/hooks/useEkuboPrices";
-import { formatNumber, indexAddress } from "@/lib/utils";
+import {
+  formatNumber,
+  indexAddress,
+  aggregatePrizesBySponsor,
+} from "@/lib/utils";
+import type { SponsorContribution as MgSponsorContribution } from "@/lib/utils";
 import { getTokenLogoUrl, getTokenSymbol } from "@/lib/tokensMeta";
-import { useDojo } from "@/context/dojo";
+import { useChainConfig } from "@/context/chain";
 import { useMemo } from "react";
 import { useGetTournamentPrizes } from "@/hooks/useBudokanQueries";
 import { BigNumberish } from "starknet";
@@ -23,6 +28,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useGetUsernames } from "@/hooks/useController";
 import { useNftTokenUris } from "@/hooks/useNftTokenUris";
 import NftPreview from "@/components/tournament/prizes/NftPreview";
+import { adaptSdkPrize } from "@/lib/utils/prizeAdapters";
+import type { Prize as MetagamePrize } from "@provable-games/metagame-sdk";
 
 interface SponsorsDialogProps {
   open: boolean;
@@ -34,7 +41,6 @@ interface SponsorsDialogProps {
 
 interface TokenContribution {
   tokenAddress: string;
-  tokenType: "erc20";
   totalAmount: bigint;
   count: number;
   usdValue: number;
@@ -46,7 +52,7 @@ interface NftCollectionContribution {
   nfts: { tokenId: bigint }[];
 }
 
-interface SponsorContribution {
+interface EnrichedSponsorContribution {
   sponsorAddress: string;
   tokens: Map<string, TokenContribution>;
   nftCollections: Map<string, NftCollectionContribution>;
@@ -61,7 +67,7 @@ export const SponsorsDialog = ({
   tokenDecimals,
   tournamentId,
 }: SponsorsDialogProps) => {
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
   const chainId = selectedChainConfig?.chainId ?? "";
 
   const tournamentIdStr = tournamentId ? String(tournamentId) : undefined;
@@ -72,92 +78,90 @@ export const SponsorsDialog = ({
       open ? tournamentIdStr : undefined,
     );
 
-  // Group prizes by sponsor and aggregate by token
+  // Convert budokan-sdk prizes to metagame-sdk Prize type
+  const mgPrizes = useMemo<MetagamePrize[]>(
+    () => (prizesData ?? []).map(adaptSdkPrize),
+    [prizesData],
+  );
+
+  // Group prizes by sponsor using metagame-sdk aggregation
   const sponsorContributions = useMemo(() => {
-    if (!prizesData) return [];
+    if (mgPrizes.length === 0) return [];
 
-    const sponsorMap = new Map<string, SponsorContribution>();
+    const mgSponsors: MgSponsorContribution[] =
+      aggregatePrizesBySponsor(mgPrizes);
 
-    prizesData.forEach((prize: any) => {
-      // Only include prizes with sponsor_address (sponsored prizes)
-      if (!prize.sponsor_address || prize.sponsor_address === "0x0") return;
+    // Build a lookup of NFT prizes per sponsor for collection grouping
+    // (the SDK aggregation counts NFTs but doesn't track individual token IDs)
+    const nftsBySponsor = new Map<
+      string,
+      Map<string, NftCollectionContribution>
+    >();
+    for (const prize of mgPrizes) {
+      if (
+        prize.tokenType !== "erc721" ||
+        !prize.sponsorAddress ||
+        prize.sponsorAddress === "0x0"
+      )
+        continue;
 
-      const sponsorAddress = prize.sponsor_address;
+      if (!nftsBySponsor.has(prize.sponsorAddress)) {
+        nftsBySponsor.set(prize.sponsorAddress, new Map());
+      }
+      const collections = nftsBySponsor.get(prize.sponsorAddress)!;
 
-      if (!sponsorMap.has(sponsorAddress)) {
-        sponsorMap.set(sponsorAddress, {
-          sponsorAddress,
-          tokens: new Map<string, TokenContribution>(),
-          nftCollections: new Map<string, NftCollectionContribution>(),
-          totalUsdValue: 0,
-          totalPrizes: 0,
+      if (!collections.has(prize.tokenAddress)) {
+        const tokenSymbol =
+          getTokenSymbol(chainId, prize.tokenAddress) || "NFT";
+        collections.set(prize.tokenAddress, {
+          tokenAddress: prize.tokenAddress,
+          tokenSymbol,
+          nfts: [],
         });
       }
 
-      const sponsor = sponsorMap.get(sponsorAddress)!;
-      sponsor.totalPrizes++;
+      collections.get(prize.tokenAddress)!.nfts.push({
+        tokenId: BigInt(prize.amount),
+      });
+    }
 
-      // Determine token type and amount
-      const isErc20 =
-        prize.token_type?.variant?.erc20 || prize.token_type === "erc20";
-      const tokenAddress = prize.token_address;
+    // Enrich each sponsor contribution with USD values and NFT details
+    const enriched: EnrichedSponsorContribution[] = mgSponsors.map(
+      (mgSponsor) => {
+        const tokens = new Map<string, TokenContribution>();
+        let totalUsdValue = 0;
 
-      if (isErc20) {
-        // Aggregate ERC20 tokens by address
-        if (!sponsor.tokens.has(tokenAddress)) {
-          sponsor.tokens.set(tokenAddress, {
-            tokenAddress,
-            tokenType: "erc20",
-            totalAmount: 0n,
-            count: 0,
-            usdValue: 0,
+        for (const token of mgSponsor.tokens) {
+          const decimals =
+            tokenDecimals[indexAddress(token.tokenAddress)] || 18;
+          const tokenAmount = Number(token.totalAmount) / 10 ** decimals;
+          const tokenPrice = prices[indexAddress(token.tokenAddress)] ?? 0;
+          const usdValue = tokenAmount * tokenPrice;
+
+          tokens.set(token.tokenAddress, {
+            tokenAddress: token.tokenAddress,
+            totalAmount: token.totalAmount,
+            count: token.prizeCount,
+            usdValue,
           });
+
+          totalUsdValue += usdValue;
         }
 
-        const tokenContribution = sponsor.tokens.get(tokenAddress)!;
-        tokenContribution.count++;
-
-        const amount = BigInt(
-          prize.token_type?.variant?.erc20?.amount ||
-            prize["token_type.erc20.amount"] ||
-            0
-        );
-
-        tokenContribution.totalAmount += amount;
-
-        const decimals = tokenDecimals[indexAddress(tokenAddress)] || 18;
-        const tokenAmount = Number(amount) / 10 ** decimals;
-        const tokenPrice = prices[indexAddress(tokenAddress)] ?? 0;
-        const usdValue = tokenAmount * tokenPrice;
-
-        tokenContribution.usdValue += usdValue;
-        sponsor.totalUsdValue += usdValue;
-      } else {
-        // Group NFTs by collection
-        const tokenId = BigInt(
-          prize.token_type?.variant?.erc721?.token_id ||
-            prize["token_type.erc721.id"] ||
-            0
-        );
-        const tokenSymbol = getTokenSymbol(chainId, tokenAddress) || "NFT";
-
-        if (!sponsor.nftCollections.has(tokenAddress)) {
-          sponsor.nftCollections.set(tokenAddress, {
-            tokenAddress,
-            tokenSymbol,
-            nfts: [],
-          });
-        }
-
-        sponsor.nftCollections.get(tokenAddress)!.nfts.push({ tokenId });
-      }
-    });
+        return {
+          sponsorAddress: mgSponsor.sponsorAddress,
+          tokens,
+          nftCollections:
+            nftsBySponsor.get(mgSponsor.sponsorAddress) ?? new Map(),
+          totalUsdValue,
+          totalPrizes: mgSponsor.totalPrizeCount,
+        };
+      },
+    );
 
     // Sort sponsors by total USD value (descending)
-    return Array.from(sponsorMap.values()).sort(
-      (a, b) => b.totalUsdValue - a.totalUsdValue
-    );
-  }, [prizesData, prices, tokenDecimals, chainId]);
+    return enriched.sort((a, b) => b.totalUsdValue - a.totalUsdValue);
+  }, [mgPrizes, prices, tokenDecimals, chainId]);
 
   const totalSponsors = sponsorContributions.length;
   const totalSponsoredValue = sponsorContributions.reduce(

@@ -8,8 +8,8 @@ import {
   braavos,
 } from "@starknet-react/core";
 import React from "react";
-import { ChainId, CHAINS, getDefaultChainId } from "@/dojo/setup/networks";
-import { initializeController } from "@/dojo/setup/controllerSetup";
+import { ChainId, CHAINS, getDefaultChainId } from "@/chain/setup/networks";
+import { initializeController } from "@/chain/setup/controllerSetup";
 
 // Initialize controller outside component - always mainnet
 const initController = () => {

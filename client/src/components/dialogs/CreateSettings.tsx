@@ -90,7 +90,7 @@ export const SettingsDialog = ({
               ) : (
                 <SettingsDisplay
                   currentSetting={settings.find(
-                    (setting) => setting.settings_id === selectedSetting
+                    (setting) => setting.id === selectedSetting
                   )}
                   currentSettingId={selectedSetting}
                   onChange={onChange}

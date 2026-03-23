@@ -16,7 +16,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useDojo } from "@/context/dojo";
+import { useChainConfig } from "@/context/chain";
 import { useState } from "react";
 import NftPreview from "@/components/tournament/prizes/NftPreview";
 
@@ -41,7 +41,7 @@ const Prize = ({
   tokenUris = {},
   nftUrisLoading = false,
 }: PrizeProps) => {
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
   const totalPrizeNFTs = countTotalNFTs(prizes);
   const [isMobileDialogOpen, setIsMobileDialogOpen] = useState(false);
 

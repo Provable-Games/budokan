@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useState, useMemo, useEffect } from "react";
 import { TableProperties } from "lucide-react";
 import { BigNumberish } from "starknet";
-import { useGameTokens } from "@/hooks/useDenshokanQueries";
+import { useLiveLeaderboard } from "@provable-games/denshokan-sdk/react";
 import { useGetTournamentRegistrations } from "@/hooks/useBudokanQueries";
 import { useGetUsernames } from "@/hooks/useController";
 import { MobilePlayerCard } from "@/components/tournament/table/PlayerCard";
@@ -21,8 +21,8 @@ import EntrantRow from "@/components/tournament/table/EntrantRow";
 import { padAddress } from "@/lib/utils";
 import { ScoreTableDialog } from "@/components/dialogs/ScoreTable";
 import { BanManagementDialog } from "@/components/dialogs/BanManagement";
-import { useDojo } from "@/context/dojo";
-import { Tournament } from "@/generated/models.gen";
+import { useChainConfig } from "@/context/chain";
+import type { Tournament, WSEventMessage } from "@provable-games/budokan-sdk";
 import { Ban } from "lucide-react";
 
 interface ScoreTableProps {
@@ -32,6 +32,7 @@ interface ScoreTableProps {
   isEnded: boolean;
   tournamentModel?: Tournament;
   onBanComplete?: () => void;
+  lastMessage?: WSEventMessage | null;
 }
 
 const ScoreTable = ({
@@ -41,8 +42,9 @@ const ScoreTable = ({
   isEnded,
   tournamentModel,
   onBanComplete,
+  lastMessage,
 }: ScoreTableProps) => {
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
   const [showScores, setShowScores] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<any>(null);
   const [isMobileDialogOpen, setIsMobileDialogOpen] = useState(false);
@@ -53,12 +55,14 @@ const ScoreTable = ({
   const tournamentAddress = selectedChainConfig.budokanAddress!;
 
   // Check if this tournament has extension requirements that support banning
-  const hasEntryRequirement = tournamentModel?.entry_requirement.isSome();
-  const requirementVariant =
-    tournamentModel?.entry_requirement.Some?.entry_requirement_type?.activeVariant();
+  const entryReq = (tournamentModel as any)?.entryRequirement;
+  const hasEntryRequirement = !!entryReq;
+  const reqType = entryReq?.entryRequirementType;
+  const requirementVariant = reqType?.type as string | undefined;
   const extensionConfig =
-    tournamentModel?.entry_requirement.Some?.entry_requirement_type?.variant
-      ?.extension;
+    requirementVariant === "extension"
+      ? { address: reqType?.address, config: reqType?.config }
+      : undefined;
 
   // Only show ban button if:
   // 1. Tournament hasn't started
@@ -74,48 +78,72 @@ const ScoreTable = ({
   const [currentPage, setCurrentPageNum] = useState(1);
   const pageSize = 10;
 
+  // 1. Leaderboard with server-side pagination — this drives the view
   const {
-    data: games,
-    refetch,
-    loading,
-  } = useGameTokens({
-    owner: padAddress(tournamentAddress),
-    gameId: Number(tournamentId),
+    entries: pageEntries,
+    total: leaderboardTotal,
+    isLoading: tokensLoading,
+    refetch: refetchTokens,
+  } = useLiveLeaderboard({
+    contextId: Number(tournamentId),
+    minterAddress: padAddress(tournamentAddress),
+    sort: { field: "score", direction: "desc" },
     limit: pageSize,
     offset: (currentPage - 1) * pageSize,
-    active: true,
+    enabled: entryCount > 0,
+    liveScores: isStarted,
+    liveGameOver: isStarted,
   });
 
-  const totalPages = Math.ceil(entryCount / pageSize);
+  const totalEntries = leaderboardTotal || entryCount;
+  const totalPages = Math.ceil(totalEntries / pageSize);
   const hasNextPage = currentPage < totalPages;
   const hasPreviousPage = currentPage > 1;
   const nextPage = () => setCurrentPageNum((p) => Math.min(p + 1, totalPages));
   const previousPage = () => setCurrentPageNum((p) => Math.max(p - 1, 1));
 
-  const gameTokens = games ?? [];
-
-  const { data: registrants } = useGetTournamentRegistrations(
-    tournamentId?.toString(),
-    {
-      limit: pageSize,
-    },
+  // 2. Fetch registrations for the current page's tokens (for isBanned, hasSubmitted)
+  const pageTokenIds = useMemo(
+    () => pageEntries.map((e) => e.tokenId),
+    [pageEntries],
+  );
+  const {
+    data: registrants,
+    refetch: refetchRegistrations,
+  } = useGetTournamentRegistrations(
+    pageTokenIds.length > 0 ? tournamentId?.toString() : undefined,
+    { limit: 1000 },
   );
 
-  // Map registrants to match the order of games
-  const orderedRegistrants = useMemo(() => {
-    if (!registrants || !gameTokens.length) return [];
+  // 3. Enrich leaderboard entries with registration metadata
+  const gameTokens = useMemo(() => {
+    if (!pageEntries.length) return [];
 
-    return gameTokens.map((game) => {
-      const tokenId = Number(game.token_id);
-      return (
-        registrants.find((reg: any) => Number(reg.game_token_id) === tokenId) || null
-      );
+    const regMap = new Map(
+      ((registrants as any[]) ?? []).map((r: any) => {
+        const raw = (r.gameTokenId)?.toString();
+        const hex = raw?.startsWith("0x") ? raw : "0x" + BigInt(raw ?? 0).toString(16);
+        return [hex, r];
+      }),
+    );
+
+    return pageEntries.map((entry) => {
+      const reg = regMap.get(entry.tokenId);
+      return {
+        ...entry,
+        gameId: 0,
+        playerName: entry.playerName || reg?.playerName || "",
+        lifecycle: { start: 0n, end: 0n },
+        metadata: "",
+        isBanned: !!reg?.isBanned,
+        hasSubmitted: !!reg?.hasSubmitted,
+      };
     });
-  }, [gameTokens, registrants]);
+  }, [pageEntries, registrants]);
 
   const ownerAddresses = useMemo(
-    () => gameTokens.map((game) => game?.owner ?? "0x0"),
-    [gameTokens]
+    () => gameTokens.map((game: any) => game?.owner ?? "0x0"),
+    [gameTokens],
   );
   const { usernames } = useGetUsernames(ownerAddresses);
 
@@ -126,9 +154,14 @@ const ScoreTable = ({
     }
   }, [gameTokens, hasInitialized]);
 
+  // Refetch registrations on budokan WS events (bans, submissions)
   useEffect(() => {
-    refetch();
-  }, [entryCount]);
+    if (lastMessage?.channel === "registrations") {
+      refetchRegistrations();
+    }
+  }, [lastMessage, refetchRegistrations]);
+
+  const loading = tokensLoading;
 
   return (
     <TournamentCard showCard={showScores}>
@@ -136,9 +169,9 @@ const ScoreTable = ({
         <TournamentCardTitle>
           {isStarted ? "Scores" : "Entrants"}
         </TournamentCardTitle>
-        {showScores && entryCount > 10 && (
+        {showScores && totalEntries > pageSize && (
           <Pagination
-            totalPages={Math.ceil(entryCount / 10)}
+            totalPages={totalPages}
             currentPage={currentPage}
             nextPage={nextPage}
             previousPage={previousPage}
@@ -149,7 +182,7 @@ const ScoreTable = ({
         <div className="flex flex-row items-center gap-2">
           {/* Desktop refresh button */}
           <Button
-            onClick={refetch}
+            onClick={refetchTokens}
             disabled={loading}
             size="sm"
             variant="outline"
@@ -162,7 +195,7 @@ const ScoreTable = ({
               {/* Mobile buttons together */}
               <div className="flex sm:hidden">
                 <Button
-                  onClick={refetch}
+                  onClick={refetchTokens}
                   disabled={loading}
                   size="xs"
                   variant="outline"
@@ -224,11 +257,10 @@ const ScoreTable = ({
             checkedLabel="Hide"
             uncheckedLabel="Show Scores"
           />
-          <TournamentCardMetric icon={<USER />} metric={entryCount} />
+          <TournamentCardMetric icon={<USER />} metric={totalEntries} />
         </div>
       </TournamentCardHeader>
       <TournamentCardContent showContent={showScores}>
-        {/* {!loading ? ( */}
         <div className="flex flex-row py-2">
           {[0, 1].map((colIndex) => (
             <div
@@ -240,44 +272,43 @@ const ScoreTable = ({
               {colIndex === 0 && gameTokens.length > 5 && (
                 <div className="absolute right-0 top-0 bottom-0 w-0.5 bg-brand/25 h-full" />
               )}
-              {gameTokens.slice(colIndex * 5, colIndex * 5 + 5).map((_, index) => (
-                <>
-                  {isStarted ? (
+              {gameTokens
+                .slice(colIndex * 5, colIndex * 5 + 5)
+                .map((_, index) => {
+                  const game = gameTokens[index + colIndex * 5];
+                  if (!game) return null;
+                  return isStarted ? (
                     <ScoreRow
-                      key={index}
+                      key={game.tokenId}
                       index={index}
                       colIndex={colIndex}
                       currentPage={currentPage}
-                      game={gameTokens[index + colIndex * 5]}
-                      registration={orderedRegistrants?.[index + colIndex * 5]}
+                      game={game}
+                      registration={game}
                       usernames={usernames}
                       isStarted={isStarted}
                       isEnded={isEnded}
-                      gameAddress={tournamentModel?.game_config.game_address}
+                      gameAddress={tournamentModel?.gameAddress}
                       setSelectedPlayer={setSelectedPlayer}
                       setIsMobileDialogOpen={setIsMobileDialogOpen}
                     />
                   ) : (
                     <EntrantRow
-                      key={index}
-                      game={gameTokens[index + colIndex * 5]}
+                      key={game.tokenId}
+                      game={game}
                       index={index}
                       colIndex={colIndex}
                       currentPage={currentPage}
                       setSelectedPlayer={setSelectedPlayer}
                       setIsMobileDialogOpen={setIsMobileDialogOpen}
                       usernames={usernames}
-                      registration={orderedRegistrants?.[index + colIndex * 5]}
+                      registration={game}
                     />
-                  )}
-                </>
-              ))}
+                  );
+                })}
             </div>
           ))}
         </div>
-        {/* ) : (
-          <TableSkeleton entryCount={entryCount} offset={offset} />
-        )} */}
       </TournamentCardContent>
 
       {/* Mobile dialog for player details */}
@@ -289,7 +320,7 @@ const ScoreTable = ({
         ownerAddress={ownerAddresses?.[selectedPlayer?.index ?? 0]}
         isStarted={isStarted}
         isEnded={isEnded}
-        gameAddress={tournamentModel?.game_config.game_address}
+        gameAddress={tournamentModel?.gameAddress}
       />
 
       {/* Table dialog for scores */}
@@ -297,7 +328,7 @@ const ScoreTable = ({
         open={showTableDialog}
         onOpenChange={setShowTableDialog}
         tournamentId={tournamentId}
-        entryCount={entryCount}
+        entryCount={totalEntries}
         isStarted={isStarted}
         isEnded={isEnded}
         banRefreshTrigger={localBanRefreshTrigger}
@@ -312,7 +343,8 @@ const ScoreTable = ({
           tournamentModel={tournamentModel}
           extensionAddress={extensionConfig?.address}
           onBanComplete={() => {
-            refetch();
+            refetchTokens();
+            refetchRegistrations();
             setLocalBanRefreshTrigger((prev) => prev + 1);
             if (onBanComplete) {
               onBanComplete();

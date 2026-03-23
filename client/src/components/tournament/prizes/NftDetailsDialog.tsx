@@ -34,11 +34,17 @@ export const NftDetailsDialog = ({
         <div className="flex flex-col gap-4">
           {tokenUri.image && (
             <div className="flex items-center justify-center bg-black/50 rounded-md p-4">
-              <img
-                src={tokenUri.image}
-                alt={tokenUri.name || `${symbol} #${tokenId}`}
+              <object
+                data={tokenUri.image}
+                type="image/svg+xml"
                 className="w-full h-auto max-w-full max-h-[400px] object-contain rounded-md"
-              />
+              >
+                <img
+                  src={tokenUri.image}
+                  alt={tokenUri.name || `${symbol} #${tokenId}`}
+                  className="w-full h-auto max-w-full max-h-[400px] object-contain rounded-md"
+                />
+              </object>
             </div>
           )}
           {tokenUri.description && (

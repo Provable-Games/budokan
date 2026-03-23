@@ -38,17 +38,23 @@ const NftPreview = ({
   }
 
   const content = tokenUri?.image ? (
-    <img
-      src={tokenUri.image}
-      alt={`${symbol} #${tokenId.toString()}`}
+    <object
+      data={tokenUri.image}
+      type="image/svg+xml"
       className={imageClass}
-      onError={(e) => {
-        // Fallback to placeholder on error
-        e.currentTarget.style.display = "none";
-        const fallback = e.currentTarget.nextElementSibling as HTMLElement;
-        if (fallback) fallback.style.display = "flex";
-      }}
-    />
+    >
+      <img
+        src={tokenUri.image}
+        alt={`${symbol} #${tokenId.toString()}`}
+        className={imageClass}
+        onError={(e) => {
+          // Fallback to placeholder on error
+          e.currentTarget.style.display = "none";
+          const fallback = e.currentTarget.parentElement?.nextElementSibling as HTMLElement;
+          if (fallback) fallback.style.display = "flex";
+        }}
+      />
+    </object>
   ) : null;
 
   const fallback = (
@@ -96,11 +102,17 @@ const NftPreview = ({
         <div className="flex flex-col gap-3">
           {tokenUri.image && (
             <div className="flex items-center justify-center bg-black/50 rounded-md p-2">
-              <img
-                src={tokenUri.image}
-                alt={tokenUri.name || `${symbol} #${tokenId}`}
+              <object
+                data={tokenUri.image}
+                type="image/svg+xml"
                 className="w-full h-auto max-w-[280px] max-h-[280px] object-contain rounded-md"
-              />
+              >
+                <img
+                  src={tokenUri.image}
+                  alt={tokenUri.name || `${symbol} #${tokenId}`}
+                  className="w-full h-auto max-w-[280px] max-h-[280px] object-contain rounded-md"
+                />
+              </object>
             </div>
           )}
           <div className="text-sm space-y-2">

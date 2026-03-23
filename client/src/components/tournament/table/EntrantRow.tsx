@@ -27,13 +27,13 @@ const EntrantRow = ({
   usernames,
   registration,
 }: EntrantRowProps) => {
-  const isBanned = registration?.is_banned === 1 ? true : false;
+  const isBanned = !!registration?.isBanned;
   const renderPlayerDetails = (game: GameTokenData) => (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2 px-4">
         <div className="flex flex-row gap-2">
           <span className="text-brand-muted">Player Name:</span>
-          <span>{game?.player_name}</span>
+          <span>{game?.playerName}</span>
         </div>
         <div className="flex flex-row gap-2">
           <span className="text-brand-muted">Owner:</span>
@@ -63,13 +63,13 @@ const EntrantRow = ({
               isBanned ? "opacity-60" : ""
             }`}>
               <span className="w-4 flex-none font-brand">
-                {index + 1 + colIndex * 5 + currentPage * 10}.
+                {game.rank || (index + 1 + colIndex * 5 + (currentPage - 1) * 10)}.
               </span>
               <span className="w-6 3xl:w-8 flex-none">
                 <USER />
               </span>
               <span className="flex-none max-w-20 group-hover:text-brand transition-colors duration-200">
-                {game?.player_name}
+                {game?.playerName}
               </span>
               {isBanned && (
                 <Ban className="w-3 h-3 3xl:w-4 3xl:h-4 text-destructive flex-shrink-0" />
@@ -97,13 +97,13 @@ const EntrantRow = ({
         }}
       >
         <span className="w-4 flex-none font-brand">
-          {index + 1 + colIndex * 5 + (currentPage - 1) * 10}.
+          {game.rank || (index + 1 + colIndex * 5 + (currentPage - 1) * 10)}.
         </span>
         <span className="w-6 flex-none">
           <USER />
         </span>
         <span className="flex-none max-w-20 3xl:max-w-44 group-hover:text-brand transition-colors duration-200">
-          {game?.player_name}
+          {game?.playerName}
         </span>
         {isBanned && (
           <Ban className="w-3 h-3 text-destructive flex-shrink-0" />

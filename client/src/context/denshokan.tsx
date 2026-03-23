@@ -1,10 +1,9 @@
-import { createContext, useContext, useMemo } from "react";
+import { useMemo } from "react";
 import type { ReactNode } from "react";
 import { useNetwork } from "@starknet-react/core";
-import { CHAINS, ChainId, getDefaultChainId } from "@/dojo/setup/networks";
-import { createDenshokanClient, type DenshokanClient, type DenshokanClientConfig } from "@provable-games/denshokan-sdk";
-
-const DenshokanContext = createContext<DenshokanClient | null>(null);
+import { CHAINS, ChainId, getDefaultChainId } from "@/chain/setup/networks";
+import { createDenshokanClient, type DenshokanClientConfig } from "@provable-games/denshokan-sdk";
+import { DenshokanProvider as SdkDenshokanProvider, useDenshokanClient } from "@provable-games/denshokan-sdk/react";
 
 export function DenshokanProvider({ children }: { children: ReactNode }) {
   const { chain } = useNetwork();
@@ -32,16 +31,11 @@ export function DenshokanProvider({ children }: { children: ReactNode }) {
   }, [chain]);
 
   return (
-    <DenshokanContext.Provider value={client}>
+    <SdkDenshokanProvider client={client}>
       {children}
-    </DenshokanContext.Provider>
+    </SdkDenshokanProvider>
   );
 }
 
-export function useDenshokanClient(): DenshokanClient {
-  const client = useContext(DenshokanContext);
-  if (!client) {
-    throw new Error("useDenshokanClient must be used within a DenshokanProvider");
-  }
-  return client;
-}
+// Re-export the SDK hook so existing imports from "@/context/denshokan" still work
+export { useDenshokanClient };

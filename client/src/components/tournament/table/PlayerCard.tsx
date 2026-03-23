@@ -4,11 +4,45 @@ import { VERIFIED, QUESTION } from "@/components/Icons";
 import { Ban, Eye, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getWatchLink, getReplayLink } from "@/assets/games";
+import { useTokenUri } from "@provable-games/denshokan-sdk/react";
+import { useMemo } from "react";
+
+const TokenUriImage = ({ tokenId }: { tokenId: string }) => {
+  const { data: tokenUri, isLoading } = useTokenUri(tokenId);
+
+  const parsedImage = useMemo(() => {
+    if (!tokenUri) return "";
+    try {
+      const match = tokenUri.match(/^data:application\/json;base64,(.+)$/);
+      const json = match ? atob(match[1]) : tokenUri;
+      return JSON.parse(json)?.image ?? "";
+    } catch {
+      return "";
+    }
+  }, [tokenUri]);
+
+  if (isLoading) {
+    return <span className="text-center text-neutral px-4">Loading...</span>;
+  }
+
+  if (!parsedImage) {
+    return <span className="text-center text-neutral">No Token URI</span>;
+  }
+
+  return (
+    <object
+      data={parsedImage}
+      type="image/svg+xml"
+      className="w-full h-auto px-4"
+    >
+      <img src={parsedImage} alt="metadata" className="w-full h-auto px-4" />
+    </object>
+  );
+};
 
 export const PlayerDetails = ({
   playerName,
   username,
-  metadata,
   isStarted,
   isEnded,
   hasSubmitted,
@@ -18,7 +52,6 @@ export const PlayerDetails = ({
 }: {
   playerName: string;
   username: string;
-  metadata: string;
   isStarted?: boolean;
   isEnded: boolean;
   hasSubmitted: boolean;
@@ -47,12 +80,8 @@ export const PlayerDetails = ({
         )}
       </div>
       <div className="w-full h-0.5 bg-brand/50" />
-      {metadata !== "" && metadata !== undefined ? (
-        <img
-          src={JSON.parse(metadata)?.image}
-          alt="metadata"
-          className="w-full h-auto px-4"
-        />
+      {tokenId ? (
+        <TokenUriImage tokenId={tokenId} />
       ) : (
         <span className="text-center text-neutral">No Token URI</span>
       )}
@@ -127,7 +156,7 @@ export const MobilePlayerCard = ({
   const username =
     usernames?.get(indexAddress(ownerAddress ?? "0x0")) ||
     displayAddress(ownerAddress ?? "0x0");
-  const isBanned = selectedPlayer?.registration?.is_banned === 1;
+  const isBanned = !!selectedPlayer?.registration?.isBanned;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:hidden">
@@ -137,15 +166,14 @@ export const MobilePlayerCard = ({
 
         {selectedPlayer && (
           <PlayerDetails
-            playerName={selectedPlayer.game?.player_name}
+            playerName={selectedPlayer.game?.playerName}
             username={username}
-            metadata={selectedPlayer.game?.metadata}
             isStarted={isStarted}
             isEnded={isEnded}
-            hasSubmitted={selectedPlayer.game?.has_submitted}
+            hasSubmitted={selectedPlayer.game?.hasSubmitted}
             isBanned={isBanned}
             gameAddress={gameAddress}
-            tokenId={selectedPlayer.game?.token_id?.toString()}
+            tokenId={selectedPlayer.game?.tokenId?.toString()}
           />
         )}
       </DialogContent>

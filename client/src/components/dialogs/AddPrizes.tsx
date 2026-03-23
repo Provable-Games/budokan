@@ -11,17 +11,18 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { FormToken } from "@/lib/types";
-import { Prize, ERC20Data, ERC721Data, Tournament } from "@/generated/models.gen";
-import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
+import { Prize, ERC20Data, ERC721Data } from "@/generated/models.gen";
+import type { Tournament } from "@provable-games/budokan-sdk";
+import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 import { BigNumberish } from "starknet";
 import { CairoCustomEnum, CairoOption, CairoOptionVariant } from "starknet";
 import { useAccount } from "@starknet-react/core";
-import { useConnectToSelectedChain } from "@/dojo/hooks/useChain";
-import { useDojo } from "@/context/dojo";
+import { useConnectToSelectedChain } from "@/chain/hooks/useChain";
+import { useChainConfig } from "@/context/chain";
 import { LoadingSpinner } from "@/components/ui/spinner";
 import { useGetPlatformStats } from "@/hooks/useBudokanQueries";
 import { PrizeManager } from "@/components/shared/PrizeManager";
-import { ChainId } from "@/dojo/setup/networks";
+import { ChainId } from "@/chain/setup/networks";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
 import { ALERT } from "@/components/Icons";
 import {
@@ -95,7 +96,7 @@ export function AddPrizesDialog({
   });
 
   const { address, account: _account } = useAccount();
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
   const { connect } = useConnectToSelectedChain();
   const { approveAndAddPrizes, approveAndAddPrizesBatched, getTokenDecimals } =
     useSystemCalls();
@@ -159,7 +160,7 @@ export function AddPrizesDialog({
     const existingPrizeValueUSD = 0;
 
     return validatePrizeAddition(
-      tournament,
+      tournament as unknown as Record<string, unknown>,
       additionalPrizeValueUSD,
       existingPrizeValueUSD
     );

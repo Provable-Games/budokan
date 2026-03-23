@@ -1,11 +1,6 @@
 import { create } from "zustand";
-import { Tournament, Prize } from "@/generated/models.gen";
+import type { Tournament, Prize } from "@provable-games/budokan-sdk";
 
-type MappedTournament = Tournament & {
-  entry_count: number;
-  prize_count: number;
-  submission_count: number;
-};
 
 interface TokenTotal {
   tokenAddress: string;
@@ -61,7 +56,7 @@ interface TournamentState {
   setIsLoading: (tab: TournamentTab, isLoading: boolean) => void;
 
   // Process pre-mapped tournament data (from new SDK hooks)
-  processTournamentsFromMapped: (mapped: MappedTournament[]) => ProcessedTournament[];
+  processTournamentsFromMapped: (mapped: Tournament[]) => ProcessedTournament[];
 }
 
 const useTournamentStore = create<TournamentState>((set, get) => ({
@@ -178,9 +173,19 @@ const useTournamentStore = create<TournamentState>((set, get) => ({
     if (!mapped || !Array.isArray(mapped)) return [];
 
     return mapped.map((t) => ({
-      tournament: t as Tournament,
+      tournament: t,
       prizes: [],
-      entryCount: t.entry_count ?? 0,
+      entryCount: t.entryCount ?? 0,
+      aggregations: (t as any).prizeAggregation
+        ? {
+            token_totals: ((t as any).prizeAggregation as any[]).map((pa: any) => ({
+              tokenAddress: pa.tokenAddress,
+              tokenType: pa.tokenType,
+              totalAmount: Number(pa.totalAmount),
+              nftCount: pa.nftCount,
+            })),
+          }
+        : undefined,
     }));
   },
 }));

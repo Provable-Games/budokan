@@ -20,7 +20,6 @@ import {
 } from "@/generated/models.gen";
 import { PositionPrizes, TokenPrizes } from "@/lib/types";
 import { TokenPrices } from "@/hooks/useEkuboPrices";
-import { getExtensionProof } from "@/lib/extensionConfig";
 import type { Schedule } from "@/generated/models.gen";
 
 /**
@@ -62,9 +61,9 @@ export const processTournamentData = (
   const gameStartDelay = Math.max(0, gameStartTimestamp - now);
   const gameEndDelay = gameStartDelay + formData.duration;
 
-  // Registration delays
-  let registrationStartDelay = 60; // default: 1 minute after creation
-  let registrationEndDelay = gameStartDelay; // default: registration ends when game starts
+  // Registration delays - 0 means "open" (no registration period)
+  let registrationStartDelay = 0;
+  let registrationEndDelay = 0;
 
   if (formData.type === "fixed" && formData.registrationStartTime) {
     const regStartTimestamp = Math.floor(
@@ -373,18 +372,22 @@ export const getSubmittableScores = (
   // Filter out already submitted scores but keep their positions intact
   // Only return scores that haven't been submitted yet
   const newSubmissions = leaderboardWithPositions
-    .filter((game) => !submittedTokenIdSet.has(game.token_id.toString()))
+    .filter((game) => !submittedTokenIdSet.has(game.tokenId.toString()))
     .map((game) => ({
-      tokenId: game.token_id,
+      tokenId: game.tokenId,
       position: game.position, // Keep the original position based on score ranking
     }));
 
   return newSubmissions;
 };
 
+/**
+ * Accepts either SDK entry fee data (plain object with camelCase fields)
+ * or null/undefined. Constructs DisplayPrize objects for the prize display system.
+ */
 export const extractEntryFeePrizes = (
   tournamentId: BigNumberish,
-  entryFee: CairoOption<EntryFee>,
+  entryFee: any,
   entryCount: BigNumberish,
   distributionPositions?: number
 ): {
@@ -392,20 +395,22 @@ export const extractEntryFeePrizes = (
   gameCreatorShare: DisplayPrize[];
   distributionPrizes: DisplayPrize[];
 } => {
-  if (!entryFee?.isSome()) {
+  // Support both SDK shape (entryFee as plain object) and absence
+  const fee = entryFee;
+  const tokenAddress = fee?.tokenAddress ?? fee?.token_address;
+  const amount = fee?.amount;
+  if (!fee || !tokenAddress || !amount) {
     return {
       tournamentCreatorShare: [],
       gameCreatorShare: [],
       distributionPrizes: [],
     };
   }
-  const totalFeeAmount = BigInt(entryFee.Some?.amount!) * BigInt(entryCount);
+  const totalFeeAmount = BigInt(amount) * BigInt(entryCount);
 
   // Get distribution positions from entry fee if not provided
-  const winnersCount = distributionPositions ??
-    (Number(entryFee.Some?.distribution_count ?? 0) > 0
-      ? Number(entryFee.Some?.distribution_count)
-      : 3);
+  const distCount = Number(fee.distributionCount ?? fee.distribution_count ?? 0);
+  const winnersCount = distributionPositions ?? (distCount > 0 ? distCount : 3);
 
   if (totalFeeAmount === 0n) {
     return {
@@ -415,126 +420,118 @@ export const extractEntryFeePrizes = (
     };
   }
 
-  const gameCreatorShareAmount = Number(entryFee.Some?.game_creator_share ?? 0) > 0
-    ? (totalFeeAmount * BigInt(entryFee?.Some?.game_creator_share ?? 0)) / 10000n
+  const gameCreatorShareBps = Number(fee.gameCreatorShare ?? fee.game_creator_share ?? 0);
+  const gameCreatorShareAmount = gameCreatorShareBps > 0
+    ? (totalFeeAmount * BigInt(gameCreatorShareBps)) / 10000n
     : 0n;
 
   const gameCreatorShare = gameCreatorShareAmount > 0n
     ? [
         {
           id: 0,
-          context_id: tournamentId, // Changed from tournament_id
-          position: 0, // Virtual position for display
-          token_address: entryFee.Some?.token_address!,
+          context_id: tournamentId,
+          position: 0,
+          token_address: tokenAddress,
           token_type: new CairoCustomEnum({
             erc20: {
-              amount: gameCreatorShareAmount.toString(), // Shares are in basis points (10000 = 100%)
+              amount: gameCreatorShareAmount.toString(),
               distribution: new CairoOption(CairoOptionVariant.None),
               distribution_count: new CairoOption(CairoOptionVariant.None),
             } as ERC20Data,
             erc721: undefined,
           }),
-          sponsor_address: "0x0", // Placeholder
+          sponsor_address: "0x0",
           type: "entry_fee_game_creator",
         } as DisplayPrize,
       ]
     : [];
 
-  const tournamentCreatorShareAmount = Number(entryFee.Some?.tournament_creator_share ?? 0) > 0
-    ? (totalFeeAmount * BigInt(entryFee?.Some?.tournament_creator_share ?? 0)) / 10000n
+  const tournamentCreatorShareBps = Number(fee.tournamentCreatorShare ?? fee.tournament_creator_share ?? 0);
+  const tournamentCreatorShareAmount = tournamentCreatorShareBps > 0
+    ? (totalFeeAmount * BigInt(tournamentCreatorShareBps)) / 10000n
     : 0n;
 
   const tournamentCreatorShare = tournamentCreatorShareAmount > 0n
     ? [
         {
           id: 0,
-          context_id: tournamentId, // Changed from tournament_id
-          position: 0, // Virtual position for display
-          token_address: entryFee.Some?.token_address!,
+          context_id: tournamentId,
+          position: 0,
+          token_address: tokenAddress,
           token_type: new CairoCustomEnum({
             erc20: {
-              amount: tournamentCreatorShareAmount.toString(), // Shares are in basis points (10000 = 100%)
+              amount: tournamentCreatorShareAmount.toString(),
               distribution: new CairoOption(CairoOptionVariant.None),
               distribution_count: new CairoOption(CairoOptionVariant.None),
             } as ERC20Data,
             erc721: undefined,
           }),
-          sponsor_address: "0x0", // Placeholder
+          sponsor_address: "0x0",
           type: "entry_fee_tournament_creator",
         } as DisplayPrize,
       ]
     : [];
 
-  // Calculate distribution prizes based on the distribution enum
+  // Calculate distribution prizes
   const calculateDistributionPrizes = (): DisplayPrize[] => {
-    if (!entryFee.Some?.distribution) return [];
+    const dist = fee.distribution;
+    if (!dist) return [];
 
-    const dist = entryFee.Some.distribution;
     let distributionPercentages: number[] = [];
 
-    // Extract distribution type and calculate percentages
-    if (dist.activeVariant() === "Linear") {
-      const weight = (dist.unwrap() as number) / 10; // Convert from u16 to decimal
+    // Detect distribution type: SDK stores as { type, weight } or similar
+    const distType = typeof dist === "object" && dist !== null
+      ? (dist.activeVariant?.() ?? dist.type ?? "uniform")
+      : "uniform";
+    const distWeight = typeof dist === "object" && dist !== null
+      ? (dist.unwrap?.() ?? dist.weight ?? 1)
+      : 1;
+
+    if (distType === "Linear" || distType === "linear") {
       distributionPercentages = calculateDistribution(
-        winnersCount,
-        weight,
-        0, 0, 0,
-        "linear"
+        winnersCount, Number(distWeight) / 10, 0, 0, 0, "linear"
       );
-    } else if (dist.activeVariant() === "Exponential") {
-      const weight = (dist.unwrap() as number) / 10; // Convert from u16 to decimal
+    } else if (distType === "Exponential" || distType === "exponential") {
       distributionPercentages = calculateDistribution(
-        winnersCount,
-        weight,
-        0, 0, 0,
-        "exponential"
+        winnersCount, Number(distWeight) / 10, 0, 0, 0, "exponential"
       );
-    } else if (dist.activeVariant() === "Uniform") {
+    } else if (distType === "Uniform" || distType === "uniform") {
       distributionPercentages = calculateDistribution(
-        winnersCount,
-        1,
-        0, 0, 0,
-        "uniform"
+        winnersCount, 1, 0, 0, 0, "uniform"
       );
-    } else if (dist.activeVariant() === "Custom") {
-      // Custom distribution array comes directly as percentages
-      distributionPercentages = (dist.unwrap() as number[]).map(v => v / 100);
+    } else if (distType === "Custom" || distType === "custom") {
+      const customValues = dist.unwrap?.() ?? dist.values ?? [];
+      distributionPercentages = (customValues as number[]).map(v => v / 100);
     }
 
     // Calculate actual prize pool after fees
-    // Shares are in basis points (10000 = 100%)
-    const creatorSharePercent = Number(entryFee.Some?.tournament_creator_share ?? 0);
-    const gameSharePercent = Number(entryFee.Some?.game_creator_share ?? 0);
-    const refundSharePercent = Number(entryFee.Some?.refund_share ?? 0);
+    const creatorSharePercent = tournamentCreatorShareBps;
+    const gameSharePercent = gameCreatorShareBps;
+    const refundSharePercent = Number(fee.refundShare ?? fee.refund_share ?? 0);
 
     const prizePoolPercent = 10000 - creatorSharePercent - gameSharePercent - refundSharePercent;
     const prizePoolAmount = (totalFeeAmount * BigInt(prizePoolPercent)) / 10000n;
 
-    // Create prize objects from percentages
     return distributionPercentages
       .map((percentage, index) => {
         if (percentage === 0) return null;
-
-        // percentage is 0-100 (e.g., 50 = 50%), convert to basis points by multiplying by 100
-        const amount = (prizePoolAmount * BigInt(Math.floor(percentage * 100))) / 10000n;
-
-        // Skip prizes with 0 amount (now accurately reflects contract calculation)
-        if (amount === 0n) return null;
+        const prizeAmount = (prizePoolAmount * BigInt(Math.floor(percentage * 100))) / 10000n;
+        if (prizeAmount === 0n) return null;
 
         return {
           id: 0,
-          context_id: tournamentId, // Changed from tournament_id
-          position: index + 1, // Virtual position for display
-          token_address: entryFee.Some?.token_address!,
+          context_id: tournamentId,
+          position: index + 1,
+          token_address: tokenAddress,
           token_type: new CairoCustomEnum({
             erc20: {
-              amount: amount.toString(),
+              amount: prizeAmount.toString(),
               distribution: new CairoOption(CairoOptionVariant.None),
               distribution_count: new CairoOption(CairoOptionVariant.None),
             } as ERC20Data,
             erc721: undefined,
           }),
-          sponsor_address: "0x0", // Placeholder
+          sponsor_address: "0x0",
           type: "entry_fee",
         } as DisplayPrize;
       })
@@ -1007,8 +1004,8 @@ export const processQualificationProof = (
   requirementVariant: string,
   proof: any,
   address: string,
-  extensionAddress?: string,
-  extensionContext?: any
+  _extensionAddress?: string,
+  _extensionContext?: unknown,
 ): CairoOption<QualificationProofEnum> => {
   if (requirementVariant === "token") {
     return new CairoOption(
@@ -1061,10 +1058,8 @@ export const processQualificationProof = (
       );
     }
 
-    // Generic extension - get proof from extension config
-    const extensionProofData = extensionAddress
-      ? getExtensionProof(extensionAddress, address, extensionContext)
-      : [address]; // Fallback to address if no extension address provided
+    // Generic extension — proof is always empty (extensions validate on-chain)
+    const extensionProofData: string[] = [];
 
     return new CairoOption(
       CairoOptionVariant.Some,
@@ -1086,80 +1081,147 @@ export const processQualificationProof = (
  * Similar to how entry fee distributions are expanded
  */
 export const expandDistributedPrizes = (
-  prizes: Prize[]
+  prizes: any[]
 ): DisplayPrize[] => {
   const expanded: DisplayPrize[] = [];
 
   prizes.forEach((prize) => {
-    const tokenType = prize.token_type;
+    // Support both CairoCustomEnum (token_type with .activeVariant()) and SDK plain objects (tokenType)
+    const tokenType = prize.token_type ?? prize.tokenType;
+    if (!tokenType) {
+      expanded.push({ ...prize, position: prize.position ?? prize.payoutPosition ?? 0, type: "sponsored_single" } as DisplayPrize);
+      return;
+    }
 
-    if (tokenType.activeVariant?.() === "erc20") {
-      const erc20Data = tokenType.variant?.erc20;
+    // SDK flat format: tokenType is a plain string
+    if (typeof tokenType === "string") {
+      const isErc20 = tokenType === "erc20";
+      if (!isErc20) {
+        expanded.push({
+          ...prize,
+          id: prize.id ?? prize.prizeId,
+          context_id: prize.context_id ?? prize.tournamentId,
+          position: prize.position ?? prize.payoutPosition ?? 0,
+          token_address: prize.token_address ?? prize.tokenAddress,
+          sponsor_address: prize.sponsor_address ?? prize.sponsorAddress,
+          type: "sponsored_single",
+        } as DisplayPrize);
+        return;
+      }
 
-      // Check if this prize has distribution_count - handle both SDK format (isSome method) and manual format (Some property)
-      const hasDistributionCount = erc20Data?.distribution_count?.isSome?.() || erc20Data?.distribution_count?.Some !== undefined;
-      const hasDistribution = erc20Data.distribution?.isSome?.() || erc20Data.distribution?.Some;
+      const distCount = Number(prize.distributionCount ?? prize.distribution_count ?? 0);
+      if (distCount <= 0) {
+        expanded.push({
+          ...prize,
+          id: prize.id ?? prize.prizeId,
+          context_id: prize.context_id ?? prize.tournamentId,
+          position: prize.position ?? prize.payoutPosition ?? 0,
+          token_address: prize.token_address ?? prize.tokenAddress,
+          sponsor_address: prize.sponsor_address ?? prize.sponsorAddress,
+          type: "sponsored_single",
+        } as DisplayPrize);
+        return;
+      }
 
-      if (hasDistributionCount) {
-        const distributionCount = Number(erc20Data.distribution_count.Some);
+      const totalAmount = BigInt(prize.amount ?? 0);
+      const distType = (prize.distributionType ?? prize.distribution_type ?? "uniform").toLowerCase();
+      const weight = Number(prize.distributionWeight ?? prize.distribution_weight ?? 100);
+
+      let distributionPercentages: number[];
+      if (distType === "custom") {
+        distributionPercentages = calculateDistribution(distCount, 1, 0, 0, 0, "uniform");
+      } else {
+        distributionPercentages = calculateDistribution(
+          distCount,
+          weight / 10,
+          0, 0, 0,
+          distType as "linear" | "exponential" | "uniform"
+        );
+      }
+
+      distributionPercentages.forEach((percentage, index) => {
+        if (percentage === 0) return;
+        const amount = (totalAmount * BigInt(Math.floor(percentage * 100))) / 10000n;
+        if (amount === 0n) return;
+
+        expanded.push({
+          id: prize.id ?? prize.prizeId,
+          context_id: prize.context_id ?? prize.tournamentId,
+          position: index + 1,
+          token_address: prize.token_address ?? prize.tokenAddress,
+          token_type: new CairoCustomEnum({
+            erc20: {
+              amount: amount.toString(),
+              distribution: new CairoOption(CairoOptionVariant.None),
+              distribution_count: new CairoOption(CairoOptionVariant.None),
+            } as ERC20Data,
+            erc721: undefined,
+          }),
+          sponsor_address: prize.sponsor_address ?? prize.sponsorAddress,
+          type: "sponsored_distributed",
+        } as DisplayPrize);
+      });
+      return;
+    }
+
+    // Detect if ERC20: CairoCustomEnum uses .activeVariant(), SDK uses plain object keys
+    const isErc20 = typeof tokenType.activeVariant === "function"
+      ? tokenType.activeVariant() === "erc20"
+      : !!(tokenType.erc20 || tokenType.type === "erc20");
+
+    if (isErc20) {
+      const erc20Data = tokenType.variant?.erc20 ?? tokenType.erc20 ?? tokenType;
+      if (!erc20Data?.amount) {
+        expanded.push({ ...prize, position: prize.position ?? prize.payoutPosition ?? 0, type: "sponsored_single" } as DisplayPrize);
+        return;
+      }
+
+      // Get distribution count from various formats
+      const rawDistCount = erc20Data.distribution_count ?? erc20Data.distributionCount;
+      const distributionCount = typeof rawDistCount === "object" && rawDistCount !== null
+        ? (rawDistCount.isSome?.() ? Number(rawDistCount.Some) : (rawDistCount.Some !== undefined ? Number(rawDistCount.Some) : 0))
+        : Number(rawDistCount ?? 0);
+
+      if (distributionCount > 0) {
         const totalAmount = BigInt(erc20Data.amount);
 
-        // Calculate distribution percentages
+        // Get distribution type from various formats
+        const rawDist = erc20Data.distribution;
         let distributionPercentages: number[] = [];
 
-        if (hasDistribution) {
-          const dist = erc20Data.distribution.Some;
+        if (rawDist) {
+          const distType = typeof rawDist === "object" && rawDist !== null
+            ? (rawDist.activeVariant?.() ?? rawDist.type ?? (rawDist.Some?.activeVariant?.() ? rawDist.Some.activeVariant() : null))
+            : rawDist;
+          const distValue = typeof rawDist === "object" && rawDist !== null
+            ? (rawDist.unwrap?.() ?? rawDist.weight ?? rawDist.Some?.unwrap?.() ?? rawDist.Some)
+            : undefined;
 
-          if (dist.activeVariant() === "Linear") {
-            const weight = (dist.unwrap() as number) / 10;
-            distributionPercentages = calculateDistribution(
-              distributionCount,
-              weight,
-              0, 0, 0,
-              "linear"
-            );
-          } else if (dist.activeVariant() === "Exponential") {
-            const weight = (dist.unwrap() as number) / 10;
-            distributionPercentages = calculateDistribution(
-              distributionCount,
-              weight,
-              0, 0, 0,
-              "exponential"
-            );
-          } else if (dist.activeVariant() === "Uniform") {
-            distributionPercentages = calculateDistribution(
-              distributionCount,
-              1,
-              0, 0, 0,
-              "uniform"
-            );
-          } else if (dist.activeVariant() === "Custom") {
-            distributionPercentages = (dist.unwrap() as number[]).map(v => v / 100);
+          if (distType === "Linear" || distType === "linear") {
+            distributionPercentages = calculateDistribution(distributionCount, Number(distValue ?? 10) / 10, 0, 0, 0, "linear");
+          } else if (distType === "Exponential" || distType === "exponential") {
+            distributionPercentages = calculateDistribution(distributionCount, Number(distValue ?? 10) / 10, 0, 0, 0, "exponential");
+          } else if (distType === "Uniform" || distType === "uniform") {
+            distributionPercentages = calculateDistribution(distributionCount, 1, 0, 0, 0, "uniform");
+          } else if (distType === "Custom" || distType === "custom") {
+            distributionPercentages = ((distValue ?? []) as number[]).map(v => v / 100);
+          } else {
+            distributionPercentages = calculateDistribution(distributionCount, 1, 0, 0, 0, "uniform");
           }
         } else {
-          // Default to uniform if no distribution specified
-          distributionPercentages = calculateDistribution(
-            distributionCount,
-            1,
-            0, 0, 0,
-            "uniform"
-          );
+          distributionPercentages = calculateDistribution(distributionCount, 1, 0, 0, 0, "uniform");
         }
 
-        // Create a DisplayPrize for each position
         distributionPercentages.forEach((percentage, index) => {
           if (percentage === 0) return;
-
           const amount = (totalAmount * BigInt(Math.floor(percentage * 100))) / 10000n;
-
-          // Skip prizes with 0 amount (now accurately reflects contract calculation)
           if (amount === 0n) return;
 
           expanded.push({
-            id: prize.id,
-            context_id: prize.context_id,
+            id: prize.id ?? prize.prizeId,
+            context_id: prize.context_id ?? prize.tournamentId,
             position: index + 1,
-            token_address: prize.token_address,
+            token_address: prize.token_address ?? prize.tokenAddress,
             token_type: new CairoCustomEnum({
               erc20: {
                 amount: amount.toString(),
@@ -1168,23 +1230,23 @@ export const expandDistributedPrizes = (
               } as ERC20Data,
               erc721: undefined,
             }),
-            sponsor_address: prize.sponsor_address,
+            sponsor_address: prize.sponsor_address ?? prize.sponsorAddress,
             type: "sponsored_distributed",
           } as DisplayPrize);
         });
       } else {
-        // Single prize, no distribution
         expanded.push({
           ...prize,
-          position: 0, // Position 0 for non-distributed prizes
+          position: prize.position ?? prize.payoutPosition ?? 0,
+          token_address: prize.token_address ?? prize.tokenAddress,
           type: "sponsored_single",
         } as DisplayPrize);
       }
     } else {
-      // ERC721 prizes are always single
       expanded.push({
         ...prize,
-        position: 0,
+        position: prize.position ?? prize.payoutPosition ?? 0,
+        token_address: prize.token_address ?? prize.tokenAddress,
         type: "sponsored_single",
       } as DisplayPrize);
     }

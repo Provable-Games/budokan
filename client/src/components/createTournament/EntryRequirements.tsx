@@ -19,16 +19,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { StepProps } from "@/containers/CreateTournament";
 import { USER, X, INFO } from "@/components/Icons";
-import { displayAddress, feltToString, indexAddress } from "@/lib/utils";
+import { displayAddress, indexAddress } from "@/lib/utils";
 import TokenGameIcon from "@/components/icons/TokenGameIcon";
 import { Search } from "lucide-react";
 import TokenDialog from "@/components/dialogs/Token";
-import { useDojo } from "@/context/dojo";
+import { useChainConfig } from "@/context/chain";
 import {
   useGetTournaments,
   useGetTournamentsCount,
 } from "@/hooks/useBudokanQueries";
-import { computeAbsoluteTimes } from "@/lib/utils/formatting";
 import Pagination from "@/components/table/Pagination";
 import {
   Tooltip,
@@ -47,11 +46,11 @@ import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { PRESET_EXTENSIONS } from "@/lib/extensionPresets";
 import {
-  PRESET_EXTENSIONS,
   getExtensionAddresses,
   getOpusSupportedAssets,
-} from "@/lib/extensionConfig";
+} from "@provable-games/metagame-sdk";
 import { SnapshotConfig } from "./extensions/SnapshotConfig";
 import { ERC20BalanceConfig } from "./extensions/ERC20BalanceConfig";
 import { OpusTrovesConfig } from "./extensions/OpusTrovesConfig";
@@ -60,7 +59,7 @@ import { GovernanceConfig } from "./extensions/GovernanceConfig";
 import { CustomExtensionConfig } from "./extensions/CustomExtensionConfig";
 
 const EntryRequirements = ({ form }: StepProps) => {
-  const { selectedChainConfig } = useDojo();
+  const { selectedChainConfig } = useChainConfig();
   const [newAddress, setNewAddress] = React.useState("");
   const [tournamentSearchQuery, setTournamentSearchQuery] = useState("");
   const [gameFilters, setGameFilters] = useState<string[]>([]);
@@ -95,7 +94,7 @@ const EntryRequirements = ({ form }: StepProps) => {
     return {
       tournament: tournament,
       prizes: [],
-      entryCount: Number(tournament.entry_count ?? 0),
+      entryCount: Number(tournament.entryCount ?? 0),
     };
   });
 
@@ -674,9 +673,7 @@ const EntryRequirements = ({ form }: StepProps) => {
                                           className="inline-flex items-center gap-2 p-2 border border-brand-muted rounded w-fit"
                                         >
                                           <span>
-                                            {feltToString(
-                                              selectedTournament.metadata.name
-                                            )}{" "}
+                                            {(selectedTournament as any).name}{" "}
                                             -{" "}
                                             {Number(
                                               selectedTournament.id
@@ -686,10 +683,10 @@ const EntryRequirements = ({ form }: StepProps) => {
                                             className="h-4 w-4 hover:cursor-pointer"
                                             onClick={() => {
                                               field.onChange(
-                                                field.value.filter(
+                                                field.value?.filter(
                                                   (v) =>
                                                     v !== selectedTournament
-                                                )
+                                                ) ?? []
                                               );
                                             }}
                                           >
@@ -793,15 +790,16 @@ const EntryRequirements = ({ form }: StepProps) => {
                                       {tournamentsData?.length > 0 ? (
                                         tournamentsData.map(
                                           (tournament, index) => {
-                                            const tAbsTimes = computeAbsoluteTimes(tournament?.tournament.created_at, tournament?.tournament.schedule);
+                                            const tGameStartTime = Number(tournament?.tournament.gameStartTime ?? 0);
                                             const isStarted =
-                                              tAbsTimes.gameStartTime <
+                                              tGameStartTime <
                                               Number(
                                                 BigInt(Date.now()) / 1000n
                                               );
 
+                                            const tGameEndTime = Number(tournament?.tournament.gameEndTime ?? 0);
                                             const isEnded =
-                                              tAbsTimes.gameEndTime <
+                                              tGameEndTime <
                                               Number(
                                                 BigInt(Date.now()) / 1000n
                                               );
@@ -862,10 +860,7 @@ const EntryRequirements = ({ form }: StepProps) => {
                                               >
                                                 <div className="flex flex-row items-center gap-2">
                                                   <span className="font-brand">
-                                                    {feltToString(
-                                                      tournament.tournament
-                                                        .metadata.name
-                                                    )}
+                                                    {tournament.tournament.name}
                                                   </span>
                                                   -
                                                   <span className="font-brand">
@@ -1027,7 +1022,7 @@ const EntryRequirements = ({ form }: StepProps) => {
 
                                               // Then check if it's already in the existing list
                                               if (
-                                                field.value.some(
+                                                field.value?.some(
                                                   (existingAddr) =>
                                                     indexAddress(existingAddr).toLowerCase() ===
                                                     indexAddress(addr).toLowerCase()
@@ -1091,7 +1086,7 @@ const EntryRequirements = ({ form }: StepProps) => {
 
                                           if (uniqueValidAddresses.length > 0) {
                                             field.onChange([
-                                              ...field.value,
+                                              ...(field.value ?? []),
                                               ...uniqueValidAddresses,
                                             ]);
                                             setNewAddress("");
@@ -1115,20 +1110,20 @@ const EntryRequirements = ({ form }: StepProps) => {
                                     </Button>
                                   </div>
                                 </div>
-                                {field.value.length > 0 && (
+                                {(field.value ?? []).length > 0 && (
                                   <>
                                     <div className="w-full h-0.5 bg-brand/25" />
                                     <div className="flex flex-row items-center justify-between">
                                       <div className="flex flex-col gap-2">
                                         <span className="text-sm">
-                                          {field.value.length} address
-                                          {field.value.length !== 1
+                                          {(field.value ?? []).length} address
+                                          {(field.value ?? []).length !== 1
                                             ? "es"
                                             : ""}{" "}
                                           added
                                         </span>
                                         <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto w-5/6">
-                                          {field.value.map((address, index) => (
+                                          {(field.value ?? []).map((address, index) => (
                                             <div
                                               key={index}
                                               className="flex items-center justify-between p-2 border border-neutral rounded w-fit"
@@ -1140,7 +1135,7 @@ const EntryRequirements = ({ form }: StepProps) => {
                                                 className="h-4 w-4 ml-2 hover:cursor-pointer"
                                                 onClick={() => {
                                                   const newAddresses = [
-                                                    ...field.value,
+                                                    ...(field.value ?? []),
                                                   ];
                                                   newAddresses.splice(index, 1);
                                                   field.onChange(newAddresses);

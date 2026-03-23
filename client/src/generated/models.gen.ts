@@ -1,4 +1,3 @@
-import type { SchemaType as ISchemaType } from "@dojoengine/sdk";
 import {
   CairoCustomEnum,
   CairoOption,
@@ -404,7 +403,7 @@ export type NFTQualification = {
   token_id: Uint256;
 };
 
-export interface SchemaType extends ISchemaType {
+export interface SchemaType {
   [namespace: string]: {
     GameCounter: WithFieldOrder<GameCounter>;
     GameCounterValue: WithFieldOrder<GameCounterValue>;

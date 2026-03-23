@@ -35,12 +35,12 @@ const ScoreRow = ({
   setSelectedPlayer,
   setIsMobileDialogOpen,
 }: ScoreRowProps) => {
-  const playerName = game.player_name;
+  const playerName = game.playerName;
   const score = game.score;
   const ownerAddress = game.owner;
 
-  const hasSubmitted = registration?.has_submitted === 1 ? true : false;
-  const isBanned = registration?.is_banned === 1 ? true : false;
+  const hasSubmitted = !!registration?.hasSubmitted;
+  const isBanned = !!registration?.isBanned;
 
   //TODO: revert after devconnect
   const username =
@@ -59,13 +59,13 @@ const ScoreRow = ({
               } ${isBanned ? "opacity-60" : ""}`}
             >
               <span className="w-4 flex-none font-brand">
-                {index + 1 + colIndex * 5 + currentPage * 10}.
+                {game.rank || (index + 1 + colIndex * 5 + (currentPage - 1) * 10)}.
               </span>
               <span className="w-6 3xl:w-8 flex-none">
                 <USER />
               </span>
               <span className="flex-none lg:max-w-20 xl:max-w-24 2xl:max-w-28 3xl:max-w-44 group-hover:text-brand transition-colors duration-200 text-ellipsis overflow-hidden whitespace-nowrap">
-                {username}
+                {playerName || username}
               </span>
               {isBanned && (
                 <Ban className="w-3 h-3 3xl:w-4 3xl:h-4 text-destructive flex-shrink-0" />
@@ -95,15 +95,14 @@ const ScoreRow = ({
             side="top"
           >
             <PlayerDetails
-              playerName={game.player_name ?? "Unknown Player"}
+              playerName={game.playerName ?? "Unknown Player"}
               username={username}
-              metadata={typeof game.metadata === 'string' ? game.metadata : JSON.stringify(game.metadata)}
               isStarted={isStarted}
               isEnded={isEnded}
               hasSubmitted={hasSubmitted}
               isBanned={isBanned}
               gameAddress={gameAddress}
-              tokenId={game.token_id?.toString()}
+              tokenId={game.tokenId?.toString()}
             />
           </HoverCardContent>
         </HoverCard>
@@ -124,7 +123,7 @@ const ScoreRow = ({
         }}
       >
         <span className="w-4 flex-none font-brand">
-          {index + 1 + colIndex * 5 + currentPage * 10}.
+          {game.rank || (index + 1 + colIndex * 5 + (currentPage - 1) * 10)}.
         </span>
         <span className="w-6 flex-none">
           <USER />

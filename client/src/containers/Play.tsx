@@ -2,10 +2,9 @@ import { Button } from "@/components/ui/button";
 import { ARROW_LEFT } from "@/components/Icons";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { feltToString } from "@/lib/utils";
 import { useGetTournaments } from "@/hooks/useBudokanQueries";
 // import TournamentGames from "@/components/play/TournamentGames";
-import { Tournament } from "@/generated/models.gen";
+import type { Tournament } from "@provable-games/budokan-sdk";
 import { Card } from "@/components/ui/card";
 
 const Play = () => {
@@ -21,7 +20,7 @@ const Play = () => {
   const tournamentsData = tournaments.map((tournament) => ({
     tournament,
     prizes: [],
-    entryCount: tournament.entry_count ?? 0,
+    entryCount: tournament.entryCount ?? 0,
   }));
 
   return (
@@ -62,7 +61,7 @@ const Play = () => {
                     >
                       <div className="flex flex-row items-center gap-2">
                         <p>
-                          {feltToString(tournament.tournament.metadata.name)}
+                          {tournament.tournament.name}
                         </p>
                         -<p>{Number(tournament.tournament.id).toString()}</p>
                       </div>

@@ -18,7 +18,7 @@ const SmallSettingsTable = ({
     );
   }
 
-  const entries = Object.entries(settings);
+  const entries = Object.entries(settings ?? {});
 
   return (
     <div className="flex flex-row gap-2 overflow-x-auto pb-2">

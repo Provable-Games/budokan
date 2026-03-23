@@ -1,11 +1,13 @@
 import { DOLLAR, REFRESH } from "@/components/Icons";
-import { useGameTokens } from "@/hooks/useDenshokanQueries";
 import { useGetTournamentRegistrations } from "@/hooks/useBudokanQueries";
 import { useEffect, useState, useMemo } from "react";
 import { useAccount } from "@starknet-react/core";
 import { BigNumberish } from "starknet";
 import EntryCard from "@/components/tournament/myEntries/EntryCard";
-import { Tournament } from "@/generated/models.gen";
+import type { Tournament, WSEventMessage } from "@provable-games/budokan-sdk";
+import { useLiveLeaderboard } from "@provable-games/denshokan-sdk/react";
+import { useChainConfig } from "@/context/chain";
+import { padAddress } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   TournamentCard,
@@ -21,7 +23,10 @@ interface MyEntriesProps {
   gameAddress: string;
   tournamentModel: Tournament;
   totalEntryCount: number;
+  isStarted: boolean;
+  isEnded: boolean;
   banRefreshTrigger?: number;
+  lastMessage?: WSEventMessage | null;
 }
 
 const MyEntries = ({
@@ -29,23 +34,47 @@ const MyEntries = ({
   gameAddress,
   tournamentModel,
   totalEntryCount,
+  isStarted,
+  isEnded,
   banRefreshTrigger,
+  lastMessage,
 }: MyEntriesProps) => {
   const { address } = useAccount();
+  const { selectedChainConfig } = useChainConfig();
+  const tournamentAddress = selectedChainConfig.budokanAddress!;
   const [showMyEntries, setShowMyEntries] = useState(false);
 
   const {
-    data: ownedGames,
+    entries: ownedEntries,
+    isLoading: loading,
     refetch,
-    loading,
-  } = useGameTokens({
-    owner: address ?? "0x0",
-    gameId: Number(tournamentId),
+  } = useLiveLeaderboard({
+    contextId: Number(tournamentId),
+    minterAddress: padAddress(tournamentAddress),
+    owner: address,
+    sort: { field: "score", direction: "desc" },
     limit: 1000,
-    active: !!address,
+    enabled: !!address,
+    liveScores: true,
+    liveGameOver: true,
+    liveMints: true,
   });
 
-  const gameTokens = ownedGames ?? [];
+  const gameTokens = useMemo(
+    () =>
+      ownedEntries.map((e) => ({
+        tokenId: e.tokenId,
+        gameId: 0,
+        owner: e.owner,
+        playerName: e.playerName,
+        score: e.score,
+        gameOver: e.gameOver,
+        rank: e.rank,
+        lifecycle: { start: 0n, end: 0n },
+        metadata: "" as string,
+      })),
+    [ownedEntries],
+  );
   const myEntriesCount = gameTokens.length;
 
   const { data: myEntries, refetch: refetchRegistrations } = useGetTournamentRegistrations(
@@ -58,11 +87,10 @@ const MyEntries = ({
 
   const processedEntries = useMemo(() => {
     if (!myEntries || myEntries.length === 0) return [];
-    const processed = myEntries.map((entry: any) => ({
+    return myEntries.map((entry: any) => ({
       ...entry,
-      game_token_id: Number(entry.game_token_id),
+      gameTokenId: Number(entry.gameTokenId ?? entry.game_token_id),
     }));
-    return processed;
   }, [myEntries]);
 
   useEffect(() => {
@@ -75,10 +103,12 @@ const MyEntries = ({
     }
   }, [address, myEntriesCount, totalEntryCount]);
 
+  // Refetch registrations on budokan WS registration events
   useEffect(() => {
-    refetch();
-    refetchRegistrations();
-  }, [totalEntryCount]);
+    if (lastMessage?.channel === "registrations") {
+      refetchRegistrations();
+    }
+  }, [lastMessage, refetchRegistrations]);
 
   // Refetch when a ban operation completes
   useEffect(() => {
@@ -138,7 +168,7 @@ const MyEntries = ({
           <div className="flex flex-row gap-5 overflow-x-auto pb-2 h-full">
             {gameTokens.map((game, index) => {
               const registration = processedEntries.find(
-                (entry) => entry.game_token_id === Number(game.token_id)
+                (entry) => entry.gameTokenId === Number(game.tokenId)
               );
               return (
                 <EntryCard
@@ -147,6 +177,8 @@ const MyEntries = ({
                   game={game}
                   tournamentModel={tournamentModel}
                   registration={registration}
+                  isStarted={isStarted}
+                  isEnded={isEnded}
                 />
               );
             })}

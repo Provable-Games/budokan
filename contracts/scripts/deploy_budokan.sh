@@ -15,6 +15,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONTRACTS_DIR="$SCRIPT_DIR/.."
+WORKSPACE_DIR="$CONTRACTS_DIR/.."
 
 # Load .env if it exists
 if [ -f "$CONTRACTS_DIR/.env" ]; then
@@ -102,21 +103,25 @@ fi
 # Always use release profile for deployment (optimized, smaller artifacts, cheaper gas)
 SCARB_PROFILE="release"
 
-cd "$CONTRACTS_DIR"
+cd "$WORKSPACE_DIR"
 
 print_info "Building contracts ($SCARB_PROFILE profile)..."
 scarb --profile "$SCARB_PROFILE" build --workspace
 
-# Verify contract artifacts exist
-if [ ! -f "$CONTRACTS_DIR/target/release/budokan_Budokan.contract_class.json" ]; then
-    print_error "Budokan contract artifact not found"
+# Verify contract artifacts exist (workspace target is at repo root)
+ARTIFACTS_DIR="$WORKSPACE_DIR/target/release"
+if [ ! -f "$ARTIFACTS_DIR/budokan_Budokan.contract_class.json" ]; then
+    print_error "Budokan contract artifact not found at $ARTIFACTS_DIR"
     exit 1
 fi
 
-if [ ! -f "$CONTRACTS_DIR/target/release/budokan_viewer_BudokanViewer.contract_class.json" ]; then
-    print_error "BudokanViewer contract artifact not found"
+if [ ! -f "$ARTIFACTS_DIR/budokan_viewer_BudokanViewer.contract_class.json" ]; then
+    print_error "BudokanViewer contract artifact not found at $ARTIFACTS_DIR"
     exit 1
 fi
+
+# Change to contracts dir for sncast (snfoundry.toml location)
+cd "$CONTRACTS_DIR"
 
 print_info "Contract artifacts found"
 

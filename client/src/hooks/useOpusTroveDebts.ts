@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { useSystemCalls } from "@/dojo/hooks/useSystemCalls";
+import { useProvider } from "@starknet-react/core";
+import { getUserTotalTroveDebt } from "@provable-games/metagame-sdk/rpc";
 
 interface UseOpusTroveDebtsParams {
   userAddresses: string[];
@@ -14,9 +15,10 @@ interface UseOpusTroveDebtsResult {
 }
 
 /**
- * Hook to fetch Opus Trove debt for multiple user addresses
+ * Hook to fetch Opus Trove debt for multiple user addresses.
+ * Uses metagame-sdk/rpc for the Opus contract calls.
  *
- * Returns a map of user address -> total debt across all troves
+ * Returns a map of user address -> total debt across all troves.
  */
 export const useOpusTroveDebts = ({
   userAddresses,
@@ -26,11 +28,11 @@ export const useOpusTroveDebts = ({
   const [debts, setDebts] = useState<Map<string, bigint>>(new Map());
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const { getUserTroveIds, getTroveHealth } = useSystemCalls();
+  const { provider } = useProvider();
 
   useEffect(() => {
     const fetchDebts = async () => {
-      if (!enabled || userAddresses.length === 0) {
+      if (!enabled || !provider || userAddresses.length === 0) {
         setDebts(new Map());
         return;
       }
@@ -44,32 +46,11 @@ export const useOpusTroveDebts = ({
         await Promise.all(
           userAddresses.map(async (userAddress) => {
             try {
-              // Get all trove IDs for this user
-              const troveIds = await getUserTroveIds(userAddress);
-
-              if (troveIds.length === 0) {
-                debtsMap.set(userAddress, 0n);
-                return;
-              }
-
-              // Sum up debt across all troves
               // TODO: If assetAddresses is specified (not wildcard), filter troves by asset type
-              let totalDebt = 0n;
-
-              for (const troveId of troveIds) {
-                const debt = await getTroveHealth(troveId);
-                if (debt !== null) {
-                  totalDebt += debt;
-                }
-              }
-
+              const totalDebt = await getUserTotalTroveDebt(provider, userAddress);
               debtsMap.set(userAddress, totalDebt);
             } catch (err) {
-              console.error(
-                "Error fetching trove debt for",
-                userAddress,
-                err
-              );
+              console.error("Error fetching trove debt for", userAddress, err);
               debtsMap.set(userAddress, 0n);
             }
           })
@@ -84,7 +65,7 @@ export const useOpusTroveDebts = ({
     };
 
     fetchDebts();
-  }, [enabled, userAddresses.join(","), assetAddresses.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [enabled, provider, userAddresses.join(","), assetAddresses.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return { debts, isLoading, error };
 };
