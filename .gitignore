@@ -5,4 +5,7 @@ node_modules/
 !.env.example
 .apibara/
 .claude/
+.claudeignore
 .snfoundry_cache/
+.DS_Store
+pr-response-plan.md
