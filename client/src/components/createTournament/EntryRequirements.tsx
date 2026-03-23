@@ -19,7 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { StepProps } from "@/containers/CreateTournament";
 import { USER, X, INFO } from "@/components/Icons";
-import { displayAddress, feltToString, indexAddress } from "@/lib/utils";
+import { displayAddress, indexAddress } from "@/lib/utils";
 import TokenGameIcon from "@/components/icons/TokenGameIcon";
 import { Search } from "lucide-react";
 import TokenDialog from "@/components/dialogs/Token";
@@ -28,7 +28,6 @@ import {
   useGetTournaments,
   useGetTournamentsCount,
 } from "@/hooks/useBudokanQueries";
-import { computeAbsoluteTimes } from "@/lib/utils/formatting";
 import Pagination from "@/components/table/Pagination";
 import {
   Tooltip,
@@ -674,7 +673,7 @@ const EntryRequirements = ({ form }: StepProps) => {
                                           className="inline-flex items-center gap-2 p-2 border border-brand-muted rounded w-fit"
                                         >
                                           <span>
-                                            {selectedTournament.name}{" "}
+                                            {(selectedTournament as any).name}{" "}
                                             -{" "}
                                             {Number(
                                               selectedTournament.id
@@ -684,10 +683,10 @@ const EntryRequirements = ({ form }: StepProps) => {
                                             className="h-4 w-4 hover:cursor-pointer"
                                             onClick={() => {
                                               field.onChange(
-                                                field.value.filter(
+                                                field.value?.filter(
                                                   (v) =>
                                                     v !== selectedTournament
-                                                )
+                                                ) ?? []
                                               );
                                             }}
                                           >
@@ -1023,7 +1022,7 @@ const EntryRequirements = ({ form }: StepProps) => {
 
                                               // Then check if it's already in the existing list
                                               if (
-                                                field.value.some(
+                                                field.value?.some(
                                                   (existingAddr) =>
                                                     indexAddress(existingAddr).toLowerCase() ===
                                                     indexAddress(addr).toLowerCase()
@@ -1087,7 +1086,7 @@ const EntryRequirements = ({ form }: StepProps) => {
 
                                           if (uniqueValidAddresses.length > 0) {
                                             field.onChange([
-                                              ...field.value,
+                                              ...(field.value ?? []),
                                               ...uniqueValidAddresses,
                                             ]);
                                             setNewAddress("");
@@ -1111,20 +1110,20 @@ const EntryRequirements = ({ form }: StepProps) => {
                                     </Button>
                                   </div>
                                 </div>
-                                {field.value.length > 0 && (
+                                {(field.value ?? []).length > 0 && (
                                   <>
                                     <div className="w-full h-0.5 bg-brand/25" />
                                     <div className="flex flex-row items-center justify-between">
                                       <div className="flex flex-col gap-2">
                                         <span className="text-sm">
-                                          {field.value.length} address
-                                          {field.value.length !== 1
+                                          {(field.value ?? []).length} address
+                                          {(field.value ?? []).length !== 1
                                             ? "es"
                                             : ""}{" "}
                                           added
                                         </span>
                                         <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto w-5/6">
-                                          {field.value.map((address, index) => (
+                                          {(field.value ?? []).map((address, index) => (
                                             <div
                                               key={index}
                                               className="flex items-center justify-between p-2 border border-neutral rounded w-fit"
@@ -1136,7 +1135,7 @@ const EntryRequirements = ({ form }: StepProps) => {
                                                 className="h-4 w-4 ml-2 hover:cursor-pointer"
                                                 onClick={() => {
                                                   const newAddresses = [
-                                                    ...field.value,
+                                                    ...(field.value ?? []),
                                                   ];
                                                   newAddresses.splice(index, 1);
                                                   field.onChange(newAddresses);

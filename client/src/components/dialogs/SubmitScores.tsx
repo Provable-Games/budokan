@@ -10,7 +10,7 @@ import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 import { useAccount } from "@starknet-react/core";
 import { Leaderboard } from "@/generated/models.gen";
 import type { Tournament } from "@provable-games/budokan-sdk";
-import { feltToString, getOrdinalSuffix } from "@/lib/utils";
+import { getOrdinalSuffix } from "@/lib/utils";
 import { addAddressPadding } from "starknet";
 import { useConnectToSelectedChain } from "@/chain/hooks/useChain";
 import { useTokens } from "@provable-games/denshokan-sdk/react";
@@ -109,7 +109,7 @@ export function SubmitScoresDialog({
       if (submittableScores.length > 10) {
         await submitScoresBatched(
           tournamentModel?.id,
-          feltToString(tournamentModel?.metadata.name),
+          tournamentModel?.name ?? "",
           submittableScores,
           10, // batch size
           (current, total) => setBatchProgress({ current, total })
@@ -117,7 +117,7 @@ export function SubmitScoresDialog({
       } else {
         await submitScores(
           tournamentModel?.id,
-          feltToString(tournamentModel?.metadata.name),
+          tournamentModel?.name ?? "",
           submittableScores
         );
       }

@@ -131,6 +131,7 @@ const ScoreTable = ({
       const reg = regMap.get(entry.tokenId);
       return {
         ...entry,
+        gameId: 0,
         playerName: entry.playerName || reg?.playerName || "",
         lifecycle: { start: 0n, end: 0n },
         metadata: "",

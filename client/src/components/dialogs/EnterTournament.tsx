@@ -796,7 +796,7 @@ export function EnterTournamentDialog({
   const {
     qualifications: extensionQualifications,
     totalEntriesLeft: extensionTotalEntriesLeft,
-    bestQualification: extensionBestQualification,
+    bestQualification: _extensionBestQualification,
     loading: extensionQualificationsLoading,
   } = useExtensionQualification(
     provider,
@@ -1286,8 +1286,8 @@ export function EnterTournamentDialog({
                             </span>
                             {tournamentValidatorConfig.requirementType ===
                             "won" ? (
-                              !!hasWonTournamentMap[tournament.id.toString()] &&
-                              hasWonTournamentMap[tournament.id.toString()]
+                              !!winMap[tournament.id.toString()] &&
+                              winMap[tournament.id.toString()]
                                 .length > 0 ? (
                                 <div className="flex flex-row items-center gap-2">
                                   <span className="w-5">
@@ -1331,7 +1331,7 @@ export function EnterTournamentDialog({
                                   <span>No qualified entries</span>
                                 </div>
                               )
-                            ) : !!hasParticipatedInTournamentMap[
+                            ) : !!participationMap[
                                 tournament.id.toString()
                               ] ? (
                               <div className="flex flex-row items-center gap-2">

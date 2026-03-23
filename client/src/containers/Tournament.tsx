@@ -12,11 +12,11 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useProvider } from "@starknet-react/core";
 import TournamentTimeline from "@/components/TournamentTimeline";
 import Countdown from "@/components/Countdown";
-import { feltToString, indexAddress, padU64, formatNumber, calculateDistribution } from "@/lib/utils";
+import { indexAddress, padU64, formatNumber, calculateDistribution } from "@/lib/utils";
 import type { DisplayPrize } from "@/lib/types";
+import type { Leaderboard } from "@/generated/models.gen";
 import { addAddressPadding } from "starknet";
 import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
-import type { Tournament as SdkTournament } from "@provable-games/budokan-sdk";
 import { useChainConfig } from "@/context/chain";
 import { expandDistributedPrizes } from "@/lib/utils/formatting";
 import { EnterTournamentDialog } from "@/components/dialogs/EnterTournament";
@@ -442,6 +442,7 @@ const Tournament = () => {
       const posAmount = (poolAmount * BigInt(Math.floor(pct * 100))) / 10000n;
       return {
         id: 0,
+        context_id: Number(tournamentModel?.id ?? 0),
         tournament_id: Number(tournamentModel?.id ?? 0),
         payout_position: i + 1,
         token_address: entryFeeToken,
@@ -449,7 +450,7 @@ const Tournament = () => {
         position: i + 1,
         type: "entry_fee",
         sponsor_address: "",
-      } as DisplayPrize;
+      } as unknown as DisplayPrize;
     });
   }, [tournamentModel?.entryFee, tournamentModel?.id, entryFeeToken, entryCount]);
 
@@ -876,7 +877,10 @@ const Tournament = () => {
             open={submitScoresDialogOpen}
             onOpenChange={setSubmitScoresDialogOpen}
             tournamentModel={tournamentModel}
-            leaderboard={leaderboardModel!}
+            leaderboard={{
+              tournament_id: Number(id ?? 0),
+              token_ids: (leaderboardModel ?? []).map((e) => e.tokenId),
+            } as Leaderboard}
           />
           <ClaimPrizesDialog
             open={claimDialogOpen}

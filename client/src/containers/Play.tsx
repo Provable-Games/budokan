@@ -20,7 +20,7 @@ const Play = () => {
   const tournamentsData = tournaments.map((tournament) => ({
     tournament,
     prizes: [],
-    entryCount: tournament.entry_count ?? 0,
+    entryCount: tournament.entryCount ?? 0,
   }));
 
   return (

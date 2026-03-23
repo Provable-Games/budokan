@@ -182,6 +182,3 @@ export const getDefaultChainId = (): ChainId => {
   return ChainId.SN_MAIN;
 };
 
-const isChainIdSupported = (chainId: ChainId): boolean => {
-  return Object.keys(CHAINS).includes(chainId);
-};

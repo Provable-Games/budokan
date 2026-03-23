@@ -48,7 +48,7 @@ export const TournamentCard = ({
   tournament,
   index: _index,
   status,
-  prizes,
+  prizes: _prizes,
   entryCount,
   tokens,
   tokenPrices,
@@ -262,7 +262,7 @@ export const TournamentCard = ({
               <Lock className="w-3 h-3 text-brand-muted flex-shrink-0" />
             )}
             <p className="truncate min-w-0 font-brand text-sm sm:text-base">
-              {tournament.name ?? tournament.metadata?.name}
+              {tournament.name ?? (tournament.metadata as any)?.name}
             </p>
           </div>
           <div className="flex-shrink-0">

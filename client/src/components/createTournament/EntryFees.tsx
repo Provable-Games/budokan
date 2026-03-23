@@ -2,10 +2,8 @@ import { useEffect } from "react";
 import { StepProps } from "@/containers/CreateTournament";
 import {
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
-  FormLabel,
 } from "@/components/ui/form";
 import React from "react";
 import { calculateDistribution, indexAddress } from "@/lib/utils";

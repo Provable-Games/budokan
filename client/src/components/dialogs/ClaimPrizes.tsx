@@ -71,7 +71,7 @@ export function ClaimPrizesDialog({
   );
 
   const claimedRewards: RewardClaim[] = (rewardClaimsData ||
-    []) as RewardClaim[];
+    []) as unknown as RewardClaim[];
 
   const entryFeeData = (tournamentModel as any)?.entryFee;
   const leaderboardSize =
@@ -128,7 +128,7 @@ export function ClaimPrizesDialog({
       if (claimableRewardTypes.length > 20) {
         await claimPrizesBatched(
           tournamentModel?.id,
-          tournamentModel?.metadata?.name ?? tournamentModel?.name ?? "",
+          tournamentModel?.name ?? "",
           claimableRewardTypes,
           20, // batch size
           (current, total) => setBatchProgress({ current, total })
@@ -136,7 +136,7 @@ export function ClaimPrizesDialog({
       } else {
         await claimPrizes(
           tournamentModel?.id,
-          tournamentModel?.metadata?.name ?? tournamentModel?.name ?? "",
+          tournamentModel?.name ?? "",
           claimableRewardTypes
         );
       }

@@ -152,11 +152,7 @@ export function useGetMyLiveTournamentsCount({
 
 // ─── Tournament Listing Hooks ──────────────────────────────────────────────
 
-type MappedTournament = Tournament & {
-  entry_count: number;
-  prize_count: number;
-  submission_count: number;
-};
+type MappedTournament = Tournament;
 
 interface TournamentListResult {
   data: MappedTournament[];

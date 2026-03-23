@@ -160,7 +160,7 @@ export function AddPrizesDialog({
     const existingPrizeValueUSD = 0;
 
     return validatePrizeAddition(
-      tournament,
+      tournament as unknown as Record<string, unknown>,
       additionalPrizeValueUSD,
       existingPrizeValueUSD
     );
