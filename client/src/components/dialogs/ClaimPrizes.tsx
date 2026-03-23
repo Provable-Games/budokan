@@ -128,7 +128,7 @@ export function ClaimPrizesDialog({
       if (claimableRewardTypes.length > 20) {
         await claimPrizesBatched(
           tournamentModel?.id,
-          tournamentModel?.name ?? "",
+          tournamentModel?.metadata?.name ?? tournamentModel?.name ?? "",
           claimableRewardTypes,
           20, // batch size
           (current, total) => setBatchProgress({ current, total })
@@ -136,7 +136,7 @@ export function ClaimPrizesDialog({
       } else {
         await claimPrizes(
           tournamentModel?.id,
-          tournamentModel?.name ?? "",
+          tournamentModel?.metadata?.name ?? tournamentModel?.name ?? "",
           claimableRewardTypes
         );
       }
