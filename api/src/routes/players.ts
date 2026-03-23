@@ -38,10 +38,8 @@ app.get("/:address/tournaments", async (c) => {
     if (gameTokenIdsRaw) {
       const tokenIds = gameTokenIdsRaw
         .split(",")
-        .map((id) => {
-          try { return BigInt(id.trim()); } catch { return null; }
-        })
-        .filter((id): id is bigint => id !== null);
+        .map((id) => id.trim())
+        .filter((id) => id.length > 0);
       if (tokenIds.length > 0) {
         conditions.push(inArray(registrations.gameTokenId, tokenIds));
       }
