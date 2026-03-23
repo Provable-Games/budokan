@@ -113,16 +113,10 @@ export function useGameTokens({
           const result = await client.getPlayerTokens(owner, { gameId, limit, offset });
           return result.data.map((token) => ({
             tokenId: token.tokenId,
-            gameId: token.gameId,
             owner: token.owner,
             playerName: token.playerName,
             score: token.score,
             gameOver: token.gameOver,
-            lifecycle: {
-              start: BigInt(token.startDelay),
-              end: BigInt(token.endDelay),
-            },
-            metadata: {} as Record<string, unknown>,
           }));
         }
       : null,

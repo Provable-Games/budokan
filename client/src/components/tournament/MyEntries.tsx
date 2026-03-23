@@ -60,21 +60,7 @@ const MyEntries = ({
     liveMints: true,
   });
 
-  const gameTokens = useMemo(
-    () =>
-      ownedEntries.map((e) => ({
-        tokenId: e.tokenId,
-        gameId: 0,
-        owner: e.owner,
-        playerName: e.playerName,
-        score: e.score,
-        gameOver: e.gameOver,
-        rank: e.rank,
-        lifecycle: { start: 0n, end: 0n },
-        metadata: "" as string,
-      })),
-    [ownedEntries],
-  );
+  const gameTokens = useMemo(() => ownedEntries, [ownedEntries]);
   const myEntriesCount = gameTokens.length;
 
   const { data: myEntries, refetch: refetchRegistrations } = useGetTournamentRegistrations(

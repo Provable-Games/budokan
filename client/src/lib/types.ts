@@ -87,16 +87,10 @@ export type FormToken = {
  */
 export interface GameTokenData {
   tokenId: string;
-  gameId: number;
   owner: string;
   playerName: string;
   score: number;
   gameOver: boolean;
-  lifecycle: {
-    start: bigint;
-    end: bigint;
-  };
-  metadata: Record<string, unknown> | string;
   rank?: number;
 }
 

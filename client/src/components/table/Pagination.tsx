@@ -32,7 +32,7 @@ const Pagination = ({
 
       {/* Simple page counter for all screen sizes */}
       <div className="flex items-center justify-center min-w-[50px] text-sm text-brand font-medium">
-        {currentPage + 1} / {totalPages}
+        {currentPage} / {totalPages}
       </div>
 
       <Button
