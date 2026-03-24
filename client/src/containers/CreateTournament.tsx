@@ -21,10 +21,7 @@ import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 import { Tournament } from "@/generated/models.gen";
 import { useChainConfig } from "@/context/chain";
 import { FormToken } from "@/lib/types";
-import {
-  useGetPlatformMetrics,
-  useGetPlatformStats,
-} from "@/hooks/useBudokanQueries";
+import { useActivityStats } from "@provable-games/budokan-sdk/react";
 import { getExtensionAddresses } from "@provable-games/metagame-sdk";
 
 export type TournamentFormData = z.infer<typeof formSchema>;
@@ -196,13 +193,8 @@ const CreateTournament = () => {
     },
   });
 
-  const { data: platformMetricsModel } = useGetPlatformMetrics({
-    active: true,
-  });
-
-  const { data: platformStats } = useGetPlatformStats({
-    active: true,
-  });
+  const { stats: platformMetricsModel } = useActivityStats();
+  const platformStats = platformMetricsModel;
 
   const tournamentCount = Number(platformMetricsModel?.totalTournaments ?? 0);
   const prizeCount = Number(platformStats?.totalPrizes ?? 0);

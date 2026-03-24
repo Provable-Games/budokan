@@ -1,10 +1,8 @@
 import { useMemo } from "react";
-import { BudokanProvider as SdkBudokanProvider, useBudokanClient } from "@provable-games/budokan-sdk/react";
+import { BudokanProvider as SdkBudokanProvider } from "@provable-games/budokan-sdk/react";
 import type { BudokanClientConfig } from "@provable-games/budokan-sdk";
 import { useNetwork } from "@starknet-react/core";
 import { CHAINS, ChainId, getDefaultChainId } from "@/chain/setup/networks";
-
-export { useBudokanClient };
 
 export function BudokanProvider({ children }: { children: React.ReactNode }) {
   const { chain } = useNetwork();

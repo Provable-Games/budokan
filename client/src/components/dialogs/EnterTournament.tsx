@@ -58,11 +58,7 @@ import {
   TROPHY,
   REFRESH,
 } from "@/components/Icons";
-import {
-  useGetTournamentRegistrations,
-  useGetTournamentLeaderboard,
-  useGetTournamentQualifications,
-} from "@/hooks/useBudokanQueries";
+import { useRegistrations, useLeaderboard, useQualifications } from "@provable-games/budokan-sdk/react";
 import { useGameTokens } from "@/hooks/useDenshokanQueries";
 import { useChainConfig } from "@/context/chain";
 // computeAbsoluteTimes no longer needed — SDK provides pre-computed timestamps
@@ -720,13 +716,14 @@ export function EnterTournamentDialog({
 
   const enterTournamentId = tournamentModel?.id ? String(tournamentModel.id) : undefined;
 
-  const { data: registrations } = useGetTournamentRegistrations(
+  const { registrations: registrationsResult } = useRegistrations(
     isTournamentValidatorExtension && !!tournamentValidatorConfig
       ? enterTournamentId
       : undefined,
   );
+  const registrations = registrationsResult?.data ?? null;
 
-  const { data: leaderboard } = useGetTournamentLeaderboard(
+  const { leaderboard } = useLeaderboard(
     isTournamentValidatorExtension && !!tournamentValidatorConfig
       ? enterTournamentId
       : undefined,
@@ -813,7 +810,7 @@ export function EnterTournamentDialog({
     requirementVariant === "allowlist"
   );
 
-  const { data: qualificationEntriesRaw } = useGetTournamentQualifications(
+  const { qualifications: qualificationEntriesRaw } = useQualifications(
     shouldFetchQualifications ? enterTournamentId : undefined,
   );
 

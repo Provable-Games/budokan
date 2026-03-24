@@ -1,5 +1,5 @@
 import { DOLLAR, REFRESH } from "@/components/Icons";
-import { useGetTournamentRegistrations } from "@/hooks/useBudokanQueries";
+import { useRegistrations } from "@provable-games/budokan-sdk/react";
 import { useEffect, useState, useMemo } from "react";
 import { useAccount } from "@starknet-react/core";
 import { BigNumberish } from "starknet";
@@ -63,13 +63,14 @@ const MyEntries = ({
   const gameTokens = useMemo(() => ownedEntries, [ownedEntries]);
   const myEntriesCount = gameTokens.length;
 
-  const { data: myEntries, refetch: refetchRegistrations } = useGetTournamentRegistrations(
+  const { registrations: myEntriesResult, refetch: refetchRegistrations } = useRegistrations(
     tournamentId?.toString(),
     {
       playerAddress: address,
       limit: 1000,
     },
   );
+  const myEntries = myEntriesResult?.data ?? null;
 
   const processedEntries = useMemo(() => {
     if (!myEntries || myEntries.length === 0) return [];

@@ -19,7 +19,7 @@ import { BigNumberish, addAddressPadding } from "starknet";
 import { useTokens } from "@provable-games/denshokan-sdk/react";
 import { REFRESH, VERIFIED } from "@/components/Icons";
 import { Ban } from "lucide-react";
-import { useGetTournamentRegistrations } from "@/hooks/useBudokanQueries";
+import { useRegistrations } from "@provable-games/budokan-sdk/react";
 import { useChainConfig } from "@/context/chain";
 import {
   Tooltip,
@@ -92,10 +92,11 @@ export const ScoreTableDialog = ({
 
   // Fetch registrations for ban/submit metadata
   const tournamentIdStr = tournamentId ? String(tournamentId) : undefined;
-  const { data: registrants } = useGetTournamentRegistrations(
+  const { registrations: registrantsResult } = useRegistrations(
     pageEntries.length > 0 ? tournamentIdStr : undefined,
     { limit: 1000 },
   );
+  const registrants = registrantsResult?.data ?? null;
 
   // Build registration lookup
   const regMap = useMemo(() => {

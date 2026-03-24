@@ -24,10 +24,7 @@ import TokenGameIcon from "@/components/icons/TokenGameIcon";
 import { Search } from "lucide-react";
 import TokenDialog from "@/components/dialogs/Token";
 import { useChainConfig } from "@/context/chain";
-import {
-  useGetTournaments,
-  useGetTournamentsCount,
-} from "@/hooks/useBudokanQueries";
+import { useTournaments, useTournamentCount } from "@provable-games/budokan-sdk/react";
 import Pagination from "@/components/table/Pagination";
 import {
   Tooltip,
@@ -77,16 +74,14 @@ const EntryRequirements = ({ form }: StepProps) => {
     { value: 10, label: "10" },
   ];
 
-  const { data: tournaments } = useGetTournaments({
+  const { tournaments: tournamentsResult } = useTournaments({
     gameAddress: gameFilters.length > 0 ? gameFilters[0] : undefined,
     limit: 10,
     offset: (currentPage - 1) * 10,
-    active: true,
   });
+  const tournaments = tournamentsResult?.data ?? [];
 
-  const { data: tournamentsCount } = useGetTournamentsCount({
-    active: true,
-  });
+  const { count: tournamentsCount } = useTournamentCount();
 
   const totalPages = Math.ceil((tournamentsCount ?? 0) / 10);
 

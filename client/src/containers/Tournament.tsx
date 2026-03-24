@@ -31,16 +31,15 @@ import PrizesContainer from "@/components/tournament/prizes/PrizesContainer";
 import { ClaimPrizesDialog } from "@/components/dialogs/ClaimPrizes";
 import { SubmitScoresDialog } from "@/components/dialogs/SubmitScores";
 import {
-  useGetTournament,
-  useGetTournamentPrizeAggregation,
-  useGetTournaments,
-  useGetTournamentLeaderboard,
-  useGetTournamentRegistrations,
-  useGetTournamentPrizes,
-  useGetTournamentRewardClaimsSummary,
-  useGetPlatformMetrics,
-} from "@/hooks/useBudokanQueries";
-import { useSubscribeTournament } from "@/hooks/useBudokanWebSocket";
+  useTournament,
+  useTournaments,
+  useLeaderboard,
+  useRegistrations,
+  usePrizes,
+  useRewardClaimsSummary,
+  useActivityStats,
+  useSubscription,
+} from "@provable-games/budokan-sdk/react";
 import { getTokensByAddresses } from "@/lib/tokenUtils";
 import { getTokenLogoUrl } from "@/lib/tokensMeta";
 import { ChainId } from "@/chain/setup/networks";
@@ -89,10 +88,10 @@ const Tournament = () => {
 
   // Fetch tournament data via new SDK hook
   const {
-    data: tournamentData,
+    tournament: tournamentData,
     loading: tournamentLoading,
     refetch: refetchTournament,
-  } = useGetTournament(id);
+  } = useTournament(id);
 
   const tournamentModel = tournamentData;
 
@@ -100,15 +99,15 @@ const Tournament = () => {
   const entryCount = Number(tournamentModel?.entryCount ?? 0);
 
   // Subscribe to tournament updates via WebSocket
-  const { lastMessage } = useSubscribeTournament(id);
+  const { lastMessage } = useSubscription(["tournaments", "registrations", "leaderboards", "prizes", "rewards"], id ? [id] : undefined);
 
   // Platform metrics for prize count tracking
-  const { data: platformMetrics } = useGetPlatformMetrics({ active: true });
+  const { stats: platformMetrics } = useActivityStats();
   console.log(platformMetrics);
   const subscribedPrizeCount = Number(platformMetrics?.totalTournaments ?? 0);
 
   // Fetch leaderboard via new SDK hook (returns a single Leaderboard object)
-  const { data: leaderboardModel } = useGetTournamentLeaderboard(id);
+  const { leaderboard: leaderboardModel } = useLeaderboard(id);
 
   // Mark initial load done once the first fetch completes (loading goes false after being true)
   const hasStartedFetch = useRef(false);
@@ -142,8 +141,9 @@ const Tournament = () => {
       : entryCount;
 
   // Fetch registrations via new SDK hook
-  const { data: allRegistrants } =
-    useGetTournamentRegistrations(id);
+  const { registrations: registrationsResult } =
+    useRegistrations(id);
+  const allRegistrants = registrationsResult?.data ?? null;
 
   // Calculate non-banned entry count
   const nonBannedEntryCount = useMemo(() => {
@@ -234,30 +234,36 @@ const Tournament = () => {
 
   const entryFeeToken = tournamentModel?.entryFee?.tokenAddress;
 
-  // Fetch aggregated data
-  const {
-    data: rawAggregations,
-    loading: aggregationsLoading,
-    refetch: refetchAggregations,
-  } = useGetTournamentPrizeAggregation(id);
+  // Fetch ALL sponsored prizes via SDK hook
+  const { prizes: sponsoredPrizes, loading: sponsoredPrizesLoading, refetch: refetchAggregations } = usePrizes(id);
 
-  // Reshape aggregation data to match the expected { token_totals, total_prizes } shape
+  // Aggregate prizes client-side to match the expected { token_totals, total_prizes } shape
+  const aggregationsLoading = sponsoredPrizesLoading;
   const aggregations = useMemo(() => {
-    if (!rawAggregations) return undefined;
+    if (!sponsoredPrizes) return undefined;
+    const map = new Map<string, { tokenAddress: string; tokenType: string; totalAmount: number; nftCount: number }>();
+    for (const p of sponsoredPrizes) {
+      const key = `${p.tokenAddress}_${p.tokenType}`;
+      const existing = map.get(key);
+      const isErc20 = p.tokenType === "erc20";
+      const amount = isErc20 ? Number(p.amount ?? 0) : 0;
+      if (existing) {
+        existing.totalAmount += amount;
+        if (!isErc20) existing.nftCount++;
+      } else {
+        map.set(key, {
+          tokenAddress: p.tokenAddress,
+          tokenType: p.tokenType,
+          totalAmount: amount,
+          nftCount: isErc20 ? 0 : 1,
+        });
+      }
+    }
     return {
-      token_totals: rawAggregations.map((a: any) => ({
-        tokenAddress: a.tokenAddress,
-        tokenType: a.tokenType ?? "erc20",
-        totalAmount: Number(a.totalAmount),
-      })),
-      total_prizes: rawAggregations.length,
+      token_totals: Array.from(map.values()),
+      total_prizes: sponsoredPrizes.length,
     };
-  }, [rawAggregations]);
-
-  // Fetch ALL sponsored prizes via new SDK hook (returns pre-mapped Prize objects)
-  const { data: sponsoredPrizes } = useGetTournamentPrizes(id);
-
-  console.log(sponsoredPrizes);
+  }, [sponsoredPrizes]);
 
   // Expand distributed sponsored prizes into individual positions
   const expandedSponsoredPrizes = useMemo(
@@ -268,7 +274,7 @@ const Tournament = () => {
   console.log(expandedSponsoredPrizes)
 
   // Fetch reward claims summary via new SDK hook
-  const { data: rewardClaimsSummary } = useGetTournamentRewardClaimsSummary(id);
+  const { summary: rewardClaimsSummary } = useRewardClaimsSummary(id);
 
   // Calculate actual claimable prizes from summary
   const actualClaimablePrizesCount = useMemo(() => {
@@ -686,10 +692,11 @@ const Tournament = () => {
     return tournamentIds.map((id: any) => padU64(BigInt(id)));
   }, [tournamentModel, isExtensionRequirement, entryReqType]);
 
-  const { data: extensionTournaments } = useGetTournaments({
+  const active = tournamentIdsQuery.length > 0;
+  const { tournaments: extensionTournamentsResult } = useTournaments(active ? {
     limit: 100,
-    active: tournamentIdsQuery.length > 0,
-  });
+  } : undefined);
+  const extensionTournaments = extensionTournamentsResult?.data ?? [];
 
   // Filter extension tournaments client-side by IDs from the extension config
   const tournamentsData = useMemo(() => {

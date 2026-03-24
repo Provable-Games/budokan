@@ -20,7 +20,7 @@ import { getTokenLogoUrl } from "@/lib/tokensMeta";
 import { useChainConfig } from "@/context/chain";
 import { calculatePrizeValue } from "@/lib/utils/formatting";
 import { useState, useMemo } from "react";
-import { useGetTournamentPrizes } from "@/hooks/useBudokanQueries";
+import { usePrizes } from "@provable-games/budokan-sdk/react";
 import { BigNumberish } from "starknet";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -66,7 +66,7 @@ export const PrizesTableDialog = ({
   const tournamentIdStr = tournamentId ? String(tournamentId) : undefined;
 
   // Fetch prizes (new API returns all prizes at once)
-  const { data: prizesData, loading: prizesLoading } = useGetTournamentPrizes(
+  const { prizes: prizesData, loading: prizesLoading } = usePrizes(
     open ? tournamentIdStr : undefined,
   );
 

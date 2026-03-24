@@ -26,10 +26,7 @@ import {
 } from "@/lib/tokensMeta";
 import { useChainConfig } from "@/context/chain";
 import { LoadingSpinner } from "@/components/ui/spinner";
-import {
-  useGetTournamentPrizes,
-  useGetTournamentRewardClaims,
-} from "@/hooks/useBudokanQueries";
+import { usePrizes, useRewardClaims } from "@provable-games/budokan-sdk/react";
 
 interface ClaimPrizesDialogProps {
   open: boolean;
@@ -61,14 +58,15 @@ export function ClaimPrizesDialog({
   const tournamentId = tournamentModel?.id ? String(tournamentModel.id) : undefined;
 
   // Fetch ALL sponsored prizes from database (data comes pre-mapped)
-  const { data: sponsoredPrizes } = useGetTournamentPrizes(
+  const { prizes: sponsoredPrizes } = usePrizes(
     open ? tournamentId : undefined,
   );
 
   // Fetch claimed rewards list (individual claim records, not summary)
-  const { data: rewardClaimsData } = useGetTournamentRewardClaims(
+  const { rewardClaims: rewardClaimsResult } = useRewardClaims(
     open ? tournamentId : undefined,
   );
+  const rewardClaimsData = rewardClaimsResult?.data ?? null;
 
   const claimedRewards: RewardClaim[] = (rewardClaimsData ||
     []) as unknown as RewardClaim[];

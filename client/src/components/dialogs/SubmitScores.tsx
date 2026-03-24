@@ -18,7 +18,7 @@ import { getSubmittableScores } from "@/lib/utils/formatting";
 import { useState, useMemo } from "react";
 import { LoadingSpinner } from "@/components/ui/spinner";
 import { useChainConfig } from "@/context/chain";
-import { useGetTournamentRegistrations } from "@/hooks/useBudokanQueries";
+import { useRegistrations } from "@provable-games/budokan-sdk/react";
 
 interface SubmitScoresDialogProps {
   open: boolean;
@@ -75,10 +75,11 @@ export function SubmitScoresDialog({
   const tournamentId = tournamentModel?.id ? String(tournamentModel.id) : undefined;
 
   // Fetch registration data to check banned status
-  const { data: registrants } = useGetTournamentRegistrations(
+  const { registrations: registrantsResult } = useRegistrations(
     gameIds.length > 0 ? tournamentId : undefined,
     { limit: 1000 },
   );
+  const registrants = registrantsResult?.data ?? null;
 
   // Filter out banned games and take only top leaderboardSize entries
   const nonBannedGames = useMemo(() => {

@@ -11,10 +11,8 @@ import LoadingPage from "@/containers/LoadingPage";
 import { useSyncNetworkUrl } from "@/chain/hooks/useSyncNetworkUrl";
 import { useSwitchToUrlNetwork } from "@/chain/hooks/useSwitchToUrlNetwork";
 import { useGames } from "@/hooks/useDenshokanQueries";
-import {
-  useSubscribeTournaments,
-  useSubscribeMetrics,
-} from "@/hooks/useBudokanWebSocket";
+import { useSubscription } from "@provable-games/budokan-sdk/react";
+import type { WSChannel } from "@provable-games/budokan-sdk";
 
 
 const NotFound = lazy(() => import("@/containers/NotFound"));
@@ -35,8 +33,8 @@ function App() {
   // Network management hooks
   useSwitchToUrlNetwork(); // Switch to network from URL on initial load
   useSyncNetworkUrl(); // Keep URL in sync when network changes
-  useSubscribeMetrics();
-  useSubscribeTournaments();
+  useSubscription(["metrics" as WSChannel]);
+  useSubscription(["tournaments", "registrations", "prizes"]);
 
   const { games: minigames, loading: minigamesLoading } = useGames();
 

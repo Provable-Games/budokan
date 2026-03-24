@@ -10,7 +10,7 @@ import { useState, useEffect, useMemo } from "react";
 import { BigNumberish, addAddressPadding } from "starknet";
 import { useGameTokens } from "@/hooks/useDenshokanQueries";
 import { REFRESH, USER } from "@/components/Icons";
-import { useGetTournamentRegistrations } from "@/hooks/useBudokanQueries";
+import { useRegistrations } from "@provable-games/budokan-sdk/react";
 import { useChainConfig } from "@/context/chain";
 import type { Tournament } from "@provable-games/budokan-sdk";
 import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
@@ -76,10 +76,11 @@ export const BanManagementDialog = ({
 
   const tournamentIdStr = tournamentId ? String(tournamentId) : undefined;
 
-  const { data: registrants, refetch: refetchRegistrants } = useGetTournamentRegistrations(
+  const { registrations: registrantsResult, refetch: refetchRegistrants } = useRegistrations(
     gameIds.length > 0 ? tournamentIdStr : undefined,
     { limit: 1000 },
   );
+  const registrants = registrantsResult?.data ?? null;
 
   // Get Opus Troves validator address for the current chain
   const opusTrovesValidatorAddress = useMemo(() => {

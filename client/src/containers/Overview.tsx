@@ -14,17 +14,14 @@ import GameFilters from "@/components/overview/GameFilters";
 import GameIcon from "@/components/icons/GameIcon";
 import TournamentTabs from "@/components/overview/TournamentTabs";
 import {
-  useGetUpcomingTournamentsCount,
-  useGetLiveTournamentsCount,
-  useGetEndedTournamentsCount,
-  useGetTournaments,
-  useGetMyTournaments,
-  useGetMyTournamentsCount,
-  useGetMyLiveTournamentsCount,
-  TAB_TO_PHASE,
-} from "@/hooks/useBudokanQueries";
+  useTournaments,
+  useTournamentCount,
+  usePlayerTournamentCount,
+  usePlayerTournaments,
+  useSubscription,
+} from "@provable-games/budokan-sdk/react";
 import { useAccountTokenIds } from "@/hooks/useDenshokanQueries";
-import { useSubscribeTournaments } from "@/hooks/useBudokanWebSocket";
+
 import { indexAddress } from "@/lib/utils";
 import { useChainConfig } from "@/context/chain";
 import EmptyResults from "@/components/overview/tournaments/EmptyResults";
@@ -37,6 +34,12 @@ import { EXCLUDED_TOURNAMENT_IDS } from "@/lib/constants";
 import { LoadingSpinner } from "@/components/ui/spinner";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
 import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
+
+const TAB_TO_PHASE = {
+  upcoming: "scheduled",
+  live: "live",
+  ended: "finalized",
+} as const;
 
 const SORT_OPTIONS = {
   upcoming: [
@@ -98,7 +101,7 @@ const Overview = () => {
     }
   }, [chain]);
 
-  const { lastMessage } = useSubscribeTournaments();
+  const { lastMessage } = useSubscription(["tournaments", "registrations", "prizes"]);
 
   const [tokenDecimals, setTokenDecimals] = useState<Record<string, number>>(
     {},
@@ -108,17 +111,13 @@ const Overview = () => {
   const loadingRef = useRef<HTMLDivElement>(null);
 
   const {
-    data: upcomingTournamentsCount,
+    count: upcomingTournamentsCount,
     refetch: refetchUpcomingTournamentsCount,
-  } = useGetUpcomingTournamentsCount({ active: true });
+  } = useTournamentCount("scheduled");
 
-  const { data: liveTournamentsCount } = useGetLiveTournamentsCount({
-    active: true,
-  });
+  const { count: liveTournamentsCount } = useTournamentCount("live");
 
-  const { data: endedTournamentsCount } = useGetEndedTournamentsCount({
-    active: true,
-  });
+  const { count: endedTournamentsCount } = useTournamentCount("finalized");
 
   const queryAddress = useMemo(() => {
     if (!address || address === "0x0") return null;
@@ -130,15 +129,9 @@ const Overview = () => {
     active: !!address,
   });
 
-  const { data: myTournamentsCount } = useGetMyTournamentsCount({
-    playerAddress: queryAddress ?? undefined,
-    active: !!queryAddress,
-  });
+  const { count: myTournamentsCount } = usePlayerTournamentCount(queryAddress ?? undefined);
 
-  const { data: myLiveTournamentsCount } = useGetMyLiveTournamentsCount({
-    playerAddress: queryAddress ?? undefined,
-    active: !!queryAddress,
-  });
+  const { count: myLiveTournamentsCount } = usePlayerTournamentCount(queryAddress ?? undefined, "live");
 
   const tournamentCounts = useMemo(() => {
     return {
@@ -197,19 +190,24 @@ const Overview = () => {
   }, [currentPage, currentTournaments.length, tournamentCounts, selectedTab]);
 
   // Use this to conditionally fetch data
+  const isListTab = ["upcoming", "live", "ended"].includes(selectedTab);
   const {
-    data: tournaments,
+    tournaments: tournamentsResult,
     loading: tournamentsLoading,
-  } = useGetTournaments({
-    phase: TAB_TO_PHASE[selectedTab as keyof typeof TAB_TO_PHASE],
-    gameAddress: gameFilters[0],
-    sort: currentSortBy as any,
-    offset: currentPage * 12,
-    limit: 12,
-    excludeIds: EXCLUDED_TOURNAMENT_IDS.map(String),
-    // Only activate the query for the appropriate tabs and when we need to fetch
-    active: ["upcoming", "live", "ended"].includes(selectedTab) && shouldFetch,
-  });
+  } = useTournaments(
+    isListTab && shouldFetch
+      ? {
+          phase: TAB_TO_PHASE[selectedTab as keyof typeof TAB_TO_PHASE],
+          gameAddress: gameFilters[0],
+          sort: currentSortBy as any,
+          offset: currentPage * 12,
+          limit: 12,
+          excludeIds: EXCLUDED_TOURNAMENT_IDS.map(String),
+          includePrizeSummary: "summary",
+        }
+      : undefined,
+  );
+  const tournaments = useMemo(() => tournamentsResult?.data ?? [], [tournamentsResult]);
 
   useEffect(() => {
     if (lastMessage) {
@@ -220,14 +218,12 @@ const Overview = () => {
     }
   }, [lastMessage, refetchUpcomingTournamentsCount]);
 
-  const { data: myTournaments, loading: myTournamentsLoading } =
-    useGetMyTournaments({
-      playerAddress: queryAddress ?? undefined,
-      gameTokenIds: gameTokenIds ?? undefined,
-      limit: 12,
-      offset: currentPage * 12,
-      active: selectedTab === "my",
-    });
+  const { tournaments: myTournamentsResult, loading: myTournamentsLoading } =
+    usePlayerTournaments(
+      selectedTab === "my" ? (queryAddress ?? undefined) : undefined,
+      { gameTokenIds: gameTokenIds ?? undefined, limit: 12, offset: currentPage * 12 },
+    );
+  const myTournaments = useMemo(() => myTournamentsResult?.data ?? [], [myTournamentsResult]);
 
   // Extract unique token addresses from all accumulated tournaments (not just current page)
   const uniqueTokenAddresses = useMemo(() => {

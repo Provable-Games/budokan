@@ -22,7 +22,7 @@ import type { SponsorContribution as MgSponsorContribution } from "@/lib/utils";
 import { getTokenLogoUrl, getTokenSymbol } from "@/lib/tokensMeta";
 import { useChainConfig } from "@/context/chain";
 import { useMemo } from "react";
-import { useGetTournamentPrizes } from "@/hooks/useBudokanQueries";
+import { usePrizes } from "@provable-games/budokan-sdk/react";
 import { BigNumberish } from "starknet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useGetUsernames } from "@/hooks/useController";
@@ -73,10 +73,11 @@ export const SponsorsDialog = ({
   const tournamentIdStr = tournamentId ? String(tournamentId) : undefined;
 
   // Fetch all prizes to get sponsored ones
-  const { data: prizesData, loading: prizesLoading } =
-    useGetTournamentPrizes(
+  const { prizes: sponsoredPrizes, loading: prizesLoading } =
+    usePrizes(
       open ? tournamentIdStr : undefined,
     );
+  const prizesData = sponsoredPrizes;
 
   // Convert budokan-sdk prizes to metagame-sdk Prize type
   const mgPrizes = useMemo<MetagamePrize[]>(

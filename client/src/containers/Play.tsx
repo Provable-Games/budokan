@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { ARROW_LEFT } from "@/components/Icons";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { useGetTournaments } from "@/hooks/useBudokanQueries";
+import { useTournaments } from "@provable-games/budokan-sdk/react";
 // import TournamentGames from "@/components/play/TournamentGames";
 import type { Tournament } from "@provable-games/budokan-sdk";
 import { Card } from "@/components/ui/card";
@@ -11,11 +11,8 @@ const Play = () => {
   const navigate = useNavigate();
   const [selectedTournament, setSelectedTournament] = useState<Tournament>();
 
-  const { data: tournaments } = useGetTournaments({
-    limit: 100,
-    offset: 0,
-    active: true,
-  });
+  const { tournaments: tournamentsResult } = useTournaments({ limit: 100, offset: 0 });
+  const tournaments = tournamentsResult?.data ?? [];
 
   const tournamentsData = tournaments.map((tournament) => ({
     tournament,

@@ -20,7 +20,7 @@ import { useAccount } from "@starknet-react/core";
 import { useConnectToSelectedChain } from "@/chain/hooks/useChain";
 import { useChainConfig } from "@/context/chain";
 import { LoadingSpinner } from "@/components/ui/spinner";
-import { useGetPlatformStats } from "@/hooks/useBudokanQueries";
+import { useActivityStats } from "@provable-games/budokan-sdk/react";
 import { PrizeManager } from "@/components/shared/PrizeManager";
 import { ChainId } from "@/chain/setup/networks";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
@@ -121,9 +121,7 @@ export function AddPrizesDialog({
   const chainId = selectedChainConfig?.chainId ?? "";
   const isSepolia = selectedChainConfig?.chainId === ChainId.SN_SEPOLIA;
 
-  const { data: platformStats } = useGetPlatformStats({
-    active: open,
-  });
+  const { stats: platformStats } = useActivityStats();
 
   const prizeCount = Number(platformStats?.totalPrizes ?? 0);
 

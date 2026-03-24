@@ -20,7 +20,7 @@ import { Button } from "@/components/ui/button";
 import { PrizesTableDialog } from "@/components/dialogs/PrizesTable";
 import { SponsorsDialog } from "@/components/dialogs/Sponsors";
 import { TableProperties, Users } from "lucide-react";
-import { useGetTournamentPrizes } from "@/hooks/useBudokanQueries";
+import { usePrizes } from "@provable-games/budokan-sdk/react";
 import { BigNumberish } from "starknet";
 
 interface PrizesContainerProps {
@@ -56,10 +56,10 @@ const PrizesContainer = ({
 
   // Always fetch top 5 positions for container view
   const {
-    data: prizesData,
+    prizes: prizesData,
     loading: prizesLoading,
     refetch: refetchPrizes,
-  } = useGetTournamentPrizes(
+  } = usePrizes(
     tournamentId ? tournamentId.toString() : undefined,
   );
 

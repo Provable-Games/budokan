@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from "react";
 import { TableProperties } from "lucide-react";
 import { BigNumberish } from "starknet";
 import { useLiveLeaderboard } from "@provable-games/denshokan-sdk/react";
-import { useGetTournamentRegistrations } from "@/hooks/useBudokanQueries";
+import { useRegistrations } from "@provable-games/budokan-sdk/react";
 import { useGetUsernames } from "@/hooks/useController";
 import { MobilePlayerCard } from "@/components/tournament/table/PlayerCard";
 import {
@@ -108,12 +108,13 @@ const ScoreTable = ({
     [pageEntries],
   );
   const {
-    data: registrants,
+    registrations: registrantsResult,
     refetch: refetchRegistrations,
-  } = useGetTournamentRegistrations(
+  } = useRegistrations(
     pageTokenIds.length > 0 ? tournamentId?.toString() : undefined,
     { limit: 1000 },
   );
+  const registrants = registrantsResult?.data ?? null;
 
   // 3. Enrich leaderboard entries with registration metadata
   const gameTokens = useMemo(() => {
