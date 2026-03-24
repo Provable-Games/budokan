@@ -134,11 +134,11 @@ const Tournament = () => {
   const tournamentId = Number(id || 0);
   const tournamentExists = !EXCLUDED_TOURNAMENT_IDS.includes(tournamentId) && tournamentData !== null;
 
-  // Get leaderboard size from distribution_count if specified, otherwise use entry count
+  // Get leaderboard size from distribution_count if specified, otherwise default to 10
   const leaderboardSize =
     Number(tournamentModel?.entryFee?.distributionCount ?? 0) > 0
       ? Number(tournamentModel?.entryFee?.distributionCount)
-      : entryCount;
+      : 10;
 
   // Fetch registrations via new SDK hook
   const { registrations: registrationsResult } =
