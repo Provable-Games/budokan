@@ -80,7 +80,7 @@ export function useGames(params?: { limit?: number; offset?: number }) {
         image: game.imageUrl ?? "",
       }));
     },
-    [JSON.stringify(params)],
+    [client, JSON.stringify(params)],
   );
   return { games: data, loading, error, refetch };
 }
@@ -120,7 +120,7 @@ export function useGameTokens({
           }));
         }
       : null,
-    [active, owner, gameAddress, gameId, limit, offset],
+    [client, active, owner, gameAddress, gameId, limit, offset],
   );
 }
 
@@ -145,7 +145,7 @@ export function useAccountTokenIds({
           return result.data.map((token: { tokenId: string }) => token.tokenId);
         }
       : null,
-    [active, owner, gameAddress],
+    [client, active, owner, gameAddress],
   );
 }
 
@@ -173,7 +173,7 @@ export function useGameSettings({
           return result.data;
         }
       : null,
-    [active, gameAddress, limit, offset],
+    [client, active, gameAddress, limit, offset],
   );
 }
 
@@ -194,7 +194,7 @@ export function useGameSetting({
     active && settingsId !== undefined && gameAddress
       ? () => client.getSetting(settingsId, gameAddress)
       : null,
-    [active, settingsId, gameAddress],
+    [client, active, settingsId, gameAddress],
   );
 }
 
@@ -216,7 +216,7 @@ export function useGameSettingsCount({
           return result.total;
         }
       : null,
-    [active, gameAddress],
+    [client, active, gameAddress],
   );
 }
 
@@ -242,6 +242,6 @@ export function useTokenScore({
           return Number(score);
         }
       : null,
-    [active, tokenId, gameAddress],
+    [client, active, tokenId, gameAddress],
   );
 }
