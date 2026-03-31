@@ -92,11 +92,9 @@ interface EnterTournamentDialogProps {
   totalPrizesValueUSD: number;
 }
 
-// Update the proof type to make tournamentId and position optional
 type Proof = {
-  tournamentId?: string;
   tokenId?: string;
-  position?: number;
+  extensionProof?: string[];
 };
 
 // Update the entriesLeftByTournament type to include either tournamentId or token
@@ -186,12 +184,7 @@ export function EnterTournamentDialog({
         ? {
             type: requirementVariant as SdkQualificationProof["type"],
             tokenId: proof.tokenId,
-            tournamentId: proof.tournamentId,
-            position: proof.position,
-            address,
-            extensionProof: requirementVariant === "extension" && !proof.tournamentId
-              ? []
-              : undefined,
+            extensionProof: proof.extensionProof,
           }
         : null;
       const qualificationProof = buildQualificationProof(sdkProof);
@@ -533,8 +526,6 @@ export function EnterTournamentDialog({
     ? [indexAddress(requiredTokenAddress ?? "")]
     : [];
 
-  const allowlistAddresses = entryReqType?.addresses;
-
   const extensionConfig = requirementVariant === "extension"
     ? { address: entryReqType?.address, config: entryReqType?.config }
     : undefined;
@@ -805,10 +796,8 @@ export function EnterTournamentDialog({
   );
 
   // Determine whether we need to fetch qualification entries
-  const shouldFetchQualifications = hasEntryRequirement && (
-    (requirementVariant === "token" && (ownedTokenIds?.length > 0 || (manualTokenOwnershipVerified && manualTokenId))) ||
-    requirementVariant === "allowlist"
-  );
+  const shouldFetchQualifications = hasEntryRequirement &&
+    requirementVariant === "token" && (ownedTokenIds?.length > 0 || (manualTokenOwnershipVerified && manualTokenId));
 
   const { qualifications: qualificationEntriesRaw } = useQualifications(
     shouldFetchQualifications ? enterTournamentId : undefined,
@@ -850,11 +839,6 @@ export function EnterTournamentDialog({
     return ids;
   }, [ownedTokenIds, manualTokenOwnershipVerified, manualTokenId]);
 
-  const allowlistEntryCount = useMemo(() =>
-    qualificationEntries?.[0]?.entry_count ?? 0,
-    [qualificationEntries]
-  );
-
   const {
     meetsRequirements: meetsEntryRequirements,
     bestProof: sdkBestProof,
@@ -865,8 +849,6 @@ export function EnterTournamentDialog({
     ownedTokenIds: allOwnedTokenIds,
     tokenEntryCounts,
     playerAddress: address,
-    allowlist: allowlistAddresses ?? [],
-    addressEntryCount: allowlistEntryCount,
     extensionQualifications,
     tournamentValidatorConfig: isTournamentValidatorExtension ? tournamentValidatorConfig : null,
     extensionValidEntry,
@@ -879,8 +861,7 @@ export function EnterTournamentDialog({
     if (!sdkBestProof) return { tokenId: "" };
     return {
       tokenId: sdkBestProof.tokenId,
-      tournamentId: sdkBestProof.tournamentId,
-      position: sdkBestProof.position,
+      extensionProof: sdkBestProof.extensionProof,
     };
   }, [sdkBestProof]);
 
@@ -893,7 +874,7 @@ export function EnterTournamentDialog({
         result.tournamentId = source.sourceId;
       } else if (source.sourceType === "token") {
         result.token = requiredTokenAddresses?.[0];
-      } else if (source.sourceType === "allowlist" || source.sourceType === "extension") {
+      } else if (source.sourceType === "extension") {
         result.address = address;
       }
       return result;
@@ -1124,9 +1105,7 @@ export function EnterTournamentDialog({
                   ) : (
                     "Entry validated by extension contract"
                   )
-                ) : (
-                  "Must be part of the allowlist"
-                )}
+                ) : null}
               </span>
               {requirementVariant === "token" ? (
                 <>

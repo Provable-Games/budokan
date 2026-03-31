@@ -69,7 +69,6 @@ export {
   formatTokenAmount,
   formatCashToUSD,
   evaluateTokenQualification,
-  evaluateAllowlistQualification,
   evaluateExtensionQualification,
   evaluateQualification,
 } from "@provable-games/metagame-sdk";
@@ -85,14 +84,12 @@ export type {
   QualificationEntry,
   QualificationProof,
   TokenQualificationInput,
-  AllowlistQualificationInput,
   ExtensionQualificationInput,
 } from "@provable-games/metagame-sdk";
 export { QualifyingMode } from "@provable-games/metagame-sdk";
 export {
   buildQualificationProof,
   buildNFTProof,
-  buildAddressProof,
   buildTournamentExtensionProof,
   buildExtensionProof,
   buildParticipationMap,

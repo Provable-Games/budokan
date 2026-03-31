@@ -485,7 +485,6 @@ function decodeOptionEntryFee(
  * EntryRequirement = { entry_limit: u32, entry_requirement_type: EntryRequirementType }
  * EntryRequirementType =
  *   token(ContractAddress) |
- *   allowlist(Span<ContractAddress>) |
  *   extension(ExtensionConfig { address: ContractAddress, config: Span<felt252> })
  */
 function decodeOptionEntryRequirement(
@@ -519,18 +518,6 @@ function decodeOptionEntryRequirement(
       break;
     }
     case 1: {
-      // allowlist(Span<ContractAddress>)
-      const spanLen = Number(hexToBigInt(data[idx + consumed]));
-      consumed++;
-      const addresses: string[] = [];
-      for (let i = 0; i < spanLen; i++) {
-        addresses.push(feltToHex(data[idx + consumed]));
-        consumed++;
-      }
-      entryRequirementType = { type: "allowlist", addresses };
-      break;
-    }
-    case 2: {
       // extension(ExtensionConfig { address, config: Span<felt252> })
       const extensionAddress = feltToHex(data[idx + consumed]);
       consumed++;
@@ -765,12 +752,6 @@ function decodeQualificationProof(
       return { value: { type: "NFT", token_id: tokenId }, consumed };
     }
     case 1: {
-      // Address(ContractAddress)
-      const address = feltToHex(data[idx + consumed]);
-      consumed++;
-      return { value: { type: "Address", address }, consumed };
-    }
-    case 2: {
       // Extension(Span<felt252>)
       const spanLen = Number(hexToBigInt(data[idx + consumed]));
       consumed++;
