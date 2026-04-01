@@ -906,32 +906,7 @@ const TournamentConfirmation = ({
                           </>
                         )}
                       </>
-                    ) : (
-                      <>
-                        <span>Addresses:</span>
-                        <div className="flex flex-col gap-1">
-                          {formData.gatingOptions.addresses?.map(
-                            (address, index) => (
-                              <div
-                                key={index}
-                                className="flex flex-row items-center gap-2"
-                              >
-                                <span>{index + 1}.</span>
-                                <span>{displayAddress(address)}</span>
-                                <a
-                                  href={`${selectedChainConfig.blockExplorerUrl}/${address}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="w-6"
-                                >
-                                  <EXTERNAL_LINK />
-                                </a>
-                              </div>
-                            )
-                          )}
-                        </div>
-                      </>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               </>

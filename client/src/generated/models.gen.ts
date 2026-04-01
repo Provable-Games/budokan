@@ -322,7 +322,6 @@ export type EntryRequirement = {
 // Type definition for `tournaments::components::models::tournament::EntryRequirementType` enum
 export type EntryRequirementType = {
   token: string;
-  allowlist: Array<string>;
   extension: ExtensionConfig;
 };
 export type EntryRequirementTypeEnum = CairoCustomEnum;
@@ -387,7 +386,7 @@ export type QualificationProof = {
   Tournament: TournamentQualification;
   // For qualifying via NFT ownership
   NFT: NFTQualification;
-  // For qualifying via allowlist
+  // For qualifying via address
   Address: string;
 };
 export type QualificationProofEnum = CairoCustomEnum;

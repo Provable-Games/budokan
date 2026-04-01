@@ -18,7 +18,6 @@ import {
   CLOCK,
   LOCK,
   COUNTER,
-  USER,
   EXTERNAL_LINK,
   INFO,
   OPUS,
@@ -57,11 +56,6 @@ import {
   Dialog,
   DialogContent,
   DialogTrigger,
-  DialogTitle,
-  DialogDescription,
-  DialogHeader,
-  DialogFooter,
-  DialogClose,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getTokenByAddress } from "@/lib/tokenUtils";
@@ -136,11 +130,6 @@ const EntryRequirements = ({
   }, [selectedChainConfig?.chainId]);
 
   const tokenLoading = false; // No loading needed for static data
-
-  const allowlist = useMemo(
-    () => reqType?.addresses,
-    [reqType]
-  );
 
   const extensionConfig = useMemo(
     () => reqType?.type === "extension" ? { address: reqType?.address, config: reqType?.config } : undefined,
@@ -272,7 +261,6 @@ const EntryRequirements = ({
     selectedChainConfig.blockExplorerUrl !== undefined;
 
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [allowlistDialogOpen, setAllowlistDialogOpen] = useState(false);
 
   const renderContent = () => {
     if (activeVariant === "token") {
@@ -354,16 +342,8 @@ const EntryRequirements = ({
           <span className="hidden sm:block">Extension</span>
         </div>
       );
-    } else {
-      return (
-        <div className="flex flex-row items-center gap-1 w-full">
-          <span className="w-6">
-            <USER />
-          </span>
-          <span className="hidden sm:block">Allowlist</span>
-        </div>
-      );
     }
+    return null;
   };
 
   const renderHoverContent = () => {
@@ -822,25 +802,8 @@ const EntryRequirements = ({
           {!!hasEntryLimit && <EntryLimitInfo limit={Number(entryLimit)} />}
         </>
       );
-    } else {
-      return (
-        <>
-          <p className="text-muted-foreground">
-            {`To enter you must be whitelisted:`}
-          </p>
-          <Button
-            className="w-fit"
-            variant="outline"
-            onClick={() => {
-              setAllowlistDialogOpen(true);
-            }}
-          >
-            <span>See Allowlist</span>
-          </Button>
-          {!!hasEntryLimit && <EntryLimitInfo limit={Number(entryLimit)} />}
-        </>
-      );
     }
+    return null;
   };
 
   const TriggerCard = ({ onClick = () => {} }) => (
@@ -904,62 +867,6 @@ const EntryRequirements = ({
         </HoverCard>
       </div>
 
-      {/* Allowlist Dialog */}
-      <Dialog open={allowlistDialogOpen} onOpenChange={setAllowlistDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>Tournament Allowlist</DialogTitle>
-            <DialogDescription>
-              Only addresses on this list can participate in the tournament.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="h-[300px] mt-4 overflow-y-auto grid grid-cols-2 sm:grid-cols-3">
-            {allowlist && allowlist.length > 0 ? (
-              <div className="space-y-2">
-                {allowlist.map((address: string, index: number) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between p-2 border border-brand-muted rounded"
-                  >
-                    <span className="w-6">
-                      <USER />
-                    </span>
-                    <span className="font-mono text-xs">
-                      {displayAddress(address)}
-                    </span>
-                    {blockExplorerExists && (
-                      <a
-                        href={`${selectedChainConfig.blockExplorerUrl}/contract/${address}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-6"
-                      >
-                        <EXTERNAL_LINK />
-                      </a>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex items-center justify-center h-full text-muted-foreground">
-                No addresses in allowlist
-              </div>
-            )}
-          </div>
-
-          <DialogFooter className="mt-4">
-            <div className="flex justify-between w-full">
-              <span className="text-muted-foreground">
-                {allowlist ? `${allowlist.length} addresses` : "0 addresses"}
-              </span>
-              <DialogClose asChild>
-                <Button variant="outline">Close</Button>
-              </DialogClose>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </>
   );
 };
