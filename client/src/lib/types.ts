@@ -88,7 +88,7 @@ export type FormToken = {
 export interface GameTokenData {
   tokenId: string;
   owner: string;
-  playerName: string;
+  playerName: string | null;
   score: number;
   gameOver: boolean;
   rank?: number;

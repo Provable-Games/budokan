@@ -24,7 +24,7 @@ A permissionless, fully on-chain tournament management system built on StarkNet.
 Budokan is a comprehensive tournament infrastructure that manages the complete lifecycle of gaming competitions on StarkNet. Built on Cairo 2.15.0 with Scarb and Starknet Foundry, it provides a robust foundation for permissionless competitive gaming with:
 
 - **Permissionless Creation**: Anyone can launch tournaments with custom configurations
-- **Flexible Access Control**: Token-gating, tournament-gating, allowlists, or custom validators
+- **Flexible Access Control**: Token-gating, tournament-gating, or custom validators
 - **Multi-Prize Support**: Entry fee pools and sponsored prizes (ERC20/ERC721)
 - **On-Chain Leaderboards**: Ordered score tracking with batch submission support
 - **Automated Distribution**: Prize claims for winners, creators, and game developers
@@ -58,7 +58,6 @@ Budokan supports multiple entry requirement patterns:
 
 - **Token-Gated**: Require ownership of specific ERC721 tokens
 - **Tournament-Gated**: Restrict to winners or participants of previous tournaments
-- **Allowlist**: Pre-approved address lists for exclusive tournaments
 - **Custom Validators**: Extensible via `IEntryValidator` interface for custom logic
 - **Entry Limits**: Optional caps on entries per qualification proof
 - **Open Access**: No requirements for permissionless participation

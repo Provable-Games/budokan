@@ -132,7 +132,7 @@ src/
 
 3. **WorldStorage Abstraction**: `libs/store.cairo` provides typed CRUD operations for all Dojo models, abstracting away raw world storage access.
 
-4. **Entry Validators**: Modular validation via `IEntryValidator` interface. Built-in types: token-gated, tournament-gated, allowlist, custom validators.
+4. **Entry Validators**: Modular validation via `IEntryValidator` interface. Built-in types: token-gated, tournament-gated, custom validators.
 
 ### Core Data Models
 

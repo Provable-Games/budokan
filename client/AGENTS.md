@@ -38,6 +38,14 @@ If requirements are ambiguous:
 - Propose multiple approaches with tradeoffs
 - Default to simpler, more maintainable options
 
+## Package Manager
+
+**CRITICAL: Always use `bun`, never `npm`, `yarn`, or `pnpm`.** This project uses `bun.lock` as the single lockfile. Do not run `npm install`, `npm ci`, or any npm commands that manage dependencies. Do not generate `package-lock.json`.
+
+- `bun install` — install dependencies (respects frozen lockfile)
+- `bun add <pkg>` — add a dependency
+- `bun remove <pkg>` — remove a dependency
+
 ## Build Commands
 
 ```bash

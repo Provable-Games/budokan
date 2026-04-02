@@ -63,8 +63,6 @@ const PrizesContainer = ({
     tournamentId ? tournamentId.toString() : undefined,
   );
 
-  console.log(prizesData);
-
   useEffect(() => {
     refetchPrizes();
   }, [subscibedPrizeCount]);

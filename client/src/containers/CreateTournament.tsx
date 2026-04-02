@@ -60,7 +60,7 @@ const formSchema = z.object({
     .object({
       entry_limit: z.number().min(1).max(100).optional(),
       type: z
-        .enum(["token", "tournament", "addresses", "extension"])
+        .enum(["token", "tournament", "extension"])
         .optional(),
       token: z.custom<FormToken>().optional(),
       tournament: z
@@ -71,7 +71,6 @@ const formSchema = z.object({
           top_positions: z.number().min(0).max(200).default(0),
         })
         .optional(),
-      addresses: z.array(z.string()).default([]),
       extension: z
         .object({
           address: z.string().optional(),
@@ -164,7 +163,6 @@ const CreateTournament = () => {
       enablePrizes: false,
       gatingOptions: {
         entry_limit: 1,
-        addresses: [],
         tournament: {
           tournaments: [],
           requirement: "participated",
@@ -355,11 +353,6 @@ const CreateTournament = () => {
                       ) &&
                       getValue("gatingOptions.tournament.tournaments").length >
                         0
-                    );
-                  case "addresses":
-                    return (
-                      Array.isArray(getValue("gatingOptions.addresses")) &&
-                      getValue("gatingOptions.addresses").length > 0
                     );
                   case "extension":
                     return !!(

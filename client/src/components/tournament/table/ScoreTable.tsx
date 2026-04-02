@@ -107,13 +107,11 @@ const ScoreTable = ({
     () => pageEntries.map((e) => e.tokenId),
     [pageEntries],
   );
-  const {
-    registrations: registrantsResult,
-    refetch: refetchRegistrations,
-  } = useRegistrations(
-    pageTokenIds.length > 0 ? tournamentId?.toString() : undefined,
-    { limit: 1000 },
-  );
+  const { registrations: registrantsResult, refetch: refetchRegistrations } =
+    useRegistrations(
+      pageTokenIds.length > 0 ? tournamentId?.toString() : undefined,
+      { limit: 1000 },
+    );
   const registrants = registrantsResult?.data ?? null;
 
   // 3. Enrich leaderboard entries with registration metadata
@@ -122,8 +120,10 @@ const ScoreTable = ({
 
     const regMap = new Map(
       ((registrants as any[]) ?? []).map((r: any) => {
-        const raw = (r.gameTokenId)?.toString();
-        const hex = raw?.startsWith("0x") ? raw : "0x" + BigInt(raw ?? 0).toString(16);
+        const raw = r.gameTokenId?.toString();
+        const hex = raw?.startsWith("0x")
+          ? raw
+          : "0x" + BigInt(raw ?? 0).toString(16);
         return [hex, r];
       }),
     );

@@ -394,10 +394,6 @@ const BUDOKAN_ABI = [
         "type": "core::starknet::contract_address::ContractAddress"
       },
       {
-        "name": "allowlist",
-        "type": "core::array::Span::<core::starknet::contract_address::ContractAddress>"
-      },
-      {
         "name": "extension",
         "type": "interfaces::extension::ExtensionConfig"
       }
@@ -552,10 +548,6 @@ const BUDOKAN_ABI = [
       {
         "name": "NFT",
         "type": "game_components_interfaces::entry_requirement::NFTQualification"
-      },
-      {
-        "name": "Address",
-        "type": "core::starknet::contract_address::ContractAddress"
       },
       {
         "name": "Extension",

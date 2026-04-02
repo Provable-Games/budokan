@@ -20,7 +20,7 @@ import {
   usePlayerTournaments,
   useSubscription,
 } from "@provable-games/budokan-sdk/react";
-import { useAccountTokenIds } from "@/hooks/useDenshokanQueries";
+import { useTokens } from "@provable-games/denshokan-sdk/react";
 
 import { indexAddress } from "@/lib/utils";
 import { useChainConfig } from "@/context/chain";
@@ -124,10 +124,13 @@ const Overview = () => {
     return indexAddress(address);
   }, [address]);
 
-  const { data: gameTokenIds } = useAccountTokenIds({
-    owner: address,
-    active: !!address,
-  });
+  const { data: playerTokensResult } = useTokens(
+    address && address !== "0x0" ? { owner: address, limit: 1000 } : undefined,
+  );
+  const gameTokenIds = useMemo(
+    () => playerTokensResult?.data?.map((t) => t.tokenId) ?? null,
+    [playerTokensResult],
+  );
 
   const { count: myTournamentsCount } = usePlayerTournamentCount(queryAddress ?? undefined);
 
@@ -183,11 +186,10 @@ const Overview = () => {
     // 1. We're on the first page (always fetch first page)
     // 2. OR we're on a subsequent page AND we don't have enough data yet
     const hasEnoughData =
-      currentTournaments.length >= (currentPage + 1) * 12 ||
-      currentTournaments.length === tournamentCounts[selectedTab];
+      currentTournaments.length >= (currentPage + 1) * 12;
 
     return currentPage === 0 || (currentPage > 0 && !hasEnoughData);
-  }, [currentPage, currentTournaments.length, tournamentCounts, selectedTab]);
+  }, [currentPage, currentTournaments.length, selectedTab]);
 
   // Use this to conditionally fetch data
   const isListTab = ["upcoming", "live", "ended"].includes(selectedTab);

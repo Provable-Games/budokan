@@ -100,8 +100,6 @@ export const processTournamentData = (
       case "token":
         entryRequirementType = new CairoCustomEnum({
           token: formData.gatingOptions.token?.address,
-          tournament: undefined,
-          allowlist: undefined,
           extension: undefined,
         });
         break;
@@ -124,20 +122,10 @@ export const processTournamentData = (
 
         entryRequirementType = new CairoCustomEnum({
           token: undefined,
-          tournament: undefined,
-          allowlist: undefined,
           extension: {
             address: tournamentValidatorAddress || "",
             config: tournamentConfig,
           },
-        });
-        break;
-      case "addresses":
-        entryRequirementType = new CairoCustomEnum({
-          token: undefined,
-          tournament: undefined,
-          allowlist: formData.gatingOptions.addresses,
-          extension: undefined,
         });
         break;
       case "extension":
@@ -157,8 +145,6 @@ export const processTournamentData = (
 
         entryRequirementType = new CairoCustomEnum({
           token: undefined,
-          tournament: undefined,
-          allowlist: undefined,
           extension: {
             address: formData.gatingOptions.extension?.address,
             config: configArray,
@@ -1003,7 +989,7 @@ export const calculatePaidPlaces = (
 export const processQualificationProof = (
   requirementVariant: string,
   proof: any,
-  address: string,
+  _address?: string,
   _extensionAddress?: string,
   _extensionContext?: unknown,
 ): CairoOption<QualificationProofEnum> => {
@@ -1011,62 +997,26 @@ export const processQualificationProof = (
     return new CairoOption(
       CairoOptionVariant.Some,
       new CairoCustomEnum({
-        Tournament: undefined,
         NFT: {
           token_id: {
             low: proof.tokenId,
             high: "0",
           },
         },
-        Address: undefined,
         Extension: undefined,
       })
     );
   }
 
-  if (requirementVariant === "allowlist") {
-    return new CairoOption(
-      CairoOptionVariant.Some,
-      new CairoCustomEnum({
-        Tournament: undefined,
-        NFT: undefined,
-        Address: address,
-        Extension: undefined,
-      })
-    );
-  }
 
   if (requirementVariant === "extension") {
-    // Check if this is a tournament validator with tournament proof
-    // Tournament validator proofs have tournamentId, tokenId, and position
-    if (proof?.tournamentId && proof?.tokenId && proof?.position !== undefined) {
-      // Tournament validator proof: [tournament_id, token_id, position]
-      const extensionProofData = [
-        proof.tournamentId.toString(),
-        proof.tokenId.toString(),
-        proof.position.toString(),
-      ];
-
-      return new CairoOption(
-        CairoOptionVariant.Some,
-        new CairoCustomEnum({
-          Tournament: undefined,
-          NFT: undefined,
-          Address: undefined,
-          Extension: extensionProofData,
-        })
-      );
-    }
-
-    // Generic extension — proof is always empty (extensions validate on-chain)
-    const extensionProofData: string[] = [];
+    // Extension proof data — encoded by the extension's own logic
+    const extensionProofData: string[] = proof?.extensionProof ?? [];
 
     return new CairoOption(
       CairoOptionVariant.Some,
       new CairoCustomEnum({
-        Tournament: undefined,
         NFT: undefined,
-        Address: undefined,
         Extension: extensionProofData,
       })
     );

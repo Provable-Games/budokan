@@ -97,8 +97,8 @@ source = "git+https://github.com/EkuboProtocol/starknet-contracts.git?tag=v4.0.1
 
 [[package]]
 name = "game_components_embeddable_game_standard"
-version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=main#ffb1b880a83964eb8e618544d6113aa728eeba1e"
+version = "1.1.2"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=main#b1708c1ec752930201c49a9c43a92c24b9f42a2e"
 dependencies = [
  "game_components_interfaces",
  "game_components_metagame",
@@ -111,8 +111,8 @@ dependencies = [
 
 [[package]]
 name = "game_components_interfaces"
-version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=main#ffb1b880a83964eb8e618544d6113aa728eeba1e"
+version = "1.1.2"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=main#b1708c1ec752930201c49a9c43a92c24b9f42a2e"
 dependencies = [
  "ekubo",
  "metagame_extensions_interfaces",
@@ -120,9 +120,10 @@ dependencies = [
 
 [[package]]
 name = "game_components_metagame"
-version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=main#ffb1b880a83964eb8e618544d6113aa728eeba1e"
+version = "1.1.2"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=main#b1708c1ec752930201c49a9c43a92c24b9f42a2e"
 dependencies = [
+ "game_components_embeddable_game_standard",
  "game_components_interfaces",
  "game_components_utilities",
  "metagame_extensions_interfaces",
@@ -132,8 +133,8 @@ dependencies = [
 
 [[package]]
 name = "game_components_test_common"
-version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=main#ffb1b880a83964eb8e618544d6113aa728eeba1e"
+version = "1.1.2"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=main#b1708c1ec752930201c49a9c43a92c24b9f42a2e"
 dependencies = [
  "game_components_embeddable_game_standard",
  "game_components_interfaces",
@@ -149,8 +150,8 @@ dependencies = [
 
 [[package]]
 name = "game_components_utilities"
-version = "1.5.1"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=main#ffb1b880a83964eb8e618544d6113aa728eeba1e"
+version = "1.1.2"
+source = "git+https://github.com/Provable-Games/game-components.git?branch=main#b1708c1ec752930201c49a9c43a92c24b9f42a2e"
 dependencies = [
  "alexandria_encoding",
  "game_components_embeddable_game_standard",
@@ -216,13 +217,13 @@ dependencies = [
 
 [[package]]
 name = "snforge_scarb_plugin"
-version = "0.55.0"
-source = "git+https://github.com/foundry-rs/starknet-foundry?tag=v0.55.0#8891212a4fe99f1787298042f828ebd4e4abe9a3"
+version = "0.58.1"
+source = "git+https://github.com/foundry-rs/starknet-foundry?tag=v0.58.1#5892ff56f01f18c76f3ebfd2af00c8088211c1d5"
 
 [[package]]
 name = "snforge_std"
-version = "0.55.0"
-source = "git+https://github.com/foundry-rs/starknet-foundry?tag=v0.55.0#8891212a4fe99f1787298042f828ebd4e4abe9a3"
+version = "0.58.1"
+source = "git+https://github.com/foundry-rs/starknet-foundry?tag=v0.58.1#5892ff56f01f18c76f3ebfd2af00c8088211c1d5"
 dependencies = [
  "snforge_scarb_plugin",
 ]
