@@ -731,7 +731,6 @@ function decodeRewardType(
  *
  * QualificationProof =
  *   NFT(NFTQualification { token_id: u256 }) |
- *   Address(ContractAddress) |
  *   Extension(Span<felt252>)
  */
 function decodeQualificationProof(

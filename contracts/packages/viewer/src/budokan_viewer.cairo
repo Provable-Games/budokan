@@ -11,7 +11,7 @@ use budokan_interfaces::viewer::{
 use core::num::traits::Zero;
 use game_components_interfaces::metagame::core::{IMetagameDispatcher, IMetagameDispatcherTrait};
 use game_components_interfaces::prize::{
-    IPrizeDispatcher, IPrizeDispatcherTrait, PrizeData, PrizeType,
+    IPrizeDispatcher, IPrizeDispatcherTrait, PrizeData, PrizeType, TokenTypeData,
 };
 use game_components_interfaces::registration::{
     IRegistrationDispatcher, IRegistrationDispatcherTrait, Registration,
@@ -464,12 +464,43 @@ pub mod BudokanViewer {
             while prize_id <= total_prizes {
                 let prize = prize_dispatcher.get_prize(prize_id);
                 if prize.context_id == tournament_id {
-                    let prize_type = PrizeType::Single(prize_id);
-                    let claimed = prize_dispatcher.is_prize_claimed(tournament_id, prize_type);
-                    all_claims
-                        .append(
-                            RewardClaimView { reward_type: RewardType::Prize(prize_type), claimed },
-                        );
+                    // Check if this is a distributed prize (ERC20 with distribution_count)
+                    let distribution_count = match @prize.token_type {
+                        TokenTypeData::erc20(erc20_data) => {
+                            match erc20_data.distribution_count {
+                                Option::Some(count) => *count,
+                                Option::None => 0,
+                            }
+                        },
+                        TokenTypeData::erc721(_) => 0,
+                    };
+
+                    if distribution_count > 0 {
+                        // Distributed prize: one claim per position
+                        let mut pos: u32 = 1;
+                        while pos <= distribution_count {
+                            let prize_type = PrizeType::Distributed((prize_id, pos));
+                            let claimed = prize_dispatcher
+                                .is_prize_claimed(tournament_id, prize_type);
+                            all_claims
+                                .append(
+                                    RewardClaimView {
+                                        reward_type: RewardType::Prize(prize_type), claimed,
+                                    },
+                                );
+                            pos += 1;
+                        }
+                    } else {
+                        // Single prize: one claim
+                        let prize_type = PrizeType::Single(prize_id);
+                        let claimed = prize_dispatcher.is_prize_claimed(tournament_id, prize_type);
+                        all_claims
+                            .append(
+                                RewardClaimView {
+                                    reward_type: RewardType::Prize(prize_type), claimed,
+                                },
+                            );
+                    }
                 }
                 prize_id += 1;
             }

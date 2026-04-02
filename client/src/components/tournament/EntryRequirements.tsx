@@ -100,7 +100,7 @@ const EntryRequirements = ({
 
   const navigate = useNavigate();
 
-  // SDK shape: { entryLimit, entryRequirementType: { type, tokenAddress?, addresses?, address?, config? } }
+  // SDK shape: { entryLimit, entryRequirementType: { type, tokenAddress?, config? } }
   const reqType = entryRequirement?.entryRequirementType;
   const entryLimit = entryRequirement?.entryLimit;
   const hasEntryLimit = Number(entryLimit) > 0;
