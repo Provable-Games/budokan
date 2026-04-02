@@ -59,7 +59,7 @@ import {
   REFRESH,
 } from "@/components/Icons";
 import { useRegistrations, useLeaderboard, useQualifications } from "@provable-games/budokan-sdk/react";
-import { usePlayerTokens } from "@provable-games/denshokan-sdk/react";
+import { useTokens } from "@provable-games/denshokan-sdk/react";
 import { useChainConfig } from "@/context/chain";
 // computeAbsoluteTimes no longer needed — SDK provides pre-computed timestamps
 import { buildQualificationProof } from "@/lib/utils";
@@ -696,11 +696,13 @@ export function EnterTournamentDialog({
     // };
   }, [manualTokenId, open, requirementVariant, ownedTokenIds]);
 
-  const { tokens: playerTokensResult } = usePlayerTokens(address);
+  const { data: ownedTokensResult } = useTokens(
+    address ? { owner: address, limit: 1000 } : undefined,
+  );
 
   const ownedGameIds = useMemo(() => {
-    return playerTokensResult?.data?.map((token) => token.tokenId).filter(Boolean);
-  }, [playerTokensResult]);
+    return ownedTokensResult?.data?.map((token) => token.tokenId).filter(Boolean);
+  }, [ownedTokensResult]);
 
   const enterTournamentId = tournamentModel?.id ? String(tournamentModel.id) : undefined;
 

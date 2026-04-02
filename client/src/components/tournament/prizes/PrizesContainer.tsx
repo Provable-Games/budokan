@@ -58,7 +58,6 @@ const PrizesContainer = ({
   const {
     prizes: prizesData,
     loading: prizesLoading,
-    error: prizesError,
     refetch: refetchPrizes,
   } = usePrizes(
     tournamentId ? tournamentId.toString() : undefined,

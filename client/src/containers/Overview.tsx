@@ -20,7 +20,7 @@ import {
   usePlayerTournaments,
   useSubscription,
 } from "@provable-games/budokan-sdk/react";
-import { usePlayerTokens } from "@provable-games/denshokan-sdk/react";
+import { useTokens } from "@provable-games/denshokan-sdk/react";
 
 import { indexAddress } from "@/lib/utils";
 import { useChainConfig } from "@/context/chain";
@@ -124,9 +124,8 @@ const Overview = () => {
     return indexAddress(address);
   }, [address]);
 
-  const { data: playerTokensResult } = usePlayerTokens(
-    address && address !== "0x0" ? address : undefined,
-    { limit: 1000 },
+  const { data: playerTokensResult } = useTokens(
+    address && address !== "0x0" ? { owner: address, limit: 1000 } : undefined,
   );
   const gameTokenIds = useMemo(
     () => playerTokensResult?.data?.map((t) => t.tokenId) ?? null,
