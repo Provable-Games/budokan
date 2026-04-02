@@ -35,7 +35,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 // Tournament type now comes from SDK
-import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import {
   Table,

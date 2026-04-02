@@ -30,5 +30,5 @@ export function BudokanProvider({ children }: { children: React.ReactNode }) {
     };
   }, [chain]);
 
-  return <SdkBudokanProvider config={config}>{children}</SdkBudokanProvider>;
+  return <SdkBudokanProvider config={config}>{children as any}</SdkBudokanProvider>;
 }

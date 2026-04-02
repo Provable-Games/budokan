@@ -38,7 +38,7 @@ export function DenshokanProvider({ children }: { children: ReactNode }) {
   }, [chain]);
 
   return (
-    <SdkDenshokanProvider client={client}>{children}</SdkDenshokanProvider>
+    <SdkDenshokanProvider client={client}>{children as any}</SdkDenshokanProvider>
   );
 }
 

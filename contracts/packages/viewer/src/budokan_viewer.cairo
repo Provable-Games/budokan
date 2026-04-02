@@ -10,7 +10,6 @@ use budokan_interfaces::viewer::{
 };
 use core::num::traits::Zero;
 use game_components_interfaces::metagame::core::{IMetagameDispatcher, IMetagameDispatcherTrait};
-use openzeppelin_interfaces::erc721::{IERC721Dispatcher, IERC721DispatcherTrait};
 use game_components_interfaces::prize::{
     IPrizeDispatcher, IPrizeDispatcherTrait, PrizeData, PrizeType,
 };
@@ -18,6 +17,7 @@ use game_components_interfaces::registration::{
     IRegistrationDispatcher, IRegistrationDispatcherTrait, Registration,
 };
 use openzeppelin_access::ownable::OwnableComponent;
+use openzeppelin_interfaces::erc721::{IERC721Dispatcher, IERC721DispatcherTrait};
 use openzeppelin_upgrades::UpgradeableComponent;
 use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
 use starknet::{ClassHash, ContractAddress};
@@ -299,7 +299,7 @@ pub mod BudokanViewer {
                         break;
                     }
                     i += 1;
-                };
+                }
                 if found {
                     if skipped < offset {
                         skipped += 1;
@@ -330,7 +330,7 @@ pub mod BudokanViewer {
                         break;
                     }
                     i += 1;
-                };
+                }
                 id += 1;
             }
 
@@ -468,13 +468,11 @@ pub mod BudokanViewer {
                     let claimed = prize_dispatcher.is_prize_claimed(tournament_id, prize_type);
                     all_claims
                         .append(
-                            RewardClaimView {
-                                reward_type: RewardType::Prize(prize_type), claimed,
-                            },
+                            RewardClaimView { reward_type: RewardType::Prize(prize_type), claimed },
                         );
                 }
                 prize_id += 1;
-            };
+            }
 
             // Compute totals and apply pagination
             let total: u32 = all_claims.len();
@@ -496,7 +494,7 @@ pub mod BudokanViewer {
                     claims.append(claim);
                 }
                 idx += 1;
-            };
+            }
 
             RewardClaimResult { claims, total, total_claimed, total_unclaimed }
         }
@@ -508,12 +506,8 @@ pub mod BudokanViewer {
         ) -> TournamentFilterResult {
             let budokan = self._budokan();
             let registration = self._registration();
-            let metagame = IMetagameDispatcher {
-                contract_address: self.budokan_address.read(),
-            };
-            let denshokan = IERC721Dispatcher {
-                contract_address: metagame.context_address(),
-            };
+            let metagame = IMetagameDispatcher { contract_address: self.budokan_address.read() };
+            let denshokan = IERC721Dispatcher { contract_address: metagame.context_address() };
             let total_tournaments = budokan.total_tournaments();
             let mut matched: u64 = 0;
             let mut skipped: u64 = 0;
@@ -536,7 +530,7 @@ pub mod BudokanViewer {
                         }
                     }
                     eid += 1;
-                };
+                }
                 if found {
                     if skipped < offset {
                         skipped += 1;
@@ -546,7 +540,7 @@ pub mod BudokanViewer {
                     matched += 1;
                 }
                 tid += 1;
-            };
+            }
 
             TournamentFilterResult { tournament_ids, total: matched }
         }
