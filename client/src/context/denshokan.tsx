@@ -2,8 +2,14 @@ import { useMemo } from "react";
 import type { ReactNode } from "react";
 import { useNetwork } from "@starknet-react/core";
 import { CHAINS, ChainId, getDefaultChainId } from "@/chain/setup/networks";
-import { createDenshokanClient, type DenshokanClientConfig } from "@provable-games/denshokan-sdk";
-import { DenshokanProvider as SdkDenshokanProvider, useDenshokanClient } from "@provable-games/denshokan-sdk/react";
+import {
+  createDenshokanClient,
+  type DenshokanClientConfig,
+} from "@provable-games/denshokan-sdk";
+import {
+  DenshokanProvider as SdkDenshokanProvider,
+  useDenshokanClient,
+} from "@provable-games/denshokan-sdk/react";
 
 export function DenshokanProvider({ children }: { children: ReactNode }) {
   const { chain } = useNetwork();
@@ -25,15 +31,14 @@ export function DenshokanProvider({ children }: { children: ReactNode }) {
       apiUrl: chainConfig.denshokanApiUrl,
       rpcUrl: chainConfig.rpcUrl,
       denshokanAddress: chainConfig.denshokanAddress,
+      primarySource: "api" as const,
     };
 
     return createDenshokanClient(config);
   }, [chain]);
 
   return (
-    <SdkDenshokanProvider client={client}>
-      {children}
-    </SdkDenshokanProvider>
+    <SdkDenshokanProvider client={client}>{children}</SdkDenshokanProvider>
   );
 }
 

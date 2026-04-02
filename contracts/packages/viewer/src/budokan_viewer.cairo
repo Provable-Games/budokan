@@ -3,13 +3,17 @@
 // It separates view logic from the main Budokan contract to reduce contract size.
 // Includes OwnableComponent and UpgradeableComponent for access control and upgradability.
 
-use budokan_interfaces::budokan::{IBudokanDispatcher, IBudokanDispatcherTrait, Phase};
+use budokan_interfaces::budokan::{IBudokanDispatcher, IBudokanDispatcherTrait, Phase, RewardType};
 use budokan_interfaces::viewer::{
-    IBudokanViewer, LeaderboardEntryView, RegistrationResult, TournamentFilterResult,
-    TournamentFullState,
+    IBudokanViewer, LeaderboardEntryView, RegistrationResult, RewardClaimResult, RewardClaimView,
+    TournamentFilterResult, TournamentFullState,
 };
 use core::num::traits::Zero;
-use game_components_interfaces::prize::{IPrizeDispatcher, IPrizeDispatcherTrait, PrizeData};
+use game_components_interfaces::metagame::core::{IMetagameDispatcher, IMetagameDispatcherTrait};
+use openzeppelin_interfaces::erc721::{IERC721Dispatcher, IERC721DispatcherTrait};
+use game_components_interfaces::prize::{
+    IPrizeDispatcher, IPrizeDispatcherTrait, PrizeData, PrizeType,
+};
 use game_components_interfaces::registration::{
     IRegistrationDispatcher, IRegistrationDispatcherTrait, Registration,
 };
@@ -115,6 +119,7 @@ pub mod BudokanViewer {
         fn _prize(self: @ContractState) -> IPrizeDispatcher {
             IPrizeDispatcher { contract_address: self.budokan_address.read() }
         }
+
 
         fn _build_full_state(self: @ContractState, tournament_id: u64) -> TournamentFullState {
             let budokan = self._budokan();
@@ -273,6 +278,65 @@ pub mod BudokanViewer {
             count
         }
 
+        fn tournaments_by_phases(
+            self: @ContractState, phases: Array<Phase>, offset: u64, limit: u64,
+        ) -> TournamentFilterResult {
+            let budokan = self._budokan();
+            let total = budokan.total_tournaments();
+            let mut matched: u64 = 0;
+            let mut skipped: u64 = 0;
+            let mut tournament_ids: Array<u64> = array![];
+            let phases_snap = phases.span();
+
+            let mut id: u64 = 1;
+            while id <= total {
+                let current = budokan.current_phase(id);
+                let mut found = false;
+                let mut i: u32 = 0;
+                while i < phases_snap.len() {
+                    if current == *phases_snap.at(i) {
+                        found = true;
+                        break;
+                    }
+                    i += 1;
+                };
+                if found {
+                    if skipped < offset {
+                        skipped += 1;
+                    } else if tournament_ids.len().into() < limit {
+                        tournament_ids.append(id);
+                    }
+                    matched += 1;
+                }
+                id += 1;
+            }
+
+            TournamentFilterResult { tournament_ids, total: matched }
+        }
+
+        fn count_tournaments_by_phases(self: @ContractState, phases: Array<Phase>) -> u64 {
+            let budokan = self._budokan();
+            let total = budokan.total_tournaments();
+            let mut count: u64 = 0;
+            let phases_snap = phases.span();
+
+            let mut id: u64 = 1;
+            while id <= total {
+                let current = budokan.current_phase(id);
+                let mut i: u32 = 0;
+                while i < phases_snap.len() {
+                    if current == *phases_snap.at(i) {
+                        count += 1;
+                        break;
+                    }
+                    i += 1;
+                };
+                id += 1;
+            }
+
+            count
+        }
+
         fn count_tournaments_by_phase(self: @ContractState, phase: Phase) -> u64 {
             let budokan = self._budokan();
             let total = budokan.total_tournaments();
@@ -383,6 +447,108 @@ pub mod BudokanViewer {
             }
 
             results
+        }
+
+        // === REWARD CLAIMS ===
+
+        fn tournament_reward_claims(
+            self: @ContractState, tournament_id: u64, offset: u32, limit: u32,
+        ) -> RewardClaimResult {
+            let prize_dispatcher = self._prize();
+            let total_prizes = prize_dispatcher.get_total_prizes();
+            let mut claims: Array<RewardClaimView> = array![];
+            let mut all_claims: Array<RewardClaimView> = array![];
+
+            // Collect prize reward claims for this tournament
+            let mut prize_id: u64 = 1;
+            while prize_id <= total_prizes {
+                let prize = prize_dispatcher.get_prize(prize_id);
+                if prize.context_id == tournament_id {
+                    let prize_type = PrizeType::Single(prize_id);
+                    let claimed = prize_dispatcher.is_prize_claimed(tournament_id, prize_type);
+                    all_claims
+                        .append(
+                            RewardClaimView {
+                                reward_type: RewardType::Prize(prize_type), claimed,
+                            },
+                        );
+                }
+                prize_id += 1;
+            };
+
+            // Compute totals and apply pagination
+            let total: u32 = all_claims.len();
+            let mut total_claimed: u32 = 0;
+            let mut total_unclaimed: u32 = 0;
+            let mut idx: u32 = 0;
+            let mut skipped: u32 = 0;
+            let snap = all_claims.span();
+            while idx < total {
+                let claim = *snap.at(idx);
+                if claim.claimed {
+                    total_claimed += 1;
+                } else {
+                    total_unclaimed += 1;
+                }
+                if skipped < offset {
+                    skipped += 1;
+                } else if claims.len() < limit {
+                    claims.append(claim);
+                }
+                idx += 1;
+            };
+
+            RewardClaimResult { claims, total, total_claimed, total_unclaimed }
+        }
+
+        // === PLAYER TOURNAMENTS ===
+
+        fn player_tournaments(
+            self: @ContractState, player_address: ContractAddress, offset: u64, limit: u64,
+        ) -> TournamentFilterResult {
+            let budokan = self._budokan();
+            let registration = self._registration();
+            let metagame = IMetagameDispatcher {
+                contract_address: self.budokan_address.read(),
+            };
+            let denshokan = IERC721Dispatcher {
+                contract_address: metagame.context_address(),
+            };
+            let total_tournaments = budokan.total_tournaments();
+            let mut matched: u64 = 0;
+            let mut skipped: u64 = 0;
+            let mut tournament_ids: Array<u64> = array![];
+
+            let mut tid: u64 = 1;
+            while tid <= total_tournaments {
+                let entry_count = registration.get_entry_count(tid);
+                let mut found = false;
+                let mut eid: u32 = 1;
+                while eid <= entry_count {
+                    if registration.entry_exists(tid, eid) {
+                        let entry = registration.get_entry(tid, eid);
+                        // Check if this entry's game token is owned by the player
+                        let token_id: u256 = entry.game_token_id.into();
+                        let owner = denshokan.owner_of(token_id);
+                        if owner == player_address {
+                            found = true;
+                            break;
+                        }
+                    }
+                    eid += 1;
+                };
+                if found {
+                    if skipped < offset {
+                        skipped += 1;
+                    } else if tournament_ids.len().into() < limit {
+                        tournament_ids.append(tid);
+                    }
+                    matched += 1;
+                }
+                tid += 1;
+            };
+
+            TournamentFilterResult { tournament_ids, total: matched }
         }
     }
 }

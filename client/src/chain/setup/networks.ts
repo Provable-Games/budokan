@@ -50,6 +50,7 @@ export type ChainConfig = {
   explorers?: ChainExplorers;
   denshokanAddress?: string;
   budokanAddress?: string;
+  budokanViewerAddress?: string;
   // SDK API URLs
   budokanApiUrl?: string;
   denshokanApiUrl?: string;
@@ -74,9 +75,11 @@ const snSepoliaConfig: ChainConfig = {
   ethAddress: sepolia.nativeCurrency.address,
   connectorIds: [supportedConnectorIds.CONTROLLER],
   denshokanAddress:
-    "0x05178014ac8150207c795a9e426cfcbb0546ba1e033e869b04e0b6d8c2791e64",
+    "0x024c4870f96355ac9fd701bd05ab5d08c220c371ebb861535eb9851a959c522d",
   budokanAddress:
-    "0x04a845177b5158c54b7f44bd5031c7bd336aa7436967c8d03a2fc91375bb7a54",
+    "0x0072a26c29ba5021508bbbb8487663a2a536b8a926acf388d3d772961bd063e0",
+  budokanViewerAddress:
+    "0x06bef644110a02c1b075b539953c707cd03b4bb32b42f5f1b0b0090b5139529f",
   budokanApiUrl: "https://budokan-api-sepolia.up.railway.app",
   denshokanApiUrl: "https://denshokan-api-sepolia.up.railway.app",
 };
@@ -102,6 +105,7 @@ const snMainnetConfig: ChainConfig = {
     "0x036017e69d21d6d8c13e266eabb73ef1f1d02722d86bdcabe5f168f8e549d3cd",
   budokanAddress:
     "0x051f5fc1ddcffcb0bf548378e0166a5e5328fb4894efbab170e3fb1a4c0cdfdf",
+  budokanViewerAddress: "",
   budokanApiUrl: "https://budokan-api-production.up.railway.app",
   denshokanApiUrl: "https://denshokan-api-production.up.railway.app",
 } as const;
@@ -181,4 +185,3 @@ export const getDefaultChainId = (): ChainId => {
 
   return ChainId.SN_MAIN;
 };
-

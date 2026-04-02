@@ -10,10 +10,9 @@ import Header from "@/components/Header";
 import LoadingPage from "@/containers/LoadingPage";
 import { useSyncNetworkUrl } from "@/chain/hooks/useSyncNetworkUrl";
 import { useSwitchToUrlNetwork } from "@/chain/hooks/useSwitchToUrlNetwork";
-import { useGames } from "@/hooks/useDenshokanQueries";
+import { useGames } from "@provable-games/denshokan-sdk/react";
 import { useSubscription } from "@provable-games/budokan-sdk/react";
 import type { WSChannel } from "@provable-games/budokan-sdk";
-
 
 const NotFound = lazy(() => import("@/containers/NotFound"));
 const Overview = lazy(() => {
@@ -36,7 +35,15 @@ function App() {
   useSubscription(["metrics" as WSChannel]);
   useSubscription(["tournaments", "registrations", "prizes"]);
 
-  const { games: minigames, loading: minigamesLoading } = useGames();
+  const { data: gamesResult, isLoading: minigamesLoading } = useGames();
+  const minigames = useMemo(() =>
+    gamesResult?.data?.map((game) => ({
+      ...game,
+      contract_address: game.contractAddress,
+      image: game.imageUrl ?? "",
+    })) ?? null,
+    [gamesResult],
+  );
 
   const whitelistedGames = getGames();
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
-use budokan_interfaces::budokan::{Phase, Tournament};
-use game_components_interfaces::prize::PrizeData;
+use budokan_interfaces::budokan::{Phase, RewardType, Tournament};
+use game_components_interfaces::prize::{PrizeData, PrizeType};
 use game_components_interfaces::registration::Registration;
 use starknet::ContractAddress;
 
@@ -34,6 +34,20 @@ pub struct LeaderboardEntryView {
     pub token_id: felt252,
 }
 
+#[derive(Copy, Drop, Serde)]
+pub struct RewardClaimView {
+    pub reward_type: RewardType,
+    pub claimed: bool,
+}
+
+#[derive(Drop, Serde)]
+pub struct RewardClaimResult {
+    pub claims: Array<RewardClaimView>,
+    pub total: u32,
+    pub total_claimed: u32,
+    pub total_unclaimed: u32,
+}
+
 // ==============================================
 // INTERFACE
 // ==============================================
@@ -51,12 +65,16 @@ pub trait IBudokanViewer<TState> {
     fn tournaments_by_phase(
         self: @TState, phase: Phase, offset: u64, limit: u64,
     ) -> TournamentFilterResult;
+    fn tournaments_by_phases(
+        self: @TState, phases: Array<Phase>, offset: u64, limit: u64,
+    ) -> TournamentFilterResult;
 
     // === COUNTS (for pagination UI) ===
     fn count_tournaments(self: @TState) -> u64;
     fn count_tournaments_by_game(self: @TState, game_address: ContractAddress) -> u64;
     fn count_tournaments_by_creator(self: @TState, creator: ContractAddress) -> u64;
     fn count_tournaments_by_phase(self: @TState, phase: Phase) -> u64;
+    fn count_tournaments_by_phases(self: @TState, phases: Array<Phase>) -> u64;
 
     // === TOURNAMENT DETAIL ===
     fn tournament_detail(self: @TState, tournament_id: u64) -> TournamentFullState;
@@ -74,4 +92,14 @@ pub trait IBudokanViewer<TState> {
 
     // === PRIZES (iterate prize_id, filter by tournament) ===
     fn tournament_prizes(self: @TState, tournament_id: u64) -> Array<PrizeData>;
+
+    // === REWARD CLAIMS (check claimed status for prizes + entry fees) ===
+    fn tournament_reward_claims(
+        self: @TState, tournament_id: u64, offset: u32, limit: u32,
+    ) -> RewardClaimResult;
+
+    // === PLAYER TOURNAMENTS (find tournaments a player has entered) ===
+    fn player_tournaments(
+        self: @TState, player_address: ContractAddress, offset: u64, limit: u64,
+    ) -> TournamentFilterResult;
 }

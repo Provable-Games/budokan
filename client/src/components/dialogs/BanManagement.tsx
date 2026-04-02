@@ -8,7 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useState, useEffect, useMemo } from "react";
 import { BigNumberish, addAddressPadding } from "starknet";
-import { useGameTokens } from "@/hooks/useDenshokanQueries";
+import { usePlayerTokens } from "@provable-games/denshokan-sdk/react";
 import { REFRESH, USER } from "@/components/Icons";
 import { useRegistrations } from "@provable-games/budokan-sdk/react";
 import { useChainConfig } from "@/context/chain";
@@ -62,12 +62,11 @@ export const BanManagementDialog = ({
   const { waitForBannedEntry } = useEntityUpdates();
 
   // Fetch all game tokens for this tournament
-  const { data: games, refetch, loading } = useGameTokens({
-    owner: addAddressPadding(tournamentAddress),
-    gameId: Number(tournamentId),
-    limit: 1000,
-    active: open,
-  });
+  const { data: playerTokensResult, refetch, isLoading: loading } = usePlayerTokens(
+    open ? addAddressPadding(tournamentAddress) : undefined,
+    { gameId: Number(tournamentId), limit: 1000 },
+  );
+  const games = playerTokensResult?.data ?? null;
 
   const gameIds = useMemo(
     () => games?.map((game) => Number(game.tokenId)) || [],
