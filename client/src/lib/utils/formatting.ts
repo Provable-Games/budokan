@@ -27,12 +27,17 @@ import type { Schedule } from "@/generated/models.gen";
  */
 export function computeAbsoluteTimes(createdAt: BigNumberish, schedule: Schedule) {
   const base = Number(createdAt);
+  const regStart = base + Number(schedule.registration_start_delay);
+  const regEnd = regStart + Number(schedule.registration_end_delay);
+  const gameStart = base + Number(schedule.game_start_delay);
+  const gameEnd = gameStart + Number(schedule.game_end_delay);
+  const submissionEnd = gameEnd + Number(schedule.submission_duration);
   return {
-    registrationStartTime: base + Number(schedule.registration_start_delay),
-    registrationEndTime: base + Number(schedule.registration_end_delay),
-    gameStartTime: base + Number(schedule.game_start_delay),
-    gameEndTime: base + Number(schedule.game_end_delay),
-    submissionEndTime: base + Number(schedule.game_end_delay) + Number(schedule.submission_duration),
+    registrationStartTime: regStart,
+    registrationEndTime: regEnd,
+    gameStartTime: gameStart,
+    gameEndTime: gameEnd,
+    submissionEndTime: submissionEnd,
   };
 }
 
@@ -58,8 +63,10 @@ export const processTournamentData = (
   );
 
   // Delays relative to "now" (will be relative to created_at on-chain)
+  // game_start_delay: offset from created_at to game start
+  // game_end_delay: duration of game (offset from game_start to game_end)
   const gameStartDelay = Math.max(0, gameStartTimestamp - now);
-  const gameEndDelay = gameStartDelay + formData.duration;
+  const gameEndDelay = formData.duration;
 
   // Registration delays - 0 means "open" (no registration period)
   let registrationStartDelay = 0;
@@ -77,20 +84,21 @@ export const processTournamentData = (
       ) / 1000
     );
     registrationStartDelay = Math.max(0, regStartTimestamp - now);
-  }
 
-  if (formData.type === "fixed" && formData.registrationEndTime) {
-    const regEndTimestamp = Math.floor(
-      Date.UTC(
-        formData.registrationEndTime.getUTCFullYear(),
-        formData.registrationEndTime.getUTCMonth(),
-        formData.registrationEndTime.getUTCDate(),
-        formData.registrationEndTime.getUTCHours(),
-        formData.registrationEndTime.getUTCMinutes(),
-        formData.registrationEndTime.getUTCSeconds()
-      ) / 1000
-    );
-    registrationEndDelay = Math.max(0, regEndTimestamp - now);
+    if (formData.registrationEndTime) {
+      const regEndTimestamp = Math.floor(
+        Date.UTC(
+          formData.registrationEndTime.getUTCFullYear(),
+          formData.registrationEndTime.getUTCMonth(),
+          formData.registrationEndTime.getUTCDate(),
+          formData.registrationEndTime.getUTCHours(),
+          formData.registrationEndTime.getUTCMinutes(),
+          formData.registrationEndTime.getUTCSeconds()
+        ) / 1000
+      );
+      // registration_end_delay is duration from reg_start, not absolute offset
+      registrationEndDelay = Math.max(0, regEndTimestamp - (now + registrationStartDelay));
+    }
   }
 
   // Process entry requirement based on type and requirement

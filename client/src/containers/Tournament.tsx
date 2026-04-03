@@ -220,8 +220,7 @@ const Tournament = () => {
   }, [tournamentModel?.description]);
 
   const durationSeconds = Number(
-    BigInt(tournamentModel?.schedule?.gameEndDelay ?? 0n) -
-      BigInt(tournamentModel?.schedule?.gameStartDelay ?? 0n),
+    tournamentModel?.schedule?.gameEndDelay ?? 0,
   );
 
   const registrationType =
