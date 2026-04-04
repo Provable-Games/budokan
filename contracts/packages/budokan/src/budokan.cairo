@@ -1303,9 +1303,7 @@ pub mod Budokan {
                 let tournament_id = self.total_tournaments.read();
                 entry_validator_dispatcher
                     .add_config(
-                        tournament_id + 1,
-                        entry_requirement.entry_limit,
-                        extension_config.config,
+                        tournament_id + 1, entry_requirement.entry_limit, extension_config.config,
                     );
             }
         }
