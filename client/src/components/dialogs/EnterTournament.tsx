@@ -37,6 +37,8 @@ import {
   identifyExtensionType,
   parseTournamentValidatorConfig,
   parseOpusTrovesValidatorConfig,
+  parseMerkleValidatorConfig,
+  fetchMerkleProof,
   formatCashToUSD,
   buildParticipationMap,
   buildWinMap,
@@ -139,6 +141,7 @@ export function EnterTournamentDialog({
   const [extensionEntriesLeft, setExtensionEntriesLeft] = useState<
     number | null
   >(null);
+  const [merkleQualification, setMerkleQualification] = useState<string[]>([]);
   const [manualTokenId, setManualTokenId] = useState("");
   const [_isVerifyingTokenOwnership, _setIsVerifyingTokenOwnership] =
     useState(false);
@@ -543,6 +546,16 @@ export function EnterTournamentDialog({
   );
   const isTournamentValidatorExtension = extensionType === "tournament";
   const isOpusTrovesValidatorExtension = extensionType === "opusTroves";
+  const isMerkleValidatorExtension = extensionType === "merkle";
+
+  // Parse merkle tree ID from config
+  const merkleValidatorConfig = useMemo(
+    () =>
+      isMerkleValidatorExtension && extensionConfig?.config
+        ? parseMerkleValidatorConfig(extensionConfig.config)
+        : null,
+    [isMerkleValidatorExtension, extensionConfig?.config],
+  );
 
   // Parse tournament validator config using metagame-sdk
   const tournamentValidatorConfig = useMemo(
@@ -595,8 +608,21 @@ export function EnterTournamentDialog({
             return;
           }
 
-          // Generic extension — proof is always empty (extensions validate on-chain)
-          const qualification: string[] = [];
+          // Merkle validators require the proof from the merkle API
+          let qualification: string[] = [];
+          if (isMerkleValidatorExtension && merkleValidatorConfig?.treeId) {
+            const proofData = await fetchMerkleProof(merkleValidatorConfig.treeId, address);
+            if (proofData) {
+              qualification = proofData.qualification;
+              setMerkleQualification(qualification);
+            } else {
+              // Player not in the allowlist
+              setMerkleQualification([]);
+              setExtensionValidEntry(false);
+              setExtensionEntriesLeft(0);
+              return;
+            }
+          }
 
           const [validEntry, entriesLeft] = await Promise.all([
             sdkCheckValidEntry(provider, extensionAddress, tournamentModel?.id, address, qualification),
@@ -622,6 +648,8 @@ export function EnterTournamentDialog({
     provider,
     tournamentModel?.id,
     isTournamentValidatorExtension,
+    isMerkleValidatorExtension,
+    merkleValidatorConfig?.treeId,
   ]);
 
   // Fetch trove debt for Opus Troves validator using SDK RPC
@@ -856,13 +884,17 @@ export function EnterTournamentDialog({
   });
 
   // Map SDK proof back to the component's Proof type
+  // For merkle validators, inject the fetched merkle proof
   const proof: Proof = useMemo(() => {
     if (!sdkBestProof) return { tokenId: "" };
     return {
       tokenId: sdkBestProof.tokenId,
-      extensionProof: sdkBestProof.extensionProof,
+      extensionProof:
+        isMerkleValidatorExtension && merkleQualification.length > 0
+          ? merkleQualification
+          : sdkBestProof.extensionProof,
     };
-  }, [sdkBestProof]);
+  }, [sdkBestProof, isMerkleValidatorExtension, merkleQualification]);
 
   // Map SDK entriesLeftBySource to the component's EntriesLeftCount[] shape
   // The JSX expects .tournamentId, .token, .address, .entriesLeft properties

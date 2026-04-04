@@ -7,6 +7,8 @@ import {
   parseERC20BalanceValidatorConfig,
   parseOpusTrovesValidatorConfig,
   parseSnapshotValidatorConfig,
+  parseMerkleValidatorConfig,
+  fetchMerkleTrees,
   getQualifyingModeInfo,
   formatTokenAmount,
   formatCashToUSD,
@@ -44,12 +46,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   TournamentValidatorConfig,
   ERC20BalanceValidatorConfig,
   OpusTrovesValidatorConfig,
   SnapshotValidatorConfig,
+  MerkleValidatorConfig,
 } from "@/lib/utils";
 import {
   Dialog,
@@ -151,6 +154,7 @@ const EntryRequirements = ({
   const isERC20BalanceValidatorExtension = extensionType === "erc20Balance";
   const isOpusTrovesValidatorExtension = extensionType === "opusTroves";
   const isSnapshotValidatorExtension = extensionType === "snapshot";
+  const isMerkleValidatorExtension = extensionType === "merkle";
 
   // Parse extension configs using SDK parsers
   const snapshotValidatorConfig: SnapshotValidatorConfig | null = useMemo(
@@ -160,6 +164,28 @@ const EntryRequirements = ({
         : null,
     [isSnapshotValidatorExtension, extensionConfig?.config]
   );
+
+  const merkleValidatorConfig: MerkleValidatorConfig | null = useMemo(
+    () =>
+      isMerkleValidatorExtension && extensionConfig?.config
+        ? parseMerkleValidatorConfig(extensionConfig.config)
+        : null,
+    [isMerkleValidatorExtension, extensionConfig?.config]
+  );
+
+  // Fetch tree metadata for merkle validators
+  const [merkleTreeName, setMerkleTreeName] = useState<string | null>(null);
+  const [merkleTreeDescription, setMerkleTreeDescription] = useState<string | null>(null);
+  useEffect(() => {
+    if (!merkleValidatorConfig?.treeId) return;
+    fetchMerkleTrees().then((res) => {
+      const tree = res.data.find((t) => String(t.id) === merkleValidatorConfig.treeId);
+      if (tree) {
+        setMerkleTreeName(tree.name || null);
+        setMerkleTreeDescription(tree.description || null);
+      }
+    });
+  }, [merkleValidatorConfig?.treeId]);
 
   const tournamentValidatorConfig: TournamentValidatorConfig | null = useMemo(
     () =>
@@ -636,6 +662,52 @@ const EntryRequirements = ({
                     </span>
                     <span className="font-medium font-mono">
                       {snapshotValidatorConfig.snapshotId}
+                    </span>
+                  </div>
+                )}
+              </div>
+              {!!hasEntryLimit && (
+                <div className="flex flex-wrap items-center gap-2 text-xs mt-1">
+                  <span className="text-brand-muted whitespace-nowrap">
+                    Entry Limit:
+                  </span>
+                  <span className="font-medium">{Number(entryLimit)}</span>
+                </div>
+              )}
+            </div>
+          </>
+        );
+      }
+      // Show Merkle Allowlist details if it's a Merkle validator
+      if (isMerkleValidatorExtension) {
+        return (
+          <>
+            <div className="flex flex-col gap-2">
+              <p className="text-muted-foreground text-xs">
+                To enter you must be on the allowlist:
+              </p>
+              <div className="flex flex-col gap-1 text-xs">
+                {merkleTreeName && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">
+                      {merkleTreeName}
+                    </span>
+                  </div>
+                )}
+                {merkleTreeDescription && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-muted-foreground">
+                      {merkleTreeDescription}
+                    </span>
+                  </div>
+                )}
+                {!merkleTreeName && merkleValidatorConfig?.treeId && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-brand-muted whitespace-nowrap">
+                      Tree ID:
+                    </span>
+                    <span className="font-medium font-mono">
+                      {merkleValidatorConfig.treeId}
                     </span>
                   </div>
                 )}

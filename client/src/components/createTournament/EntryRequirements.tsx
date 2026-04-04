@@ -21,7 +21,15 @@ import { StepProps } from "@/containers/CreateTournament";
 import { USER, X, INFO } from "@/components/Icons";
 import { indexAddress } from "@/lib/utils";
 import TokenGameIcon from "@/components/icons/TokenGameIcon";
-import { Search } from "lucide-react";
+import {
+  Search,
+  Image,
+  ListChecks,
+  Coins,
+  Vault,
+  GitBranch,
+  Settings,
+} from "lucide-react";
 import TokenDialog from "@/components/dialogs/Token";
 import { useChainConfig } from "@/context/chain";
 import { useTournaments, useTournamentCount } from "@provable-games/budokan-sdk/react";
@@ -49,9 +57,15 @@ import {
 import { SnapshotConfig } from "./extensions/SnapshotConfig";
 import { ERC20BalanceConfig } from "./extensions/ERC20BalanceConfig";
 import { OpusTrovesConfig } from "./extensions/OpusTrovesConfig";
-import { ZkPassportConfig } from "./extensions/ZkPassportConfig";
-import { GovernanceConfig } from "./extensions/GovernanceConfig";
+import { MerkleConfig } from "./extensions/MerkleConfig";
 import { CustomExtensionConfig } from "./extensions/CustomExtensionConfig";
+
+const PRESET_ICONS: Record<string, React.ReactNode> = {
+  snapshot: <ListChecks className="w-4 h-4" />,
+  erc20_balance: <Coins className="w-4 h-4" />,
+  opus_troves: <Vault className="w-4 h-4" />,
+  merkle: <GitBranch className="w-4 h-4" />,
+};
 
 const EntryRequirements = ({ form }: StepProps) => {
   const { selectedChainConfig } = useChainConfig();
@@ -90,26 +104,27 @@ const EntryRequirements = ({ form }: StepProps) => {
   });
 
   const handleGatingTypeChange = (
-    type: "token" | "tournament" | "extension"
+    type: "token" | "tournament" | "extension",
+    preset?: string | null,
   ) => {
     form.setValue("gatingOptions.type", type);
 
     form.setValue("gatingOptions.token", undefined);
     form.setValue("gatingOptions.tournament.requirement", "participated");
-    form.setValue("gatingOptions.tournament.qualifying_mode", 2); // Default to ALL
-    form.setValue("gatingOptions.tournament.top_positions", 0); // Default to 0 for participated
+    form.setValue("gatingOptions.tournament.qualifying_mode", 2);
+    form.setValue("gatingOptions.tournament.top_positions", 0);
     form.setValue("gatingOptions.tournament.tournaments", []);
     form.setValue("gatingOptions.extension", undefined);
 
-    // If extension is selected, disable entry limit and set to 0
     if (type === "extension") {
       form.setValue("enableEntryLimit", false);
       form.setValue("gatingOptions.entry_limit", 0);
-      setSelectedPreset("snapshot");
+      setSelectedPreset(preset ?? null);
+      setExtensionError("");
     } else {
-      // For non-extension types, enable entry limit by default with a value of 1
       form.setValue("enableEntryLimit", true);
       form.setValue("gatingOptions.entry_limit", 1);
+      setSelectedPreset(null);
     }
   };
 
@@ -138,10 +153,8 @@ const EntryRequirements = ({ form }: StepProps) => {
           setSelectedPreset("erc20_balance");
         } else if (normalizedAddress === indexAddress(extensionAddresses.opusTrovesValidator ?? "")) {
           setSelectedPreset("opus_troves");
-        } else if (normalizedAddress === indexAddress(extensionAddresses.zkPassportValidator ?? "")) {
-          setSelectedPreset("zk_passport");
-        } else if (normalizedAddress === indexAddress(extensionAddresses.governanceValidator ?? "")) {
-          setSelectedPreset("governance");
+        } else if (normalizedAddress === indexAddress(extensionAddresses.merkleValidator ?? "")) {
+          setSelectedPreset("merkle");
         } else {
           setSelectedPreset(null);
         }
@@ -183,7 +196,7 @@ const EntryRequirements = ({ form }: StepProps) => {
                         Choose the requirement type for the tournament
                       </FormDescription>
                     </div>
-                    <div className="flex flex-wrap gap-4">
+                    <div className="flex flex-wrap gap-2">
                       <Button
                         type="button"
                         variant={
@@ -193,96 +206,48 @@ const EntryRequirements = ({ form }: StepProps) => {
                         }
                         onClick={() => handleGatingTypeChange("token")}
                       >
+                        <Image className="w-4 h-4" />
                         Token
                       </Button>
-                      {/* Tournament and Extension options temporarily disabled
+                      {Object.entries(PRESET_EXTENSIONS).map(
+                        ([key, config]) => (
+                          <Button
+                            key={key}
+                            type="button"
+                            variant={
+                              form.watch("gatingOptions.type") === "extension" &&
+                              selectedPreset === key
+                                ? "default"
+                                : "outline"
+                            }
+                            onClick={() =>
+                              handleGatingTypeChange("extension", key)
+                            }
+                          >
+                            {PRESET_ICONS[key]}
+                            {config.name}
+                          </Button>
+                        )
+                      )}
                       <Button
                         type="button"
                         variant={
-                          form.watch("gatingOptions.type") === "tournament"
+                          form.watch("gatingOptions.type") === "extension" &&
+                          selectedPreset === null
                             ? "default"
                             : "outline"
                         }
-                        onClick={() => handleGatingTypeChange("tournament")}
-                      >
-                        Tournaments
-                      </Button>
-                      */}
-                      <Button
-                        type="button"
-                        variant={
-                          form.watch("gatingOptions.type") === "extension"
-                            ? "default"
-                            : "outline"
+                        onClick={() =>
+                          handleGatingTypeChange("extension", null)
                         }
-                        onClick={() => handleGatingTypeChange("extension")}
                       >
-                        Extension
+                        <Settings className="w-4 h-4" />
+                        Custom
                       </Button>
                     </div>
                   </div>
                   <div className="hidden sm:block w-0.5 h-full bg-brand/25" />
                   <div className="sm:hidden w-full h-0.5 bg-brand/25" />
-
-                  {/* Extension Type Selection - shown when extension is selected */}
-                  {form.watch("gatingOptions.type") === "extension" && (
-                    <div className="flex flex-col gap-4 sm:w-1/2">
-                      <div className="flex flex-row items-center gap-5">
-                        <FormLabel className="font-brand text-lg xl:text-xl 2xl:text-2xl 3xl:text-3xl">
-                          Extension Type
-                        </FormLabel>
-                        <FormDescription className="hidden sm:block">
-                          Choose a preset extension or use a custom contract
-                        </FormDescription>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          variant={
-                            selectedPreset === null ? "default" : "outline"
-                          }
-                          onClick={() => {
-                            setSelectedPreset(null);
-                            form.setValue(
-                              "gatingOptions.extension.address",
-                              ""
-                            );
-                            form.setValue("gatingOptions.extension.config", "");
-                            setExtensionError("");
-                          }}
-                        >
-                          Custom Contract
-                        </Button>
-                        {Object.entries(PRESET_EXTENSIONS).map(
-                          ([key, config]) => (
-                            <Button
-                              key={key}
-                              type="button"
-                              variant={
-                                selectedPreset === key ? "default" : "outline"
-                              }
-                              onClick={() => {
-                                setSelectedPreset(key);
-                                setExtensionError("");
-                                // Reset config fields
-                                form.setValue(
-                                  "gatingOptions.extension.config",
-                                  ""
-                                );
-                                // Address will be set by the component
-                                form.setValue(
-                                  "gatingOptions.extension.address",
-                                  ""
-                                );
-                              }}
-                            >
-                              {config.name}
-                            </Button>
-                          )
-                        )}
-                      </div>
-                    </div>
-                  )}
 
                   {/* Entry Limit - shown when extension is NOT selected */}
                   {form.watch("gatingOptions.type") !== "extension" && (
@@ -948,14 +913,9 @@ const EntryRequirements = ({ form }: StepProps) => {
                         />
                       )}
 
-                      {/* ZK Passport Preset Configuration */}
-                      {selectedPreset === "zk_passport" && (
-                        <ZkPassportConfig extensionError={extensionError} />
-                      )}
-
-                      {/* Governance Preset Configuration */}
-                      {selectedPreset === "governance" && (
-                        <GovernanceConfig extensionError={extensionError} />
+                      {/* Merkle Allowlist Preset Configuration */}
+                      {selectedPreset === "merkle" && (
+                        <MerkleConfig extensionError={extensionError} />
                       )}
 
                       {/* Custom Contract Configuration */}

@@ -1304,7 +1304,7 @@ pub mod Budokan {
                 entry_validator_dispatcher
                     .add_config(
                         tournament_id + 1,
-                        entry_requirement.entry_limit.try_into().unwrap(),
+                        entry_requirement.entry_limit,
                         extension_config.config,
                     );
             }

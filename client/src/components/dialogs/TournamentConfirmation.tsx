@@ -29,7 +29,7 @@ import { useChainConfig } from "@/context/chain";
 // import { calculateTotalValue } from "@/lib/utils/formatting";
 import { LoadingSpinner } from "@/components/ui/spinner";
 import { useGameSetting } from "@/hooks/useDenshokanQueries";
-import { getExtensionAddresses } from "@provable-games/metagame-sdk";
+import { getExtensionAddresses, identifyExtensionType } from "@provable-games/metagame-sdk";
 import { getTokenByAddress } from "@/lib/tokenUtils";
 import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 import { OPUS } from "@/components/Icons";
@@ -323,6 +323,41 @@ const TournamentConfirmation = ({
     formData.gatingOptions?.extension?.config,
     selectedChainConfig?.chainId,
   ]);
+
+  // Identify the extension type for display
+  const detectedExtensionType = useMemo(() => {
+    if (
+      formData.gatingOptions?.type !== "extension" ||
+      !formData.gatingOptions?.extension?.address
+    ) {
+      // No address but has config → snapshot (legacy pattern)
+      if (formData.gatingOptions?.type === "extension" && formData.gatingOptions?.extension?.config) {
+        return "snapshot";
+      }
+      return "unknown";
+    }
+    return identifyExtensionType(
+      formData.gatingOptions.extension.address,
+      selectedChainConfig?.chainId ?? ""
+    );
+  }, [
+    formData.gatingOptions?.type,
+    formData.gatingOptions?.extension?.address,
+    formData.gatingOptions?.extension?.config,
+    selectedChainConfig?.chainId,
+  ]);
+
+  // Fetch merkle tree name for display
+  const [merkleTreeName, setMerkleTreeName] = useState<string | null>(null);
+  useEffect(() => {
+    if (detectedExtensionType !== "merkle" || !formData.gatingOptions?.extension?.config) return;
+    import("@provable-games/metagame-sdk").then(({ fetchMerkleTrees }) => {
+      fetchMerkleTrees().then((res) => {
+        const tree = res.data.find((t) => String(t.id) === formData.gatingOptions?.extension?.config);
+        if (tree?.name) setMerkleTreeName(tree.name);
+      });
+    });
+  }, [detectedExtensionType, formData.gatingOptions?.extension?.config]);
 
   const handleConfirm = async () => {
     setIsCreating(true);
@@ -856,6 +891,40 @@ const TournamentConfirmation = ({
                               </>
                             )}
                           </>
+                        ) : detectedExtensionType === "merkle" ? (
+                          <>
+                            <span className="text-muted-foreground">
+                              Requirement:
+                            </span>
+                            <span>Merkle Allowlist</span>
+                            {formData.gatingOptions.extension?.config && (
+                              <>
+                                <span className="text-muted-foreground">
+                                  Allowlist:
+                                </span>
+                                <span>
+                                  {merkleTreeName ?? `Tree #${formData.gatingOptions.extension.config}`}
+                                </span>
+                              </>
+                            )}
+                          </>
+                        ) : detectedExtensionType === "snapshot" ? (
+                          <>
+                            <span className="text-muted-foreground">
+                              Requirement:
+                            </span>
+                            <span>Snapshot Voting</span>
+                            {formData.gatingOptions.extension?.config && (
+                              <>
+                                <span className="text-muted-foreground">
+                                  Snapshot ID:
+                                </span>
+                                <span className="font-mono text-xs break-all">
+                                  {formData.gatingOptions.extension.config}
+                                </span>
+                              </>
+                            )}
+                          </>
                         ) : formData.gatingOptions.extension?.address ? (
                           <>
                             <span className="text-muted-foreground">
@@ -887,24 +956,7 @@ const TournamentConfirmation = ({
                               </>
                             )}
                           </>
-                        ) : (
-                          <>
-                            <span className="text-muted-foreground">
-                              Extension Type:
-                            </span>
-                            <span>Snapshot Voting</span>
-                            {formData.gatingOptions.extension?.config && (
-                              <>
-                                <span className="text-muted-foreground">
-                                  Snapshot ID:
-                                </span>
-                                <span className="font-mono text-xs break-all">
-                                  {formData.gatingOptions.extension.config}
-                                </span>
-                              </>
-                            )}
-                          </>
-                        )}
+                        ) : null}
                       </>
                     ) : null}
                   </div>
