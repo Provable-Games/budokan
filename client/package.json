@@ -18,7 +18,7 @@
     "@provable-games/budokan-sdk": "0.1.5",
     "@provable-games/denshokan-sdk": "0.1.22",
     "@provable-games/ekubo-sdk": "0.1.17",
-    "@provable-games/metagame-sdk": "file:../../metagame-sdk",
+    "@provable-games/metagame-sdk": "^0.1.4",
     "@vercel/functions": "^2.0.0",
     "@radix-ui/react-checkbox": "^1.3.3",
     "@radix-ui/react-dialog": "^1.1.6",

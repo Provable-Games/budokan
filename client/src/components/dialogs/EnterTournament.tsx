@@ -43,7 +43,6 @@ import {
   buildWinMap,
   resolveTournamentQualifications,
 } from "@/lib/utils";
-import type { TournamentQualificationInput } from "@/lib/utils";
 import { addAddressPadding } from "starknet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -798,14 +797,19 @@ export function EnterTournamentDialog({
     return names;
   }, [validatorTournaments]);
 
-  const tournamentValidatorQualificationInputs = useMemo<TournamentQualificationInput[]>(() => {
+  const tournamentValidatorQualificationInputs = useMemo(() => {
     if (!isTournamentValidatorExtension || !tournamentValidatorConfig) return [];
-    return resolveTournamentQualifications(
+    const resolved = resolveTournamentQualifications(
       tournamentValidatorConfig,
       participationMap,
       winMap,
       tournamentNames,
     );
+    return resolved.map((q) => ({
+      id: `${q.tournamentId}-${q.tokenId}`,
+      proof: [q.tournamentId, q.tokenId, String(q.position)],
+      label: q.tournamentName,
+    }));
   }, [isTournamentValidatorExtension, tournamentValidatorConfig, participationMap, winMap, tournamentNames]);
 
   // Use the extension qualification hook to check entries left for tournament validators
