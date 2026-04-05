@@ -352,12 +352,12 @@ const TournamentConfirmation = ({
   useEffect(() => {
     if (detectedExtensionType !== "merkle" || !formData.gatingOptions?.extension?.config) return;
     import("@provable-games/metagame-sdk").then(({ fetchMerkleTrees }) => {
-      fetchMerkleTrees().then((res) => {
-        const tree = res.data.find((t) => String(t.id) === formData.gatingOptions?.extension?.config);
+      fetchMerkleTrees({ chainId: selectedChainConfig?.chainId }).then((res) => {
+        const tree = res.data.find((t: any) => String(t.id) === formData.gatingOptions?.extension?.config);
         if (tree?.name) setMerkleTreeName(tree.name);
       });
     });
-  }, [detectedExtensionType, formData.gatingOptions?.extension?.config]);
+  }, [detectedExtensionType, formData.gatingOptions?.extension?.config, selectedChainConfig?.chainId]);
 
   const handleConfirm = async () => {
     setIsCreating(true);

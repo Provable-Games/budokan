@@ -611,7 +611,7 @@ export function EnterTournamentDialog({
           // Merkle validators require the proof from the merkle API
           let qualification: string[] = [];
           if (isMerkleValidatorExtension && merkleValidatorConfig?.treeId) {
-            const proofData = await fetchMerkleProof(merkleValidatorConfig.treeId, address);
+            const proofData = await fetchMerkleProof(merkleValidatorConfig.treeId, address, selectedChainConfig?.chainId);
             if (proofData) {
               qualification = proofData.qualification;
               setMerkleQualification(qualification);

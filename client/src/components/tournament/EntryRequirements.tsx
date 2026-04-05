@@ -178,14 +178,14 @@ const EntryRequirements = ({
   const [merkleTreeDescription, setMerkleTreeDescription] = useState<string | null>(null);
   useEffect(() => {
     if (!merkleValidatorConfig?.treeId) return;
-    fetchMerkleTrees().then((res) => {
+    fetchMerkleTrees({ chainId: selectedChainConfig?.chainId }).then((res) => {
       const tree = res.data.find((t) => String(t.id) === merkleValidatorConfig.treeId);
       if (tree) {
         setMerkleTreeName(tree.name || null);
         setMerkleTreeDescription(tree.description || null);
       }
     });
-  }, [merkleValidatorConfig?.treeId]);
+  }, [merkleValidatorConfig?.treeId, selectedChainConfig?.chainId]);
 
   const tournamentValidatorConfig: TournamentValidatorConfig | null = useMemo(
     () =>

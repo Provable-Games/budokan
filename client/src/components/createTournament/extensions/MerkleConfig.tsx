@@ -36,13 +36,13 @@ export const MerkleConfig = ({ extensionError }: MerkleConfigProps) => {
   // Fetch trees with pagination
   useEffect(() => {
     setLoading(true);
-    fetchMerkleTrees({ page: currentPage, limit: PAGE_SIZE })
+    fetchMerkleTrees({ page: currentPage, limit: PAGE_SIZE, chainId: selectedChainConfig?.chainId })
       .then((res) => {
         setTrees(res.data);
         setTotalPages(res.totalPages);
       })
       .finally(() => setLoading(false));
-  }, [currentPage]);
+  }, [currentPage, selectedChainConfig?.chainId]);
 
   // Restore selection from form on mount
   useEffect(() => {
