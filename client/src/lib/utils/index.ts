@@ -65,8 +65,6 @@ export {
   parseOpusTrovesValidatorConfig,
   parseSnapshotValidatorConfig,
   parseMerkleValidatorConfig,
-  fetchMerkleTrees,
-  fetchMerkleProof,
   parseExtensionConfig,
   getQualifyingModeInfo,
   formatTokenAmount,

@@ -9,6 +9,7 @@ import { ChainContextProvider } from "@/context/chain";
 import { EkuboProvider } from "@provable-games/ekubo-sdk/react";
 import { BudokanProvider } from "@/context/budokan";
 import { DenshokanProvider } from "@/context/denshokan";
+import { MetagameProvider } from "@/context/metagame";
 
 async function main() {
   createRoot(document.getElementById("root")!).render(
@@ -16,13 +17,15 @@ async function main() {
       <StarknetProvider>
         <ChainContextProvider>
           <EkuboProvider config={{ fetch: { timeout: 30000 } }}>
-            <BudokanProvider>
-              <DenshokanProvider>
-                  <Router>
-                    <App />
-                  </Router>
-              </DenshokanProvider>
-            </BudokanProvider>
+            <MetagameProvider>
+              <BudokanProvider>
+                <DenshokanProvider>
+                    <Router>
+                      <App />
+                    </Router>
+                </DenshokanProvider>
+              </BudokanProvider>
+            </MetagameProvider>
           </EkuboProvider>
         </ChainContextProvider>
       </StarknetProvider>

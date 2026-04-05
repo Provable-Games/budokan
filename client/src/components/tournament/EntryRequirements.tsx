@@ -8,12 +8,12 @@ import {
   parseOpusTrovesValidatorConfig,
   parseSnapshotValidatorConfig,
   parseMerkleValidatorConfig,
-  fetchMerkleTrees,
   getQualifyingModeInfo,
   formatTokenAmount,
   formatCashToUSD,
 } from "@/lib/utils";
 import { useChainConfig } from "@/context/chain";
+import { useMerkleTrees } from "@provable-games/metagame-sdk/react";
 import {
   COIN,
   TROPHY,
@@ -46,7 +46,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type {
   TournamentValidatorConfig,
   ERC20BalanceValidatorConfig,
@@ -174,18 +174,17 @@ const EntryRequirements = ({
   );
 
   // Fetch tree metadata for merkle validators
-  const [merkleTreeName, setMerkleTreeName] = useState<string | null>(null);
-  const [merkleTreeDescription, setMerkleTreeDescription] = useState<string | null>(null);
-  useEffect(() => {
-    if (!merkleValidatorConfig?.treeId) return;
-    fetchMerkleTrees({ chainId: selectedChainConfig?.chainId }).then((res) => {
-      const tree = res.data.find((t) => String(t.id) === merkleValidatorConfig.treeId);
-      if (tree) {
-        setMerkleTreeName(tree.name || null);
-        setMerkleTreeDescription(tree.description || null);
-      }
-    });
-  }, [merkleValidatorConfig?.treeId, selectedChainConfig?.chainId]);
+  const { trees: merkleTrees } = useMerkleTrees();
+  const merkleTreeName = useMemo(() => {
+    if (!merkleValidatorConfig?.treeId) return null;
+    const tree = merkleTrees.find((t) => String(t.id) === merkleValidatorConfig.treeId);
+    return tree?.name || null;
+  }, [merkleTrees, merkleValidatorConfig?.treeId]);
+  const merkleTreeDescription = useMemo(() => {
+    if (!merkleValidatorConfig?.treeId) return null;
+    const tree = merkleTrees.find((t) => String(t.id) === merkleValidatorConfig.treeId);
+    return tree?.description || null;
+  }, [merkleTrees, merkleValidatorConfig?.treeId]);
 
   const tournamentValidatorConfig: TournamentValidatorConfig | null = useMemo(
     () =>

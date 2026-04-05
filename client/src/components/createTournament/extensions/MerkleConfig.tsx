@@ -8,11 +8,9 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { useChainConfig } from "@/context/chain";
-import {
-  getExtensionAddresses,
-  fetchMerkleTrees,
-} from "@provable-games/metagame-sdk";
-import type { MerkleTree } from "@provable-games/metagame-sdk";
+import { getExtensionAddresses } from "@provable-games/metagame-sdk";
+import type { MerkleTree } from "@provable-games/metagame-sdk/merkle";
+import { useMerkleTrees } from "@provable-games/metagame-sdk/react";
 import Pagination from "@/components/table/Pagination";
 import { ExternalLink } from "lucide-react";
 
@@ -27,22 +25,13 @@ export const MerkleConfig = ({ extensionError }: MerkleConfigProps) => {
   const { selectedChainConfig } = useChainConfig();
   const form = useFormContext();
 
-  const [trees, setTrees] = useState<MerkleTree[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedTreeId, setSelectedTreeId] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(0);
 
-  // Fetch trees with pagination
-  useEffect(() => {
-    setLoading(true);
-    fetchMerkleTrees({ page: currentPage, limit: PAGE_SIZE, chainId: selectedChainConfig?.chainId })
-      .then((res) => {
-        setTrees(res.data);
-        setTotalPages(res.totalPages);
-      })
-      .finally(() => setLoading(false));
-  }, [currentPage, selectedChainConfig?.chainId]);
+  const { trees, totalPages, isLoading } = useMerkleTrees({
+    page: currentPage,
+    limit: PAGE_SIZE,
+  });
 
   // Restore selection from form on mount
   useEffect(() => {
@@ -95,7 +84,7 @@ export const MerkleConfig = ({ extensionError }: MerkleConfigProps) => {
       </div>
       <FormControl>
         <div className="flex flex-col gap-2">
-          {loading ? (
+          {isLoading ? (
             <div className="text-sm text-muted-foreground py-4 text-center">
               Loading allowlists...
             </div>

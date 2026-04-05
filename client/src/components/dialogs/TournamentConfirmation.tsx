@@ -26,6 +26,7 @@ import { getTokenLogoUrl, getTokenDecimals } from "@/lib/tokensMeta";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
 import { useMemo, useState, useEffect } from "react";
 import { useChainConfig } from "@/context/chain";
+import { useMerkleTrees } from "@provable-games/metagame-sdk/react";
 // import { calculateTotalValue } from "@/lib/utils/formatting";
 import { LoadingSpinner } from "@/components/ui/spinner";
 import { useGameSetting } from "@/hooks/useDenshokanQueries";
@@ -348,16 +349,12 @@ const TournamentConfirmation = ({
   ]);
 
   // Fetch merkle tree name for display
-  const [merkleTreeName, setMerkleTreeName] = useState<string | null>(null);
-  useEffect(() => {
-    if (detectedExtensionType !== "merkle" || !formData.gatingOptions?.extension?.config) return;
-    import("@provable-games/metagame-sdk").then(({ fetchMerkleTrees }) => {
-      fetchMerkleTrees({ chainId: selectedChainConfig?.chainId }).then((res) => {
-        const tree = res.data.find((t: any) => String(t.id) === formData.gatingOptions?.extension?.config);
-        if (tree?.name) setMerkleTreeName(tree.name);
-      });
-    });
-  }, [detectedExtensionType, formData.gatingOptions?.extension?.config, selectedChainConfig?.chainId]);
+  const { trees: merkleTrees } = useMerkleTrees();
+  const merkleTreeName = useMemo(() => {
+    if (detectedExtensionType !== "merkle" || !formData.gatingOptions?.extension?.config) return null;
+    const tree = merkleTrees.find((t) => String(t.id) === formData.gatingOptions?.extension?.config);
+    return tree?.name ?? null;
+  }, [detectedExtensionType, formData.gatingOptions?.extension?.config, merkleTrees]);
 
   const handleConfirm = async () => {
     setIsCreating(true);

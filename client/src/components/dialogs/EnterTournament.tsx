@@ -38,7 +38,6 @@ import {
   parseTournamentValidatorConfig,
   parseOpusTrovesValidatorConfig,
   parseMerkleValidatorConfig,
-  fetchMerkleProof,
   formatCashToUSD,
   buildParticipationMap,
   buildWinMap,
@@ -63,6 +62,7 @@ import {
 import { useRegistrations, useLeaderboard, useQualifications } from "@provable-games/budokan-sdk/react";
 import { useTokens } from "@provable-games/denshokan-sdk/react";
 import { useChainConfig } from "@/context/chain";
+import { useMetagameClient } from "@provable-games/metagame-sdk/react";
 // computeAbsoluteTimes no longer needed — SDK provides pre-computed timestamps
 import { buildQualificationProof } from "@/lib/utils";
 import type { QualificationProof as SdkQualificationProof } from "@/lib/utils";
@@ -121,6 +121,7 @@ export function EnterTournamentDialog({
   totalPrizesValueUSD,
 }: EnterTournamentDialogProps) {
   const { selectedChainConfig } = useChainConfig();
+  const metagameClient = useMetagameClient();
   const { address } = useAccount();
   const { provider } = useProvider();
   const { connect } = useConnectToSelectedChain();
@@ -611,7 +612,7 @@ export function EnterTournamentDialog({
           // Merkle validators require the proof from the merkle API
           let qualification: string[] = [];
           if (isMerkleValidatorExtension && merkleValidatorConfig?.treeId) {
-            const proofData = await fetchMerkleProof(merkleValidatorConfig.treeId, address, selectedChainConfig?.chainId);
+            const proofData = await metagameClient.merkle.getProof(merkleValidatorConfig.treeId, address);
             if (proofData) {
               qualification = proofData.qualification;
               setMerkleQualification(qualification);
