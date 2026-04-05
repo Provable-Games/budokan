@@ -32,8 +32,8 @@ pub mod entry_validator_mock {
         owner_address: ContractAddress,
         registration_only: bool,
         tournament_erc721_address: Map<u64, ContractAddress>,
-        tournament_entry_limit: Map<u64, u8>,
-        tournament_entries: Map<(u64, ContractAddress), u8>,
+        tournament_entry_limit: Map<u64, u32>,
+        tournament_entries: Map<(u64, ContractAddress), u32>,
     }
 
     #[event]
@@ -54,7 +54,7 @@ pub mod entry_validator_mock {
 
     #[abi(embed_v0)]
     impl EntryValidatorImpl of IEntryRequirementExtension<ContractState> {
-        fn owner_address(self: @ContractState) -> ContractAddress {
+        fn context_owner(self: @ContractState, context_id: u64) -> ContractAddress {
             self.owner_address.read()
         }
 
@@ -88,7 +88,7 @@ pub mod entry_validator_mock {
             context_id: u64,
             player_address: ContractAddress,
             qualification: Span<felt252>,
-        ) -> Option<u8> {
+        ) -> Option<u32> {
             let entry_limit = self.tournament_entry_limit.read(context_id);
             if entry_limit == 0 {
                 return Option::None; // Unlimited entries
@@ -100,7 +100,7 @@ pub mod entry_validator_mock {
         }
 
         fn add_config(
-            ref self: ContractState, context_id: u64, entry_limit: u8, config: Span<felt252>,
+            ref self: ContractState, context_id: u64, entry_limit: u32, config: Span<felt252>,
         ) {
             // Extract ERC721 address from config (first element)
             let erc721_address: ContractAddress = (*config.at(0)).try_into().unwrap();
