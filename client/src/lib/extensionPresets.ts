@@ -7,35 +7,33 @@ export interface ExtensionPreset {
   name: string;
   description: string;
   isPreset: true;
-  requiresSnapshotId?: boolean;
+  icon: string;
 }
 
 /** UI display presets for the extension selection dropdown in tournament creation */
 export const PRESET_EXTENSIONS: Record<string, ExtensionPreset> = {
   snapshot: {
-    name: "Snapshot Voting",
+    name: "Allowlist",
     description: "Validates entry based on Snapshot voting participation",
     isPreset: true,
-    requiresSnapshotId: true,
+    icon: "list-checks",
   },
   erc20_balance: {
     name: "ERC20 Balance",
     description: "Validates entry based on ERC20 token balance thresholds",
     isPreset: true,
+    icon: "coins",
   },
   opus_troves: {
     name: "Opus Troves",
     description: "Validates entry based on Opus Trove collateral",
     isPreset: true,
+    icon: "vault",
   },
-  zk_passport: {
-    name: "ZK Passport",
-    description: "Validates entry using zero-knowledge passport proofs",
+  merkle: {
+    name: "Merkle Allowlist",
+    description: "Validates entry against a merkle tree allowlist",
     isPreset: true,
-  },
-  governance: {
-    name: "Governance",
-    description: "Validates entry based on governance participation or token balance",
-    isPreset: true,
+    icon: "git-branch",
   },
 };

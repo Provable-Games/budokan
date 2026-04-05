@@ -37,12 +37,12 @@ import {
   identifyExtensionType,
   parseTournamentValidatorConfig,
   parseOpusTrovesValidatorConfig,
+  parseMerkleValidatorConfig,
   formatCashToUSD,
   buildParticipationMap,
   buildWinMap,
   resolveTournamentQualifications,
 } from "@/lib/utils";
-import type { TournamentQualificationInput } from "@/lib/utils";
 import { addAddressPadding } from "starknet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -61,6 +61,7 @@ import {
 import { useRegistrations, useLeaderboard, useQualifications } from "@provable-games/budokan-sdk/react";
 import { useTokens } from "@provable-games/denshokan-sdk/react";
 import { useChainConfig } from "@/context/chain";
+import { useMetagameClient } from "@provable-games/metagame-sdk/react";
 // computeAbsoluteTimes no longer needed — SDK provides pre-computed timestamps
 import { buildQualificationProof } from "@/lib/utils";
 import type { QualificationProof as SdkQualificationProof } from "@/lib/utils";
@@ -119,6 +120,7 @@ export function EnterTournamentDialog({
   totalPrizesValueUSD,
 }: EnterTournamentDialogProps) {
   const { selectedChainConfig } = useChainConfig();
+  const metagameClient = useMetagameClient();
   const { address } = useAccount();
   const { provider } = useProvider();
   const { connect } = useConnectToSelectedChain();
@@ -139,6 +141,7 @@ export function EnterTournamentDialog({
   const [extensionEntriesLeft, setExtensionEntriesLeft] = useState<
     number | null
   >(null);
+  const [merkleQualification, setMerkleQualification] = useState<string[]>([]);
   const [manualTokenId, setManualTokenId] = useState("");
   const [_isVerifyingTokenOwnership, _setIsVerifyingTokenOwnership] =
     useState(false);
@@ -543,6 +546,16 @@ export function EnterTournamentDialog({
   );
   const isTournamentValidatorExtension = extensionType === "tournament";
   const isOpusTrovesValidatorExtension = extensionType === "opusTroves";
+  const isMerkleValidatorExtension = extensionType === "merkle";
+
+  // Parse merkle tree ID from config
+  const merkleValidatorConfig = useMemo(
+    () =>
+      isMerkleValidatorExtension && extensionConfig?.config
+        ? parseMerkleValidatorConfig(extensionConfig.config)
+        : null,
+    [isMerkleValidatorExtension, extensionConfig?.config],
+  );
 
   // Parse tournament validator config using metagame-sdk
   const tournamentValidatorConfig = useMemo(
@@ -595,8 +608,21 @@ export function EnterTournamentDialog({
             return;
           }
 
-          // Generic extension — proof is always empty (extensions validate on-chain)
-          const qualification: string[] = [];
+          // Merkle validators require the proof from the merkle API
+          let qualification: string[] = [];
+          if (isMerkleValidatorExtension && merkleValidatorConfig?.treeId) {
+            const proofData = await metagameClient.merkle.getProof(merkleValidatorConfig.treeId, address);
+            if (proofData) {
+              qualification = proofData.qualification;
+              setMerkleQualification(qualification);
+            } else {
+              // Player not in the allowlist
+              setMerkleQualification([]);
+              setExtensionValidEntry(false);
+              setExtensionEntriesLeft(0);
+              return;
+            }
+          }
 
           const [validEntry, entriesLeft] = await Promise.all([
             sdkCheckValidEntry(provider, extensionAddress, tournamentModel?.id, address, qualification),
@@ -622,6 +648,8 @@ export function EnterTournamentDialog({
     provider,
     tournamentModel?.id,
     isTournamentValidatorExtension,
+    isMerkleValidatorExtension,
+    merkleValidatorConfig?.treeId,
   ]);
 
   // Fetch trove debt for Opus Troves validator using SDK RPC
@@ -769,14 +797,19 @@ export function EnterTournamentDialog({
     return names;
   }, [validatorTournaments]);
 
-  const tournamentValidatorQualificationInputs = useMemo<TournamentQualificationInput[]>(() => {
+  const tournamentValidatorQualificationInputs = useMemo(() => {
     if (!isTournamentValidatorExtension || !tournamentValidatorConfig) return [];
-    return resolveTournamentQualifications(
+    const resolved = resolveTournamentQualifications(
       tournamentValidatorConfig,
       participationMap,
       winMap,
       tournamentNames,
     );
+    return resolved.map((q) => ({
+      id: `${q.tournamentId}-${q.tokenId}`,
+      proof: [q.tournamentId, q.tokenId, String(q.position)],
+      label: q.tournamentName,
+    }));
   }, [isTournamentValidatorExtension, tournamentValidatorConfig, participationMap, winMap, tournamentNames]);
 
   // Use the extension qualification hook to check entries left for tournament validators
@@ -856,13 +889,17 @@ export function EnterTournamentDialog({
   });
 
   // Map SDK proof back to the component's Proof type
+  // For merkle validators, inject the fetched merkle proof
   const proof: Proof = useMemo(() => {
     if (!sdkBestProof) return { tokenId: "" };
     return {
       tokenId: sdkBestProof.tokenId,
-      extensionProof: sdkBestProof.extensionProof,
+      extensionProof:
+        isMerkleValidatorExtension && merkleQualification.length > 0
+          ? merkleQualification
+          : sdkBestProof.extensionProof,
     };
-  }, [sdkBestProof]);
+  }, [sdkBestProof, isMerkleValidatorExtension, merkleQualification]);
 
   // Map SDK entriesLeftBySource to the component's EntriesLeftCount[] shape
   // The JSX expects .tournamentId, .token, .address, .entriesLeft properties

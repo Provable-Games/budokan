@@ -70,9 +70,9 @@ pub mod tournament_validator_mock {
         /// Qualifying tournament IDs per tournament
         qualifying_tournament_ids: Map<u64, Vec<u64>>,
         /// Entry limit per tournament
-        tournament_entry_limit: Map<u64, u8>,
+        tournament_entry_limit: Map<u64, u32>,
         /// Entry count per (tournament_id, player_address)
-        tournament_entries: Map<(u64, ContractAddress), u8>,
+        tournament_entries: Map<(u64, ContractAddress), u32>,
     }
 
     #[event]
@@ -94,7 +94,7 @@ pub mod tournament_validator_mock {
 
     #[abi(embed_v0)]
     impl EntryValidatorImpl of IEntryRequirementExtension<ContractState> {
-        fn owner_address(self: @ContractState) -> ContractAddress {
+        fn context_owner(self: @ContractState, context_id: u64) -> ContractAddress {
             self.owner_address.read()
         }
 
@@ -118,8 +118,6 @@ pub mod tournament_validator_mock {
             current_owner: ContractAddress,
             qualification: Span<felt252>,
         ) -> bool {
-            // Check if the current owner still has valid entry based on qualifying tournament
-            // If not, this entry should be banned
             !self.validate_entry_internal(context_id, current_owner, qualification)
         }
 
@@ -128,7 +126,7 @@ pub mod tournament_validator_mock {
             context_id: u64,
             player_address: ContractAddress,
             qualification: Span<felt252>,
-        ) -> Option<u8> {
+        ) -> Option<u32> {
             let entry_limit = self.tournament_entry_limit.read(context_id);
             if entry_limit == 0 {
                 return Option::None; // Unlimited entries
@@ -140,7 +138,7 @@ pub mod tournament_validator_mock {
         }
 
         fn add_config(
-            ref self: ContractState, context_id: u64, entry_limit: u8, config: Span<felt252>,
+            ref self: ContractState, context_id: u64, entry_limit: u32, config: Span<felt252>,
         ) {
             // config[0]: qualifier_type (0 = participants, 1 = winners)
             // config[1..]: qualifying tournament IDs

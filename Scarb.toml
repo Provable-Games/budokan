@@ -25,7 +25,7 @@ game_components_utilities = { git = "https://github.com/Provable-Games/game-comp
 game_components_interfaces = { git = "https://github.com/Provable-Games/game-components.git", branch = "main" }
 game_components_test_common = { git = "https://github.com/Provable-Games/game-components.git", branch = "main" }
 game_components_testing = { git = "https://github.com/Provable-Games/game-components.git", branch = "main" }
-metagame_extensions_interfaces = { git = "https://github.com/Provable-Games/metagame_extensions.git", tag = "v0.1.1" }
+metagame_extensions_interfaces = { git = "https://github.com/Provable-Games/metagame_extensions.git", tag = "v0.1.2" }
 
 [scripts]
 test = "snforge test"
