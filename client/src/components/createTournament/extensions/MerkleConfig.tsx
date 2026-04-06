@@ -14,7 +14,7 @@ import { useMerkleTrees } from "@provable-games/metagame-sdk/react";
 import Pagination from "@/components/table/Pagination";
 import { ExternalLink } from "lucide-react";
 
-const MERKLE_CREATE_URL = "https://localhost:5174/merkle";
+const MERKLE_CREATE_URL = "https://metagame-extensions.up.railway.app/merkle";
 const PAGE_SIZE = 10;
 
 interface MerkleConfigProps {

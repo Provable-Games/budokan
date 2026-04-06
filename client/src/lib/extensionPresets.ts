@@ -12,9 +12,9 @@ export interface ExtensionPreset {
 
 /** UI display presets for the extension selection dropdown in tournament creation */
 export const PRESET_EXTENSIONS: Record<string, ExtensionPreset> = {
-  snapshot: {
+  merkle: {
     name: "Allowlist",
-    description: "Validates entry based on Snapshot voting participation",
+    description: "Validates entry against a merkle tree allowlist",
     isPreset: true,
     icon: "list-checks",
   },
@@ -29,11 +29,5 @@ export const PRESET_EXTENSIONS: Record<string, ExtensionPreset> = {
     description: "Validates entry based on Opus Trove collateral",
     isPreset: true,
     icon: "vault",
-  },
-  merkle: {
-    name: "Merkle Allowlist",
-    description: "Validates entry against a merkle tree allowlist",
-    isPreset: true,
-    icon: "git-branch",
   },
 };

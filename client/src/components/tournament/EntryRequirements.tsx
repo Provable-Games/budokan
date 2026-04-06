@@ -6,7 +6,6 @@ import {
   parseTournamentValidatorConfig,
   parseERC20BalanceValidatorConfig,
   parseOpusTrovesValidatorConfig,
-  parseSnapshotValidatorConfig,
   parseMerkleValidatorConfig,
   getQualifyingModeInfo,
   formatTokenAmount,
@@ -46,12 +45,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useMemo, useState } from "react";
-import { ListChecks, Coins, GitBranch } from "lucide-react";
+import { ListChecks, Coins } from "lucide-react";
 import type {
   TournamentValidatorConfig,
   ERC20BalanceValidatorConfig,
   OpusTrovesValidatorConfig,
-  SnapshotValidatorConfig,
   MerkleValidatorConfig,
 } from "@/lib/utils";
 import {
@@ -153,17 +151,7 @@ const EntryRequirements = ({
   const isTournamentValidatorExtension = extensionType === "tournament";
   const isERC20BalanceValidatorExtension = extensionType === "erc20Balance";
   const isOpusTrovesValidatorExtension = extensionType === "opusTroves";
-  const isSnapshotValidatorExtension = extensionType === "snapshot";
   const isMerkleValidatorExtension = extensionType === "merkle";
-
-  // Parse extension configs using SDK parsers
-  const snapshotValidatorConfig: SnapshotValidatorConfig | null = useMemo(
-    () =>
-      isSnapshotValidatorExtension && extensionConfig?.config
-        ? parseSnapshotValidatorConfig(extensionConfig.config)
-        : null,
-    [isSnapshotValidatorExtension, extensionConfig?.config]
-  );
 
   const merkleValidatorConfig: MerkleValidatorConfig | null = useMemo(
     () =>
@@ -341,18 +329,10 @@ const EntryRequirements = ({
           </div>
         );
       }
-      if (isSnapshotValidatorExtension) {
-        return (
-          <div className="flex flex-row items-center gap-1 w-full">
-            <ListChecks className="w-5 h-5 flex-shrink-0" />
-            <span className="hidden sm:block text-xs">Snapshot</span>
-          </div>
-        );
-      }
       if (isMerkleValidatorExtension) {
         return (
           <div className="flex flex-row items-center gap-1 w-full">
-            <GitBranch className="w-5 h-5 flex-shrink-0" />
+            <ListChecks className="w-5 h-5 flex-shrink-0" />
             <span className="hidden sm:block text-xs">
               {merkleTreeName || "Allowlist"}
             </span>
@@ -633,38 +613,6 @@ const EntryRequirements = ({
                     </span>
                     <span className="font-medium">
                       {opusTrovesValidatorConfig.maxEntries}
-                    </span>
-                  </div>
-                )}
-              </div>
-              {!!hasEntryLimit && (
-                <div className="flex flex-wrap items-center gap-2 text-xs mt-1">
-                  <span className="text-brand-muted whitespace-nowrap">
-                    Entry Limit:
-                  </span>
-                  <span className="font-medium">{Number(entryLimit)}</span>
-                </div>
-              )}
-            </div>
-          </>
-        );
-      }
-      // Show Snapshot details if it's a Snapshot validator
-      if (isSnapshotValidatorExtension) {
-        return (
-          <>
-            <div className="flex flex-col gap-2">
-              <p className="text-muted-foreground text-xs">
-                To enter you must hold a qualifying Snapshot:
-              </p>
-              <div className="flex flex-col gap-1 text-xs">
-                {snapshotValidatorConfig?.snapshotId && (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-brand-muted whitespace-nowrap">
-                      Snapshot ID:
-                    </span>
-                    <span className="font-medium font-mono">
-                      {snapshotValidatorConfig.snapshotId}
                     </span>
                   </div>
                 )}

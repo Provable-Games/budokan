@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { StepProps } from "@/containers/CreateTournament";
-import { USER, X, INFO } from "@/components/Icons";
+import { USER, X, INFO, OPUS } from "@/components/Icons";
 import { indexAddress } from "@/lib/utils";
 import TokenGameIcon from "@/components/icons/TokenGameIcon";
 import {
@@ -26,8 +26,6 @@ import {
   Image,
   ListChecks,
   Coins,
-  Vault,
-  GitBranch,
   Settings,
 } from "lucide-react";
 import TokenDialog from "@/components/dialogs/Token";
@@ -54,17 +52,15 @@ import {
   getExtensionAddresses,
   getOpusSupportedAssets,
 } from "@provable-games/metagame-sdk";
-import { SnapshotConfig } from "./extensions/SnapshotConfig";
 import { ERC20BalanceConfig } from "./extensions/ERC20BalanceConfig";
 import { OpusTrovesConfig } from "./extensions/OpusTrovesConfig";
 import { MerkleConfig } from "./extensions/MerkleConfig";
 import { CustomExtensionConfig } from "./extensions/CustomExtensionConfig";
 
 const PRESET_ICONS: Record<string, React.ReactNode> = {
-  snapshot: <ListChecks className="w-4 h-4" />,
+  merkle: <ListChecks className="w-4 h-4" />,
   erc20_balance: <Coins className="w-4 h-4" />,
-  opus_troves: <Vault className="w-4 h-4" />,
-  merkle: <GitBranch className="w-4 h-4" />,
+  opus_troves: <span className="w-4 h-4"><OPUS /></span>,
 };
 
 const EntryRequirements = ({ form }: StepProps) => {
@@ -158,9 +154,6 @@ const EntryRequirements = ({ form }: StepProps) => {
         } else {
           setSelectedPreset(null);
         }
-      } else if (extensionConfig && !extensionAddress) {
-        // Snapshot preset (has config but no address)
-        setSelectedPreset("snapshot");
       }
     }
   }, [
@@ -893,11 +886,6 @@ const EntryRequirements = ({ form }: StepProps) => {
                   <>
                     <div className="w-full h-0.5 bg-brand/25" />
                     <div className="space-y-4">
-                      {/* Snapshot Preset Configuration */}
-                      {selectedPreset === "snapshot" && (
-                        <SnapshotConfig extensionError={extensionError} />
-                      )}
-
                       {/* ERC20 Balance Preset Configuration */}
                       {selectedPreset === "erc20_balance" && (
                         <ERC20BalanceConfig extensionError={extensionError} />
