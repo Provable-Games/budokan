@@ -19,7 +19,7 @@ interface PaymentTokenSelectorProps {
   entryFeeToken: string;
   /** Entry fee amount in smallest units */
   entryFeeAmount: string;
-  /** Entry fee in USD */
+  /** Entry fee in USD (total for all entries) */
   entryFeeUsd: number;
   /** Entry fee token decimals */
   entryFeeDecimals: number;
@@ -45,6 +45,8 @@ interface PaymentTokenSelectorProps {
   gameShare?: number;
   /** Prize pool share in basis points */
   prizePoolShare?: number;
+  /** Number of entries (quotes are per-entry, multiply for display) */
+  quantity?: number;
 }
 
 export function PaymentTokenSelector({
@@ -60,6 +62,7 @@ export function PaymentTokenSelector({
   onTokenSelect,
   quotes,
   quotesLoading,
+  quantity = 1,
 }: PaymentTokenSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -102,9 +105,10 @@ export function PaymentTokenSelector({
     }
     if (selectedQuote?.quote && selectedTokenInfo) {
       const decimals = selectedTokenInfo.decimals;
+      const totalForQuantity = BigInt(selectedQuote.quote.total) * BigInt(quantity);
       return {
         amount: formatPrizeAmount(
-          Number(selectedQuote.quote.total) / Math.pow(10, decimals),
+          Number(totalForQuantity) / Math.pow(10, decimals),
         ),
         symbol: selectedTokenInfo.symbol || "tokens",
         loading: false,
@@ -135,6 +139,7 @@ export function PaymentTokenSelector({
     entryFeeSymbol,
     selectedQuote,
     selectedTokenInfo,
+    quantity,
   ]);
 
   // Filter tokens that have enough balance or could theoretically swap
@@ -180,7 +185,7 @@ export function PaymentTokenSelector({
           symbol: entryFeeSymbol,
           decimals: entryFeeDecimals,
           logo: entryFeeLogo,
-          usdBalance: entryFeeUsd,
+          usdBalance: undefined,
         })
       : null;
 
@@ -209,7 +214,6 @@ export function PaymentTokenSelector({
     entryFeeSymbol,
     entryFeeDecimals,
     entryFeeLogo,
-    entryFeeUsd,
   ]);
 
   // Get payment info for a token (for the list display)
@@ -234,12 +238,12 @@ export function PaymentTokenSelector({
 
     const tokenQuote = quotes[token.tokenAddress];
     if (tokenQuote?.quote) {
-      // Check if user's balance covers the quote total
-      const quoteTotal = BigInt(tokenQuote.quote.total);
+      // Multiply per-entry quote by quantity
+      const quoteTotal = BigInt(tokenQuote.quote.total) * BigInt(quantity);
       const hasEnoughBalance = BigInt(token.balance) >= quoteTotal;
       return {
         amount: formatPrizeAmount(
-          Number(tokenQuote.quote.total) / Math.pow(10, token.decimals),
+          Number(quoteTotal) / Math.pow(10, token.decimals),
         ),
         isDirect: false,
         loading: false,

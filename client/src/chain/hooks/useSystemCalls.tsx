@@ -81,6 +81,8 @@ export const useSystemCalls = () => {
     prizeTotalUsd: number,
     prependCalls?: { contractAddress: string; entrypoint: string; calldata: string[] }[],
     numEntries: number = 1,
+    batchSize: number = 20,
+    onProgress?: (current: number, total: number) => void
   ) => {
     const gameStartTime = Number(tournamentModel.gameStartTime ?? 0);
     const startsIn = gameStartTime - Date.now() / 1000;
@@ -89,17 +91,19 @@ export const useSystemCalls = () => {
     const budokanContract = initializeBudokanContract();
 
     try {
-      let calls: { contractAddress: string; entrypoint: string; calldata: any }[] = [];
+      // (entry calls built per-batch below with unique salt)
 
-      // Add any prepended calls (e.g., swap calls for Ekubo)
+      // Build prefix calls: swap + approve (covers total amount upfront)
+      const prefixCalls: { contractAddress: string; entrypoint: string; calldata: any }[] = [];
+
       if (prependCalls && prependCalls.length > 0) {
-        calls.push(...prependCalls);
+        prefixCalls.push(...prependCalls);
       }
 
       // Approve total entry fee amount for all entries
       if (entryFeeData?.tokenAddress) {
         const totalAmount = BigInt(entryFeeData.amount) * BigInt(numEntries);
-        calls.push({
+        prefixCalls.push({
           contractAddress: entryFeeData.tokenAddress,
           entrypoint: "approve",
           calldata: CallData.compile([
@@ -110,26 +114,65 @@ export const useSystemCalls = () => {
         });
       }
 
-      // Add enter_tournament call for each entry
-      for (let i = 0; i < numEntries; i++) {
-        const call = budokanContract.populate("enter_tournament", [
-          tournamentId,
-          player_name,
-          player_address,
-          qualification,
-          i, // salt — unique per entry
-          0, // metadata_value
-        ]);
-        calls.push({
-          contractAddress: tournamentAddress,
-          entrypoint: "enter_tournament",
-          calldata: call.calldata,
-        });
+      // Split entries into batches
+      const entryIndices = Array.from({ length: numEntries }, (_, i) => i);
+      const batches: number[][] = [];
+      for (let i = 0; i < entryIndices.length; i += batchSize) {
+        batches.push(entryIndices.slice(i, i + batchSize));
       }
 
-      const tx = await account?.execute(calls);
+      let tx;
+      for (const [batchIndex, batch] of batches.entries()) {
+        const calls: { contractAddress: string; entrypoint: string; calldata: any }[] = [];
 
-      await waitForTournamentEntry(tournamentId, entryCount);
+        // First batch includes swap + approve
+        if (batchIndex === 0) {
+          calls.push(...prefixCalls);
+        }
+
+        // Add entry calls for this batch with unique salt per entry
+        const globalOffset = batchIndex * batchSize;
+        for (let i = 0; i < batch.length; i++) {
+          const call = budokanContract.populate("enter_tournament", [
+            tournamentId,
+            player_name,
+            player_address,
+            qualification,
+            globalOffset + i, // salt — unique per entry
+            0, // metadata_value
+          ]);
+          calls.push({
+            contractAddress: tournamentAddress,
+            entrypoint: "enter_tournament",
+            calldata: call.calldata,
+          });
+        }
+
+        console.log(
+          `Processing entry batch ${batchIndex + 1}/${batches.length} with ${batch.length} entries${
+            batchIndex === 0 && prefixCalls.length > 0
+              ? ` and ${prefixCalls.length} prefix calls (swap/approve)`
+              : ""
+          }`
+        );
+
+        if (onProgress) {
+          onProgress(batchIndex + 1, batches.length);
+        }
+
+        tx = await account?.execute(calls);
+
+        // Wait for confirmation before sending next batch
+        if (batches.length > 1 && tx?.transaction_hash) {
+          console.log(
+            `Waiting for transaction ${tx.transaction_hash} to be confirmed...`
+          );
+          await account?.waitForTransaction(tx.transaction_hash);
+          console.log(`Transaction ${tx.transaction_hash} confirmed`);
+        }
+      }
+
+      await waitForTournamentEntry(tournamentId, entryCount, numEntries);
 
       if (tx) {
         showTournamentEntry({

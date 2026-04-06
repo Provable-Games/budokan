@@ -93,6 +93,53 @@ interface EnterTournamentDialogProps {
   totalPrizesValueUSD: number;
 }
 
+const ENTRY_BATCH_SIZE = 20;
+const MAX_QUANTITY_NO_LIMIT = 100;
+
+function QuantitySelector({
+  quantity,
+  setQuantity,
+  maxQuantity,
+}: {
+  quantity: number;
+  setQuantity: React.Dispatch<React.SetStateAction<number>>;
+  maxQuantity: number;
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+        disabled={quantity <= 1}
+        className="w-7 h-7 flex items-center justify-center rounded border border-brand/25 hover:bg-brand/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-sm"
+      >
+        -
+      </button>
+      <input
+        type="number"
+        min={1}
+        max={maxQuantity}
+        value={quantity}
+        onChange={(e) => {
+          const val = parseInt(e.target.value, 10);
+          if (!isNaN(val)) {
+            setQuantity(Math.max(1, Math.min(maxQuantity, val)));
+          }
+        }}
+        className="w-10 h-7 text-center text-sm font-medium bg-transparent border border-brand/25 rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+      />
+      <button
+        type="button"
+        onClick={() => setQuantity((q) => Math.min(maxQuantity, q + 1))}
+        disabled={quantity >= maxQuantity}
+        className="w-7 h-7 flex items-center justify-center rounded border border-brand/25 hover:bg-brand/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-sm"
+      >
+        +
+      </button>
+    </div>
+  );
+}
+
 type Proof = {
   tokenId?: string;
   extensionProof?: string[];
@@ -127,6 +174,7 @@ export function EnterTournamentDialog({
   const { connector } = useConnect();
   const { approveAndEnterTournament } = useSystemCalls();
   const [playerName, setPlayerName] = useState("");
+  const [quantity, setQuantity] = useState(1);
   const [controllerUsername, setControllerUsername] = useState("");
   const [playerAddress, setPlayerAddress] = useState<string | undefined>(
     undefined,
@@ -134,6 +182,10 @@ export function EnterTournamentDialog({
   const [isLookingUpUsername, setIsLookingUpUsername] = useState(false);
   const [balance, setBalance] = useState<string>("0");
   const [isEntering, setIsEntering] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
   const [extensionValidEntry, setExtensionValidEntry] =
     useState<boolean>(false);
   const [extensionEntriesLeft, setExtensionEntriesLeft] = useState<
@@ -162,6 +214,7 @@ export function EnterTournamentDialog({
 
   const handleEnterTournament = async () => {
     setIsEntering(true);
+    setBatchProgress(null);
     try {
       if (!address) return;
 
@@ -198,11 +251,11 @@ export function EnterTournamentDialog({
         calldata: string[];
       }[] = [];
       if (isSwapPayment && selectedPaymentToken && entryToken && entryAmount) {
-        // Get fresh quote for exact output (we need exactly entryAmount of entry token)
+        // Get fresh quote for exact output (we need exactly totalEntryAmount of entry token)
         const quote = await ekuboClient.getQuote({
           tokenFrom: selectedPaymentToken,
           tokenTo: entryToken,
-          amount: -BigInt(entryAmount), // Negative for exact output
+          amount: -totalEntryAmount, // Negative for exact output
         });
 
         // Generate swap calls (allCalls includes transfer, swap, and clear)
@@ -210,7 +263,7 @@ export function EnterTournamentDialog({
           quote,
           sellToken: selectedPaymentToken,
           buyToken: entryToken,
-          minimumReceived: BigInt(entryAmount), // We need at least this much
+          minimumReceived: totalEntryAmount, // We need at least this much
           slippagePercent: 1n, // 1% slippage
         });
 
@@ -232,21 +285,25 @@ export function EnterTournamentDialog({
         qualificationProof,
         // gameCount
         duration,
-        entryFeeUsdCost,
+        totalEntryFeeUsdCost,
         entryCount,
         totalPrizesValueUSD,
         swapCalls, // Pass swap calls to be prepended
         numEntries,
+        ENTRY_BATCH_SIZE,
+        (current, total) => setBatchProgress({ current, total }),
       );
 
       setPlayerName("");
       setControllerUsername("");
       setPlayerAddress(undefined);
       setNumEntries(1);
+      setBatchProgress(null);
       onOpenChange(false);
       setIsEntering(false);
     } catch (error) {
       console.error("Failed to enter tournament:", error);
+      setBatchProgress(null);
       setIsEntering(false);
     }
   };
@@ -363,7 +420,7 @@ export function EnterTournamentDialog({
     return () => clearTimeout(timeoutId);
   }, [sellTokensKeyRaw, sellTokensForQuotesRaw]);
 
-  // Memoize the amount to prevent new BigInt on every render
+  // Quote for a single entry - does NOT change with quantity to avoid re-fetching
   const quoteAmount = useMemo(() => BigInt(entryAmount ?? 0), [entryAmount]);
 
   // Memoize enabled to prevent toggling
@@ -434,6 +491,8 @@ export function EnterTournamentDialog({
       setIsEntering(false);
       setSelectedPaymentToken(null);
       setIsEditingPlayerName(false);
+      setQuantity(1);
+      setBatchProgress(null);
     }
   }, [open]);
 
@@ -459,7 +518,8 @@ export function EnterTournamentDialog({
     fetchRawBalance();
   }, [entryToken, address, provider]);
 
-  const hasBalance = BigInt(balance) >= BigInt(entryAmount ?? 0n);
+  const hasBalance =
+    BigInt(balance) >= BigInt(entryAmount ?? 0) * BigInt(quantity);
 
   // Check if user can pay (either directly or via swap)
   const canPay = useMemo(() => {
@@ -485,12 +545,16 @@ export function EnterTournamentDialog({
       );
       if (!selectedTokenBalance) return false;
 
-      return BigInt(selectedTokenBalance.balance) >= BigInt(quote.quote.total);
+      return (
+        BigInt(selectedTokenBalance.balance) >=
+        BigInt(quote.quote.total) * BigInt(quantity)
+      );
     }
   }, [
     selectedPaymentToken,
     entryToken,
     hasBalance,
+    quantity,
     ekuboQuotes,
     tokenBalances,
   ]);
@@ -979,6 +1043,25 @@ export function EnterTournamentDialog({
     });
   }, [entriesLeftBySource, requiredTokenAddresses, address]);
 
+  // Compute max quantity from remaining entries
+  const maxQuantity = useMemo(() => {
+    if (entriesLeftByTournament.length === 0) return 1;
+    const minLeft = Math.min(
+      ...entriesLeftByTournament.map((e) => e.entriesLeft),
+    );
+    return minLeft === Infinity ? MAX_QUANTITY_NO_LIMIT : Math.max(minLeft, 1);
+  }, [entriesLeftByTournament]);
+
+  // Clamp numEntries when maxQuantity changes
+  useEffect(() => {
+    setNumEntries((q: number) => Math.min(q, maxQuantity));
+  }, [maxQuantity]);
+
+  // Compute total amounts for bulk entry
+  const singleEntryAmount = BigInt(entryAmount ?? 0);
+  const totalEntryAmount = singleEntryAmount * BigInt(numEntries);
+  const totalEntryFeeUsdCost = entryFeeUsdCost * numEntries;
+
   // display the entry fee distribution
   // Shares are now in basis points (10000 = 100%) to allow 2 decimal precision
 
@@ -993,6 +1076,20 @@ export function EnterTournamentDialog({
         <DialogHeader>
           <DialogTitle className="text-xl">Enter Tournament</DialogTitle>
         </DialogHeader>
+        {batchProgress && (
+          <div className="bg-brand/10 border border-brand p-4 rounded-lg">
+            <div className="flex items-center gap-3">
+              <LoadingSpinner />
+              <div>
+                <p className="font-semibold">Processing Transactions</p>
+                <p className="text-sm text-muted-foreground">
+                  Batch {batchProgress.current} of {batchProgress.total} -
+                  Please do not close this window
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="flex flex-col gap-3">
           {/* Entry Fee Summary */}
           {hasEntryFee && entryToken && (
@@ -1136,31 +1233,62 @@ export function EnterTournamentDialog({
             </div>
           )}
 
-          {/* Payment Token Selector */}
+          {/* Quantity Selector (no entry fee) */}
+          {!hasEntryFee && maxQuantity > 1 && (
+            <div className="flex items-center justify-between p-3 border border-brand/25 rounded-lg bg-neutral/5">
+              <span className="text-sm text-brand-muted">Entries</span>
+              <QuantitySelector
+                quantity={quantity}
+                setQuantity={setQuantity}
+                maxQuantity={maxQuantity}
+              />
+            </div>
+          )}
+
+          {/* Payment Token Selector with Quantity */}
           {hasEntryFee && entryToken && (
-            <PaymentTokenSelector
-              entryFeeToken={entryToken}
-              entryFeeAmount={entryAmount?.toString() ?? "0"}
-              entryFeeUsd={entryFeeUsdCost}
-              entryFeeDecimals={getTokenDecimals(chainId, entryToken ?? "")}
-              entryFeeSymbol={
-                tokens.find(
-                  (token) =>
-                    indexAddress(token.token_address) ===
-                    indexAddress(entryToken),
-                )?.symbol
-              }
-              entryFeeLogo={getTokenLogoUrl(chainId, entryToken ?? "")}
-              entryFeeUserBalance={balance}
-              balances={tokenBalances}
-              selectedToken={selectedPaymentToken}
-              onTokenSelect={setSelectedPaymentToken}
-              quotes={ekuboQuotes}
-              quotesLoading={quotesLoading || balancesLoading}
-              creatorShare={creatorShare}
-              gameShare={gameShare}
-              prizePoolShare={prizePoolShare}
-            />
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <PaymentTokenSelector
+                  entryFeeToken={entryToken}
+                  entryFeeAmount={totalEntryAmount.toString()}
+                  entryFeeUsd={totalEntryFeeUsdCost}
+                  entryFeeDecimals={getTokenDecimals(chainId, entryToken ?? "")}
+                  entryFeeSymbol={
+                    tokens.find(
+                      (token) =>
+                        indexAddress(token.token_address) ===
+                        indexAddress(entryToken),
+                    )?.symbol
+                  }
+                  entryFeeLogo={getTokenLogoUrl(chainId, entryToken ?? "")}
+                  entryFeeUserBalance={balance}
+                  balances={tokenBalances}
+                  selectedToken={selectedPaymentToken}
+                  onTokenSelect={setSelectedPaymentToken}
+                  quotes={ekuboQuotes}
+                  quotesLoading={quotesLoading || balancesLoading}
+                  creatorShare={creatorShare}
+                  gameShare={gameShare}
+                  prizePoolShare={prizePoolShare}
+                  quantity={quantity}
+                />
+              </div>
+              {maxQuantity > 1 && (
+                <div className="flex flex-col items-center gap-1">
+                  <QuantitySelector
+                    quantity={quantity}
+                    setQuantity={setQuantity}
+                    maxQuantity={maxQuantity}
+                  />
+                  {quantity > 1 && (
+                    <span className="text-xs text-brand-muted">
+                      ${formatUsdValue(totalEntryFeeUsdCost)}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
           )}
 
           {hasEntryRequirement && (
@@ -1910,7 +2038,11 @@ export function EnterTournamentDialog({
                 {isEntering ? (
                   <div className="flex items-center gap-2">
                     <LoadingSpinner />
-                    <span>Entering...</span>
+                    <span>
+                      {batchProgress
+                        ? `Batch ${batchProgress.current}/${batchProgress.total}`
+                        : "Entering..."}
+                    </span>
                   </div>
                 ) : extensionQualificationsLoading ? (
                   <div className="flex items-center gap-2">
