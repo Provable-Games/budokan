@@ -79,7 +79,8 @@ export const useSystemCalls = () => {
     entryFeeUsdCost: number,
     entryCount: number,
     prizeTotalUsd: number,
-    prependCalls?: { contractAddress: string; entrypoint: string; calldata: string[] }[]
+    prependCalls?: { contractAddress: string; entrypoint: string; calldata: string[] }[],
+    numEntries: number = 1,
   ) => {
     const gameStartTime = Number(tournamentModel.gameStartTime ?? 0);
     const startsIn = gameStartTime - Date.now() / 1000;
@@ -88,14 +89,6 @@ export const useSystemCalls = () => {
     const budokanContract = initializeBudokanContract();
 
     try {
-      const call = budokanContract.populate("enter_tournament", [
-        tournamentId,
-        player_name,
-        player_address,
-        qualification,
-        0, // salt
-        0, // metadata_value
-      ]);
       let calls: { contractAddress: string; entrypoint: string; calldata: any }[] = [];
 
       // Add any prepended calls (e.g., swap calls for Ekubo)
@@ -103,23 +96,36 @@ export const useSystemCalls = () => {
         calls.push(...prependCalls);
       }
 
-      // Always add approve call for entry fee token (after swap or directly)
+      // Approve total entry fee amount for all entries
       if (entryFeeData?.tokenAddress) {
+        const totalAmount = BigInt(entryFeeData.amount) * BigInt(numEntries);
         calls.push({
           contractAddress: entryFeeData.tokenAddress,
           entrypoint: "approve",
           calldata: CallData.compile([
             tournamentAddress,
-            entryFeeData.amount,
+            totalAmount.toString(),
             "0",
           ]),
         });
       }
-      calls.push({
-        contractAddress: tournamentAddress,
-        entrypoint: "enter_tournament",
-        calldata: call.calldata,
-      });
+
+      // Add enter_tournament call for each entry
+      for (let i = 0; i < numEntries; i++) {
+        const call = budokanContract.populate("enter_tournament", [
+          tournamentId,
+          player_name,
+          player_address,
+          qualification,
+          i, // salt — unique per entry
+          0, // metadata_value
+        ]);
+        calls.push({
+          contractAddress: tournamentAddress,
+          entrypoint: "enter_tournament",
+          calldata: call.calldata,
+        });
+      }
 
       const tx = await account?.execute(calls);
 
@@ -129,7 +135,7 @@ export const useSystemCalls = () => {
         showTournamentEntry({
           tournamentName,
           game,
-          entryFeeUsdCost,
+          entryFeeUsdCost: entryFeeUsdCost * numEntries,
           hasEntryFee: !!entryFeeData?.tokenAddress,
           startsIn,
           duration,

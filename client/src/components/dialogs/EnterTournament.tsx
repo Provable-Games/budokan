@@ -1,7 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import {
-  useEntryQualification,
-} from "@provable-games/metagame-sdk/react";
+import { useEntryQualification } from "@provable-games/metagame-sdk/react";
 import {
   checkExtensionValidEntry as sdkCheckValidEntry,
   getExtensionEntriesLeft as sdkGetEntriesLeft,
@@ -58,7 +56,11 @@ import {
   TROPHY,
   REFRESH,
 } from "@/components/Icons";
-import { useRegistrations, useLeaderboard, useQualifications } from "@provable-games/budokan-sdk/react";
+import {
+  useRegistrations,
+  useLeaderboard,
+  useQualifications,
+} from "@provable-games/budokan-sdk/react";
 import { useTokens } from "@provable-games/denshokan-sdk/react";
 import { useChainConfig } from "@/context/chain";
 import { useMetagameClient } from "@provable-games/metagame-sdk/react";
@@ -69,9 +71,7 @@ import { getTokenLogoUrl, getTokenDecimals } from "@/lib/tokensMeta";
 import { LoadingSpinner } from "@/components/ui/spinner";
 import { getTokenByAddress } from "@/lib/tokenUtils";
 import { useVoyagerNfts } from "@/hooks/useVoyagerNfts";
-import {
-  useExtensionQualification,
-} from "@provable-games/metagame-sdk/react";
+import { useExtensionQualification } from "@provable-games/metagame-sdk/react";
 import { useVoyagerTokenBalances } from "@/hooks/useVoyagerTokenBalances";
 import {
   useEkuboQuotes,
@@ -125,9 +125,7 @@ export function EnterTournamentDialog({
   const { provider } = useProvider();
   const { connect } = useConnectToSelectedChain();
   const { connector } = useConnect();
-  const {
-    approveAndEnterTournament,
-  } = useSystemCalls();
+  const { approveAndEnterTournament } = useSystemCalls();
   const [playerName, setPlayerName] = useState("");
   const [controllerUsername, setControllerUsername] = useState("");
   const [playerAddress, setPlayerAddress] = useState<string | undefined>(
@@ -154,6 +152,7 @@ export function EnterTournamentDialog({
     string | null
   >(null);
   const [isEditingPlayerName, setIsEditingPlayerName] = useState(false);
+  const [numEntries, setNumEntries] = useState(1);
 
   const chainId = selectedChainConfig?.chainId ?? "";
   const isController = connector ? isControllerAccount(connector) : false;
@@ -237,11 +236,13 @@ export function EnterTournamentDialog({
         entryCount,
         totalPrizesValueUSD,
         swapCalls, // Pass swap calls to be prepended
+        numEntries,
       );
 
       setPlayerName("");
       setControllerUsername("");
       setPlayerAddress(undefined);
+      setNumEntries(1);
       onOpenChange(false);
       setIsEntering(false);
     } catch (error) {
@@ -311,8 +312,7 @@ export function EnterTournamentDialog({
     ? getTokenDecimals(chainId, entryToken)
     : 18;
   const entryFeeUsdCost = entryToken
-    ? (Number(entryFeeData?.amount ?? 0) /
-        10 ** entryTokenDecimals) *
+    ? (Number(entryFeeData?.amount ?? 0) / 10 ** entryTokenDecimals) *
       Number(entryFeePrice)
     : 0;
 
@@ -529,9 +529,13 @@ export function EnterTournamentDialog({
     ? [indexAddress(requiredTokenAddress ?? "")]
     : [];
 
-  const extensionConfig = requirementVariant === "extension"
-    ? { address: entryReqType?.address, config: entryReqType?.config }
-    : undefined;
+  const extensionConfig = useMemo(
+    () =>
+      requirementVariant === "extension"
+        ? { address: entryReqType?.address, config: entryReqType?.config }
+        : undefined,
+    [requirementVariant, entryReqType?.address, entryReqType?.config],
+  );
 
   // Identify extension type using metagame-sdk
   const extensionType = useMemo(
@@ -568,7 +572,8 @@ export function EnterTournamentDialog({
 
   // Parse Opus Troves validator config using metagame-sdk
   const opusTrovesValidatorConfig = useMemo(() => {
-    if (!isOpusTrovesValidatorExtension || !extensionConfig?.config) return null;
+    if (!isOpusTrovesValidatorExtension || !extensionConfig?.config)
+      return null;
     const parsed = parseOpusTrovesValidatorConfig(extensionConfig.config);
     if (!parsed) return null;
     return {
@@ -583,9 +588,7 @@ export function EnterTournamentDialog({
   const validatorTournaments = useMemo(() => {
     if (!tournamentValidatorConfig) return [];
     return tournamentsData.filter((t) =>
-      tournamentValidatorConfig.tournamentIds.some(
-        (id) => id === String(t.id),
-      ),
+      tournamentValidatorConfig.tournamentIds.some((id) => id === String(t.id)),
     );
   }, [tournamentValidatorConfig, tournamentsData]);
 
@@ -611,7 +614,10 @@ export function EnterTournamentDialog({
           // Merkle validators require the proof from the merkle API
           let qualification: string[] = [];
           if (isMerkleValidatorExtension && merkleValidatorConfig?.treeId) {
-            const proofData = await metagameClient.merkle.getProof(merkleValidatorConfig.treeId, address);
+            const proofData = await metagameClient.merkle.getProof(
+              merkleValidatorConfig.treeId,
+              address,
+            );
             if (proofData) {
               qualification = proofData.qualification;
               setMerkleQualification(qualification);
@@ -625,8 +631,20 @@ export function EnterTournamentDialog({
           }
 
           const [validEntry, entriesLeft] = await Promise.all([
-            sdkCheckValidEntry(provider, extensionAddress, tournamentModel?.id, address, qualification),
-            sdkGetEntriesLeft(provider, extensionAddress, tournamentModel?.id, address, qualification),
+            sdkCheckValidEntry(
+              provider,
+              extensionAddress,
+              tournamentModel?.id,
+              address,
+              qualification,
+            ),
+            sdkGetEntriesLeft(
+              provider,
+              extensionAddress,
+              tournamentModel?.id,
+              address,
+              qualification,
+            ),
           ]);
 
           setExtensionValidEntry(validEntry);
@@ -729,10 +747,14 @@ export function EnterTournamentDialog({
   );
 
   const ownedGameIds = useMemo(() => {
-    return ownedTokensResult?.data?.map((token) => token.tokenId).filter(Boolean);
+    return ownedTokensResult?.data
+      ?.map((token) => token.tokenId)
+      .filter(Boolean);
   }, [ownedTokensResult]);
 
-  const enterTournamentId = tournamentModel?.id ? String(tournamentModel.id) : undefined;
+  const enterTournamentId = tournamentModel?.id
+    ? String(tournamentModel.id)
+    : undefined;
 
   const { registrations: registrationsResult } = useRegistrations(
     isTournamentValidatorExtension && !!tournamentValidatorConfig
@@ -767,26 +789,37 @@ export function EnterTournamentDialog({
 
   const winMap = useMemo(() => {
     if (!leaderboards || !ownedGameIds || !tournamentValidatorConfig) return {};
-    const lbs = leaderboards
-      .map((lb: any) => {
-        const lbTournament = tournamentsData.find(
-          (t) => t.id.toString() === lb.tournament_id.toString(),
-        );
-        const finalizedTime = lbTournament
-          ? BigInt(lbTournament.submissionEndTime ?? 0)
-          : 0n;
-        const tokenIds = Array.isArray(lb.token_ids)
-          ? lb.token_ids.map((id: any) => String(Number(addAddressPadding(bigintToHex(BigInt(id))))))
-          : [];
-        return {
-          tournamentId: lb.tournament_id.toString(),
-          tokenIds,
-          isFinalized: finalizedTime < currentTime,
-        };
-      });
+    const lbs = leaderboards.map((lb: any) => {
+      const lbTournament = tournamentsData.find(
+        (t) => t.id.toString() === lb.tournament_id.toString(),
+      );
+      const finalizedTime = lbTournament
+        ? BigInt(lbTournament.submissionEndTime ?? 0)
+        : 0n;
+      const tokenIds = Array.isArray(lb.token_ids)
+        ? lb.token_ids.map((id: any) =>
+            String(Number(addAddressPadding(bigintToHex(BigInt(id))))),
+          )
+        : [];
+      return {
+        tournamentId: lb.tournament_id.toString(),
+        tokenIds,
+        isFinalized: finalizedTime < currentTime,
+      };
+    });
     // ownedGameIds are plain token ID strings — buildWinMap matches against them
-    return buildWinMap(lbs, ownedGameIds ?? [], tournamentValidatorConfig.topPositions);
-  }, [leaderboards, ownedGameIds, tournamentsData, currentTime, tournamentValidatorConfig]);
+    return buildWinMap(
+      lbs,
+      ownedGameIds ?? [],
+      tournamentValidatorConfig.topPositions,
+    );
+  }, [
+    leaderboards,
+    ownedGameIds,
+    tournamentsData,
+    currentTime,
+    tournamentValidatorConfig,
+  ]);
 
   // Resolve qualification inputs using SDK
   const tournamentNames = useMemo(() => {
@@ -798,7 +831,8 @@ export function EnterTournamentDialog({
   }, [validatorTournaments]);
 
   const tournamentValidatorQualificationInputs = useMemo(() => {
-    if (!isTournamentValidatorExtension || !tournamentValidatorConfig) return [];
+    if (!isTournamentValidatorExtension || !tournamentValidatorConfig)
+      return [];
     const resolved = resolveTournamentQualifications(
       tournamentValidatorConfig,
       participationMap,
@@ -810,7 +844,13 @@ export function EnterTournamentDialog({
       proof: [q.tournamentId, q.tokenId, String(q.position)],
       label: q.tournamentName,
     }));
-  }, [isTournamentValidatorExtension, tournamentValidatorConfig, participationMap, winMap, tournamentNames]);
+  }, [
+    isTournamentValidatorExtension,
+    tournamentValidatorConfig,
+    participationMap,
+    winMap,
+    tournamentNames,
+  ]);
 
   // Use the extension qualification hook to check entries left for tournament validators
   const {
@@ -828,8 +868,11 @@ export function EnterTournamentDialog({
   );
 
   // Determine whether we need to fetch qualification entries
-  const shouldFetchQualifications = hasEntryRequirement &&
-    requirementVariant === "token" && (ownedTokenIds?.length > 0 || (manualTokenOwnershipVerified && manualTokenId));
+  const shouldFetchQualifications =
+    hasEntryRequirement &&
+    requirementVariant === "token" &&
+    (ownedTokenIds?.length > 0 ||
+      (manualTokenOwnershipVerified && manualTokenId));
 
   const { qualifications: qualificationEntriesRaw } = useQualifications(
     shouldFetchQualifications ? enterTournamentId : undefined,
@@ -839,7 +882,10 @@ export function EnterTournamentDialog({
   const qualificationEntries = useMemo(() => {
     if (!qualificationEntriesRaw) return [];
     if (Array.isArray(qualificationEntriesRaw)) return qualificationEntriesRaw;
-    if (typeof qualificationEntriesRaw === "object" && "data" in (qualificationEntriesRaw as any)) {
+    if (
+      typeof qualificationEntriesRaw === "object" &&
+      "data" in (qualificationEntriesRaw as any)
+    ) {
       return (qualificationEntriesRaw as any).data ?? [];
     }
     return [];
@@ -849,18 +895,28 @@ export function EnterTournamentDialog({
   const tokenEntryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const tokenId of ownedTokenIds ?? []) {
-      counts[tokenId] = qualificationEntries?.find(
-        (entry: any) => entry["qualification_proof.NFT.token_id"] === addAddressPadding(tokenId),
-      )?.entry_count ?? 0;
+      counts[tokenId] =
+        qualificationEntries?.find(
+          (entry: any) =>
+            entry["qualification_proof.NFT.token_id"] ===
+            addAddressPadding(tokenId),
+        )?.entry_count ?? 0;
     }
     // Also handle manual token
     if (manualTokenOwnershipVerified && manualTokenId) {
-      counts[manualTokenId] = qualificationEntries?.find(
-        (entry: any) => entry["qualification_proof.NFT.token_id"] === manualTokenId,
-      )?.entry_count ?? 0;
+      counts[manualTokenId] =
+        qualificationEntries?.find(
+          (entry: any) =>
+            entry["qualification_proof.NFT.token_id"] === manualTokenId,
+        )?.entry_count ?? 0;
     }
     return counts;
-  }, [ownedTokenIds, qualificationEntries, manualTokenOwnershipVerified, manualTokenId]);
+  }, [
+    ownedTokenIds,
+    qualificationEntries,
+    manualTokenOwnershipVerified,
+    manualTokenId,
+  ]);
 
   // Combine owned + manual token IDs
   const allOwnedTokenIds = useMemo(() => {
@@ -882,22 +938,28 @@ export function EnterTournamentDialog({
     tokenEntryCounts,
     playerAddress: address,
     extensionQualifications,
-    tournamentValidatorConfig: isTournamentValidatorExtension ? tournamentValidatorConfig : null,
+    tournamentValidatorConfig: isTournamentValidatorExtension
+      ? tournamentValidatorConfig
+      : null,
     extensionValidEntry,
     extensionEntriesLeft,
     entryLimit: hasEntryLimit ? Number(entryLimit) : 0,
   });
 
   // Map SDK proof back to the component's Proof type
-  // For merkle validators, inject the fetched merkle proof
+  // For merkle validators, always inject the fetched merkle proof so the
+  // contract can validate/reject even when entries are exhausted
   const proof: Proof = useMemo(() => {
+    if (isMerkleValidatorExtension && merkleQualification.length > 0) {
+      return {
+        tokenId: sdkBestProof?.tokenId ?? "",
+        extensionProof: merkleQualification,
+      };
+    }
     if (!sdkBestProof) return { tokenId: "" };
     return {
       tokenId: sdkBestProof.tokenId,
-      extensionProof:
-        isMerkleValidatorExtension && merkleQualification.length > 0
-          ? merkleQualification
-          : sdkBestProof.extensionProof,
+      extensionProof: sdkBestProof.extensionProof,
     };
   }, [sdkBestProof, isMerkleValidatorExtension, merkleQualification]);
 
@@ -1284,8 +1346,9 @@ export function EnterTournamentDialog({
                     // Tournament validator - show individual tournaments
                     <div className="flex flex-col gap-2 px-4">
                       {validatorTournaments.map((tournament) => {
-                        const tournamentFinalizedTime =
-                          BigInt(tournament.submissionEndTime ?? 0);
+                        const tournamentFinalizedTime = BigInt(
+                          tournament.submissionEndTime ?? 0,
+                        );
                         const hasTournamentFinalized =
                           tournamentFinalizedTime < currentTime;
                         return (
@@ -1293,14 +1356,11 @@ export function EnterTournamentDialog({
                             key={tournament.id}
                             className="flex flex-row items-center justify-between border border-brand-muted rounded-md p-2"
                           >
-                            <span>
-                              {tournament.name}
-                            </span>
+                            <span>{tournament.name}</span>
                             {tournamentValidatorConfig.requirementType ===
                             "won" ? (
                               !!winMap[tournament.id.toString()] &&
-                              winMap[tournament.id.toString()]
-                                .length > 0 ? (
+                              winMap[tournament.id.toString()].length > 0 ? (
                                 <div className="flex flex-row items-center gap-2">
                                   <span className="w-5">
                                     <CHECK />
@@ -1343,9 +1403,7 @@ export function EnterTournamentDialog({
                                   <span>No qualified entries</span>
                                 </div>
                               )
-                            ) : !!participationMap[
-                                tournament.id.toString()
-                              ] ? (
+                            ) : participationMap[tournament.id.toString()] ? (
                               <div className="flex flex-row items-center gap-2">
                                 <span className="w-5">
                                   <CHECK />
@@ -1747,6 +1805,41 @@ export function EnterTournamentDialog({
             </>
           )}
         </div>
+        {/* Entry count selector for multi-entry extensions */}
+        {requirementVariant === "extension" &&
+          extensionEntriesLeft !== null &&
+          extensionEntriesLeft > 1 && (
+            <div className="flex items-center justify-between p-3 border border-brand/25 rounded-lg bg-neutral/5">
+              <span className="text-sm text-brand-muted">Entries</span>
+              <div className="flex items-center gap-3">
+                <button
+                  className="text-brand-muted hover:text-brand disabled:opacity-30 text-lg leading-none"
+                  disabled={numEntries <= 1}
+                  onClick={() => setNumEntries(Math.max(1, numEntries - 1))}
+                >
+                  &minus;
+                </button>
+                <span className="text-sm font-medium tabular-nums w-6 text-center">
+                  {numEntries}
+                </span>
+                <button
+                  className="text-brand-muted hover:text-brand disabled:opacity-30 text-lg leading-none"
+                  disabled={numEntries >= extensionEntriesLeft}
+                  onClick={() =>
+                    setNumEntries(
+                      Math.min(extensionEntriesLeft, numEntries + 1),
+                    )
+                  }
+                >
+                  +
+                </button>
+                <span className="text-xs text-brand-muted">
+                  / {extensionEntriesLeft}
+                </span>
+              </div>
+            </div>
+          )}
+
         <div className="flex justify-between items-center gap-2 mt-6">
           {/* Player name edit in bottom left */}
           <div className="flex items-center gap-2">
@@ -1824,6 +1917,8 @@ export function EnterTournamentDialog({
                     <LoadingSpinner />
                     <span>Checking qualifications...</span>
                   </div>
+                ) : numEntries > 1 ? (
+                  `Enter ${numEntries} Times`
                 ) : (
                   "Enter Tournament"
                 )}

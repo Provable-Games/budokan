@@ -23,7 +23,6 @@ import {
   EXTERNAL_LINK,
   INFO,
   OPUS,
-  VERIFIED,
 } from "@/components/Icons";
 import {
   HoverCard,
@@ -47,6 +46,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useMemo, useState } from "react";
+import { ListChecks, Coins, GitBranch } from "lucide-react";
 import type {
   TournamentValidatorConfig,
   ERC20BalanceValidatorConfig,
@@ -309,7 +309,6 @@ const EntryRequirements = ({
         </div>
       );
     } else if (activeVariant === "extension") {
-      // Show as Tournament Qualification if it's a tournament validator
       if (isTournamentValidatorExtension) {
         return (
           <div className="flex flex-row items-center gap-1 w-full">
@@ -322,20 +321,16 @@ const EntryRequirements = ({
           </div>
         );
       }
-      // Show as ERC20 Balance if it's an ERC20 balance validator
       if (isERC20BalanceValidatorExtension) {
         return (
           <div className="flex flex-row items-center gap-1 w-full">
-            <span className="w-6">
-              <COIN />
-            </span>
+            <Coins className="w-5 h-5 flex-shrink-0" />
             <span className="hidden sm:block text-xs">
-              {erc20Token?.name || "ERC20 Balance"}
+              {erc20Token?.name || "Token Balance"}
             </span>
           </div>
         );
       }
-      // Show as Opus Troves if it's an Opus Troves validator
       if (isOpusTrovesValidatorExtension) {
         return (
           <div className="flex flex-row items-center gap-1 w-full">
@@ -346,24 +341,33 @@ const EntryRequirements = ({
           </div>
         );
       }
-      // Show as Snapshot if it's a Snapshot validator
       if (isSnapshotValidatorExtension) {
         return (
           <div className="flex flex-row items-center gap-1 w-full">
-            <span className="w-6">
-              <VERIFIED />
-            </span>
+            <ListChecks className="w-5 h-5 flex-shrink-0" />
             <span className="hidden sm:block text-xs">Snapshot</span>
           </div>
         );
       }
-      // Otherwise show as generic extension
+      if (isMerkleValidatorExtension) {
+        return (
+          <div className="flex flex-row items-center gap-1 w-full">
+            <GitBranch className="w-5 h-5 flex-shrink-0" />
+            <span className="hidden sm:block text-xs">
+              {merkleTreeName || "Allowlist"}
+            </span>
+          </div>
+        );
+      }
+      // Unknown extension
       return (
         <div className="flex flex-row items-center gap-1 w-full">
           <span className="w-6">
             <EXTERNAL_LINK />
           </span>
-          <span className="hidden sm:block">Extension</span>
+          <span className="hidden sm:block text-xs">
+            {displayAddress(extensionConfig?.address ?? "0x0")}
+          </span>
         </div>
       );
     }
