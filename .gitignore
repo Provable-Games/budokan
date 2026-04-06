@@ -8,4 +8,5 @@ node_modules/
 .claudeignore
 .snfoundry_cache/
 .DS_Store
+.vite/
 pr-response-plan.md
