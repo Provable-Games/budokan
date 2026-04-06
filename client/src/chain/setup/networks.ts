@@ -75,11 +75,11 @@ const snSepoliaConfig: ChainConfig = {
   ethAddress: sepolia.nativeCurrency.address,
   connectorIds: [supportedConnectorIds.CONTROLLER],
   denshokanAddress:
-    "0x024c4870f96355ac9fd701bd05ab5d08c220c371ebb861535eb9851a959c522d",
+    "0x0004e6e5bbf18424dfb825f1dbb65e10473b4603a1ec7b9ab02c143d877114f9",
   budokanAddress:
-    "0x0423583f0e9461708a3eb763f1c4d89dbda03814da0f048af5eefd9c97e742ef",
+    "0x02a97de0b33fb115f5c32a58232d9941c4a5b2598aa71d30c094076cc592f94d",
   budokanViewerAddress:
-    "0x0568f6078cdf5d9aad881c3a9da1be58fc83018a198bb78ca43a663070a4fcbb",
+    "0x001f2be7ed811bfa859f8f6cf72d2458f36103ac172ff8e65a630bbcc6cf98c9",
   budokanApiUrl: "https://budokan-api-sepolia.up.railway.app",
   denshokanApiUrl: "https://denshokan-api-sepolia.up.railway.app",
 };
@@ -102,11 +102,11 @@ const snMainnetConfig: ChainConfig = {
   ethAddress: mainnet.nativeCurrency.address,
   connectorIds: [supportedConnectorIds.CONTROLLER],
   denshokanAddress:
-    "0x036017e69d21d6d8c13e266eabb73ef1f1d02722d86bdcabe5f168f8e549d3cd",
+    "0x00263cc540dac11334470a64759e03952ee2f84a290e99ba8cbc391245cd0bf9",
   budokanAddress:
-    "0x06137ee50f57d08e1d0d758045e45982e2f5ef4826091ed4db136e7afbafecce",
+    "0x020239968a74f3e190d1b5aa0c6316845062a00cb98f787d661fd4aa860553de",
   budokanViewerAddress:
-    "0x075d1b9f1a9751e6b8f8b5a4ca8e721f10c58d87607e703cda062e512a434443",
+    "0x00ace1cce7933fbf0d7a2f32c3b5d4c36e63462f81c7845b6d7ac5d8dbdbefa4",
   budokanApiUrl: "https://budokan-api-production.up.railway.app",
   denshokanApiUrl: "https://denshokan-api-production.up.railway.app",
 } as const;
