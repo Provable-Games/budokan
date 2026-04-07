@@ -172,7 +172,7 @@ export const useSystemCalls = () => {
         }
       }
 
-      await waitForTournamentEntry(tournamentId, entryCount, numEntries);
+      await waitForTournamentEntry(tournamentId, entryCount + numEntries);
 
       if (tx) {
         showTournamentEntry({

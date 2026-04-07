@@ -22,7 +22,6 @@ import {
   EXTERNAL_LINK,
   INFO,
   OPUS,
-  VERIFIED,
 } from "@/components/Icons";
 import {
   HoverCard,
