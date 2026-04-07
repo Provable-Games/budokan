@@ -1,3 +1,12 @@
 target/
 PRECISION_FIX_PLAN.md
-client/
+node_modules/
+.env
+!.env.example
+.apibara/
+.claude/
+.claudeignore
+.snfoundry_cache/
+.DS_Store
+.vite/
+pr-response-plan.md

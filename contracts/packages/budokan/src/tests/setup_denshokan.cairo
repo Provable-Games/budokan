@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: UNLICENSED
 
 use core::serde::Serde;
-use game_components_minigame::interface::IMinigameDispatcher;
-use game_components_test_starknet::minigame::mocks::minigame_starknet_mock::{
-    IMinigameStarknetMockDispatcher, IMinigameStarknetMockInitDispatcher,
-    IMinigameStarknetMockInitDispatcherTrait,
+use game_components_embeddable_game_standard::minigame::interface::IMinigameDispatcher;
+use game_components_embeddable_game_standard::registry::interface::IMinigameRegistryDispatcher;
+use game_components_embeddable_game_standard::token::interface::IMinigameTokenMixinDispatcher;
+use game_components_test_common::mocks::minigame_mock::{
+    IMinigameMockDispatcher, IMinigameMockInitDispatcher, IMinigameMockInitDispatcherTrait,
 };
-use game_components_token::examples::minigame_registry_contract::IMinigameRegistryDispatcher;
-use game_components_token::interface::IMinigameTokenMixinDispatcher;
 use openzeppelin_interfaces::erc721::ERC721ABIDispatcher;
 use openzeppelin_interfaces::introspection::ISRC5Dispatcher;
 use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
@@ -29,7 +28,7 @@ pub fn GAME_CREATOR_ADDR() -> ContractAddress {
 #[derive(Drop)]
 pub struct TestContracts {
     pub denshokan: IMinigameTokenMixinDispatcher,
-    pub minigame_mock: IMinigameStarknetMockDispatcher,
+    pub minigame_mock: IMinigameMockDispatcher,
 }
 
 //
@@ -37,16 +36,16 @@ pub struct TestContracts {
 //
 
 pub fn deploy_mock_game() -> (
-    IMinigameDispatcher, IMinigameStarknetMockInitDispatcher, IMinigameStarknetMockDispatcher,
+    IMinigameDispatcher, IMinigameMockInitDispatcher, IMinigameMockDispatcher,
 ) {
-    let contract_class = declare("minigame_starknet_mock")
+    let contract_class = declare("minigame_mock")
         .expect('declare minigame failed')
         .contract_class();
     let (contract_address, _) = contract_class.deploy(@array![]).expect('deploy minigame failed');
 
     let minigame_dispatcher = IMinigameDispatcher { contract_address };
-    let minigame_init_dispatcher = IMinigameStarknetMockInitDispatcher { contract_address };
-    let minigame_mock_dispatcher = IMinigameStarknetMockDispatcher { contract_address };
+    let minigame_init_dispatcher = IMinigameMockInitDispatcher { contract_address };
+    let minigame_mock_dispatcher = IMinigameMockDispatcher { contract_address };
     (minigame_dispatcher, minigame_init_dispatcher, minigame_mock_dispatcher)
 }
 
@@ -89,7 +88,6 @@ pub fn deploy_optimized_token_contract(
     symbol: Option<ByteArray>,
     base_uri: Option<ByteArray>,
     game_registry_address: Option<ContractAddress>,
-    event_relayer_address: Option<ContractAddress>,
 ) -> (IMinigameTokenMixinDispatcher, ERC721ABIDispatcher, ISRC5Dispatcher, ContractAddress) {
     let mut constructor_calldata: Array<felt252> = array![];
 
@@ -109,38 +107,15 @@ pub fn deploy_optimized_token_contract(
         Option::None => "https://test.com/",
     };
 
-    // Serialize basic parameters
+    // Constructor: (name, symbol, base_uri, owner, royalty_receiver, royalty_fraction,
+    // game_registry_address)
     token_name.serialize(ref constructor_calldata);
     token_symbol.serialize(ref constructor_calldata);
     token_base_uri.serialize(ref constructor_calldata);
-
-    // Royalty info - ContractAddress and u128 directly
-    // Use OWNER_ADDR() as royalty receiver since zero address is rejected
+    OWNER_ADDR().serialize(ref constructor_calldata); // owner
     OWNER_ADDR().serialize(ref constructor_calldata); // royalty_receiver
     0_u128.serialize(ref constructor_calldata); // royalty_fraction (0 = no royalties)
-
-    // Serialize game_registry_address Option manually
-    // (matching game_components serialization format)
-    match game_registry_address {
-        Option::Some(addr) => {
-            constructor_calldata.append(0); // Some variant
-            constructor_calldata.append(addr.into());
-        },
-        Option::None => {
-            constructor_calldata.append(1); // None variant
-        },
-    }
-
-    // Serialize event_relayer_address Option manually
-    match event_relayer_address {
-        Option::Some(addr) => {
-            constructor_calldata.append(0); // Some variant
-            constructor_calldata.append(addr.into());
-        },
-        Option::None => {
-            constructor_calldata.append(1); // None variant
-        },
-    }
+    game_registry_address.serialize(ref constructor_calldata); // game_registry_address
 
     let contract_class = declare("FullTokenContract")
         .expect('declare token failed')
@@ -170,7 +145,6 @@ pub fn setup() -> TestContracts {
         Option::None,
         Option::None,
         Option::Some(minigame_registry_dispatcher.contract_address),
-        Option::None,
     );
 
     minigame_init_dispatcher
@@ -188,6 +162,7 @@ pub fn setup() -> TestContracts {
             Option::Some(minigame_mock_dispatcher.contract_address),
             Option::Some(minigame_mock_dispatcher.contract_address),
             token_dispatcher.contract_address,
+            Option::None,
         );
 
     TestContracts { denshokan: token_dispatcher, minigame_mock: minigame_mock_dispatcher }

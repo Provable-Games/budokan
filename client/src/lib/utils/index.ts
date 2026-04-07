@@ -1,0 +1,434 @@
+import { ClassValue, clsx } from "clsx";
+import { twMerge } from "tailwind-merge";
+import { BigNumberish, shortString } from "starknet";
+import { Prize } from "@/generated/models.gen";
+import { TOKEN_ADDRESSES } from "@/lib/constants";
+
+// Import from SDK and re-export so all existing `from "@/lib/utils"` imports continue to work
+import {
+  indexAddress,
+  padAddress,
+  displayAddress,
+  bigintToHex as sdkBigintToHex,
+  formatNumber,
+  formatPrizeAmount,
+  formatUsdValue,
+  formatScore,
+  formatTime,
+  getOrdinalSuffix,
+  calculatePayouts,
+  calculateDistribution,
+  isBefore,
+} from "@provable-games/metagame-sdk";
+
+export {
+  indexAddress,
+  padAddress,
+  displayAddress,
+  formatNumber,
+  formatPrizeAmount,
+  formatUsdValue,
+  formatScore,
+  formatTime,
+  getOrdinalSuffix,
+  calculatePayouts,
+  calculateDistribution,
+  isBefore,
+};
+export type { DistributionType } from "@provable-games/metagame-sdk";
+
+// Re-export new metagame-sdk prize/entry-fee utilities
+export {
+  aggregatePrizesByPosition,
+  aggregatePrizesBySponsor,
+  filterClaimablePrizes,
+  filterZeroPrizes,
+  calculateEntryFeeBreakdown,
+  distributePool,
+  parseNFTBulkInput,
+} from "@provable-games/metagame-sdk";
+export type {
+  PositionPrizeGroup,
+  SponsorContribution,
+  EntryFeeBreakdown,
+  EntryFeeShares,
+  NftPrizeInput,
+  NftParseResult,
+} from "@provable-games/metagame-sdk";
+
+// Re-export extension utilities and qualification evaluation
+export {
+  getExtensionAddresses,
+  identifyExtensionType,
+  parseTournamentValidatorConfig,
+  parseERC20BalanceValidatorConfig,
+  parseOpusTrovesValidatorConfig,
+  parseSnapshotValidatorConfig,
+  parseMerkleValidatorConfig,
+  parseExtensionConfig,
+  getQualifyingModeInfo,
+  formatTokenAmount,
+  formatCashToUSD,
+  evaluateTokenQualification,
+  evaluateExtensionQualification,
+  evaluateQualification,
+} from "@provable-games/metagame-sdk";
+export type {
+  EntryRequirementVariant,
+  ExtensionType,
+  TournamentValidatorConfig,
+  ERC20BalanceValidatorConfig,
+  OpusTrovesValidatorConfig,
+  SnapshotValidatorConfig,
+  MerkleValidatorConfig,
+  MerkleTree,
+  QualifyingModeInfo,
+  QualificationResult,
+  QualificationEntry,
+  QualificationProof,
+  TokenQualificationInput,
+  ExtensionQualificationInput,
+} from "@provable-games/metagame-sdk";
+export { QualifyingMode } from "@provable-games/metagame-sdk";
+export {
+  buildQualificationProof,
+  buildNFTProof,
+  buildTournamentExtensionProof,
+  buildExtensionProof,
+  buildParticipationMap,
+  buildWinMap,
+  resolveTournamentQualifications,
+} from "@provable-games/metagame-sdk";
+export type {
+  TournamentRegistration,
+  TournamentLeaderboard,
+  TournamentQualificationInput,
+} from "@provable-games/metagame-sdk";
+export {
+  calculateOpusTrovesEntries,
+  findBannableEntries,
+  findAllBannableEntries,
+} from "@provable-games/metagame-sdk";
+
+// Wrap SDK's bigintToHex to preserve the `0x${string}` return type expected by consumers
+export const bigintToHex = (v: BigNumberish): `0x${string}` =>
+  sdkBigintToHex(v) as `0x${string}`;
+
+// --- Client-specific utilities (not in SDK) ---
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+
+export function displayPrice(num: number): string {
+  if (Math.abs(num) >= 1) {
+    return num.toFixed(0);
+  } else if (Math.abs(num) > 0) {
+    return num.toFixed(2);
+  } else {
+    return "0";
+  }
+}
+
+export function roundUSDPrice(price: number): string {
+  // Handle negative numbers by applying the same logic to the absolute value
+  const isNegative = price < 0;
+  const absPrice = Math.abs(price);
+
+  // Get the integer part
+  const integerPart = Math.floor(absPrice);
+
+  // Get the decimal part
+  const decimalPart = absPrice - integerPart;
+
+  let result: number;
+
+  if (decimalPart <= 0.25) {
+    // Round down to the integer
+    result = integerPart;
+  } else if (decimalPart <= 0.75) {
+    // Round to x.50
+    result = integerPart + 0.5;
+  } else {
+    // Round up to the next integer
+    result = integerPart + 1;
+  }
+
+  // Apply the sign back
+  result = isNegative ? -result : result;
+
+  // Format the result
+  if (result % 1 === 0) {
+    return result.toFixed(0);
+  } else {
+    return result.toFixed(2);
+  }
+}
+
+export function formatEth(num: number): string {
+  if (Math.abs(num) >= 0.01) {
+    return num.toFixed(2);
+  } else if (Math.abs(num) >= 0.0001) {
+    return num.toFixed(4);
+  } else {
+    return "0";
+  }
+}
+
+export function padU32(num: number): string {
+  if (num < 0 || num > 0xffffffff) {
+    throw new Error("Value out of range for u32");
+  }
+  const hex = num.toString(16);
+  return "0x" + hex.padStart(8, "0");
+}
+
+export function padU64(num: bigint): string {
+  if (num < 0n || num > 0xffffffffffffffffn) {
+    throw new Error("Value out of range for u64");
+  }
+  const hex = num.toString(16);
+  return "0x" + hex.padStart(16, "0");
+}
+
+export const stringToFelt = (v: string): BigNumberish =>
+  v ? shortString.encodeShortString(v) : "0x0";
+
+export const feltToString = (v: BigNumberish): string => {
+  return BigInt(v) > 0n ? shortString.decodeShortString(bigintToHex(v)) : "";
+};
+
+export const isPositiveBigint = (v: BigNumberish | null): boolean => {
+  try {
+    return v != null && BigInt(v) > 0n;
+  } catch {
+    return false;
+  }
+};
+
+export function formatBalance(num: BigNumberish): number {
+  return Number(num) / 10 ** 18;
+}
+
+export const copyToClipboard = async (text: string) => {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (err) {
+    console.error("Failed to copy text: ", err);
+  }
+};
+
+export const removeFieldOrder = <T extends Record<string, any>>(
+  obj: T
+): Omit<T, "fieldOrder"> => {
+  const newObj = { ...obj } as Record<string, any>; // Cast to a non-generic type
+  delete newObj.fieldOrder;
+
+  Object.keys(newObj).forEach((key) => {
+    if (typeof newObj[key] === "object" && newObj[key] !== null) {
+      newObj[key] = removeFieldOrder(newObj[key]);
+    }
+  });
+
+  return newObj as Omit<T, "fieldOrder">;
+};
+
+export const cleanObject = (obj: any): any =>
+  Object.keys(obj).reduce((acc, key) => {
+    if (obj[key] !== undefined) acc[key] = obj[key];
+    return acc;
+  }, {} as { [key: string]: any });
+
+export const getRandomInt = (min: number, max: number): number => {
+  min = Math.ceil(min);
+  max = Math.floor(max);
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+};
+
+export function getTokenKeyFromValue(searchValue: string): string | null {
+  const entry = Object.entries(TOKEN_ADDRESSES).find(
+    ([_key, value]) => value === searchValue
+  );
+  return entry ? entry[0] : null;
+}
+
+export const getPrizesByToken = (prizes: Prize[]) => {
+  return Object.entries(
+    prizes.reduce((acc, prize) => {
+      const key = prize.token_address;
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(prize);
+      return acc;
+    }, {} as Record<string, typeof prizes>)
+  );
+};
+
+// pixel borders
+
+type Point = {
+  x: number;
+  y: number;
+};
+// from  https://pixelcorners.lukeb.co.uk/
+export function generatePixelBorderPath(radius = 4, pixelSize = 4) {
+  const points = generatePoints(radius, pixelSize);
+  const flipped = flipCoords(points);
+
+  return generatePath(flipped);
+}
+
+function generatePath(coords: Point[], reverse = false) {
+  const mirroredCoords = mirrorCoords(coords);
+
+  return (reverse ? mirroredCoords : mirroredCoords.reverse())
+    .map((point) => {
+      return `${point.x} ${point.y}`;
+    })
+    .join(",\n    ");
+}
+
+function generatePoints(radius: number, pixelSize: number, offset = 0) {
+  const coords = [];
+
+  const lastCoords = {
+    x: -1,
+    y: -1,
+  };
+
+  for (let i = 270; i > 225; i--) {
+    const x =
+      Math.floor(radius * Math.sin((2 * Math.PI * i) / 360) + radius + 0.5) *
+      pixelSize;
+    const y =
+      Math.floor(radius * Math.cos((2 * Math.PI * i) / 360) + radius + 0.5) *
+      pixelSize;
+
+    if (x !== lastCoords.x || y !== lastCoords.y) {
+      lastCoords.x = x;
+      lastCoords.y = y;
+
+      coords.push({
+        x: x + offset * pixelSize,
+        y: y + offset * pixelSize,
+      });
+    }
+  }
+
+  const mergedCoords = mergeCoords(coords);
+  const corners = addCorners(mergedCoords);
+
+  return corners;
+}
+
+function flipCoords(coords: Point[]) {
+  return [
+    ...coords,
+    ...coords.map(({ x, y }) => ({ x: y, y: x })).reverse(),
+  ].filter(({ x, y }, i, arr) => {
+    return !i || arr[i - 1].x !== x || arr[i - 1].y !== y;
+  });
+}
+
+function mergeCoords(coords: Point[]) {
+  return coords.reduce((result: Point[], point: Point, index: number) => {
+    if (
+      index !== coords.length - 1 &&
+      point.x === 0 &&
+      coords[index + 1].x === 0
+    ) {
+      return result;
+    }
+
+    if (index !== 0 && point.y === 0 && coords[index - 1].y === 0) {
+      return result;
+    }
+
+    if (
+      index !== 0 &&
+      index !== coords.length - 1 &&
+      point.x === coords[index - 1].x &&
+      point.x === coords[index + 1].x
+    ) {
+      return result;
+    }
+
+    result.push(point);
+    return result;
+  }, []);
+}
+
+function addCorners(coords: Point[]) {
+  return coords.reduce((result: Point[], point: Point, i: number) => {
+    result.push(point);
+
+    if (
+      coords.length > 1 &&
+      i < coords.length - 1 &&
+      coords[i + 1].x !== point.x &&
+      coords[i + 1].y !== point.y
+    ) {
+      result.push({
+        x: coords[i + 1].x,
+        y: point.y,
+      });
+    }
+
+    return result;
+  }, []);
+}
+
+function mirrorCoords(coords: Point[], offset = 0) {
+  return [
+    ...coords.map(({ x, y }) => ({
+      x: offset ? `${x + offset}px` : `${x}px`,
+      y: offset ? `${y + offset}px` : `${y}px`,
+    })),
+    ...coords.map(({ x, y }) => ({
+      x: edgeCoord(y, offset),
+      y: offset ? `${x + offset}px` : `${x}px`,
+    })),
+    ...coords.map(({ x, y }) => ({
+      x: edgeCoord(x, offset),
+      y: edgeCoord(y, offset),
+    })),
+    ...coords.map(({ x, y }) => ({
+      x: offset ? `${y + offset}px` : `${y}px`,
+      y: edgeCoord(x, offset),
+    })),
+  ];
+}
+
+function edgeCoord(n: number, offset: number) {
+  if (offset) {
+    return n === 0
+      ? `calc(100% - ${offset}px)`
+      : `calc(100% - ${offset + n}px)`;
+  }
+
+  return n === 0 ? "100%" : `calc(100% - ${n}px)`;
+}
+
+// Helper function to adjust color opacity
+export const adjustColorOpacity = (color: string, opacity: number): string => {
+  // Handle RGB/RGBA format
+  if (color.startsWith("rgb")) {
+    const rgbValues = color.match(/\d+/g);
+    if (rgbValues && rgbValues.length >= 3) {
+      const [r, g, b] = rgbValues;
+      return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+    }
+  }
+
+  // Handle HEX format
+  if (color.startsWith("#")) {
+    const hex = color.replace("#", "");
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+  }
+
+  // If the format isn't recognized, return the original color
+  console.warn(`Color format not recognized for: ${color}`);
+  return color;
+};

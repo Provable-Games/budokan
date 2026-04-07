@@ -1,10 +1,10 @@
 # Budokan Tournament Platform
 
 <div align="center">
-  <img src="ui/public/images/banner-1200x630.webp" alt="Budokan - The Onchain Gaming Arena" width="600" />
+  <img src="client/public/images/banner-1200x630.webp" alt="Budokan - The Onchain Gaming Arena" width="600" />
 </div>
 
-A permissionless, fully on-chain tournament management system built with Dojo on StarkNet. Budokan enables anyone to create, manage, and participate in gaming tournaments with flexible entry requirements, prize distribution, and seamless integration with external game systems.
+A permissionless, fully on-chain tournament management system built on StarkNet. Budokan enables anyone to create, manage, and participate in gaming tournaments with flexible entry requirements, prize distribution, and seamless integration with external game systems.
 
 ## Table of Contents
 
@@ -21,10 +21,10 @@ A permissionless, fully on-chain tournament management system built with Dojo on
 
 ## Overview
 
-Budokan is a comprehensive tournament infrastructure that manages the complete lifecycle of gaming competitions on StarkNet. Built on Cairo 2.10.1 and Dojo 1.5.0, it provides a robust foundation for permissionless competitive gaming with:
+Budokan is a comprehensive tournament infrastructure that manages the complete lifecycle of gaming competitions on StarkNet. Built on Cairo 2.15.0 with Scarb and Starknet Foundry, it provides a robust foundation for permissionless competitive gaming with:
 
 - **Permissionless Creation**: Anyone can launch tournaments with custom configurations
-- **Flexible Access Control**: Token-gating, tournament-gating, allowlists, or custom validators
+- **Flexible Access Control**: Token-gating, tournament-gating, or custom validators
 - **Multi-Prize Support**: Entry fee pools and sponsored prizes (ERC20/ERC721)
 - **On-Chain Leaderboards**: Ordered score tracking with batch submission support
 - **Automated Distribution**: Prize claims for winners, creators, and game developers
@@ -58,7 +58,6 @@ Budokan supports multiple entry requirement patterns:
 
 - **Token-Gated**: Require ownership of specific ERC721 tokens
 - **Tournament-Gated**: Restrict to winners or participants of previous tournaments
-- **Allowlist**: Pre-approved address lists for exclusive tournaments
 - **Custom Validators**: Extensible via `IEntryValidator` interface for custom logic
 - **Entry Limits**: Optional caps on entries per qualification proof
 - **Open Access**: No requirements for permissionless participation
@@ -129,7 +128,7 @@ Each phase has specific capabilities:
 
 ### Smart Contract Layer
 
-The Budokan smart contract (`contracts/src/budokan.cairo`) implements the `IBudokan` interface using Dojo's entity system on StarkNet. Core responsibilities include:
+The Budokan smart contract (`contracts/src/budokan.cairo`) implements the `IBudokan` interface on StarkNet. Core responsibilities include:
 
 - **Tournament Lifecycle**: Validates state transitions based on timestamp-driven phases
 - **Entry Validation**: Processes entry requirements through modular validator interfaces
@@ -142,14 +141,13 @@ The Budokan smart contract (`contracts/src/budokan.cairo`) implements the `IBudo
 - **Minimal On-Chain Logic**: Complex operations delegated to pure Cairo functions in `libs/`
 - **Extensive Testing**: All core logic covered by comprehensive unit tests
 - **Modular Design**: Entry validators, prize handlers, and game integrations are extensible
-- **Dojo Entity System**: Uses WorldStorage for efficient model-based data access
+- **Storage Patterns**: Efficient model-based data access using StarkNet storage
 
 ### Data Models
 
 **Tournament Model**:
 ```cairo
 #[derive(Drop, Serde)]
-#[dojo::model]
 pub struct Tournament {
     #[key]
     pub id: u64,
@@ -176,7 +174,7 @@ pub struct Tournament {
 
 These libraries contain pure Cairo functions that implement core business logic, enabling comprehensive unit testing outside of blockchain execution:
 
-- **`store.cairo`**: WorldStorage abstraction with CRUD operations for all Dojo models
+- **`store.cairo`**: Storage abstraction with CRUD operations for all contract models
 - **`schedule.cairo`**: Phase calculation, validation, and timestamp-based state transitions
 - **`lifecycle.cairo`**: Tournament state machine, entry validation, score ordering, prize calculation
 - **`utils.cairo`**: Mathematical operations, array manipulation, validation helpers
@@ -272,9 +270,36 @@ When configured, Budokan can integrate with Denshokan for enhanced game discover
 
 Currently operates with direct token registration as an alternative.
 
+## Development
+
+### Contracts (Cairo + Starknet Foundry)
+
+```bash
+scarb build              # Build smart contracts
+scarb clean              # Clean build artifacts
+snforge test             # Run all Cairo tests
+snforge test -e test_name  # Run a specific test by name
+```
+
+### Client (React + TypeScript + Vite)
+
+```bash
+cd client
+bun run dev      # Start development server
+bun run build    # TypeScript check + production build
+bun run lint     # Run ESLint
+```
+
+### Tool Versions
+
+Managed via asdf (`.tool-versions`):
+
+- scarb: 2.15.1
+- starknet-foundry: 0.55.0
+
 ## Resources
 
-- **Dojo Documentation**: [book.dojoengine.org](https://book.dojoengine.org/)
 - **StarkNet Docs**: [docs.starknet.io](https://docs.starknet.io/)
 - **Cairo Book**: [book.cairo-lang.org](https://book.cairo-lang.org/)
+- **Starknet Foundry**: [foundry-rs.github.io/starknet-foundry](https://foundry-rs.github.io/starknet-foundry/)
 - **Provable Games**: [github.com/Provable-Games](https://github.com/Provable-Games)

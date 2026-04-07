@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 pub mod budokan;
+pub mod events;
 
-// Models (types)
-pub mod models {
+// Structs (types)
+pub mod structs {
     pub mod budokan;
     pub mod constants;
     pub mod lifecycle;
@@ -19,15 +20,18 @@ pub mod libs {
     pub mod validations;
 }
 
+// Test mocks are public so downstream packages (e.g. budokan_viewer) can use them
+// via build-external-contracts
+pub mod mocks {
+    pub mod entry_validator_mock;
+    pub mod erc20_mock;
+    pub mod erc721_mock;
+    pub mod erc721_old_mock;
+    pub mod tournament_validator_mock;
+}
+
 #[cfg(test)]
 mod tests {
-    pub mod mocks {
-        pub mod entry_validator_mock;
-        pub mod erc20_mock;
-        pub mod erc721_mock;
-        pub mod erc721_old_mock;
-        pub mod tournament_validator_mock;
-    }
     pub mod constants;
     #[cfg(test)]
     mod helpers;

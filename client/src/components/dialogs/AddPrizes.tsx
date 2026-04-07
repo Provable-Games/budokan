@@ -1,0 +1,418 @@
+import { useEffect, useState, useMemo } from "react";
+import { useForm, FormProvider } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { FormToken } from "@/lib/types";
+import { Prize, ERC20Data, ERC721Data } from "@/generated/models.gen";
+import type { Tournament } from "@provable-games/budokan-sdk";
+import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
+import { BigNumberish } from "starknet";
+import { CairoCustomEnum, CairoOption, CairoOptionVariant } from "starknet";
+import { useAccount } from "@starknet-react/core";
+import { useConnectToSelectedChain } from "@/chain/hooks/useChain";
+import { useChainConfig } from "@/context/chain";
+import { LoadingSpinner } from "@/components/ui/spinner";
+import { useActivityStats } from "@provable-games/budokan-sdk/react";
+import { PrizeManager } from "@/components/shared/PrizeManager";
+import { ChainId } from "@/chain/setup/networks";
+import { useEkuboPrices } from "@/hooks/useEkuboPrices";
+import { ALERT } from "@/components/Icons";
+import {
+  validatePrizeAddition,
+  formatValidationMessage,
+} from "@/lib/utils/tournamentValidation";
+
+type BonusPrize =
+  | {
+      type: "ERC20";
+      token: FormToken;
+      amount: number;
+      position: number;
+      tokenDecimals?: number;
+      distribution?: "exponential" | "linear" | "uniform";
+      distributionWeight?: number;
+      distributionCount?: number;
+    }
+  | {
+      type: "ERC721";
+      token: FormToken;
+      tokenId: number;
+      position: number;
+    };
+
+// Form schema for AddPrizes
+const addPrizesSchema = z.object({
+  prizes: z.array(
+    z.discriminatedUnion("type", [
+      z.object({
+        type: z.literal("ERC20"),
+        token: z.custom<FormToken>(),
+        amount: z.number(),
+        position: z.number(),
+        tokenDecimals: z.number().optional(),
+        distribution: z.enum(["exponential", "linear", "uniform"]).optional(),
+        distributionWeight: z.number().optional(),
+        distributionCount: z.number().optional(),
+      }),
+      z.object({
+        type: z.literal("ERC721"),
+        token: z.custom<FormToken>(),
+        tokenId: z.number(),
+        position: z.number(),
+      }),
+    ])
+  ),
+});
+
+type AddPrizesFormData = z.infer<typeof addPrizesSchema>;
+
+export function AddPrizesDialog({
+  open,
+  onOpenChange,
+  tournamentId,
+  tournamentName,
+  tournament,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  tournamentId: BigNumberish;
+  tournamentName: string;
+  tournament: Tournament;
+}) {
+  // Initialize form
+  const form = useForm<AddPrizesFormData>({
+    resolver: zodResolver(addPrizesSchema),
+    defaultValues: {
+      prizes: [],
+    },
+  });
+
+  const { address, account: _account } = useAccount();
+  const { selectedChainConfig } = useChainConfig();
+  const { connect } = useConnectToSelectedChain();
+  const { approveAndAddPrizes, approveAndAddPrizesBatched, getTokenDecimals } =
+    useSystemCalls();
+
+  // Get prizes from form
+  const currentPrizes = form.watch("prizes");
+  const setCurrentPrizes = (prizes: BonusPrize[]) => {
+    form.setValue("prizes", prizes);
+  };
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
+  const [_tokenBalances, _setTokenBalances] = useState<Record<string, bigint>>(
+    {}
+  );
+  const [tokenDecimals, setTokenDecimals] = useState<Record<string, number>>(
+    {}
+  );
+
+  const chainId = selectedChainConfig?.chainId ?? "";
+  const isSepolia = selectedChainConfig?.chainId === ChainId.SN_SEPOLIA;
+
+  const { stats: platformStats } = useActivityStats();
+
+  const prizeCount = Number(platformStats?.totalPrizes ?? 0);
+
+  // Get unique token addresses for price fetching
+  const uniqueTokenAddresses = useMemo(() => {
+    return Array.from(
+      new Set(
+        currentPrizes
+          .filter((prize) => prize.type === "ERC20")
+          .map((prize) => prize.token.address)
+      )
+    );
+  }, [currentPrizes]);
+
+  const { prices } = useEkuboPrices({
+    tokens: uniqueTokenAddresses,
+  });
+
+  // Calculate total value of prizes being added
+  const additionalPrizeValueUSD = useMemo(() => {
+    return currentPrizes.reduce((total, prize) => {
+      if (prize.type === "ERC20") {
+        const price = prices?.[prize.token.address] ?? 0;
+        return total + (prize.amount ?? 0) * price;
+      }
+      return total;
+    }, 0);
+  }, [currentPrizes, prices]);
+
+  // Validate prize addition
+  const prizeValidation = useMemo(() => {
+    // For now, assume existing prize value is 0 (could be fetched from backend)
+    // This is a conservative estimate - if we don't know existing prizes, we validate based on new ones
+    const existingPrizeValueUSD = 0;
+
+    return validatePrizeAddition(
+      tournament as unknown as Record<string, unknown>,
+      additionalPrizeValueUSD,
+      existingPrizeValueUSD
+    );
+  }, [tournament, additionalPrizeValueUSD]);
+
+  const hasPrizeValidationError = !prizeValidation.isValid;
+
+  useEffect(() => {
+    if (!open) {
+      setBatchProgress(null);
+      setIsSubmitting(false);
+    }
+  }, [open]);
+
+  const submitPrizes = async () => {
+    setIsSubmitting(true);
+    const totalValue = 0; // Prize value calculation handled by contract
+    try {
+      let prizesToAdd: Prize[] = [];
+
+      // Filter out prizes with 0 amounts to avoid transaction errors
+      const validPrizes = currentPrizes.filter((prize) => {
+        if (prize.type === "ERC20") {
+          return prize.amount && prize.amount > 0;
+        }
+        return true; // ERC721 prizes are always valid if they have a tokenId
+      });
+
+      // Fetch decimals for all unique ERC20 token addresses
+      const uniqueERC20Addresses = Array.from(
+        new Set(
+          validPrizes
+            .filter((prize) => prize.type === "ERC20")
+            .map((prize) => prize.token.address)
+        )
+      );
+
+      const decimalsPromises = uniqueERC20Addresses.map(async (address) => {
+        if (!tokenDecimals[address]) {
+          const decimals = await getTokenDecimals(address);
+          return { address, decimals };
+        }
+        return { address, decimals: tokenDecimals[address] };
+      });
+
+      const decimalsResults = await Promise.all(decimalsPromises);
+      const newDecimals = decimalsResults.reduce(
+        (acc, { address, decimals }) => {
+          acc[address] = decimals;
+          return acc;
+        },
+        {} as Record<string, number>
+      );
+
+      // Update decimals state
+      setTokenDecimals((prev) => ({ ...prev, ...newDecimals }));
+
+      prizesToAdd = validPrizes.map((prize, index) => {
+        let token_type;
+
+        if (prize.type === "ERC20") {
+          // Map distribution string to CairoCustomEnum
+          // Weight is scaled by 10 for the contract (e.g., 1.0 in UI = 10 in contract)
+          const scaledWeight = Math.round((prize.distributionWeight ?? 1) * 10);
+
+          let distribution: CairoOption<CairoCustomEnum>;
+          if (prize.distribution === "linear") {
+            distribution = new CairoOption(
+              CairoOptionVariant.Some,
+              new CairoCustomEnum({
+                Linear: scaledWeight,
+                Exponential: undefined,
+                Uniform: undefined,
+                Custom: undefined,
+              })
+            );
+          } else if (prize.distribution === "exponential") {
+            distribution = new CairoOption(
+              CairoOptionVariant.Some,
+              new CairoCustomEnum({
+                Linear: undefined,
+                Exponential: scaledWeight,
+                Uniform: undefined,
+                Custom: undefined,
+              })
+            );
+          } else if (prize.distribution === "uniform") {
+            distribution = new CairoOption(
+              CairoOptionVariant.Some,
+              new CairoCustomEnum({
+                Linear: undefined,
+                Exponential: undefined,
+                Uniform: {},
+                Custom: undefined,
+              })
+            );
+          } else {
+            distribution = new CairoOption(CairoOptionVariant.None);
+          }
+
+          // Create distribution_count as CairoOption
+          const distribution_count: CairoOption<BigNumberish> =
+            prize.distributionCount
+              ? new CairoOption(
+                  CairoOptionVariant.Some,
+                  prize.distributionCount
+                )
+              : new CairoOption(CairoOptionVariant.None);
+
+          const erc20Data: ERC20Data = {
+            amount: BigInt(
+              Math.floor(
+                prize.amount! *
+                  10 **
+                    (newDecimals[prize.token.address] ||
+                      prize.tokenDecimals ||
+                      18)
+              )
+            ).toString(),
+            distribution,
+            distribution_count,
+          };
+
+          token_type = new CairoCustomEnum({
+            erc20: erc20Data,
+            erc721: undefined,
+          });
+        } else {
+          const erc721Data: ERC721Data = {
+            id: BigInt(prize.tokenId!).toString(),
+          };
+
+          token_type = new CairoCustomEnum({
+            erc20: undefined,
+            erc721: erc721Data,
+          });
+        }
+
+        return {
+          id: Number(prizeCount) + index + 1,
+          tournament_id: tournamentId,
+          context_id: tournamentId,
+          sponsor_address: address || "0x0",
+          token_address: prize.token.address,
+          token_type,
+          position: prize.position, // useSystemCalls expects .position, not .payout_position
+          claimed: false,
+        };
+      });
+
+      // Use batched version if there are many prizes
+      if (prizesToAdd.length > 30) {
+        await approveAndAddPrizesBatched(
+          tournamentName,
+          prizesToAdd,
+          true,
+          totalValue,
+          Number(prizeCount),
+          30, // batch size
+          (current, total) => setBatchProgress({ current, total })
+        );
+      } else {
+        await approveAndAddPrizes(
+          tournamentName,
+          prizesToAdd,
+          true,
+          totalValue,
+          Number(prizeCount)
+        );
+      }
+
+      setCurrentPrizes([]);
+      onOpenChange(false);
+      setIsSubmitting(false);
+    } catch (error) {
+      console.error("Failed to add prizes:", error);
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <FormProvider {...form}>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-[900px] max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Add Prizes to Tournament</DialogTitle>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto pr-2">
+            {batchProgress && (
+              <div className="bg-brand/10 border border-brand p-4 rounded-lg mb-4">
+                <div className="flex items-center gap-3">
+                  <LoadingSpinner />
+                  <div>
+                    <p className="font-semibold">Processing Transactions</p>
+                    <p className="text-sm text-muted-foreground">
+                      Batch {batchProgress.current} of {batchProgress.total} -
+                      Please do not close this window
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {hasPrizeValidationError && currentPrizes.length > 0 && (
+              <div className="flex flex-col gap-2 p-3 bg-destructive/10 border border-destructive rounded-md mb-4">
+                <div className="flex flex-row gap-2 items-start text-destructive">
+                  <span className="w-6 flex-shrink-0 mt-0.5">
+                    <ALERT />
+                  </span>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-sm font-semibold">
+                      Entry Barrier Required
+                    </span>
+                    <span className="text-sm">
+                      {formatValidationMessage(prizeValidation)}
+                    </span>
+                    <span className="text-sm text-muted-foreground mt-1">
+                      This tournament doesn't have entry fees or requirements. Adding significant prizes without entry barriers enables farming, bot abuse, and increases gas costs.
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <PrizeManager
+              prizes={currentPrizes}
+              onPrizesChange={setCurrentPrizes}
+              chainId={chainId}
+              isSepolia={isSepolia}
+            />
+          </div>
+
+          <DialogFooter className="flex justify-end w-full">
+            {currentPrizes.length > 0 &&
+              (address ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={submitPrizes}
+                  disabled={isSubmitting || hasPrizeValidationError}
+                >
+                  {isSubmitting
+                    ? "Submitting..."
+                    : `Submit ${currentPrizes.length} prize${
+                        currentPrizes.length !== 1 ? "s" : ""
+                      }`}
+                </Button>
+              ) : (
+                <Button onClick={() => connect()}>Connect Wallet</Button>
+              ))}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </FormProvider>
+  );
+}

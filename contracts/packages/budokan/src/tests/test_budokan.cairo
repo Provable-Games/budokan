@@ -1,42 +1,45 @@
 // SPDX-License-Identifier: UNLICENSED
 
-use budokan::models::budokan::{
+use budokan::mocks::tournament_validator_mock::{
+    QUALIFIER_TYPE_PARTICIPANTS, QUALIFIER_TYPE_WINNERS,
+};
+use budokan::structs::budokan::{
     Distribution, ERC20Data, ERC721Data, EntryFee, EntryFeeRewardType, EntryRequirement,
-    EntryRequirementType, ExtensionConfig, GameConfig, PrizeType, QualificationProof, RewardType,
-    TokenTypeData,
+    EntryRequirementType, ExtensionConfig, GameConfig, LeaderboardConfig, PrizeType,
+    QualificationProof, RewardType, TokenTypeData,
 };
-use budokan::models::constants::{
-    MAX_SUBMISSION_PERIOD, MIN_REGISTRATION_PERIOD, MIN_SUBMISSION_PERIOD, MIN_TOURNAMENT_LENGTH,
+use budokan::structs::constants::{
+    MAX_REGISTRATION_PERIOD, MAX_SUBMISSION_PERIOD, MAX_TOURNAMENT_LENGTH, MIN_REGISTRATION_PERIOD,
+    MIN_SUBMISSION_PERIOD, MIN_TOURNAMENT_LENGTH,
 };
-use budokan::models::schedule::{Period, Phase, Schedule};
+use budokan::structs::schedule::{Phase, Schedule};
 use budokan::tests::constants::{
-    OWNER, STARTING_BALANCE, TEST_END_TIME, TEST_REGISTRATION_END_TIME,
-    TEST_REGISTRATION_START_TIME, TEST_START_TIME, TOURNAMENT_DESCRIPTION, TOURNAMENT_NAME,
+    OWNER, STARTING_BALANCE, TEST_GAME_END_DELAY, TEST_GAME_START_DELAY,
+    TEST_REGISTRATION_END_DELAY, TEST_REGISTRATION_START_DELAY, TEST_SUBMISSION_DURATION,
+    TOURNAMENT_DESCRIPTION, TOURNAMENT_NAME,
 };
 use budokan::tests::helpers::{
-    create_basic_tournament, custom_schedule, registration_open_beyond_tournament_end,
-    registration_period_too_long, registration_period_too_short, test_game_config, test_game_period,
-    test_metadata, test_schedule, test_season_schedule, tournament_too_long,
+    create_basic_tournament, create_basic_tournament_with_salt, test_game_config,
+    test_leaderboard_config, test_metadata, test_schedule, test_season_schedule,
 };
 use budokan::tests::interfaces::{
     IERC20MockDispatcher, IERC20MockDispatcherTrait, IERC721MockDispatcher,
     IERC721MockDispatcherTrait, IERC721OldMockDispatcher,
 };
-use budokan::tests::mocks::tournament_validator_mock::{
-    QUALIFIER_TYPE_PARTICIPANTS, QUALIFIER_TYPE_WINNERS,
-};
 use budokan::tests::setup_denshokan;
 use budokan_interfaces::budokan::{IBudokanDispatcher, IBudokanDispatcherTrait};
-use budokan_interfaces::entry_validator::IEntryValidatorDispatcher;
-use budokan_interfaces::prize::{IPrizeDispatcher, IPrizeDispatcherTrait};
-use budokan_interfaces::registration::{IRegistrationDispatcher, IRegistrationDispatcherTrait};
 use core::option::Option;
 use core::serde::Serde;
-use game_components_metagame::interface::IMETAGAME_ID;
-use game_components_test_starknet::minigame::mocks::minigame_starknet_mock::{
-    IMinigameStarknetMockDispatcher, IMinigameStarknetMockDispatcherTrait,
+use game_components_embeddable_game_standard::metagame::interface::IMETAGAME_ID;
+use game_components_embeddable_game_standard::token::interface::IMinigameTokenMixinDispatcher;
+use game_components_interfaces::prize::{IPrizeDispatcher, IPrizeDispatcherTrait};
+use game_components_interfaces::registration::{
+    IRegistrationDispatcher, IRegistrationDispatcherTrait,
 };
-use game_components_token::interface::IMinigameTokenMixinDispatcher;
+use game_components_test_common::mocks::minigame_mock::{
+    IMinigameMockDispatcher, IMinigameMockDispatcherTrait,
+};
+use metagame_extensions_interfaces::entry_requirement_extension::IEntryRequirementExtensionDispatcher;
 use openzeppelin_interfaces::erc721::{IERC721Dispatcher, IERC721DispatcherTrait};
 use openzeppelin_interfaces::introspection::{ISRC5Dispatcher, ISRC5DispatcherTrait};
 use snforge_std::{
@@ -50,12 +53,12 @@ pub struct TestContracts {
     pub budokan: IBudokanDispatcher,
     pub prize: IPrizeDispatcher,
     pub registration: IRegistrationDispatcher,
-    pub minigame: IMinigameStarknetMockDispatcher,
+    pub minigame: IMinigameMockDispatcher,
     pub denshokan: IMinigameTokenMixinDispatcher,
     pub erc20: IERC20MockDispatcher,
     pub erc721: IERC721MockDispatcher,
     pub erc721_old: IERC721OldMockDispatcher,
-    pub entry_validator: IEntryValidatorDispatcher,
+    pub entry_validator: IEntryRequirementExtensionDispatcher,
 }
 
 
@@ -120,10 +123,6 @@ fn deploy_budokan(denshokan_address: ContractAddress) -> ContractAddress {
     // 2. default_token_address: ContractAddress
     denshokan_address.serialize(ref calldata);
 
-    // 3. event_relayer: ContractAddress (zero = no relayer)
-    let zero_address: ContractAddress = 0_felt252.try_into().unwrap();
-    zero_address.serialize(ref calldata);
-
     let (contract_address, _) = contract_class.deploy(@calldata).expect('deploy budokan failed');
     contract_address
 }
@@ -149,7 +148,9 @@ pub fn setup() -> TestContracts {
     let erc20 = IERC20MockDispatcher { contract_address: erc20_address };
     let erc721 = IERC721MockDispatcher { contract_address: erc721_address };
     let erc721_old = IERC721OldMockDispatcher { contract_address: erc721_old_address };
-    let entry_validator = IEntryValidatorDispatcher { contract_address: entry_validator_address };
+    let entry_validator = IEntryRequirementExtensionDispatcher {
+        contract_address: entry_validator_address,
+    };
 
     // Mint tokens to OWNER
     let owner = OWNER;
@@ -219,36 +220,33 @@ fn test_create_tournament() {
         tournament.metadata.description == TOURNAMENT_DESCRIPTION(),
         'Invalid tournament description',
     );
-    match tournament.schedule.registration {
-        Option::Some(registration) => {
-            assert(
-                registration.start == TEST_REGISTRATION_START_TIME().into(),
-                'Invalid registration start',
-            );
-            assert(
-                registration.end == TEST_REGISTRATION_END_TIME().into(), 'Invalid registration end',
-            );
-        },
-        Option::None => { panic!("Tournament should have registration"); },
-    }
-
     assert(
-        tournament.schedule.game.start == TEST_START_TIME().into(), 'Invalid tournament start time',
+        tournament.schedule.registration_start_delay == TEST_REGISTRATION_START_DELAY(),
+        'Invalid registration start',
     );
-    assert(tournament.schedule.game.end == TEST_END_TIME().into(), 'Invalid tournament end time');
+    assert(
+        tournament.schedule.registration_end_delay == TEST_REGISTRATION_END_DELAY(),
+        'Invalid registration end',
+    );
+    assert(
+        tournament.schedule.game_start_delay == TEST_GAME_START_DELAY(),
+        'Invalid tournament start time',
+    );
+    assert(
+        tournament.schedule.game_end_delay == TEST_GAME_END_DELAY(), 'Invalid tournament end time',
+    );
     assert!(
         tournament.entry_requirement == Option::None, "tournament entry requirement should be none",
     );
     assert!(tournament.entry_fee.is_none(), "tournament entry fee should be none");
     assert(
-        tournament.game_config.address == contracts.minigame.contract_address,
+        tournament.game_config.game_address == contracts.minigame.contract_address,
         'Invalid game address',
     );
     assert(tournament.game_config.settings_id == 1, 'Invalid settings id');
     assert(contracts.budokan.total_tournaments() == 1, 'Invalid tournaments count');
     assert!(tournament.game_config.soulbound == false, "Tournament should not be soulbound");
-    assert!(tournament.game_config.play_url == "", "Tournament play_url should be empty");
-    assert!(tournament.game_config.play_url.len() == 0, "Tournament play_url should be empty");
+    assert!(tournament.game_config.client_url.is_none(), "Tournament client_url should be None");
 }
 
 #[test]
@@ -261,10 +259,15 @@ fn test_create_tournament_start_time_in_past() {
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
 
-    // try to create a tournament with the tournament start time in the past
-    let game_period = Period { start: time - 10, end: time + MIN_TOURNAMENT_LENGTH.into() };
-
-    let schedule = custom_schedule(Option::None, game_period, MIN_SUBMISSION_PERIOD.into());
+    // With delay-based scheduling, game_start_delay=0 means game starts immediately at created_at
+    // which is effectively "in the past" relative to current time if time > 0
+    let schedule = Schedule {
+        registration_start_delay: 0,
+        registration_end_delay: 0,
+        game_start_delay: 0,
+        game_end_delay: MIN_TOURNAMENT_LENGTH,
+        submission_duration: MIN_SUBMISSION_PERIOD,
+    };
 
     contracts
         .budokan
@@ -275,6 +278,9 @@ fn test_create_tournament_start_time_in_past() {
             test_game_config(contracts.minigame.contract_address),
             Option::None,
             Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -289,11 +295,13 @@ fn test_create_tournament_registration_period_too_short() {
 
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
 
-    let schedule = custom_schedule(
-        Option::Some(registration_period_too_short()),
-        test_game_period(),
-        MIN_SUBMISSION_PERIOD.into(),
-    );
+    let schedule = Schedule {
+        registration_start_delay: TEST_REGISTRATION_START_DELAY(),
+        registration_end_delay: MIN_REGISTRATION_PERIOD - 1, // Too short
+        game_start_delay: TEST_GAME_START_DELAY(),
+        game_end_delay: TEST_GAME_END_DELAY(),
+        submission_duration: TEST_SUBMISSION_DURATION(),
+    };
 
     let entry_requirement = Option::None;
     let entry_fee = Option::None;
@@ -307,6 +315,9 @@ fn test_create_tournament_registration_period_too_short() {
             test_game_config(contracts.minigame.contract_address),
             entry_fee,
             entry_requirement,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -320,11 +331,14 @@ fn test_create_tournament_registration_period_too_long() {
 
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
 
-    let schedule = custom_schedule(
-        Option::Some(registration_period_too_long()),
-        test_game_period(),
-        MIN_SUBMISSION_PERIOD.into(),
-    );
+    // Use a very large registration_end_delay to exceed maximum
+    let schedule = Schedule {
+        registration_start_delay: TEST_REGISTRATION_START_DELAY(),
+        registration_end_delay: 60 * 60 * 24 * 365, // 1 year - way too long
+        game_start_delay: TEST_GAME_START_DELAY() + 60 * 60 * 24 * 365,
+        game_end_delay: TEST_GAME_END_DELAY(),
+        submission_duration: TEST_SUBMISSION_DURATION(),
+    };
 
     let entry_requirement = Option::None;
     let entry_fee = Option::None;
@@ -338,6 +352,9 @@ fn test_create_tournament_registration_period_too_long() {
             test_game_config(contracts.minigame.contract_address),
             entry_fee,
             entry_requirement,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -351,7 +368,14 @@ fn test_create_tournament_end_time_too_close() {
 
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
 
-    let schedule = registration_open_beyond_tournament_end();
+    // Registration extends beyond game start
+    let schedule = Schedule {
+        registration_start_delay: 100,
+        registration_end_delay: MIN_REGISTRATION_PERIOD,
+        game_start_delay: 100, // game starts before registration ends
+        game_end_delay: MIN_TOURNAMENT_LENGTH,
+        submission_duration: MIN_SUBMISSION_PERIOD,
+    };
 
     let entry_requirement = Option::None;
     let entry_fee = Option::None;
@@ -365,6 +389,9 @@ fn test_create_tournament_end_time_too_close() {
             test_game_config(contracts.minigame.contract_address),
             entry_fee,
             entry_requirement,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -378,7 +405,13 @@ fn test_create_tournament_tournament_too_long() {
 
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
 
-    let schedule = tournament_too_long();
+    let schedule = Schedule {
+        registration_start_delay: 0,
+        registration_end_delay: 0,
+        game_start_delay: 0,
+        game_end_delay: MAX_TOURNAMENT_LENGTH + 1, // Exceeds maximum tournament duration
+        submission_duration: MIN_SUBMISSION_PERIOD,
+    };
 
     contracts
         .budokan
@@ -389,6 +422,9 @@ fn test_create_tournament_tournament_too_long() {
             test_game_config(contracts.minigame.contract_address),
             Option::None,
             Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -402,9 +438,13 @@ fn test_create_tournament_submission_period_too_short() {
 
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
 
-    let schedule = custom_schedule(
-        Option::None, test_game_period(), MIN_SUBMISSION_PERIOD.into() - 1,
-    );
+    let schedule = Schedule {
+        registration_start_delay: 0,
+        registration_end_delay: 0,
+        game_start_delay: TEST_GAME_START_DELAY(),
+        game_end_delay: TEST_GAME_END_DELAY(),
+        submission_duration: MIN_SUBMISSION_PERIOD - 1,
+    };
 
     contracts
         .budokan
@@ -415,6 +455,9 @@ fn test_create_tournament_submission_period_too_short() {
             test_game_config(contracts.minigame.contract_address),
             Option::None,
             Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -428,9 +471,13 @@ fn test_create_tournament_submission_period_too_long() {
 
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
 
-    let schedule = custom_schedule(
-        Option::None, test_game_period(), MAX_SUBMISSION_PERIOD.into() + 1,
-    );
+    let schedule = Schedule {
+        registration_start_delay: 0,
+        registration_end_delay: 0,
+        game_start_delay: TEST_GAME_START_DELAY(),
+        game_end_delay: TEST_GAME_END_DELAY(),
+        submission_duration: MAX_SUBMISSION_PERIOD + 1,
+    };
 
     contracts
         .budokan
@@ -441,6 +488,9 @@ fn test_create_tournament_submission_period_too_long() {
             test_game_config(contracts.minigame.contract_address),
             Option::None,
             Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -481,7 +531,7 @@ fn test_total_tournaments() {
     create_basic_tournament(contracts.budokan, contracts.minigame.contract_address);
     assert(contracts.budokan.total_tournaments() == 1, 'Should be 1');
 
-    create_basic_tournament(contracts.budokan, contracts.minigame.contract_address);
+    create_basic_tournament_with_salt(contracts.budokan, contracts.minigame.contract_address, 1);
     assert(contracts.budokan.total_tournaments() == 2, 'Should be 2');
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -516,14 +566,17 @@ fn test_tournament_current_phase_registration() {
     let contracts = setup();
     let owner = OWNER;
 
-    // Set block timestamp to during registration period
-    let registration_time = TEST_REGISTRATION_START_TIME().into() + 1;
-    start_cheat_block_timestamp(contracts.budokan.contract_address, registration_time);
+    // Create tournament at time 0
+    start_cheat_block_timestamp(contracts.budokan.contract_address, 0);
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
 
     let tournament = create_basic_tournament(
         contracts.budokan, contracts.minigame.contract_address,
     );
+
+    // Now warp to during registration period (created_at=0, reg starts at registration_start_delay)
+    let registration_time = TEST_REGISTRATION_START_DELAY().into() + 1;
+    start_cheat_block_timestamp(contracts.budokan.contract_address, registration_time);
 
     let phase = contracts.budokan.current_phase(tournament.id);
 
@@ -541,14 +594,17 @@ fn test_tournament_current_phase_live() {
     let contracts = setup();
     let owner = OWNER;
 
-    // Set block timestamp to during game period
-    let game_time = TEST_START_TIME().into() + 1;
-    start_cheat_block_timestamp(contracts.budokan.contract_address, game_time);
+    // Create tournament at time 0
+    start_cheat_block_timestamp(contracts.budokan.contract_address, 0);
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
 
     let tournament = create_basic_tournament(
         contracts.budokan, contracts.minigame.contract_address,
     );
+
+    // Now warp to during game period (created_at=0, game starts at game_start_delay)
+    let game_time = TEST_GAME_START_DELAY().into() + 1;
+    start_cheat_block_timestamp(contracts.budokan.contract_address, game_time);
 
     let phase = contracts.budokan.current_phase(tournament.id);
 
@@ -571,13 +627,11 @@ fn test_create_tournament_with_entry_fee() {
     let entry_fee = EntryFee {
         token_address: contracts.erc20.contract_address,
         amount: 100,
+        tournament_creator_share: 1000, // 10% (1000 basis points) to tournament creator
+        game_creator_share: 500, // 5% (500 basis points) to game creator
+        refund_share: 0,
         distribution: Distribution::Linear(10), // 85% available for positions (linear distribution)
-        tournament_creator_share: Option::Some(
-            1000,
-        ), // 10% (1000 basis points) to tournament creator
-        game_creator_share: Option::Some(500), // 5% (500 basis points) to game creator
-        refund_share: Option::None,
-        distribution_positions: Option::None // Dynamic - use actual leaderboard size
+        distribution_count: 0 // Dynamic - use actual leaderboard size
     };
 
     let tournament = contracts
@@ -589,6 +643,9 @@ fn test_create_tournament_with_entry_fee() {
             test_game_config(contracts.minigame.contract_address),
             Option::Some(entry_fee),
             Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -613,13 +670,11 @@ fn test_create_tournament_with_exponential_distribution() {
     let entry_fee = EntryFee {
         token_address: contracts.erc20.contract_address,
         amount: 100,
+        tournament_creator_share: 1000, // 10% (1000 basis points) to tournament creator
+        game_creator_share: 500, // 5% (500 basis points) to game creator
+        refund_share: 0,
         distribution: Distribution::Exponential(500), // Weight of 50 (1-100 scale)
-        tournament_creator_share: Option::Some(
-            1000,
-        ), // 10% (1000 basis points) to tournament creator
-        game_creator_share: Option::Some(500), // 5% (500 basis points) to game creator
-        refund_share: Option::None,
-        distribution_positions: Option::None // Dynamic - use actual leaderboard size
+        distribution_count: 0 // Dynamic - use actual leaderboard size
     };
 
     let tournament = contracts
@@ -631,6 +686,9 @@ fn test_create_tournament_with_exponential_distribution() {
             test_game_config(contracts.minigame.contract_address),
             Option::Some(entry_fee),
             Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -662,11 +720,11 @@ fn test_create_tournament_with_high_weight_exponential() {
     let entry_fee = EntryFee {
         token_address: contracts.erc20.contract_address,
         amount: 100,
+        tournament_creator_share: 0,
+        game_creator_share: 0,
+        refund_share: 0,
         distribution: Distribution::Exponential(900), // High weight = steeper toward top
-        tournament_creator_share: Option::None,
-        game_creator_share: Option::None,
-        refund_share: Option::None,
-        distribution_positions: Option::None // Dynamic - use actual leaderboard size
+        distribution_count: 0 // Dynamic - use actual leaderboard size
     };
 
     let tournament = contracts
@@ -678,6 +736,9 @@ fn test_create_tournament_with_high_weight_exponential() {
             test_game_config(contracts.minigame.contract_address),
             Option::Some(entry_fee),
             Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -704,13 +765,26 @@ fn test_create_soulbound_tournament() {
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
 
     let game_config = GameConfig {
-        address: contracts.minigame.contract_address, settings_id: 1, soulbound: true, play_url: "",
+        game_address: contracts.minigame.contract_address,
+        settings_id: 1,
+        soulbound: true,
+        paymaster: false,
+        client_url: Option::None,
+        renderer: Option::None,
     };
 
     let tournament = contracts
         .budokan
         .create_tournament(
-            owner, test_metadata(), test_schedule(), game_config, Option::None, Option::None,
+            owner,
+            test_metadata(),
+            test_schedule(),
+            game_config,
+            Option::None,
+            Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -719,30 +793,43 @@ fn test_create_soulbound_tournament() {
 }
 
 #[test]
-fn test_create_tournament_with_play_url() {
+fn test_create_tournament_with_client_url() {
     let contracts = setup();
     let owner = OWNER;
 
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
 
-    let play_url: ByteArray = "https://play.example.com/game";
+    let client_url: ByteArray = "https://play.example.com/game";
 
     let game_config = GameConfig {
-        address: contracts.minigame.contract_address,
+        game_address: contracts.minigame.contract_address,
         settings_id: 1,
         soulbound: false,
-        play_url: play_url.clone(),
+        paymaster: false,
+        client_url: Option::Some(client_url.clone()),
+        renderer: Option::None,
     };
 
     let tournament = contracts
         .budokan
         .create_tournament(
-            owner, test_metadata(), test_schedule(), game_config, Option::None, Option::None,
+            owner,
+            test_metadata(),
+            test_schedule(),
+            game_config,
+            Option::None,
+            Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
-    assert!(tournament.game_config.play_url == play_url, "Invalid play_url");
+    match tournament.game_config.client_url {
+        Option::Some(url) => assert!(url == client_url, "Invalid client_url"),
+        Option::None => panic!("client_url should be Some"),
+    }
 }
 
 #[test]
@@ -761,14 +848,19 @@ fn test_create_season_tournament_no_registration() {
             test_game_config(contracts.minigame.contract_address),
             Option::None,
             Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
-    match tournament.schedule.registration {
-        Option::Some(_) => panic!("Season tournament should not have registration"),
-        Option::None => {},
-    }
+    // No registration = both registration delays are 0
+    assert!(
+        tournament.schedule.registration_start_delay == 0
+            && tournament.schedule.registration_end_delay == 0,
+        "Season tournament should not have registration",
+    );
 }
 
 //
@@ -841,19 +933,25 @@ fn test_create_gated_tournament_with_unsettled_tournament() {
     let contracts = setup();
     let owner = OWNER;
 
-    let time = TEST_REGISTRATION_START_TIME().into();
-
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
-    start_cheat_block_timestamp(contracts.budokan.contract_address, time);
-    start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
-    // Create first tournament
+    // Create first tournament at time 0
+    start_cheat_block_timestamp(contracts.budokan.contract_address, 0);
+    start_cheat_block_timestamp(contracts.minigame.contract_address, 0);
+
     let first_tournament = create_basic_tournament(
         contracts.budokan, contracts.minigame.contract_address,
     );
 
+    // Warp to registration period for first tournament (created_at=0, reg starts at delay)
+    let time = TEST_REGISTRATION_START_DELAY().into() + 1;
+    start_cheat_block_timestamp(contracts.budokan.contract_address, time);
+    start_cheat_block_timestamp(contracts.minigame.contract_address, time);
+
     // Enter first tournament
-    contracts.budokan.enter_tournament(first_tournament.id, 'test_player', owner, Option::None);
+    contracts
+        .budokan
+        .enter_tournament(first_tournament.id, 'test_player', owner, Option::None, 2, 0);
 
     // Deploy tournament validator extension
     let tournament_validator_address = deploy_tournament_validator_mock(
@@ -872,16 +970,13 @@ fn test_create_gated_tournament_with_unsettled_tournament() {
     let entry_fee = Option::None;
     let entry_requirement = Option::Some(entry_requirement);
 
-    let registration_period = Period { start: time, end: time + MIN_REGISTRATION_PERIOD.into() };
-
-    let game_period = Period {
-        start: time + MIN_REGISTRATION_PERIOD.into(),
-        end: time + MIN_REGISTRATION_PERIOD.into() + MIN_TOURNAMENT_LENGTH.into(),
+    let schedule = Schedule {
+        registration_start_delay: 0,
+        registration_end_delay: MIN_REGISTRATION_PERIOD,
+        game_start_delay: MIN_REGISTRATION_PERIOD,
+        game_end_delay: MIN_TOURNAMENT_LENGTH,
+        submission_duration: MIN_SUBMISSION_PERIOD,
     };
-
-    let schedule = custom_schedule(
-        Option::Some(registration_period), game_period, MIN_SUBMISSION_PERIOD.into(),
-    );
 
     contracts
         .budokan
@@ -892,6 +987,9 @@ fn test_create_gated_tournament_with_unsettled_tournament() {
             test_game_config(contracts.minigame.contract_address),
             entry_fee,
             entry_requirement,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -912,44 +1010,44 @@ fn test_create_tournament_gated_by_multiple_tournaments() {
     );
 
     // Create second tournament
-    let second_tournament = create_basic_tournament(
-        contracts.budokan, contracts.minigame.contract_address,
+    let second_tournament = create_basic_tournament_with_salt(
+        contracts.budokan, contracts.minigame.contract_address, 1,
     );
 
-    let mut time = TEST_REGISTRATION_START_TIME().into();
+    let mut time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // Enter and complete first tournament
     let (first_entry_token_id, _) = contracts
         .budokan
-        .enter_tournament(first_tournament.id, 'test_player1', owner, Option::None);
+        .enter_tournament(first_tournament.id, 'test_player1', owner, Option::None, 2, 0);
 
-    time = TEST_END_TIME().into();
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
-    contracts.minigame.end_game(first_entry_token_id, 10);
+    contracts.minigame.end_game(first_entry_token_id.into(), 10);
     contracts.budokan.submit_score(first_tournament.id, first_entry_token_id, 1);
 
     // Enter and complete second tournament
-    time = TEST_REGISTRATION_START_TIME().into();
+    time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     let (second_entry_token_id, _) = contracts
         .budokan
-        .enter_tournament(second_tournament.id, 'test_player2', owner, Option::None);
+        .enter_tournament(second_tournament.id, 'test_player2', owner, Option::None, 3, 0);
 
-    time = TEST_END_TIME().into();
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
-    contracts.minigame.end_game(second_entry_token_id, 20);
+    contracts.minigame.end_game(second_entry_token_id.into(), 20);
     contracts.budokan.submit_score(second_tournament.id, second_entry_token_id, 1);
 
     // Settle tournaments
-    time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD).into();
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY() + MIN_SUBMISSION_PERIOD).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
@@ -975,14 +1073,11 @@ fn test_create_tournament_gated_by_multiple_tournaments() {
     let entry_requirement = Option::Some(entry_requirement);
 
     let schedule = Schedule {
-        registration: Option::Some(
-            Period { start: time, end: time + MIN_REGISTRATION_PERIOD.into() },
-        ),
-        game: Period {
-            start: time + MIN_REGISTRATION_PERIOD.into(),
-            end: time + MIN_REGISTRATION_PERIOD.into() + MIN_TOURNAMENT_LENGTH.into(),
-        },
-        submission_duration: MIN_SUBMISSION_PERIOD.into(),
+        registration_start_delay: 0,
+        registration_end_delay: MIN_REGISTRATION_PERIOD,
+        game_start_delay: MIN_REGISTRATION_PERIOD,
+        game_end_delay: MIN_TOURNAMENT_LENGTH,
+        submission_duration: MIN_SUBMISSION_PERIOD,
     };
 
     let gated_tournament = contracts
@@ -994,6 +1089,9 @@ fn test_create_tournament_gated_by_multiple_tournaments() {
             test_game_config(contracts.minigame.contract_address),
             entry_fee,
             entry_requirement,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     assert(gated_tournament.entry_requirement == entry_requirement, 'Invalid entry requirement');
@@ -1016,10 +1114,12 @@ fn test_create_tournament_gated_by_multiple_tournaments() {
     // This should succeed since we can qualify with either of the two qualifying tournaments
     contracts
         .budokan
-        .enter_tournament(gated_tournament.id, 'test_player3', owner, first_qualifying_proof);
+        .enter_tournament(gated_tournament.id, 'test_player3', owner, first_qualifying_proof, 4, 0);
     contracts
         .budokan
-        .enter_tournament(gated_tournament.id, 'test_player4', owner, second_qualifying_proof);
+        .enter_tournament(
+            gated_tournament.id, 'test_player4', owner, second_qualifying_proof, 5, 0,
+        );
 
     // Verify entry was successful
     let entries = contracts.budokan.tournament_entries(gated_tournament.id);
@@ -1051,35 +1151,37 @@ fn test_create_tournament_gated_by_participants() {
         contracts.budokan, contracts.minigame.contract_address,
     );
 
-    let mut time = TEST_REGISTRATION_START_TIME().into();
+    let mut time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // Owner enters and will submit a score (will be on leaderboard)
     let (owner_token_id, _) = contracts
         .budokan
-        .enter_tournament(qualifying_tournament.id, 'owner_player', owner, Option::None);
+        .enter_tournament(qualifying_tournament.id, 'owner_player', owner, Option::None, 2, 0);
 
     // Other player enters but will NOT submit a score
     start_cheat_caller_address(contracts.budokan.contract_address, other_player);
     let (other_token_id, _) = contracts
         .budokan
-        .enter_tournament(qualifying_tournament.id, 'other_player', other_player, Option::None);
+        .enter_tournament(
+            qualifying_tournament.id, 'other_player', other_player, Option::None, 3, 0,
+        );
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     // Move to submission period
-    time = TEST_END_TIME().into();
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // Only owner submits a score - other_player does NOT submit
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
-    contracts.minigame.end_game(owner_token_id, 100);
+    contracts.minigame.end_game(owner_token_id.into(), 100);
     contracts.budokan.submit_score(qualifying_tournament.id, owner_token_id, 1);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     // Move past submission period (tournament is now finalized)
-    time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD).into();
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY() + MIN_SUBMISSION_PERIOD).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
@@ -1102,14 +1204,11 @@ fn test_create_tournament_gated_by_participants() {
     let entry_requirement = EntryRequirement { entry_limit: 1, entry_requirement_type };
 
     let schedule = Schedule {
-        registration: Option::Some(
-            Period { start: time, end: time + MIN_REGISTRATION_PERIOD.into() },
-        ),
-        game: Period {
-            start: time + MIN_REGISTRATION_PERIOD.into(),
-            end: time + MIN_REGISTRATION_PERIOD.into() + MIN_TOURNAMENT_LENGTH.into(),
-        },
-        submission_duration: MIN_SUBMISSION_PERIOD.into(),
+        registration_start_delay: 0,
+        registration_end_delay: MIN_REGISTRATION_PERIOD,
+        game_start_delay: MIN_REGISTRATION_PERIOD,
+        game_end_delay: MIN_TOURNAMENT_LENGTH,
+        submission_duration: MIN_SUBMISSION_PERIOD,
     };
 
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
@@ -1122,6 +1221,9 @@ fn test_create_tournament_gated_by_participants() {
             test_game_config(contracts.minigame.contract_address),
             Option::None,
             Option::Some(entry_requirement),
+            test_leaderboard_config(),
+            1,
+            0,
         );
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
@@ -1141,7 +1243,7 @@ fn test_create_tournament_gated_by_participants() {
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
     contracts
         .budokan
-        .enter_tournament(gated_tournament.id, 'owner_new', owner, owner_qualifying_proof);
+        .enter_tournament(gated_tournament.id, 'owner_new', owner, owner_qualifying_proof, 4, 0);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     // Other player can ALSO enter even though they NEVER submitted a score!
@@ -1155,306 +1257,15 @@ fn test_create_tournament_gated_by_participants() {
     start_cheat_caller_address(contracts.budokan.contract_address, other_player);
     contracts
         .budokan
-        .enter_tournament(gated_tournament.id, 'other_new', other_player, other_qualifying_proof);
+        .enter_tournament(
+            gated_tournament.id, 'other_new', other_player, other_qualifying_proof, 5, 0,
+        );
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     // Verify both entries were successful
     let entries = contracts.budokan.tournament_entries(gated_tournament.id);
     assert(entries == 2, 'Both participants should enter');
 
-    stop_cheat_block_timestamp(contracts.budokan.contract_address);
-    stop_cheat_block_timestamp(contracts.minigame.contract_address);
-}
-
-//
-// Test allowlist gated tournaments
-//
-
-#[test]
-fn test_allowlist_gated_tournament() {
-    let contracts = setup();
-    let owner = OWNER;
-
-    start_cheat_caller_address(contracts.budokan.contract_address, owner);
-
-    // Create array of allowed accounts
-    let allowed_player1 = 0x456_felt252.try_into().unwrap();
-    let allowed_player2 = 0x789_felt252.try_into().unwrap();
-    let allowed_accounts = array![owner, allowed_player1, allowed_player2].span();
-
-    // Create tournament gated by account list
-    let entry_requirement_type = EntryRequirementType::allowlist(allowed_accounts);
-
-    let entry_requirement = EntryRequirement { entry_limit: 1, entry_requirement_type };
-
-    let entry_fee = Option::None;
-    let entry_requirement = Option::Some(entry_requirement);
-
-    let tournament = contracts
-        .budokan
-        .create_tournament(
-            owner,
-            test_metadata(),
-            test_schedule(),
-            test_game_config(contracts.minigame.contract_address),
-            entry_fee,
-            entry_requirement,
-        );
-
-    // Verify tournament was created with correct gating
-    assert(tournament.entry_requirement == entry_requirement, 'Invalid entry requirement');
-
-    // Start tournament entries
-    let time = TEST_REGISTRATION_START_TIME().into();
-    start_cheat_block_timestamp(contracts.budokan.contract_address, time);
-    start_cheat_block_timestamp(contracts.minigame.contract_address, time);
-
-    // Allowed account (owner) can enter
-    let player1_qualification = Option::Some(QualificationProof::Address(owner));
-    contracts.budokan.enter_tournament(tournament.id, 'test_player1', owner, player1_qualification);
-
-    // Allowed player can enter
-    stop_cheat_caller_address(contracts.budokan.contract_address);
-    start_cheat_caller_address(contracts.budokan.contract_address, allowed_player1);
-
-    let player2_qualification = Option::Some(QualificationProof::Address(allowed_player1));
-    contracts
-        .budokan
-        .enter_tournament(tournament.id, 'test_player2', allowed_player1, player2_qualification);
-
-    // Verify entries were successful
-    let entries = contracts.budokan.tournament_entries(tournament.id);
-    assert(entries == 2, 'Invalid entry count');
-
-    stop_cheat_caller_address(contracts.budokan.contract_address);
-    stop_cheat_block_timestamp(contracts.budokan.contract_address);
-    stop_cheat_block_timestamp(contracts.minigame.contract_address);
-}
-
-#[should_panic(expected: "EntryRequirement: Maximum qualified entries reached for context")]
-#[test]
-fn test_allowlist_gated_tournament_with_entry_limit() {
-    let contracts = setup();
-    let owner = OWNER;
-
-    start_cheat_caller_address(contracts.budokan.contract_address, owner);
-
-    // Create array of allowed accounts
-    let allowed_player2 = 0x456_felt252.try_into().unwrap();
-    let allowed_accounts = array![owner, allowed_player2].span();
-
-    // Create tournament gated by account list
-    let entry_requirement_type = EntryRequirementType::allowlist(allowed_accounts);
-
-    let entry_requirement = EntryRequirement { entry_limit: 1, entry_requirement_type };
-
-    let entry_fee = Option::None;
-    let entry_requirement = Option::Some(entry_requirement);
-
-    let tournament = contracts
-        .budokan
-        .create_tournament(
-            owner,
-            test_metadata(),
-            test_schedule(),
-            test_game_config(contracts.minigame.contract_address),
-            entry_fee,
-            entry_requirement,
-        );
-
-    // Verify tournament was created with correct gating
-    assert(tournament.entry_requirement == entry_requirement, 'Invalid entry requirement');
-
-    // Start tournament entries
-    let time = TEST_REGISTRATION_START_TIME().into();
-    start_cheat_block_timestamp(contracts.budokan.contract_address, time);
-    start_cheat_block_timestamp(contracts.minigame.contract_address, time);
-
-    // Allowed account (owner) can enter
-    let player1_qualification = Option::Some(QualificationProof::Address(owner));
-    contracts.budokan.enter_tournament(tournament.id, 'test_player1', owner, player1_qualification);
-
-    // Allowed player can enter
-    start_cheat_caller_address(contracts.budokan.contract_address, allowed_player2);
-    let player2_qualification = Option::Some(QualificationProof::Address(allowed_player2));
-    contracts
-        .budokan
-        .enter_tournament(tournament.id, 'test_player2', allowed_player2, player2_qualification);
-    // this should fail because we have an entry limit of 1
-    contracts
-        .budokan
-        .enter_tournament(tournament.id, 'test_player3', allowed_player2, player2_qualification);
-
-    stop_cheat_caller_address(contracts.budokan.contract_address);
-    stop_cheat_block_timestamp(contracts.budokan.contract_address);
-    stop_cheat_block_timestamp(contracts.minigame.contract_address);
-}
-
-#[should_panic(expected: "Budokan: Qualifying address is not in allowlist")]
-#[test]
-fn test_allowlist_gated_tournament_unauthorized() {
-    let contracts = setup();
-    let owner = OWNER;
-
-    start_cheat_caller_address(contracts.budokan.contract_address, owner);
-
-    // Create array of allowed accounts (not including player2)
-    let allowed_player = 0x456_felt252.try_into().unwrap();
-    let allowed_accounts = array![owner, allowed_player].span();
-
-    // Create tournament gated by account list
-    let entry_requirement_type = EntryRequirementType::allowlist(allowed_accounts);
-    let entry_requirement = EntryRequirement { entry_limit: 1, entry_requirement_type };
-    let entry_requirement = Option::Some(entry_requirement);
-
-    let entry_fee = Option::None;
-
-    let tournament = contracts
-        .budokan
-        .create_tournament(
-            owner,
-            test_metadata(),
-            test_schedule(),
-            test_game_config(contracts.minigame.contract_address),
-            entry_fee,
-            entry_requirement,
-        );
-
-    // Start tournament entries
-    let time = TEST_REGISTRATION_START_TIME().into();
-    start_cheat_block_timestamp(contracts.budokan.contract_address, time);
-    start_cheat_block_timestamp(contracts.minigame.contract_address, time);
-
-    // Try to enter with unauthorized account
-    let unauthorized_player = 0x789_felt252.try_into().unwrap();
-    start_cheat_caller_address(contracts.budokan.contract_address, unauthorized_player);
-    let unauthorized_player_qualification = Option::Some(
-        QualificationProof::Address(unauthorized_player),
-    );
-    // This should panic since unauthorized_player is not in the allowed accounts list
-    contracts
-        .budokan
-        .enter_tournament(
-            tournament.id,
-            'test_player_unauthorized',
-            unauthorized_player,
-            unauthorized_player_qualification,
-        );
-
-    stop_cheat_caller_address(contracts.budokan.contract_address);
-    stop_cheat_block_timestamp(contracts.budokan.contract_address);
-    stop_cheat_block_timestamp(contracts.minigame.contract_address);
-}
-
-#[test]
-fn test_allowlist_gated_caller_different_from_qualification_address() {
-    let contracts = setup();
-    let owner = OWNER;
-
-    start_cheat_caller_address(contracts.budokan.contract_address, owner);
-
-    // Only allowed_player is on the allowlist
-    let allowed_player = 0x456_felt252.try_into().unwrap();
-    let allowed_accounts = array![allowed_player].span();
-
-    // Create tournament gated by account list
-    let entry_requirement_type = EntryRequirementType::allowlist(allowed_accounts);
-    let entry_requirement = EntryRequirement { entry_limit: 1, entry_requirement_type };
-    let entry_requirement = Option::Some(entry_requirement);
-
-    let tournament = contracts
-        .budokan
-        .create_tournament(
-            owner,
-            test_metadata(),
-            test_schedule(),
-            test_game_config(contracts.minigame.contract_address),
-            Option::None,
-            entry_requirement,
-        );
-
-    // Start tournament entries
-    let time = TEST_REGISTRATION_START_TIME().into();
-    start_cheat_block_timestamp(contracts.budokan.contract_address, time);
-    start_cheat_block_timestamp(contracts.minigame.contract_address, time);
-
-    // OWNER (caller) tries to enter using allowed_player's address as qualification
-    // Since caller != qualified address, token should go to qualified address (allowed_player)
-    let player_qualification = Option::Some(QualificationProof::Address(allowed_player));
-    let (game_token_id, _) = contracts
-        .budokan
-        .enter_tournament(tournament.id, 'test_player1', owner, player_qualification);
-
-    // Verify the game token was minted to the qualified address (allowed_player), not the caller
-    // (OWNER)
-    let denshokan_erc721 = IERC721Dispatcher {
-        contract_address: contracts.denshokan.contract_address,
-    };
-    let token_owner = denshokan_erc721.owner_of(game_token_id.into());
-    assert!(
-        token_owner == allowed_player,
-        "Token should be owned by qualified address (allowed_player), not caller",
-    );
-
-    stop_cheat_caller_address(contracts.budokan.contract_address);
-    stop_cheat_block_timestamp(contracts.budokan.contract_address);
-    stop_cheat_block_timestamp(contracts.minigame.contract_address);
-}
-
-#[test]
-fn test_allowlist_gated_caller_is_qualified_address_different_player() {
-    let contracts = setup();
-    let owner = OWNER;
-
-    start_cheat_caller_address(contracts.budokan.contract_address, owner);
-
-    // Only allowed_player is on the allowlist
-    let allowed_player = 0x456_felt252.try_into().unwrap();
-    let allowed_accounts = array![allowed_player].span();
-
-    // Create tournament gated by account list
-    let entry_requirement_type = EntryRequirementType::allowlist(allowed_accounts);
-    let entry_requirement = EntryRequirement { entry_limit: 1, entry_requirement_type };
-    let entry_requirement = Option::Some(entry_requirement);
-
-    let tournament = contracts
-        .budokan
-        .create_tournament(
-            owner,
-            test_metadata(),
-            test_schedule(),
-            test_game_config(contracts.minigame.contract_address),
-            Option::None,
-            entry_requirement,
-        );
-
-    // Start tournament entries
-    let time = TEST_REGISTRATION_START_TIME().into();
-    start_cheat_block_timestamp(contracts.budokan.contract_address, time);
-    start_cheat_block_timestamp(contracts.minigame.contract_address, time);
-
-    // allowed_player (caller) enters using their own address as qualification
-    // but specifies a different player_address (OWNER)
-    // Since caller == qualified address, token should go to player_address (OWNER)
-    stop_cheat_caller_address(contracts.budokan.contract_address);
-    start_cheat_caller_address(contracts.budokan.contract_address, allowed_player);
-
-    let player_qualification = Option::Some(QualificationProof::Address(allowed_player));
-    let (game_token_id, _) = contracts
-        .budokan
-        .enter_tournament(tournament.id, 'test_player1', owner, player_qualification);
-
-    // Verify the game token was minted to player_address (OWNER), not the caller (allowed_player)
-    let denshokan_erc721 = IERC721Dispatcher {
-        contract_address: contracts.denshokan.contract_address,
-    };
-    let token_owner = denshokan_erc721.owner_of(game_token_id.into());
-    assert!(
-        token_owner == owner,
-        "Token should be owned by player_address (OWNER), not caller (allowed_player)",
-    );
-
-    stop_cheat_caller_address(contracts.budokan.contract_address);
     stop_cheat_block_timestamp(contracts.budokan.contract_address);
     stop_cheat_block_timestamp(contracts.minigame.contract_address);
 }
@@ -1488,41 +1299,42 @@ fn test_extension_gated_tournament() {
             test_game_config(contracts.minigame.contract_address),
             Option::None,
             entry_requirement,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // Verify tournament was created with correct gating
     assert(tournament.entry_requirement == entry_requirement, 'Invalid entry requirement');
 
     // Start tournament entries
-    let time = TEST_REGISTRATION_START_TIME().into();
+    let time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     let qualification_proof = Option::Some(QualificationProof::Extension(array![].span()));
 
     // OWNER already has an ERC721 token (minted in setup), so they should be able to enter
-    let (token_id, entry_number) = contracts
+    let (token_id, entry_id) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'test_player', owner, qualification_proof);
+        .enter_tournament(tournament.id, 'test_player', owner, qualification_proof, 2, 0);
 
     // Verify entry was successful
-    assert(entry_number == 1, 'Invalid entry number');
+    assert(entry_id == 1, 'Invalid entry number');
     let entries = contracts.budokan.tournament_entries(tournament.id);
     assert(entries == 1, 'Invalid entry count');
 
     // Verify registration information
-    let registration = contracts
-        .registration
-        .get_registration(contracts.minigame.contract_address, token_id);
+    let registration = contracts.registration.get_entry(tournament.id, entry_id);
     assert(registration.context_id == tournament.id, 'Wrong tournament id');
-    assert(registration.entry_number == 1, 'Wrong entry number');
+    assert(registration.entry_id == 1, 'Wrong entry number');
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
     stop_cheat_block_timestamp(contracts.budokan.contract_address);
     stop_cheat_block_timestamp(contracts.minigame.contract_address);
 }
 
-#[should_panic(expected: "Budokan: Invalid entry according to extension")]
+#[should_panic(expected: "EntryRequirement: Invalid entry according to extension")]
 #[test]
 fn test_extension_gated_tournament_unauthorized() {
     let contracts = setup();
@@ -1548,10 +1360,13 @@ fn test_extension_gated_tournament_unauthorized() {
             test_game_config(contracts.minigame.contract_address),
             Option::None,
             entry_requirement,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // Start tournament entries
-    let time = TEST_REGISTRATION_START_TIME().into();
+    let time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
@@ -1569,7 +1384,7 @@ fn test_extension_gated_tournament_unauthorized() {
     contracts
         .budokan
         .enter_tournament(
-            tournament.id, 'unauthorized_player', unauthorized_player, qualification_proof,
+            tournament.id, 'unauthorized_player', unauthorized_player, qualification_proof, 2, 0,
         );
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -1593,19 +1408,17 @@ fn test_enter_tournament() {
     );
 
     // advance time to registration start time
-    let time = TEST_REGISTRATION_START_TIME().into();
+    let time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // enter tournament
-    let (game_token_id, entry_number) = contracts
+    let (game_token_id, entry_id) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'test_player', owner, Option::None);
+        .enter_tournament(tournament.id, 'test_player', owner, Option::None, 1, 0);
 
     // verify registration information
-    let player1_registration = contracts
-        .registration
-        .get_registration(contracts.minigame.contract_address, game_token_id);
+    let player1_registration = contracts.registration.get_entry(tournament.id, entry_id);
 
     assert!(
         player1_registration.context_id == tournament.id,
@@ -1613,12 +1426,12 @@ fn test_enter_tournament() {
         tournament.id,
         player1_registration.context_id,
     );
-    assert!(player1_registration.entry_number == 1, "Entry number should be 1");
+    assert!(player1_registration.entry_id == 1, "Entry number should be 1");
     assert!(
-        player1_registration.entry_number == entry_number,
+        player1_registration.entry_id == entry_id,
         "Invalid entry number for player 1, expected: {}, got: {}",
-        entry_number,
-        player1_registration.entry_number,
+        entry_id,
+        player1_registration.entry_id,
     );
     assert!(player1_registration.has_submitted == false, "submitted score should be false");
 
@@ -1635,9 +1448,11 @@ fn test_enter_tournament_season() {
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
 
     let schedule = Schedule {
-        registration: Option::None,
-        game: Period { start: TEST_START_TIME().into(), end: TEST_END_TIME().into() },
-        submission_duration: MIN_SUBMISSION_PERIOD.into(),
+        registration_start_delay: 0,
+        registration_end_delay: 0,
+        game_start_delay: 0,
+        game_end_delay: MIN_TOURNAMENT_LENGTH,
+        submission_duration: MIN_SUBMISSION_PERIOD,
     };
 
     let tournament = contracts
@@ -1649,25 +1464,27 @@ fn test_enter_tournament_season() {
             test_game_config(contracts.minigame.contract_address),
             Option::None,
             Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // advance time to tournament start time (no registration phase for season tournaments)
-    let time = TEST_START_TIME().into();
+    // Season schedule has game_start_delay=0, so game starts at created_at (timestamp 0)
+    let time = 1_u64;
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // enter tournament
-    let (game_token_id, entry_number) = contracts
+    let (game_token_id, entry_id) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'test_player', owner, Option::None);
+        .enter_tournament(tournament.id, 'test_player', owner, Option::None, 2, 0);
 
     // verify registration information
-    let player1_registration = contracts
-        .registration
-        .get_registration(contracts.minigame.contract_address, game_token_id);
+    let player1_registration = contracts.registration.get_entry(tournament.id, entry_id);
 
     assert!(player1_registration.context_id == tournament.id, "Wrong tournament id");
-    assert!(player1_registration.entry_number == entry_number, "Invalid entry number");
+    assert!(player1_registration.entry_id == entry_id, "Invalid entry number");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
     stop_cheat_block_timestamp(contracts.budokan.contract_address);
@@ -1690,23 +1507,31 @@ fn test_submit_score_basic() {
     let tournament = contracts
         .budokan
         .create_tournament(
-            owner, test_metadata(), test_schedule(), game_config, Option::None, Option::None,
+            owner,
+            test_metadata(),
+            test_schedule(),
+            game_config,
+            Option::None,
+            Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
-    let mut time = TEST_REGISTRATION_START_TIME().into();
+    let mut time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // Enter tournament
     let (token_id, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'test_player', owner, Option::None);
+        .enter_tournament(tournament.id, 'test_player', owner, Option::None, 2, 0);
 
-    time = TEST_END_TIME().into();
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
-    contracts.minigame.end_game(token_id, 100);
+    contracts.minigame.end_game(token_id.into(), 100);
 
     // Submit score for first place (position 1)
     contracts.budokan.submit_score(tournament.id, token_id, 1);
@@ -1714,7 +1539,7 @@ fn test_submit_score_basic() {
     // Verify leaderboard
     let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
     assert!(leaderboard.len() == 1, "Invalid leaderboard length");
-    assert!(*leaderboard.at(0) == token_id, "Invalid token id in leaderboard");
+    assert!(*leaderboard.at(0) == token_id.into(), "Invalid token id in leaderboard");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
     stop_cheat_block_timestamp(contracts.budokan.contract_address);
@@ -1733,36 +1558,44 @@ fn test_submit_score_multiple_positions() {
     let tournament = contracts
         .budokan
         .create_tournament(
-            owner, test_metadata(), test_schedule(), game_config, Option::None, Option::None,
+            owner,
+            test_metadata(),
+            test_schedule(),
+            game_config,
+            Option::None,
+            Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
-    let mut time = TEST_REGISTRATION_START_TIME().into();
+    let mut time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // Enter tournament with four players
     let (token_id1, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 2, 0);
     let (token_id2, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player2', owner, Option::None);
+        .enter_tournament(tournament.id, 'player2', owner, Option::None, 3, 0);
     let (token_id3, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player3', owner, Option::None);
+        .enter_tournament(tournament.id, 'player3', owner, Option::None, 4, 0);
     let (token_id4, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player4', owner, Option::None);
+        .enter_tournament(tournament.id, 'player4', owner, Option::None, 5, 0);
 
-    time = TEST_END_TIME().into();
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // Set different scores
-    contracts.minigame.end_game(token_id1, 100);
-    contracts.minigame.end_game(token_id2, 50);
-    contracts.minigame.end_game(token_id3, 75);
-    contracts.minigame.end_game(token_id4, 1);
+    contracts.minigame.end_game(token_id1.into(), 100);
+    contracts.minigame.end_game(token_id2.into(), 50);
+    contracts.minigame.end_game(token_id3.into(), 75);
+    contracts.minigame.end_game(token_id4.into(), 1);
 
     // Submit scores in different order than final ranking
     contracts.budokan.submit_score(tournament.id, token_id3, 1); // 75 points
@@ -1773,10 +1606,10 @@ fn test_submit_score_multiple_positions() {
     // Verify leaderboard
     let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
     assert!(leaderboard.len() == 4, "Invalid leaderboard length");
-    assert!(*leaderboard.at(0) == token_id1, "Invalid first place");
-    assert!(*leaderboard.at(1) == token_id3, "Invalid second place");
-    assert!(*leaderboard.at(2) == token_id2, "Invalid third place");
-    assert!(*leaderboard.at(3) == token_id4, "Invalid fourth place");
+    assert!(*leaderboard.at(0) == token_id1.into(), "Invalid first place");
+    assert!(*leaderboard.at(1) == token_id3.into(), "Invalid second place");
+    assert!(*leaderboard.at(2) == token_id2.into(), "Invalid third place");
+    assert!(*leaderboard.at(3) == token_id4.into(), "Invalid fourth place");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
     stop_cheat_block_timestamp(contracts.budokan.contract_address);
@@ -1795,26 +1628,34 @@ fn test_submit_score_lower_score() {
     let tournament = contracts
         .budokan
         .create_tournament(
-            owner, test_metadata(), test_schedule(), game_config, Option::None, Option::None,
+            owner,
+            test_metadata(),
+            test_schedule(),
+            game_config,
+            Option::None,
+            Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
-    let time = TEST_REGISTRATION_START_TIME().into();
+    let time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     let (token_id1, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 2, 0);
     let (token_id2, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player2', owner, Option::None);
+        .enter_tournament(tournament.id, 'player2', owner, Option::None, 3, 0);
 
-    let end_time = TEST_END_TIME().into();
+    let end_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, end_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, end_time);
 
-    contracts.minigame.end_game(token_id1, 100);
-    contracts.minigame.end_game(token_id2, 50);
+    contracts.minigame.end_game(token_id1.into(), 100);
+    contracts.minigame.end_game(token_id2.into(), 50);
 
     // Submit higher score first
     contracts.budokan.submit_score(tournament.id, token_id1, 1);
@@ -1839,22 +1680,30 @@ fn test_submit_score_invalid_position() {
     let tournament = contracts
         .budokan
         .create_tournament(
-            owner, test_metadata(), test_schedule(), game_config, Option::None, Option::None,
+            owner,
+            test_metadata(),
+            test_schedule(),
+            game_config,
+            Option::None,
+            Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
-    let time = TEST_REGISTRATION_START_TIME().into();
+    let time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     let (token_id, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 2, 0);
 
-    let end_time = TEST_END_TIME().into();
+    let end_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, end_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, end_time);
 
-    contracts.minigame.end_game(token_id, 100);
+    contracts.minigame.end_game(token_id.into(), 100);
 
     // Try to submit for position 3 when only 2 prize spots exist
     contracts.budokan.submit_score(tournament.id, token_id, 3);
@@ -1876,19 +1725,19 @@ fn test_submit_score_already_submitted() {
         contracts.budokan, contracts.minigame.contract_address,
     );
 
-    let time = TEST_REGISTRATION_START_TIME().into();
+    let time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     let (token_id, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 1, 0);
 
-    let end_time = TEST_END_TIME().into();
+    let end_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, end_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, end_time);
 
-    contracts.minigame.end_game(token_id, 100);
+    contracts.minigame.end_game(token_id.into(), 100);
 
     // Submit score once
     contracts.budokan.submit_score(tournament.id, token_id, 1);
@@ -1913,20 +1762,20 @@ fn test_submit_score_wrong_period() {
         contracts.budokan, contracts.minigame.contract_address,
     );
 
-    let time = TEST_REGISTRATION_START_TIME().into();
+    let time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     let (token_id, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 1, 0);
 
     // Try to submit before tournament ends (during live phase)
-    let live_time = TEST_START_TIME().into();
+    let live_time = TEST_GAME_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, live_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, live_time);
 
-    contracts.minigame.end_game(token_id, 100);
+    contracts.minigame.end_game(token_id.into(), 100);
     contracts.budokan.submit_score(tournament.id, token_id, 1);
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -1946,19 +1795,19 @@ fn test_submit_score_position_zero() {
         contracts.budokan, contracts.minigame.contract_address,
     );
 
-    let time = TEST_REGISTRATION_START_TIME().into();
+    let time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     let (token_id, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 1, 0);
 
-    let end_time = TEST_END_TIME().into();
+    let end_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, end_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, end_time);
 
-    contracts.minigame.end_game(token_id, 100);
+    contracts.minigame.end_game(token_id.into(), 100);
 
     // Try to submit for position 0
     contracts.budokan.submit_score(tournament.id, token_id, 0);
@@ -1980,26 +1829,34 @@ fn test_submit_score_with_gap() {
     let tournament = contracts
         .budokan
         .create_tournament(
-            owner, test_metadata(), test_schedule(), game_config, Option::None, Option::None,
+            owner,
+            test_metadata(),
+            test_schedule(),
+            game_config,
+            Option::None,
+            Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
-    let time = TEST_REGISTRATION_START_TIME().into();
+    let time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     let (token_id1, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 2, 0);
     let (token_id2, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player2', owner, Option::None);
+        .enter_tournament(tournament.id, 'player2', owner, Option::None, 3, 0);
 
-    let end_time = TEST_END_TIME().into();
+    let end_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, end_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, end_time);
 
-    contracts.minigame.end_game(token_id1, 100);
-    contracts.minigame.end_game(token_id2, 75);
+    contracts.minigame.end_game(token_id1.into(), 100);
+    contracts.minigame.end_game(token_id2.into(), 75);
 
     // Submit to position 1 first
     contracts.budokan.submit_score(tournament.id, token_id1, 1);
@@ -2081,23 +1938,23 @@ fn test_claim_prizes_with_sponsored_prizes() {
             Option::Some(1),
         );
 
-    let mut time = TEST_REGISTRATION_START_TIME().into();
+    let mut time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     let (entry_token_id, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'test_player', owner, Option::None);
+        .enter_tournament(tournament.id, 'test_player', owner, Option::None, 1, 0);
 
-    time = TEST_END_TIME().into();
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
-    contracts.minigame.end_game(entry_token_id, 1);
+    contracts.minigame.end_game(entry_token_id.into(), 1);
 
     contracts.budokan.submit_score(tournament.id, entry_token_id, 1);
 
-    time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD).into();
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY() + MIN_SUBMISSION_PERIOD).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
@@ -2163,23 +2020,23 @@ fn test_claim_prizes_prize_already_claimed() {
             Option::Some(1),
         );
 
-    let mut time = TEST_REGISTRATION_START_TIME().into();
+    let mut time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     let (entry_token_id, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'test_player', owner, Option::None);
+        .enter_tournament(tournament.id, 'test_player', owner, Option::None, 1, 0);
 
-    time = TEST_END_TIME().into();
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
-    contracts.minigame.end_game(entry_token_id, 1);
+    contracts.minigame.end_game(entry_token_id.into(), 1);
 
     contracts.budokan.submit_score(tournament.id, entry_token_id, 1);
 
-    time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD).into();
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY() + MIN_SUBMISSION_PERIOD).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
@@ -2224,7 +2081,7 @@ fn test_state_transitions() {
     }
 
     // Registration phase
-    time = TEST_REGISTRATION_START_TIME().into();
+    time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
@@ -2237,10 +2094,10 @@ fn test_state_transitions() {
     // Enter tournament
     let (token_id, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'test_player', owner, Option::None);
+        .enter_tournament(tournament.id, 'test_player', owner, Option::None, 1, 0);
 
     // Live phase - during game period
-    time = TEST_START_TIME().into();
+    time = TEST_GAME_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
@@ -2251,11 +2108,11 @@ fn test_state_transitions() {
     }
 
     // Submission phase - after game ends
-    time = TEST_END_TIME().into();
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
-    contracts.minigame.end_game(token_id, 100);
+    contracts.minigame.end_game(token_id.into(), 100);
     contracts.budokan.submit_score(tournament.id, token_id, 1);
 
     let phase = contracts.budokan.current_phase(tournament.id);
@@ -2265,7 +2122,7 @@ fn test_state_transitions() {
     }
 
     // Finalized phase - after submission period
-    time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD).into();
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY() + MIN_SUBMISSION_PERIOD).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
@@ -2292,12 +2149,12 @@ fn test_tournament_with_no_submissions() {
     );
 
     // Move through registration without any entries
-    let mut time = TEST_REGISTRATION_START_TIME().into();
+    let mut time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // Skip to finalized phase
-    time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD).into();
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY() + MIN_SUBMISSION_PERIOD).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
@@ -2328,28 +2185,36 @@ fn test_tournament_with_partial_submissions() {
     let tournament = contracts
         .budokan
         .create_tournament(
-            owner, test_metadata(), test_schedule(), game_config, Option::None, Option::None,
+            owner,
+            test_metadata(),
+            test_schedule(),
+            game_config,
+            Option::None,
+            Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // Register 2 players (but tournament has 3 prize spots)
-    let mut time = TEST_REGISTRATION_START_TIME().into();
+    let mut time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     let (token_id1, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 2, 0);
     let (token_id2, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player2', owner, Option::None);
+        .enter_tournament(tournament.id, 'player2', owner, Option::None, 3, 0);
 
     // End games and submit scores
-    time = TEST_END_TIME().into();
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
-    contracts.minigame.end_game(token_id1, 100);
-    contracts.minigame.end_game(token_id2, 50);
+    contracts.minigame.end_game(token_id1.into(), 100);
+    contracts.minigame.end_game(token_id2.into(), 50);
 
     contracts.budokan.submit_score(tournament.id, token_id1, 1);
     contracts.budokan.submit_score(tournament.id, token_id2, 2);
@@ -2357,8 +2222,8 @@ fn test_tournament_with_partial_submissions() {
     // Verify only 2 positions filled
     let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
     assert!(leaderboard.len() == 2, "Leaderboard should have 2 entries");
-    assert!(*leaderboard.at(0) == token_id1, "Invalid first place");
-    assert!(*leaderboard.at(1) == token_id2, "Invalid second place");
+    assert!(*leaderboard.at(0) == token_id1.into(), "Invalid first place");
+    assert!(*leaderboard.at(1) == token_id2.into(), "Invalid second place");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
     stop_cheat_block_timestamp(contracts.budokan.contract_address);
@@ -2383,24 +2248,24 @@ fn test_create_tournament_gated_by_multiple_tournaments_with_limited_entry() {
     );
 
     // Create second tournament
-    let second_tournament = create_basic_tournament(
-        contracts.budokan, contracts.minigame.contract_address,
+    let second_tournament = create_basic_tournament_with_salt(
+        contracts.budokan, contracts.minigame.contract_address, 1,
     );
 
-    let time = TEST_REGISTRATION_START_TIME().into();
+    let time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // Enter and complete first tournament
     let (first_entry_token_id, _) = contracts
         .budokan
-        .enter_tournament(first_tournament.id, 'test_player1', owner, Option::None);
+        .enter_tournament(first_tournament.id, 'test_player1', owner, Option::None, 2, 0);
 
-    let end_time = TEST_END_TIME().into();
+    let end_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, end_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, end_time);
 
-    contracts.minigame.end_game(first_entry_token_id, 10);
+    contracts.minigame.end_game(first_entry_token_id.into(), 10);
     contracts.budokan.submit_score(first_tournament.id, first_entry_token_id, 1);
 
     // Enter and complete second tournament
@@ -2409,16 +2274,17 @@ fn test_create_tournament_gated_by_multiple_tournaments_with_limited_entry() {
 
     let (second_entry_token_id, _) = contracts
         .budokan
-        .enter_tournament(second_tournament.id, 'test_player2', owner, Option::None);
+        .enter_tournament(second_tournament.id, 'test_player2', owner, Option::None, 3, 0);
 
     start_cheat_block_timestamp(contracts.budokan.contract_address, end_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, end_time);
 
-    contracts.minigame.end_game(second_entry_token_id, 20);
+    contracts.minigame.end_game(second_entry_token_id.into(), 20);
     contracts.budokan.submit_score(second_tournament.id, second_entry_token_id, 1);
 
     // Settle tournaments
-    let settle_time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD).into();
+    let settle_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY() + MIN_SUBMISSION_PERIOD)
+        .into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, settle_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, settle_time);
 
@@ -2441,14 +2307,11 @@ fn test_create_tournament_gated_by_multiple_tournaments_with_limited_entry() {
     let entry_requirement = Option::Some(entry_requirement);
 
     let schedule = Schedule {
-        registration: Option::Some(
-            Period { start: settle_time, end: settle_time + MIN_REGISTRATION_PERIOD.into() },
-        ),
-        game: Period {
-            start: settle_time + MIN_REGISTRATION_PERIOD.into(),
-            end: settle_time + MIN_REGISTRATION_PERIOD.into() + MIN_TOURNAMENT_LENGTH.into(),
-        },
-        submission_duration: MIN_SUBMISSION_PERIOD.into(),
+        registration_start_delay: 0,
+        registration_end_delay: MIN_REGISTRATION_PERIOD,
+        game_start_delay: MIN_REGISTRATION_PERIOD,
+        game_end_delay: MIN_TOURNAMENT_LENGTH,
+        submission_duration: MIN_SUBMISSION_PERIOD,
     };
 
     let gated_tournament = contracts
@@ -2460,6 +2323,9 @@ fn test_create_tournament_gated_by_multiple_tournaments_with_limited_entry() {
             test_game_config(contracts.minigame.contract_address),
             Option::None,
             entry_requirement,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     let reg_time = settle_time + MIN_REGISTRATION_PERIOD.into() - 1;
@@ -2481,14 +2347,18 @@ fn test_create_tournament_gated_by_multiple_tournaments_with_limited_entry() {
     // First two entries should succeed
     contracts
         .budokan
-        .enter_tournament(gated_tournament.id, 'test_player3', owner, first_qualifying_proof);
+        .enter_tournament(gated_tournament.id, 'test_player3', owner, first_qualifying_proof, 4, 0);
     contracts
         .budokan
-        .enter_tournament(gated_tournament.id, 'test_player4', owner, second_qualifying_proof);
+        .enter_tournament(
+            gated_tournament.id, 'test_player4', owner, second_qualifying_proof, 5, 0,
+        );
     // Third entry with same qualification should fail (entry limit reached)
     contracts
         .budokan
-        .enter_tournament(gated_tournament.id, 'test_player5', owner, second_qualifying_proof);
+        .enter_tournament(
+            gated_tournament.id, 'test_player5', owner, second_qualifying_proof, 6, 0,
+        );
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
     stop_cheat_block_timestamp(contracts.budokan.contract_address);
@@ -2511,23 +2381,24 @@ fn test_tournament_gated_caller_owns_qualifying_token_different_player() {
         contracts.budokan, contracts.minigame.contract_address,
     );
 
-    let time = TEST_REGISTRATION_START_TIME().into();
+    let time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     let (first_entry_token_id, _) = contracts
         .budokan
-        .enter_tournament(first_tournament.id, 'test_player1', owner, Option::None);
+        .enter_tournament(first_tournament.id, 'test_player1', owner, Option::None, 2, 0);
 
-    let end_time = TEST_END_TIME().into();
+    let end_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, end_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, end_time);
 
-    contracts.minigame.end_game(first_entry_token_id, 10);
+    contracts.minigame.end_game(first_entry_token_id.into(), 10);
     contracts.budokan.submit_score(first_tournament.id, first_entry_token_id, 1);
 
     // Settle first tournament
-    let settle_time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD).into();
+    let settle_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY() + MIN_SUBMISSION_PERIOD)
+        .into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, settle_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, settle_time);
 
@@ -2546,14 +2417,11 @@ fn test_tournament_gated_caller_owns_qualifying_token_different_player() {
     let entry_requirement = Option::Some(entry_requirement);
 
     let schedule = Schedule {
-        registration: Option::Some(
-            Period { start: settle_time, end: settle_time + MIN_REGISTRATION_PERIOD.into() },
-        ),
-        game: Period {
-            start: settle_time + MIN_REGISTRATION_PERIOD.into(),
-            end: settle_time + MIN_REGISTRATION_PERIOD.into() + MIN_TOURNAMENT_LENGTH.into(),
-        },
-        submission_duration: MIN_SUBMISSION_PERIOD.into(),
+        registration_start_delay: 0,
+        registration_end_delay: MIN_REGISTRATION_PERIOD,
+        game_start_delay: MIN_REGISTRATION_PERIOD,
+        game_end_delay: MIN_TOURNAMENT_LENGTH,
+        submission_duration: MIN_SUBMISSION_PERIOD,
     };
 
     let second_tournament = contracts
@@ -2565,6 +2433,9 @@ fn test_tournament_gated_caller_owns_qualifying_token_different_player() {
             test_game_config(contracts.minigame.contract_address),
             Option::None,
             entry_requirement,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // OWNER owns the qualifying token and enters with a different player_address
@@ -2579,7 +2450,9 @@ fn test_tournament_gated_caller_owns_qualifying_token_different_player() {
     // Since caller (OWNER) owns the qualifying token, token should go to player_address
     let (second_entry_token_id, _) = contracts
         .budokan
-        .enter_tournament(second_tournament.id, 'test_player2', different_player, qualifying_proof);
+        .enter_tournament(
+            second_tournament.id, 'test_player2', different_player, qualifying_proof, 3, 0,
+        );
 
     // Verify the game token was minted to player_address (different_player), not the caller (OWNER)
     let denshokan_erc721 = IERC721Dispatcher {
@@ -2608,7 +2481,7 @@ fn test_tournament_gated_caller_does_not_own_qualifying_token() {
         contracts.budokan, contracts.minigame.contract_address,
     );
 
-    let reg_time = TEST_REGISTRATION_START_TIME().into();
+    let reg_time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, reg_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, reg_time);
 
@@ -2616,16 +2489,19 @@ fn test_tournament_gated_caller_does_not_own_qualifying_token() {
     let qualified_player = 0x789_felt252.try_into().unwrap();
     let (first_entry_token_id, _) = contracts
         .budokan
-        .enter_tournament(first_tournament.id, 'test_player1', qualified_player, Option::None);
+        .enter_tournament(
+            first_tournament.id, 'test_player1', qualified_player, Option::None, 2, 0,
+        );
 
-    let end_time = TEST_END_TIME().into();
+    let end_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, end_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, end_time);
-    contracts.minigame.end_game(first_entry_token_id, 10);
+    contracts.minigame.end_game(first_entry_token_id.into(), 10);
     contracts.budokan.submit_score(first_tournament.id, first_entry_token_id, 1);
 
     // Settle first tournament
-    let settled_time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD).into();
+    let settled_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY() + MIN_SUBMISSION_PERIOD)
+        .into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, settled_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, settled_time);
 
@@ -2646,14 +2522,11 @@ fn test_tournament_gated_caller_does_not_own_qualifying_token() {
     let current_time = settled_time;
 
     let schedule = Schedule {
-        registration: Option::Some(
-            Period { start: current_time, end: current_time + MIN_REGISTRATION_PERIOD.into() },
-        ),
-        game: Period {
-            start: current_time + MIN_REGISTRATION_PERIOD.into(),
-            end: current_time + MIN_REGISTRATION_PERIOD.into() + MIN_TOURNAMENT_LENGTH.into(),
-        },
-        submission_duration: MIN_SUBMISSION_PERIOD.into(),
+        registration_start_delay: 0,
+        registration_end_delay: MIN_REGISTRATION_PERIOD,
+        game_start_delay: MIN_REGISTRATION_PERIOD,
+        game_end_delay: MIN_TOURNAMENT_LENGTH,
+        submission_duration: MIN_SUBMISSION_PERIOD,
     };
 
     let second_tournament = contracts
@@ -2665,6 +2538,9 @@ fn test_tournament_gated_caller_does_not_own_qualifying_token() {
             test_game_config(contracts.minigame.contract_address),
             Option::None,
             entry_requirement,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // OWNER (caller) tries to enter using qualified_player's winning token
@@ -2683,7 +2559,9 @@ fn test_tournament_gated_caller_does_not_own_qualifying_token() {
     let different_player = 0x999_felt252.try_into().unwrap();
     let (second_entry_token_id, _) = contracts
         .budokan
-        .enter_tournament(second_tournament.id, 'test_player2', different_player, qualifying_proof);
+        .enter_tournament(
+            second_tournament.id, 'test_player2', different_player, qualifying_proof, 3, 0,
+        );
 
     // Verify the game token was minted to player_address (different_player)
     // since qualified_player (caller) owns the qualifying token
@@ -2728,26 +2606,29 @@ fn test_extension_gated_tournament_with_entry_limit() {
             test_game_config(contracts.minigame.contract_address),
             Option::None,
             entry_requirement,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // Verify tournament was created with correct gating
     assert(tournament.entry_requirement == entry_requirement, 'Invalid entry requirement');
 
     // Start tournament entries
-    let time = TEST_REGISTRATION_START_TIME().into();
+    let time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     let qualification_proof = Option::Some(QualificationProof::Extension(array![].span()));
 
     // OWNER already has an ERC721 token (minted in setup), so they should be able to enter
-    let (token_id, entry_number) = contracts
+    let (token_id, entry_id) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'test_player', owner, qualification_proof);
+        .enter_tournament(tournament.id, 'test_player', owner, qualification_proof, 2, 0);
 
     // Verify entry was successful
-    assert(entry_number == 1, 'Invalid entry number');
-    assert!(token_id > 0, "Entry token ID should be positive");
+    assert(entry_id == 1, 'Invalid entry number');
+    assert!(token_id != 0, "Entry token ID should be positive");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
     stop_cheat_block_timestamp(contracts.budokan.contract_address);
@@ -2770,12 +2651,12 @@ fn test_enter_tournament_after_registration_ends() {
     );
 
     // Fast forward to after game period starts (after registration ends)
-    let after_registration = TEST_END_TIME().into();
+    let after_registration = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, after_registration);
     start_cheat_block_timestamp(contracts.minigame.contract_address, after_registration);
 
     // Try to enter tournament after registration period - should panic
-    contracts.budokan.enter_tournament(tournament.id, 'late_player', owner, Option::None);
+    contracts.budokan.enter_tournament(tournament.id, 'late_player', owner, Option::None, 1, 0);
 }
 
 
@@ -2794,19 +2675,19 @@ fn test_third_party_enters_player_into_tournament() {
     );
 
     // Start registration period
-    let time = TEST_REGISTRATION_START_TIME().into();
+    let time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // Third party (owner) enters a different player into the tournament
     let player = 0x123_felt252.try_into().unwrap();
-    let (entry_token_id, entry_number) = contracts
+    let (entry_token_id, entry_id) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'sponsored_player', player, Option::None);
+        .enter_tournament(tournament.id, 'sponsored_player', player, Option::None, 1, 0);
 
     // Verify entry was successful
-    assert!(entry_token_id > 0, "Entry token ID should be positive");
-    assert!(entry_number == 1, "Entry number should be 1");
+    assert!(entry_token_id != 0, "Entry token ID should be positive");
+    assert!(entry_id == 1, "Entry number should be 1");
 
     // Verify the entry token was minted to the player_address (not caller)
     // Note: In this contract, tokens are minted to player_address unless qualification is used
@@ -2837,30 +2718,30 @@ fn test_score_submission_multiple_players() {
     );
 
     // Start registration period
-    let time = TEST_REGISTRATION_START_TIME().into();
+    let time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // Enter two players
     let (entry_token_id_1, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 1, 0);
 
     let player2 = 0x123_felt252.try_into().unwrap();
     stop_cheat_caller_address(contracts.budokan.contract_address);
     start_cheat_caller_address(contracts.budokan.contract_address, player2);
     let (entry_token_id_2, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player2', player2, Option::None);
+        .enter_tournament(tournament.id, 'player2', player2, Option::None, 2, 0);
 
     // Move to game period
-    let game_time = TEST_END_TIME().into();
+    let game_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, game_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, game_time);
 
     // End games with different scores - player 1 submits first, player 2 has higher score
-    contracts.minigame.end_game(entry_token_id_1, 500);
-    contracts.minigame.end_game(entry_token_id_2, 1000);
+    contracts.minigame.end_game(entry_token_id_1.into(), 500);
+    contracts.minigame.end_game(entry_token_id_2.into(), 1000);
 
     // Player 1 submits score at position 1 first
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -2873,7 +2754,8 @@ fn test_score_submission_multiple_players() {
     contracts.budokan.submit_score(tournament.id, entry_token_id_2, 1);
 
     // Wait for tournament to settle
-    let settle_time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD).into();
+    let settle_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY() + MIN_SUBMISSION_PERIOD)
+        .into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, settle_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, settle_time);
 
@@ -2895,8 +2777,10 @@ fn test_create_multiple_tournaments() {
     let contracts = setup();
 
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
-    start_cheat_block_timestamp(contracts.budokan.contract_address, TEST_START_TIME().into());
-    start_cheat_block_timestamp(contracts.minigame.contract_address, TEST_START_TIME().into());
+    start_cheat_block_timestamp(contracts.budokan.contract_address, TEST_GAME_START_DELAY().into());
+    start_cheat_block_timestamp(
+        contracts.minigame.contract_address, TEST_GAME_START_DELAY().into(),
+    );
 
     // Create multiple tournaments
     let tournament1 = contracts
@@ -2908,6 +2792,9 @@ fn test_create_multiple_tournaments() {
             test_game_config(contracts.minigame.contract_address),
             Option::None,
             Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     let tournament2 = contracts
@@ -2919,6 +2806,9 @@ fn test_create_multiple_tournaments() {
             test_game_config(contracts.minigame.contract_address),
             Option::None,
             Option::None,
+            test_leaderboard_config(),
+            2,
+            0,
         );
 
     // Verify both tournaments can be retrieved
@@ -2951,21 +2841,19 @@ fn test_get_registration() {
     );
 
     // Start registration period
-    let time = TEST_REGISTRATION_START_TIME().into();
+    let time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // Enter tournament
-    let (entry_token_id, entry_number) = contracts
+    let (entry_token_id, entry_id) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'test_player', owner, Option::None);
+        .enter_tournament(tournament.id, 'test_player', owner, Option::None, 1, 0);
 
     // Get registration
-    let registration = contracts
-        .registration
-        .get_registration(contracts.minigame.contract_address, entry_token_id);
+    let registration = contracts.registration.get_entry(tournament.id, entry_id);
     assert!(registration.context_id == tournament.id, "Tournament ID should match");
-    assert!(registration.entry_number == entry_number, "Entry number should match");
+    assert!(registration.entry_id == entry_id, "Entry number should match");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
     stop_cheat_block_timestamp(contracts.budokan.contract_address);
@@ -3147,25 +3035,25 @@ fn test_prize_refunded_to_sponsor_when_position_exceeds_leaderboard() {
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     // Start registration and enter tournament with only 2 players
-    let mut time = TEST_REGISTRATION_START_TIME().into();
+    let mut time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
     let (token_id1, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 1, 0);
     let (token_id2, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player2', owner, Option::None);
+        .enter_tournament(tournament.id, 'player2', owner, Option::None, 2, 0);
 
     // Move to submission period and submit scores (only 2 players, leaderboard size = 2)
-    time = TEST_END_TIME().into();
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
-    contracts.minigame.end_game(token_id1, 100);
-    contracts.minigame.end_game(token_id2, 50);
+    contracts.minigame.end_game(token_id1.into(), 100);
+    contracts.minigame.end_game(token_id2.into(), 50);
     contracts.budokan.submit_score(tournament.id, token_id1, 1);
     contracts.budokan.submit_score(tournament.id, token_id2, 2);
 
@@ -3174,7 +3062,7 @@ fn test_prize_refunded_to_sponsor_when_position_exceeds_leaderboard() {
     assert!(leaderboard.len() == 2, "Leaderboard should have 2 entries");
 
     // Move to finalized period
-    time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD).into();
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY() + MIN_SUBMISSION_PERIOD).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
@@ -3197,10 +3085,10 @@ fn test_prize_refunded_to_sponsor_when_position_exceeds_leaderboard() {
     stop_cheat_block_timestamp(contracts.minigame.contract_address);
 }
 
-// ==================== Get Tournament ID for Token ID Tests ====================
+// ==================== Get Entry / Entry Exists Tests ====================
 
 #[test]
-fn test_get_context_id_for_token_id() {
+fn test_get_entry_for_token_id() {
     let owner = OWNER;
     let contracts = setup();
 
@@ -3212,20 +3100,19 @@ fn test_get_context_id_for_token_id() {
     );
 
     // Start registration period
-    let time = TEST_REGISTRATION_START_TIME().into();
+    let time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // Enter tournament
-    let (entry_token_id, _) = contracts
+    let (entry_token_id, entry_id) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'test_player', owner, Option::None);
+        .enter_tournament(tournament.id, 'test_player', owner, Option::None, 1, 0);
 
-    // Get tournament ID for the token
-    let retrieved_tournament_id = contracts
-        .registration
-        .get_context_id_for_token(contracts.minigame.contract_address, entry_token_id);
-    assert!(retrieved_tournament_id == tournament.id, "Tournament ID should match");
+    // Get entry and verify context_id matches tournament
+    let entry = contracts.registration.get_entry(tournament.id, entry_id);
+    assert!(entry.context_id == tournament.id, "Tournament ID should match");
+    assert!(entry.game_token_id == entry_token_id, "Game token ID should match");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
     stop_cheat_block_timestamp(contracts.budokan.contract_address);
@@ -3233,19 +3120,17 @@ fn test_get_context_id_for_token_id() {
 }
 
 #[test]
-fn test_get_tournament_id_for_unregistered_token() {
+fn test_entry_does_not_exist_for_unregistered_token() {
     let owner = OWNER;
     let contracts = setup();
 
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
 
-    // Try to get tournament ID for a token that was never entered
-    let tournament_id = contracts
-        .registration
-        .get_context_id_for_token(contracts.minigame.contract_address, 99999);
+    // Check that entry does not exist for a context/entry that was never created
+    let exists = contracts.registration.entry_exists(99999, 1);
 
-    // Should return 0 for unregistered token
-    assert!(tournament_id == 0, "Should return 0 for unregistered token");
+    // Should return false for unregistered entry
+    assert!(!exists, "Should return false for unregistered entry");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
 }
@@ -3265,19 +3150,17 @@ fn test_get_registration_banned_not_banned() {
     );
 
     // Start registration period
-    let time = TEST_REGISTRATION_START_TIME().into();
+    let time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // Enter tournament
-    let (entry_token_id, _) = contracts
+    let (_entry_token_id, entry_id) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'test_player', owner, Option::None);
+        .enter_tournament(tournament.id, 'test_player', owner, Option::None, 1, 0);
 
     // Get registration banned status
-    let is_banned = contracts
-        .registration
-        .is_registration_banned(contracts.minigame.contract_address, entry_token_id);
+    let is_banned = contracts.registration.is_entry_banned(tournament.id, entry_id);
     assert!(!is_banned, "Should not be banned initially");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -3319,28 +3202,28 @@ fn test_get_leaderboard_after_submissions() {
     );
 
     // Start registration period
-    let time = TEST_REGISTRATION_START_TIME().into();
+    let time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // Enter tournament
     let (entry_token_id, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'test_player', owner, Option::None);
+        .enter_tournament(tournament.id, 'test_player', owner, Option::None, 1, 0);
 
     // Move to game period
-    let game_time = TEST_END_TIME().into();
+    let game_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, game_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, game_time);
 
     // End game and submit score
-    contracts.minigame.end_game(entry_token_id, 1000);
+    contracts.minigame.end_game(entry_token_id.into(), 1000);
     contracts.budokan.submit_score(tournament.id, entry_token_id, 1);
 
     // Get leaderboard
     let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
     assert!(leaderboard.len() == 1, "Leaderboard should have 1 entry");
-    assert!(*leaderboard.at(0) == entry_token_id, "Leaderboard should contain the token ID");
+    assert!(*leaderboard.at(0) == entry_token_id.into(), "Leaderboard should contain the token ID");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
     stop_cheat_block_timestamp(contracts.budokan.contract_address);
@@ -3363,40 +3246,45 @@ fn test_leaderboard_ordering_by_score() {
             test_metadata(),
             test_schedule(),
             GameConfig {
-                address: contracts.minigame.contract_address,
+                game_address: contracts.minigame.contract_address,
                 settings_id: 1,
                 soulbound: false,
-                play_url: "",
+                paymaster: false,
+                client_url: Option::None,
+                renderer: Option::None,
             },
             Option::None,
             Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // Start registration period
-    let time = TEST_REGISTRATION_START_TIME().into();
+    let time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // Enter tournament - player 1
     let (entry_token_id_1, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 2, 0);
 
     // Enter tournament - player 2
     stop_cheat_caller_address(contracts.budokan.contract_address);
     start_cheat_caller_address(contracts.budokan.contract_address, player2);
     let (entry_token_id_2, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player2', player2, Option::None);
+        .enter_tournament(tournament.id, 'player2', player2, Option::None, 3, 0);
 
     // Move to game period
-    let game_time = TEST_END_TIME().into();
+    let game_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, game_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, game_time);
 
     // Player 1 gets lower score, player 2 gets higher score
-    contracts.minigame.end_game(entry_token_id_1, 500);
-    contracts.minigame.end_game(entry_token_id_2, 1000);
+    contracts.minigame.end_game(entry_token_id_1.into(), 500);
+    contracts.minigame.end_game(entry_token_id_2.into(), 1000);
 
     // Player 1 submits first at position 1
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -3411,8 +3299,12 @@ fn test_leaderboard_ordering_by_score() {
     // Get leaderboard - player 2 should be first (higher score)
     let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
     assert!(leaderboard.len() == 2, "Leaderboard should have 2 entries");
-    assert!(*leaderboard.at(0) == entry_token_id_2, "Player 2 should be first (higher score)");
-    assert!(*leaderboard.at(1) == entry_token_id_1, "Player 1 should be second (lower score)");
+    assert!(
+        *leaderboard.at(0) == entry_token_id_2.into(), "Player 2 should be first (higher score)",
+    );
+    assert!(
+        *leaderboard.at(1) == entry_token_id_1.into(), "Player 1 should be second (lower score)",
+    );
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
     stop_cheat_block_timestamp(contracts.budokan.contract_address);
@@ -3439,12 +3331,12 @@ fn test_tournament_entries_count() {
     assert!(initial_count == 0, "Initial entry count should be 0");
 
     // Start registration period
-    let time = TEST_REGISTRATION_START_TIME().into();
+    let time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // Enter tournament - player 1
-    contracts.budokan.enter_tournament(tournament.id, 'player1', owner, Option::None);
+    contracts.budokan.enter_tournament(tournament.id, 'player1', owner, Option::None, 1, 0);
 
     // Check entry count after first entry
     let count_after_first = contracts.budokan.tournament_entries(tournament.id);
@@ -3453,7 +3345,7 @@ fn test_tournament_entries_count() {
     // Enter tournament - player 2
     stop_cheat_caller_address(contracts.budokan.contract_address);
     start_cheat_caller_address(contracts.budokan.contract_address, player2);
-    contracts.budokan.enter_tournament(tournament.id, 'player2', player2, Option::None);
+    contracts.budokan.enter_tournament(tournament.id, 'player2', player2, Option::None, 2, 0);
 
     // Check entry count after second entry
     let count_after_second = contracts.budokan.tournament_entries(tournament.id);
@@ -3479,7 +3371,7 @@ fn test_tournament_current_phase_submission() {
     );
 
     // Move to after game ends (submission period)
-    let submission_time = TEST_END_TIME().into();
+    let submission_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, submission_time);
 
     // Check phase is Submission
@@ -3506,7 +3398,11 @@ fn test_tournament_current_phase_finalized() {
     );
 
     // Move to after submission period ends (finalized)
-    let finalized_time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD + 1).into();
+    let finalized_time = (TEST_GAME_START_DELAY()
+        + TEST_GAME_END_DELAY()
+        + MIN_SUBMISSION_PERIOD
+        + 1)
+        .into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, finalized_time);
 
     // Check phase is Finalized
@@ -3533,11 +3429,11 @@ fn test_create_tournament_with_entry_fee_distribution() {
     let entry_fee = EntryFee {
         token_address: contracts.erc20.contract_address,
         amount: 100,
+        tournament_creator_share: 0,
+        game_creator_share: 0,
+        refund_share: 0,
         distribution: Distribution::Linear(10), // Linear distribution across 3 prize spots
-        tournament_creator_share: Option::None,
-        game_creator_share: Option::None,
-        refund_share: Option::None,
-        distribution_positions: Option::None // Dynamic - use actual leaderboard size
+        distribution_count: 0,
     };
 
     let tournament = contracts
@@ -3547,13 +3443,18 @@ fn test_create_tournament_with_entry_fee_distribution() {
             test_metadata(),
             test_schedule(),
             GameConfig {
-                address: contracts.minigame.contract_address,
+                game_address: contracts.minigame.contract_address,
                 settings_id: 1,
                 soulbound: false,
-                play_url: "",
+                paymaster: false,
+                client_url: Option::None,
+                renderer: Option::None,
             },
             Option::Some(entry_fee),
             Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // Verify tournament was created with entry fee
@@ -3581,11 +3482,11 @@ fn test_create_tournament_with_creator_shares() {
     let entry_fee = EntryFee {
         token_address: contracts.erc20.contract_address,
         amount: 100,
+        tournament_creator_share: 500, // 5% (500 basis points) to tournament creator
+        game_creator_share: 500, // 5% (500 basis points) to game creator
+        refund_share: 0,
         distribution: Distribution::Linear(10), // Linear distribution for remaining 90%
-        tournament_creator_share: Option::Some(500), // 5% (500 basis points) to tournament creator
-        game_creator_share: Option::Some(500), // 5% (500 basis points) to game creator
-        refund_share: Option::None,
-        distribution_positions: Option::None // Dynamic - use actual leaderboard size
+        distribution_count: 0,
     };
 
     let tournament = contracts
@@ -3595,31 +3496,29 @@ fn test_create_tournament_with_creator_shares() {
             test_metadata(),
             test_schedule(),
             GameConfig {
-                address: contracts.minigame.contract_address,
+                game_address: contracts.minigame.contract_address,
                 settings_id: 1,
                 soulbound: false,
-                play_url: "",
+                paymaster: false,
+                client_url: Option::None,
+                renderer: Option::None,
             },
             Option::Some(entry_fee),
             Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // Verify tournament was created with creator shares
     let retrieved = contracts.budokan.tournament(tournament.id);
     match retrieved.entry_fee {
         Option::Some(fee) => {
-            match fee.tournament_creator_share {
-                Option::Some(share) => {
-                    assert!(share == 500, "Tournament creator share should be 500 bp (5%)");
-                },
-                Option::None => { panic!("Should have tournament creator share"); },
-            }
-            match fee.game_creator_share {
-                Option::Some(share) => {
-                    assert!(share == 500, "Game creator share should be 500 bp (5%)");
-                },
-                Option::None => { panic!("Should have game creator share"); },
-            }
+            assert!(
+                fee.tournament_creator_share == 500,
+                "Tournament creator share should be 500 bp (5%)",
+            );
+            assert!(fee.game_creator_share == 500, "Game creator share should be 500 bp (5%)");
         },
         Option::None => { panic!("Tournament should have entry fee"); },
     }
@@ -3640,11 +3539,11 @@ fn test_claim_entry_fee_prizes() {
     let entry_fee = EntryFee {
         token_address: contracts.erc20.contract_address,
         amount: 100,
+        tournament_creator_share: 0,
+        game_creator_share: 0,
+        refund_share: 0,
         distribution: Distribution::Linear(10), // 100% to winner (single prize spot)
-        tournament_creator_share: Option::None,
-        game_creator_share: Option::None,
-        refund_share: Option::None,
-        distribution_positions: Option::None // Dynamic - use actual leaderboard size
+        distribution_count: 0,
     };
 
     let tournament = contracts
@@ -3656,6 +3555,9 @@ fn test_claim_entry_fee_prizes() {
             test_game_config(contracts.minigame.contract_address),
             Option::Some(entry_fee),
             Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // Mint tokens to player for entry fee
@@ -3669,26 +3571,30 @@ fn test_claim_entry_fee_prizes() {
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
 
     // Start registration period
-    let time = TEST_REGISTRATION_START_TIME().into();
+    let time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // Enter tournament (pays entry fee)
     let (entry_token_id, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 2, 0);
 
     // Move to game period
-    let game_time = TEST_END_TIME().into();
+    let game_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, game_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, game_time);
 
     // End game and submit score
-    contracts.minigame.end_game(entry_token_id, 1000);
+    contracts.minigame.end_game(entry_token_id.into(), 1000);
     contracts.budokan.submit_score(tournament.id, entry_token_id, 1);
 
     // Move to finalized period
-    let finalized_time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD + 1).into();
+    let finalized_time = (TEST_GAME_START_DELAY()
+        + TEST_GAME_END_DELAY()
+        + MIN_SUBMISSION_PERIOD
+        + 1)
+        .into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, finalized_time);
 
     // Claim entry fee prize for position 1
@@ -3717,11 +3623,11 @@ fn test_claim_entry_fee_exponential_distribution_five_players() {
     let entry_fee = EntryFee {
         token_address: contracts.erc20.contract_address,
         amount: entry_amount,
+        tournament_creator_share: 0,
+        game_creator_share: 0,
+        refund_share: 0,
         distribution: Distribution::Exponential(15), // Weight of 1.5 for gentler curve
-        tournament_creator_share: Option::None,
-        game_creator_share: Option::None,
-        refund_share: Option::None,
-        distribution_positions: Option::None // Dynamic - use actual leaderboard size
+        distribution_count: 0,
     };
 
     let tournament = contracts
@@ -3733,6 +3639,9 @@ fn test_claim_entry_fee_exponential_distribution_five_players() {
             test_game_config(contracts.minigame.contract_address),
             Option::Some(entry_fee),
             Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // Mint tokens to owner for entry fees (5 players * 100 tokens)
@@ -3746,50 +3655,54 @@ fn test_claim_entry_fee_exponential_distribution_five_players() {
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
 
     // Start registration period
-    let time = TEST_REGISTRATION_START_TIME().into();
+    let time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // Enter 5 players into tournament
     let (player1, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 2, 0);
     let (player2, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player2', owner, Option::None);
+        .enter_tournament(tournament.id, 'player2', owner, Option::None, 3, 0);
     let (player3, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player3', owner, Option::None);
+        .enter_tournament(tournament.id, 'player3', owner, Option::None, 4, 0);
     let (player4, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player4', owner, Option::None);
+        .enter_tournament(tournament.id, 'player4', owner, Option::None, 5, 0);
     let (player5, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player5', owner, Option::None);
+        .enter_tournament(tournament.id, 'player5', owner, Option::None, 6, 0);
 
     // Move to game period
-    let game_time = TEST_END_TIME().into();
+    let game_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, game_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, game_time);
 
     // Submit scores for all players (in descending order)
-    contracts.minigame.end_game(player1, 5000);
+    contracts.minigame.end_game(player1.into(), 5000);
     contracts.budokan.submit_score(tournament.id, player1, 1);
 
-    contracts.minigame.end_game(player2, 4000);
+    contracts.minigame.end_game(player2.into(), 4000);
     contracts.budokan.submit_score(tournament.id, player2, 2);
 
-    contracts.minigame.end_game(player3, 3000);
+    contracts.minigame.end_game(player3.into(), 3000);
     contracts.budokan.submit_score(tournament.id, player3, 3);
 
-    contracts.minigame.end_game(player4, 2000);
+    contracts.minigame.end_game(player4.into(), 2000);
     contracts.budokan.submit_score(tournament.id, player4, 4);
 
-    contracts.minigame.end_game(player5, 1000);
+    contracts.minigame.end_game(player5.into(), 1000);
     contracts.budokan.submit_score(tournament.id, player5, 5);
 
     // Move to finalized period
-    let finalized_time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD + 1).into();
+    let finalized_time = (TEST_GAME_START_DELAY()
+        + TEST_GAME_END_DELAY()
+        + MIN_SUBMISSION_PERIOD
+        + 1)
+        .into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, finalized_time);
 
     // Record initial balance
@@ -3882,34 +3795,30 @@ fn test_registration_has_submitted_flag() {
     );
 
     // Start registration period
-    let time = TEST_REGISTRATION_START_TIME().into();
+    let time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // Enter tournament
-    let (entry_token_id, _) = contracts
+    let (entry_token_id, entry_id) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 1, 0);
 
     // Check has_submitted is false before submission
-    let registration_before = contracts
-        .registration
-        .get_registration(contracts.minigame.contract_address, entry_token_id);
+    let registration_before = contracts.registration.get_entry(tournament.id, entry_id);
     assert!(!registration_before.has_submitted, "has_submitted should be false before submission");
 
     // Move to game period
-    let game_time = TEST_END_TIME().into();
+    let game_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, game_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, game_time);
 
     // End game and submit score
-    contracts.minigame.end_game(entry_token_id, 1000);
+    contracts.minigame.end_game(entry_token_id.into(), 1000);
     contracts.budokan.submit_score(tournament.id, entry_token_id, 1);
 
     // Check has_submitted is true after submission
-    let registration_after = contracts
-        .registration
-        .get_registration(contracts.minigame.contract_address, entry_token_id);
+    let registration_after = contracts.registration.get_entry(tournament.id, entry_id);
     assert!(registration_after.has_submitted, "has_submitted should be true after submission");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -3932,28 +3841,36 @@ fn test_submit_score_tie_higher_game_id() {
     let tournament = contracts
         .budokan
         .create_tournament(
-            owner, test_metadata(), test_schedule(), game_config, Option::None, Option::None,
+            owner,
+            test_metadata(),
+            test_schedule(),
+            game_config,
+            Option::None,
+            Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // Start registration period
-    let reg_time = TEST_REGISTRATION_START_TIME().into();
+    let reg_time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, reg_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, reg_time);
 
     let (player1, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 2, 0);
 
     let (player2, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player2', owner, Option::None);
+        .enter_tournament(tournament.id, 'player2', owner, Option::None, 3, 0);
 
     // Set both players to have the same score
-    contracts.minigame.end_game(player1, 100);
-    contracts.minigame.end_game(player2, 100);
+    contracts.minigame.end_game(player1.into(), 100);
+    contracts.minigame.end_game(player2.into(), 100);
 
     // Move to submission phase
-    let sub_time = TEST_END_TIME().into();
+    let sub_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, sub_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, sub_time);
 
@@ -3977,28 +3894,36 @@ fn test_submit_score_tie_lower_game_id() {
     let tournament = contracts
         .budokan
         .create_tournament(
-            owner, test_metadata(), test_schedule(), game_config, Option::None, Option::None,
+            owner,
+            test_metadata(),
+            test_schedule(),
+            game_config,
+            Option::None,
+            Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // Start registration period
-    let reg_time = TEST_REGISTRATION_START_TIME().into();
+    let reg_time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, reg_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, reg_time);
 
     let (player1, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 2, 0);
 
     let (player2, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player2', owner, Option::None);
+        .enter_tournament(tournament.id, 'player2', owner, Option::None, 3, 0);
 
     // Set both players to have the same score
-    contracts.minigame.end_game(player1, 100);
-    contracts.minigame.end_game(player2, 100);
+    contracts.minigame.end_game(player1.into(), 100);
+    contracts.minigame.end_game(player2.into(), 100);
 
     // Move to submission phase
-    let sub_time = TEST_END_TIME().into();
+    let sub_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, sub_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, sub_time);
 
@@ -4010,8 +3935,8 @@ fn test_submit_score_tie_lower_game_id() {
 
     // Get leaderboard - player1 should be first due to lower game ID
     let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
-    assert!(*leaderboard.at(0) == player1, "Player1 should be first place");
-    assert!(*leaderboard.at(1) == player2, "Player2 should be second place");
+    assert!(*leaderboard.at(0) == player1.into(), "Player1 should be first place");
+    assert!(*leaderboard.at(1) == player2.into(), "Player2 should be second place");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
     stop_cheat_block_timestamp(contracts.budokan.contract_address);
@@ -4030,34 +3955,42 @@ fn test_submit_score_tie_higher_game_id_for_lower_position() {
     let tournament = contracts
         .budokan
         .create_tournament(
-            owner, test_metadata(), test_schedule(), game_config, Option::None, Option::None,
+            owner,
+            test_metadata(),
+            test_schedule(),
+            game_config,
+            Option::None,
+            Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // Start registration period
-    let reg_time = TEST_REGISTRATION_START_TIME().into();
+    let reg_time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, reg_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, reg_time);
 
     // Enter tournament with three players
-    let (token_id1, _) = contracts
+    let (token_id1, entry_id1) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
-    let (token_id2, _) = contracts
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 2, 0);
+    let (token_id2, entry_id2) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player2', owner, Option::None);
-    let (token_id3, _) = contracts
+        .enter_tournament(tournament.id, 'player2', owner, Option::None, 3, 0);
+    let (token_id3, entry_id3) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player3', owner, Option::None);
+        .enter_tournament(tournament.id, 'player3', owner, Option::None, 4, 0);
 
     // Move to submission phase
-    let sub_time = TEST_END_TIME().into();
+    let sub_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, sub_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, sub_time);
 
     // Set scores - player1 and player2 have same score, player3 has lower
-    contracts.minigame.end_game(token_id1, 100); // First player (lower ID)
-    contracts.minigame.end_game(token_id2, 100); // Second player (higher ID)
-    contracts.minigame.end_game(token_id3, 50); // Third player
+    contracts.minigame.end_game(token_id1.into(), 100); // First player (lower ID)
+    contracts.minigame.end_game(token_id2.into(), 100); // Second player (higher ID)
+    contracts.minigame.end_game(token_id3.into(), 50); // Third player
 
     // Submit scores in order
     contracts.budokan.submit_score(tournament.id, token_id1, 1); // First place
@@ -4067,20 +4000,14 @@ fn test_submit_score_tie_higher_game_id_for_lower_position() {
     // Verify leaderboard
     let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
     assert!(leaderboard.len() == 3, "Invalid leaderboard length");
-    assert!(*leaderboard.at(0) == token_id1, "Invalid first place");
-    assert!(*leaderboard.at(1) == token_id2, "Invalid second place");
-    assert!(*leaderboard.at(2) == token_id3, "Invalid third place");
+    assert!(*leaderboard.at(0) == token_id1.into(), "Invalid first place");
+    assert!(*leaderboard.at(1) == token_id2.into(), "Invalid second place");
+    assert!(*leaderboard.at(2) == token_id3.into(), "Invalid third place");
 
     // Verify registrations are marked as submitted
-    let reg1 = contracts
-        .registration
-        .get_registration(contracts.minigame.contract_address, token_id1);
-    let reg2 = contracts
-        .registration
-        .get_registration(contracts.minigame.contract_address, token_id2);
-    let reg3 = contracts
-        .registration
-        .get_registration(contracts.minigame.contract_address, token_id3);
+    let reg1 = contracts.registration.get_entry(tournament.id, entry_id1);
+    let reg2 = contracts.registration.get_entry(tournament.id, entry_id2);
+    let reg3 = contracts.registration.get_entry(tournament.id, entry_id3);
 
     assert!(reg1.has_submitted, "Player 1 should be marked as submitted");
     assert!(reg2.has_submitted, "Player 2 should be marked as submitted");
@@ -4104,30 +4031,38 @@ fn test_submit_score_tie_lower_game_id_for_lower_position() {
     let tournament = contracts
         .budokan
         .create_tournament(
-            owner, test_metadata(), test_schedule(), game_config, Option::None, Option::None,
+            owner,
+            test_metadata(),
+            test_schedule(),
+            game_config,
+            Option::None,
+            Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // Start registration period
-    let reg_time = TEST_REGISTRATION_START_TIME().into();
+    let reg_time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, reg_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, reg_time);
 
     // Enter tournament with two players
     let (token_id1, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 2, 0);
     let (token_id2, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player2', owner, Option::None);
+        .enter_tournament(tournament.id, 'player2', owner, Option::None, 3, 0);
 
     // Move to submission phase
-    let sub_time = TEST_END_TIME().into();
+    let sub_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, sub_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, sub_time);
 
     // Set equal scores for both players
-    contracts.minigame.end_game(token_id1, 100); // First player (lower ID)
-    contracts.minigame.end_game(token_id2, 100); // Second player (higher ID)
+    contracts.minigame.end_game(token_id1.into(), 100); // First player (lower ID)
+    contracts.minigame.end_game(token_id2.into(), 100); // Second player (higher ID)
 
     // Submit higher ID first
     contracts.budokan.submit_score(tournament.id, token_id2, 1); // First place
@@ -4163,20 +4098,23 @@ fn test_ban_game_ids_during_registration() {
             test_game_config(contracts.minigame.contract_address),
             Option::None,
             Option::Some(entry_requirement),
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // Enter tournament during registration with valid player
-    let reg_time = TEST_REGISTRATION_START_TIME().into();
+    let reg_time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, reg_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, reg_time);
 
     let qualification = QualificationProof::Extension(extension_config.config);
-    let (game_id_1, _) = contracts
+    let (game_id_1, entry_id_1) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::Some(qualification));
-    let (game_id_2, _) = contracts
+        .enter_tournament(tournament.id, 'player1', owner, Option::Some(qualification), 2, 0);
+    let (game_id_2, entry_id_2) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player2', owner, Option::Some(qualification));
+        .enter_tournament(tournament.id, 'player2', owner, Option::Some(qualification), 3, 0);
 
     // Transfer game_id_1 to invalid player (who doesn't have qualifying ERC721)
     let invalid_player = 0x999_felt252.try_into().unwrap();
@@ -4188,25 +4126,19 @@ fn test_ban_game_ids_during_registration() {
     stop_cheat_caller_address(contracts.denshokan.contract_address);
 
     // Verify registrations exist and are not banned initially
-    let is_banned_1 = contracts
-        .registration
-        .is_registration_banned(contracts.minigame.contract_address, game_id_1);
+    let is_banned_1 = contracts.registration.is_entry_banned(tournament.id, entry_id_1);
     assert!(!is_banned_1, "Registration should not be banned initially");
 
     // Ban game_id_1 - should be banned because owner doesn't have qualifying token
     contracts.budokan.ban_entry(tournament.id, game_id_1, array![].span());
 
     // Verify game_id_1 is now banned (owned by invalid_player)
-    let is_banned_1_after = contracts
-        .registration
-        .is_registration_banned(contracts.minigame.contract_address, game_id_1);
+    let is_banned_1_after = contracts.registration.is_entry_banned(tournament.id, entry_id_1);
     assert!(is_banned_1_after, "Game ID 1 should be banned - owner doesn't have qualifying token");
 
     // Verify game_id_2 is NOT banned (still owned by valid_player, and we didn't call ban_entry on
     // it)
-    let is_banned_2 = contracts
-        .registration
-        .is_registration_banned(contracts.minigame.contract_address, game_id_2);
+    let is_banned_2 = contracts.registration.is_entry_banned(tournament.id, entry_id_2);
     assert!(!is_banned_2, "Game ID 2 should not be banned - owner has qualifying token");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -4239,17 +4171,20 @@ fn test_banned_game_id_cannot_submit_score() {
             test_game_config(contracts.minigame.contract_address),
             Option::None,
             Option::Some(entry_requirement),
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // Enter tournament
-    let reg_time = TEST_REGISTRATION_START_TIME().into();
+    let reg_time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, reg_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, reg_time);
 
     let qualification = QualificationProof::Extension(extension_config.config);
     let (game_id, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::Some(qualification));
+        .enter_tournament(tournament.id, 'player1', owner, Option::Some(qualification), 2, 0);
 
     // Transfer to invalid player
     let invalid_player = 0x999_felt252.try_into().unwrap();
@@ -4264,13 +4199,13 @@ fn test_banned_game_id_cannot_submit_score() {
     contracts.budokan.ban_entry(tournament.id, game_id, array![].span());
 
     // Set score for the game (would happen during game period)
-    let game_time = TEST_START_TIME().into();
+    let game_time = TEST_GAME_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, game_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, game_time);
-    contracts.minigame.end_game(game_id, 100);
+    contracts.minigame.end_game(game_id.into(), 100);
 
     // Move to submission period
-    let sub_time = TEST_END_TIME().into();
+    let sub_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, sub_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, sub_time);
 
@@ -4302,17 +4237,20 @@ fn test_anyone_can_ban() {
             test_game_config(contracts.minigame.contract_address),
             Option::None,
             Option::Some(entry_requirement),
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // Enter tournament
-    let reg_time = TEST_REGISTRATION_START_TIME().into();
+    let reg_time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, reg_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, reg_time);
 
     let qualification = QualificationProof::Extension(extension_config.config);
-    let (game_id, _) = contracts
+    let (game_id, entry_id) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::Some(qualification));
+        .enter_tournament(tournament.id, 'player1', owner, Option::Some(qualification), 2, 0);
 
     // Transfer to invalid player
     let invalid_player = 0x999_felt252.try_into().unwrap();
@@ -4333,9 +4271,7 @@ fn test_anyone_can_ban() {
     contracts.budokan.ban_entry(tournament.id, game_id, array![].span());
 
     // Verify game ID is now banned
-    let is_banned = contracts
-        .registration
-        .is_registration_banned(contracts.minigame.contract_address, game_id);
+    let is_banned = contracts.registration.is_entry_banned(tournament.id, entry_id);
     assert!(is_banned, "Registration should be banned");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -4368,20 +4304,23 @@ fn test_cannot_ban_after_game_starts() {
             test_game_config(contracts.minigame.contract_address),
             Option::None,
             Option::Some(entry_requirement),
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // Enter tournament
-    let reg_time = TEST_REGISTRATION_START_TIME().into();
+    let reg_time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, reg_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, reg_time);
 
     let qualification = QualificationProof::Extension(extension_config.config);
     let (game_id, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::Some(qualification));
+        .enter_tournament(tournament.id, 'player1', owner, Option::Some(qualification), 2, 0);
 
     // Move to game start (after registration ends and after any gap)
-    let game_time = TEST_START_TIME().into();
+    let game_time = TEST_GAME_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, game_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, game_time);
 
@@ -4397,18 +4336,22 @@ fn test_can_ban_during_staging_phase() {
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
 
     // Create tournament with a gap between registration end and game start
-    let registration_start_time: u64 = 1000;
-    let registration_end_time: u64 = 1000 + MIN_REGISTRATION_PERIOD;
-    let tournament_start_time: u64 = registration_end_time
+    let registration_start_delay: u32 = 1000;
+    let registration_end_delay: u32 = MIN_REGISTRATION_PERIOD;
+    let game_start_delay: u32 = registration_start_delay
+        + MIN_REGISTRATION_PERIOD
         + 1000; // Gap of 1000 between registration end and game start
-    let tournament_end_time: u64 = tournament_start_time + MIN_TOURNAMENT_LENGTH;
+
+    // For warping timestamps (created_at = 0, so absolute time = delay)
+    let registration_start_time: u64 = registration_start_delay.into();
+    let registration_end_time: u64 = (registration_start_delay + registration_end_delay).into();
 
     let schedule = Schedule {
-        registration: Option::Some(
-            Period { start: registration_start_time, end: registration_end_time },
-        ),
-        game: Period { start: tournament_start_time, end: tournament_end_time },
-        submission_duration: MIN_SUBMISSION_PERIOD.into(),
+        registration_start_delay,
+        registration_end_delay,
+        game_start_delay,
+        game_end_delay: MIN_TOURNAMENT_LENGTH,
+        submission_duration: MIN_SUBMISSION_PERIOD,
     };
 
     // Create tournament with extension entry requirement
@@ -4428,6 +4371,9 @@ fn test_can_ban_during_staging_phase() {
             test_game_config(contracts.minigame.contract_address),
             Option::None,
             Option::Some(entry_requirement),
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // Enter tournament during registration period
@@ -4435,9 +4381,9 @@ fn test_can_ban_during_staging_phase() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, registration_start_time);
 
     let qualification = QualificationProof::Extension(extension_config.config);
-    let (game_id, _) = contracts
+    let (game_id, entry_id) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::Some(qualification));
+        .enter_tournament(tournament.id, 'player1', owner, Option::Some(qualification), 2, 0);
 
     // Transfer to invalid player (who doesn't meet entry requirements)
     let invalid_player = 0x999_felt252.try_into().unwrap();
@@ -4462,9 +4408,7 @@ fn test_can_ban_during_staging_phase() {
     contracts.budokan.ban_entry(tournament.id, game_id, array![].span());
 
     // Verify game ID is now banned
-    let is_banned = contracts
-        .registration
-        .is_registration_banned(contracts.minigame.contract_address, game_id);
+    let is_banned = contracts.registration.is_entry_banned(tournament.id, entry_id);
     assert!(is_banned, "Registration should be banned during staging phase");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -4482,9 +4426,11 @@ fn test_ban_without_registration_period() {
 
     // Create tournament without registration period but with extension requirement
     let schedule_without_registration = Schedule {
-        registration: Option::None,
-        game: test_game_period(),
-        submission_duration: MIN_SUBMISSION_PERIOD.into(),
+        registration_start_delay: 0,
+        registration_end_delay: 0,
+        game_start_delay: 0,
+        game_end_delay: MIN_TOURNAMENT_LENGTH,
+        submission_duration: MIN_SUBMISSION_PERIOD,
     };
 
     let extension_config = ExtensionConfig {
@@ -4503,17 +4449,21 @@ fn test_ban_without_registration_period() {
             test_game_config(contracts.minigame.contract_address),
             Option::None,
             Option::Some(entry_requirement),
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // Enter tournament (no registration period, so can enter anytime before game starts)
-    let before_game_start = TEST_START_TIME() - 100;
+    let before_game_start: u64 =
+        1; // Tournament created at time 0, game_start_delay=0, so any time works
     start_cheat_block_timestamp(contracts.budokan.contract_address, before_game_start.into());
     start_cheat_block_timestamp(contracts.minigame.contract_address, before_game_start.into());
 
     let qualification = QualificationProof::Extension(extension_config.config);
     let (game_id, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::Some(qualification));
+        .enter_tournament(tournament.id, 'player1', owner, Option::Some(qualification), 2, 0);
 
     // Attempt to ban without registration period - should panic
     contracts.budokan.ban_entry(tournament.id, game_id, array![].span());
@@ -4543,23 +4493,26 @@ fn test_ban_multiple_game_ids() {
             test_game_config(contracts.minigame.contract_address),
             Option::None,
             Option::Some(entry_requirement),
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // Enter multiple players
-    let reg_time = TEST_REGISTRATION_START_TIME().into();
+    let reg_time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, reg_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, reg_time);
 
     let qualification = QualificationProof::Extension(extension_config.config);
-    let (game_id_1, _) = contracts
+    let (game_id_1, entry_id_1) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::Some(qualification));
-    let (game_id_2, _) = contracts
+        .enter_tournament(tournament.id, 'player1', owner, Option::Some(qualification), 2, 0);
+    let (game_id_2, entry_id_2) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player2', owner, Option::Some(qualification));
-    let (game_id_3, _) = contracts
+        .enter_tournament(tournament.id, 'player2', owner, Option::Some(qualification), 3, 0);
+    let (game_id_3, entry_id_3) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player3', owner, Option::Some(qualification));
+        .enter_tournament(tournament.id, 'player3', owner, Option::Some(qualification), 4, 0);
 
     // Transfer game_id_1 and game_id_3 to invalid player
     let invalid_player = 0x999_felt252.try_into().unwrap();
@@ -4577,15 +4530,9 @@ fn test_ban_multiple_game_ids() {
     contracts.budokan.ban_entry(tournament.id, game_id_3, array![].span());
 
     // Verify correct IDs are banned
-    let is_banned_1 = contracts
-        .registration
-        .is_registration_banned(contracts.minigame.contract_address, game_id_1);
-    let is_banned_2 = contracts
-        .registration
-        .is_registration_banned(contracts.minigame.contract_address, game_id_2);
-    let is_banned_3 = contracts
-        .registration
-        .is_registration_banned(contracts.minigame.contract_address, game_id_3);
+    let is_banned_1 = contracts.registration.is_entry_banned(tournament.id, entry_id_1);
+    let is_banned_2 = contracts.registration.is_entry_banned(tournament.id, entry_id_2);
+    let is_banned_3 = contracts.registration.is_entry_banned(tournament.id, entry_id_3);
 
     assert!(is_banned_1, "Registration 1 should be banned - owner doesn't have qualifying token");
     assert!(!is_banned_2, "Registration 2 should not be banned");
@@ -4621,17 +4568,20 @@ fn test_cannot_ban_already_banned_game_id() {
             test_game_config(contracts.minigame.contract_address),
             Option::None,
             Option::Some(entry_requirement),
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // Enter tournament
-    let reg_time = TEST_REGISTRATION_START_TIME().into();
+    let reg_time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, reg_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, reg_time);
 
     let qualification = QualificationProof::Extension(extension_config.config);
-    let (game_id, _) = contracts
+    let (game_id, entry_id) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::Some(qualification));
+        .enter_tournament(tournament.id, 'player1', owner, Option::Some(qualification), 2, 0);
 
     // Transfer game token to invalid player (who doesn't own the qualifying token)
     let invalid_player = 0x999_felt252.try_into().unwrap();
@@ -4646,9 +4596,7 @@ fn test_cannot_ban_already_banned_game_id() {
     contracts.budokan.ban_entry(tournament.id, game_id, array![].span());
 
     // Verify game ID is banned
-    let is_banned = contracts
-        .registration
-        .is_registration_banned(contracts.minigame.contract_address, game_id);
+    let is_banned = contracts.registration.is_entry_banned(tournament.id, entry_id);
     assert!(is_banned, "Game ID should be banned");
 
     // Attempt to ban the same game ID again - should panic
@@ -4683,10 +4631,13 @@ fn test_extension_gated_tournament_entry_limit_enforced() {
             test_game_config(contracts.minigame.contract_address),
             Option::None,
             entry_requirement,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // Start tournament entries
-    let reg_time = TEST_REGISTRATION_START_TIME().into();
+    let reg_time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, reg_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, reg_time);
 
@@ -4697,7 +4648,7 @@ fn test_extension_gated_tournament_entry_limit_enforced() {
 
     let (_token_id1, entry_number1) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'test_player1', owner, qualification_proof);
+        .enter_tournament(tournament.id, 'test_player1', owner, qualification_proof, 2, 0);
 
     assert!(entry_number1 == 1, "Invalid entry number");
 
@@ -4706,7 +4657,9 @@ fn test_extension_gated_tournament_entry_limit_enforced() {
         QualificationProof::Extension(array![owner.into()].span()),
     );
 
-    contracts.budokan.enter_tournament(tournament.id, 'test_player2', owner, qualification_proof2);
+    contracts
+        .budokan
+        .enter_tournament(tournament.id, 'test_player2', owner, qualification_proof2, 3, 0);
 }
 
 #[test]
@@ -4734,10 +4687,13 @@ fn test_extension_gated_caller_qualifies_different_player() {
             test_game_config(contracts.minigame.contract_address),
             Option::None,
             entry_requirement,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // Start tournament entries
-    let reg_time = TEST_REGISTRATION_START_TIME().into();
+    let reg_time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, reg_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, reg_time);
 
@@ -4748,7 +4704,9 @@ fn test_extension_gated_caller_qualifies_different_player() {
 
     let (token_id, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'test_player', different_player, qualification_proof);
+        .enter_tournament(
+            tournament.id, 'test_player', different_player, qualification_proof, 2, 0,
+        );
 
     // Since caller (OWNER) qualifies, token should go to player_address (different_player)
     let denshokan_erc721 = IERC721Dispatcher {
@@ -4765,7 +4723,7 @@ fn test_extension_gated_caller_qualifies_different_player() {
     stop_cheat_block_timestamp(contracts.minigame.contract_address);
 }
 
-#[should_panic(expected: "Budokan: Invalid entry according to extension")]
+#[should_panic(expected: "EntryRequirement: Invalid entry according to extension")]
 #[test]
 fn test_extension_gated_caller_does_not_qualify() {
     let owner = OWNER;
@@ -4791,10 +4749,13 @@ fn test_extension_gated_caller_does_not_qualify() {
             test_game_config(contracts.minigame.contract_address),
             Option::None,
             entry_requirement,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // Start tournament entries
-    let reg_time = TEST_REGISTRATION_START_TIME().into();
+    let reg_time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, reg_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, reg_time);
 
@@ -4813,7 +4774,7 @@ fn test_extension_gated_caller_does_not_qualify() {
     contracts
         .budokan
         .enter_tournament(
-            tournament.id, 'unauthorized_player', unauthorized_player, qualification_proof,
+            tournament.id, 'unauthorized_player', unauthorized_player, qualification_proof, 2, 0,
         );
 }
 
@@ -4829,24 +4790,37 @@ fn test_soulbound_tournament_prevents_token_transfer() {
 
     // Create a soulbound tournament (soulbound = true)
     let game_config = GameConfig {
-        address: contracts.minigame.contract_address, settings_id: 1, soulbound: true, play_url: "",
+        game_address: contracts.minigame.contract_address,
+        settings_id: 1,
+        soulbound: true,
+        paymaster: false,
+        client_url: Option::None,
+        renderer: Option::None,
     };
 
     let tournament = contracts
         .budokan
         .create_tournament(
-            owner, test_metadata(), test_schedule(), game_config, Option::None, Option::None,
+            owner,
+            test_metadata(),
+            test_schedule(),
+            game_config,
+            Option::None,
+            Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // Advance time to registration start time
-    let reg_time = TEST_REGISTRATION_START_TIME().into();
+    let reg_time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, reg_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, reg_time);
 
     // Enter tournament
     let (game_token_id, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'test_player', owner, Option::None);
+        .enter_tournament(tournament.id, 'test_player', owner, Option::None, 2, 0);
 
     // Verify token was minted to OWNER
     let denshokan_erc721 = IERC721Dispatcher {
@@ -4881,16 +4855,14 @@ fn test_extension_with_registration_only_requires_registration_period() {
 
     // Create a schedule WITH a registration period that has a gap before game start (should
     // succeed)
-    let registration_start: u64 = 1000;
-    let registration_end: u64 = 1000 + MIN_REGISTRATION_PERIOD;
-    let game_start: u64 = registration_end
-        + 1000; // Gap of 1000 between registration end and game start
-    let game_end: u64 = game_start + MIN_TOURNAMENT_LENGTH;
-
     let schedule_with_gap = Schedule {
-        registration: Option::Some(Period { start: registration_start, end: registration_end }),
-        game: Period { start: game_start, end: game_end },
-        submission_duration: MIN_SUBMISSION_PERIOD.into(),
+        registration_start_delay: 1000,
+        registration_end_delay: MIN_REGISTRATION_PERIOD,
+        game_start_delay: 1000
+            + MIN_REGISTRATION_PERIOD
+            + 1000, // Gap of 1000 after registration end
+        game_end_delay: MIN_TOURNAMENT_LENGTH,
+        submission_duration: MIN_SUBMISSION_PERIOD,
     };
 
     let tournament = contracts
@@ -4902,6 +4874,9 @@ fn test_extension_with_registration_only_requires_registration_period() {
             test_game_config(contracts.minigame.contract_address),
             Option::None,
             Option::Some(entry_requirement),
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // Verify tournament was created successfully
@@ -4912,7 +4887,7 @@ fn test_extension_with_registration_only_requires_registration_period() {
 
 // ==================== Tournament Entry Tests ====================
 
-#[should_panic(expected: "Budokan: Invalid entry according to extension")]
+#[should_panic(expected: "EntryRequirement: Invalid entry according to extension")]
 #[test]
 fn test_use_host_token_to_qualify_into_tournament_gated_tournament() {
     let owner = OWNER;
@@ -4925,30 +4900,31 @@ fn test_use_host_token_to_qualify_into_tournament_gated_tournament() {
         contracts.budokan, contracts.minigame.contract_address,
     );
 
-    let reg_time = TEST_REGISTRATION_START_TIME().into();
+    let reg_time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, reg_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, reg_time);
 
     // Complete the first tournament
     let (first_entry_token_id, _) = contracts
         .budokan
-        .enter_tournament(first_tournament.id, 'test_player', owner, Option::None);
+        .enter_tournament(first_tournament.id, 'test_player', owner, Option::None, 2, 0);
 
-    let end_time = TEST_END_TIME().into();
+    let end_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, end_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, end_time);
-    contracts.minigame.end_game(first_entry_token_id, 100);
+    contracts.minigame.end_game(first_entry_token_id.into(), 100);
     contracts.budokan.submit_score(first_tournament.id, first_entry_token_id, 1);
 
     // Settle first tournament
-    let settled_time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD).into();
+    let settled_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY() + MIN_SUBMISSION_PERIOD)
+        .into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, settled_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, settled_time);
 
     // assert first_entry_token_id is in the leaderboard
     let leaderboard = contracts.budokan.get_leaderboard(first_tournament.id);
     let first_place = *leaderboard.at(0);
-    assert!(first_place == first_entry_token_id, "Invalid first place for first tournament");
+    assert!(first_place == first_entry_token_id.into(), "Invalid first place for first tournament");
 
     // Deploy tournament validator extension
     let tournament_validator_address = deploy_tournament_validator_mock(
@@ -4967,14 +4943,11 @@ fn test_use_host_token_to_qualify_into_tournament_gated_tournament() {
     let current_time = settled_time;
 
     let schedule = Schedule {
-        registration: Option::Some(
-            Period { start: current_time, end: current_time + MIN_REGISTRATION_PERIOD.into() },
-        ),
-        game: Period {
-            start: current_time + MIN_REGISTRATION_PERIOD.into(),
-            end: current_time + MIN_REGISTRATION_PERIOD.into() + MIN_TOURNAMENT_LENGTH.into(),
-        },
-        submission_duration: MIN_SUBMISSION_PERIOD.into(),
+        registration_start_delay: 0,
+        registration_end_delay: MIN_REGISTRATION_PERIOD,
+        game_start_delay: MIN_REGISTRATION_PERIOD,
+        game_end_delay: MIN_TOURNAMENT_LENGTH,
+        submission_duration: MIN_SUBMISSION_PERIOD,
     };
 
     let second_tournament = contracts
@@ -4986,6 +4959,9 @@ fn test_use_host_token_to_qualify_into_tournament_gated_tournament() {
             test_game_config(contracts.minigame.contract_address),
             Option::None,
             entry_requirement,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // attempt to join second tournament using the host token, should panic
@@ -4997,10 +4973,10 @@ fn test_use_host_token_to_qualify_into_tournament_gated_tournament() {
     );
     contracts
         .budokan
-        .enter_tournament(second_tournament.id, 'test_player', owner, wrong_qualification);
+        .enter_tournament(second_tournament.id, 'test_player', owner, wrong_qualification, 3, 0);
 }
 
-#[should_panic(expected: "Budokan: Invalid entry according to extension")]
+#[should_panic(expected: "EntryRequirement: Invalid entry according to extension")]
 #[test]
 fn test_enter_tournament_wrong_submission_type() {
     let owner = OWNER;
@@ -5013,35 +4989,36 @@ fn test_enter_tournament_wrong_submission_type() {
         contracts.budokan, contracts.minigame.contract_address,
     );
 
-    let reg_time = TEST_REGISTRATION_START_TIME().into();
+    let reg_time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, reg_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, reg_time);
 
     // Complete the first tournament with two players
     let (first_entry_token_id, _) = contracts
         .budokan
-        .enter_tournament(first_tournament.id, 'test_player', owner, Option::None);
+        .enter_tournament(first_tournament.id, 'test_player', owner, Option::None, 2, 0);
 
     let (second_entry_token_id, _) = contracts
         .budokan
-        .enter_tournament(first_tournament.id, 'test_player2', owner, Option::None);
+        .enter_tournament(first_tournament.id, 'test_player2', owner, Option::None, 3, 0);
 
-    let end_time = TEST_END_TIME().into();
+    let end_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, end_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, end_time);
-    contracts.minigame.end_game(first_entry_token_id, 100);
-    contracts.minigame.end_game(second_entry_token_id, 10);
+    contracts.minigame.end_game(first_entry_token_id.into(), 100);
+    contracts.minigame.end_game(second_entry_token_id.into(), 10);
     contracts.budokan.submit_score(first_tournament.id, first_entry_token_id, 1);
 
     // Settle first tournament
-    let settled_time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD).into();
+    let settled_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY() + MIN_SUBMISSION_PERIOD)
+        .into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, settled_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, settled_time);
 
     // assert first_entry_token_id is in the leaderboard
     let leaderboard = contracts.budokan.get_leaderboard(first_tournament.id);
     let first_place = *leaderboard.at(0);
-    assert!(first_place == first_entry_token_id, "Invalid first place for first tournament");
+    assert!(first_place == first_entry_token_id.into(), "Invalid first place for first tournament");
 
     // Deploy tournament validator extension
     let tournament_validator_address = deploy_tournament_validator_mock(
@@ -5060,14 +5037,11 @@ fn test_enter_tournament_wrong_submission_type() {
     let current_time = settled_time;
 
     let schedule = Schedule {
-        registration: Option::Some(
-            Period { start: current_time, end: current_time + MIN_REGISTRATION_PERIOD.into() },
-        ),
-        game: Period {
-            start: current_time + MIN_REGISTRATION_PERIOD.into(),
-            end: current_time + MIN_REGISTRATION_PERIOD.into() + MIN_TOURNAMENT_LENGTH.into(),
-        },
-        submission_duration: MIN_SUBMISSION_PERIOD.into(),
+        registration_start_delay: 0,
+        registration_end_delay: MIN_REGISTRATION_PERIOD,
+        game_start_delay: MIN_REGISTRATION_PERIOD,
+        game_end_delay: MIN_TOURNAMENT_LENGTH,
+        submission_duration: MIN_SUBMISSION_PERIOD,
     };
 
     let second_tournament = contracts
@@ -5079,6 +5053,9 @@ fn test_enter_tournament_wrong_submission_type() {
             test_game_config(contracts.minigame.contract_address),
             Option::None,
             entry_requirement,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // attempt to join second tournament using token that did not win first tournament, should panic
@@ -5090,7 +5067,7 @@ fn test_enter_tournament_wrong_submission_type() {
     );
     contracts
         .budokan
-        .enter_tournament(second_tournament.id, 'test_player', owner, wrong_qualification);
+        .enter_tournament(second_tournament.id, 'test_player', owner, wrong_qualification, 4, 0);
 }
 
 // ==================== Score Submission Tests ====================
@@ -5107,69 +5084,77 @@ fn test_submit_score_gas_check() {
     let tournament = contracts
         .budokan
         .create_tournament(
-            owner, test_metadata(), test_schedule(), game_config, Option::None, Option::None,
+            owner,
+            test_metadata(),
+            test_schedule(),
+            game_config,
+            Option::None,
+            Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
-    let reg_time = TEST_REGISTRATION_START_TIME().into();
+    let reg_time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, reg_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, reg_time);
 
     // Enter 10 players into the tournament
     let (player1, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'test_player', owner, Option::None);
+        .enter_tournament(tournament.id, 'test_player', owner, Option::None, 2, 0);
 
     let (player2, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'test_player2', owner, Option::None);
+        .enter_tournament(tournament.id, 'test_player2', owner, Option::None, 3, 0);
 
     let (player3, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'test_player3', owner, Option::None);
+        .enter_tournament(tournament.id, 'test_player3', owner, Option::None, 4, 0);
 
     let (player4, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'test_player4', owner, Option::None);
+        .enter_tournament(tournament.id, 'test_player4', owner, Option::None, 5, 0);
 
     let (player5, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'test_player5', owner, Option::None);
+        .enter_tournament(tournament.id, 'test_player5', owner, Option::None, 6, 0);
 
     let (player6, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'test_player6', owner, Option::None);
+        .enter_tournament(tournament.id, 'test_player6', owner, Option::None, 7, 0);
 
     let (player7, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'test_player7', owner, Option::None);
+        .enter_tournament(tournament.id, 'test_player7', owner, Option::None, 8, 0);
 
     let (player8, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'test_player8', owner, Option::None);
+        .enter_tournament(tournament.id, 'test_player8', owner, Option::None, 9, 0);
 
     let (player9, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'test_player9', owner, Option::None);
+        .enter_tournament(tournament.id, 'test_player9', owner, Option::None, 10, 0);
 
     let (player10, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'test_player10', owner, Option::None);
+        .enter_tournament(tournament.id, 'test_player10', owner, Option::None, 11, 0);
 
-    let end_time = TEST_END_TIME().into();
+    let end_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, end_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, end_time);
 
     // Set scores for each player
-    contracts.minigame.end_game(player1, 100);
-    contracts.minigame.end_game(player2, 90);
-    contracts.minigame.end_game(player3, 80);
-    contracts.minigame.end_game(player4, 70);
-    contracts.minigame.end_game(player5, 60);
-    contracts.minigame.end_game(player6, 50);
-    contracts.minigame.end_game(player7, 40);
-    contracts.minigame.end_game(player8, 30);
-    contracts.minigame.end_game(player9, 20);
-    contracts.minigame.end_game(player10, 10);
+    contracts.minigame.end_game(player1.into(), 100);
+    contracts.minigame.end_game(player2.into(), 90);
+    contracts.minigame.end_game(player3.into(), 80);
+    contracts.minigame.end_game(player4.into(), 70);
+    contracts.minigame.end_game(player5.into(), 60);
+    contracts.minigame.end_game(player6.into(), 50);
+    contracts.minigame.end_game(player7.into(), 40);
+    contracts.minigame.end_game(player8.into(), 30);
+    contracts.minigame.end_game(player9.into(), 20);
+    contracts.minigame.end_game(player10.into(), 10);
 
     // Submit scores for each player
     contracts.budokan.submit_score(tournament.id, player1, 1);
@@ -5184,7 +5169,11 @@ fn test_submit_score_gas_check() {
     contracts.budokan.submit_score(tournament.id, player10, 10);
 
     // Roll forward to beyond submission period
-    let finalized_time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD + 1).into();
+    let finalized_time = (TEST_GAME_START_DELAY()
+        + TEST_GAME_END_DELAY()
+        + MIN_SUBMISSION_PERIOD
+        + 1)
+        .into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, finalized_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, finalized_time);
 
@@ -5195,16 +5184,16 @@ fn test_submit_score_gas_check() {
     // Verify final leaderboard
     let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
     assert!(leaderboard.len() == 10, "Invalid leaderboard length");
-    assert!(*leaderboard.at(0) == player1, "Invalid first place");
-    assert!(*leaderboard.at(1) == player2, "Invalid second place");
-    assert!(*leaderboard.at(2) == player3, "Invalid third place");
-    assert!(*leaderboard.at(3) == player4, "Invalid fourth place");
-    assert!(*leaderboard.at(4) == player5, "Invalid fifth place");
-    assert!(*leaderboard.at(5) == player6, "Invalid sixth place");
-    assert!(*leaderboard.at(6) == player7, "Invalid seventh place");
-    assert!(*leaderboard.at(7) == player8, "Invalid eighth place");
-    assert!(*leaderboard.at(8) == player9, "Invalid ninth place");
-    assert!(*leaderboard.at(9) == player10, "Invalid tenth place");
+    assert!(*leaderboard.at(0) == player1.into(), "Invalid first place");
+    assert!(*leaderboard.at(1) == player2.into(), "Invalid second place");
+    assert!(*leaderboard.at(2) == player3.into(), "Invalid third place");
+    assert!(*leaderboard.at(3) == player4.into(), "Invalid fourth place");
+    assert!(*leaderboard.at(4) == player5.into(), "Invalid fifth place");
+    assert!(*leaderboard.at(5) == player6.into(), "Invalid sixth place");
+    assert!(*leaderboard.at(6) == player7.into(), "Invalid seventh place");
+    assert!(*leaderboard.at(7) == player8.into(), "Invalid eighth place");
+    assert!(*leaderboard.at(8) == player9.into(), "Invalid ninth place");
+    assert!(*leaderboard.at(9) == player10.into(), "Invalid tenth place");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
     stop_cheat_block_timestamp(contracts.budokan.contract_address);
@@ -5226,7 +5215,7 @@ fn test_third_party_enters_different_player_into_tournament() {
     );
 
     // Start registration period
-    let reg_time = TEST_REGISTRATION_START_TIME().into();
+    let reg_time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, reg_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, reg_time);
 
@@ -5234,7 +5223,7 @@ fn test_third_party_enters_different_player_into_tournament() {
     let player = 0x456_felt252.try_into().unwrap();
     let (token_id, entry_number) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'test_player', player, Option::None);
+        .enter_tournament(tournament.id, 'test_player', player, Option::None, 1, 0);
 
     // Verify entry was successful
     assert!(entry_number == 1, "Invalid entry number");
@@ -5271,11 +5260,11 @@ fn test_claim_tournament_creator_share() {
     let entry_fee = EntryFee {
         token_address: contracts.erc20.contract_address,
         amount: entry_amount,
+        tournament_creator_share: 1000, // 10% to tournament creator
+        game_creator_share: 0,
+        refund_share: 0,
         distribution: Distribution::Linear(10), // Linear distribution for prize pool
-        tournament_creator_share: Option::Some(1000), // 10% to tournament creator
-        game_creator_share: Option::None,
-        refund_share: Option::None,
-        distribution_positions: Option::None // Dynamic - use actual leaderboard size
+        distribution_count: 0,
     };
 
     let tournament = contracts
@@ -5287,6 +5276,9 @@ fn test_claim_tournament_creator_share() {
             test_game_config(contracts.minigame.contract_address),
             Option::Some(entry_fee),
             Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // Mint tokens to owner for entry fees (5 players * 100 tokens)
@@ -5300,50 +5292,54 @@ fn test_claim_tournament_creator_share() {
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
 
     // Start registration period
-    let time = TEST_REGISTRATION_START_TIME().into();
+    let time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // Enter 5 players into tournament
     let (player1, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 2, 0);
     let (player2, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player2', owner, Option::None);
+        .enter_tournament(tournament.id, 'player2', owner, Option::None, 3, 0);
     let (player3, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player3', owner, Option::None);
+        .enter_tournament(tournament.id, 'player3', owner, Option::None, 4, 0);
     let (player4, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player4', owner, Option::None);
+        .enter_tournament(tournament.id, 'player4', owner, Option::None, 5, 0);
     let (player5, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player5', owner, Option::None);
+        .enter_tournament(tournament.id, 'player5', owner, Option::None, 6, 0);
 
     // Move to game period
-    let game_time = TEST_END_TIME().into();
+    let game_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, game_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, game_time);
 
     // Submit scores for all players
-    contracts.minigame.end_game(player1, 5000);
+    contracts.minigame.end_game(player1.into(), 5000);
     contracts.budokan.submit_score(tournament.id, player1, 1);
 
-    contracts.minigame.end_game(player2, 4000);
+    contracts.minigame.end_game(player2.into(), 4000);
     contracts.budokan.submit_score(tournament.id, player2, 2);
 
-    contracts.minigame.end_game(player3, 3000);
+    contracts.minigame.end_game(player3.into(), 3000);
     contracts.budokan.submit_score(tournament.id, player3, 3);
 
-    contracts.minigame.end_game(player4, 2000);
+    contracts.minigame.end_game(player4.into(), 2000);
     contracts.budokan.submit_score(tournament.id, player4, 4);
 
-    contracts.minigame.end_game(player5, 1000);
+    contracts.minigame.end_game(player5.into(), 1000);
     contracts.budokan.submit_score(tournament.id, player5, 5);
 
     // Move to finalized period
-    let finalized_time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD + 1).into();
+    let finalized_time = (TEST_GAME_START_DELAY()
+        + TEST_GAME_END_DELAY()
+        + MIN_SUBMISSION_PERIOD
+        + 1)
+        .into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, finalized_time);
 
     // Record initial balance before claiming
@@ -5388,11 +5384,11 @@ fn test_claim_game_creator_share() {
     let entry_fee = EntryFee {
         token_address: contracts.erc20.contract_address,
         amount: entry_amount,
+        tournament_creator_share: 0,
+        game_creator_share: 1500, // 15% to game creator
+        refund_share: 0,
         distribution: Distribution::Linear(10),
-        tournament_creator_share: Option::None,
-        game_creator_share: Option::Some(1500), // 15% to game creator
-        refund_share: Option::None,
-        distribution_positions: Option::None,
+        distribution_count: 0,
     };
 
     let tournament = contracts
@@ -5404,6 +5400,9 @@ fn test_claim_game_creator_share() {
             test_game_config(contracts.minigame.contract_address),
             Option::Some(entry_fee),
             Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // Mint tokens to owner for entry fees
@@ -5417,38 +5416,42 @@ fn test_claim_game_creator_share() {
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
 
     // Start registration period
-    let time = TEST_REGISTRATION_START_TIME().into();
+    let time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // Enter 3 players into tournament
     let (player1, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 2, 0);
     let (player2, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player2', owner, Option::None);
+        .enter_tournament(tournament.id, 'player2', owner, Option::None, 3, 0);
     let (player3, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player3', owner, Option::None);
+        .enter_tournament(tournament.id, 'player3', owner, Option::None, 4, 0);
 
     // Move to game period
-    let game_time = TEST_END_TIME().into();
+    let game_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, game_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, game_time);
 
     // Submit scores for all players
-    contracts.minigame.end_game(player1, 300);
+    contracts.minigame.end_game(player1.into(), 300);
     contracts.budokan.submit_score(tournament.id, player1, 1);
 
-    contracts.minigame.end_game(player2, 200);
+    contracts.minigame.end_game(player2.into(), 200);
     contracts.budokan.submit_score(tournament.id, player2, 2);
 
-    contracts.minigame.end_game(player3, 100);
+    contracts.minigame.end_game(player3.into(), 100);
     contracts.budokan.submit_score(tournament.id, player3, 3);
 
     // Move to finalized period
-    let finalized_time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD + 1).into();
+    let finalized_time = (TEST_GAME_START_DELAY()
+        + TEST_GAME_END_DELAY()
+        + MIN_SUBMISSION_PERIOD
+        + 1)
+        .into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, finalized_time);
 
     // Record game creator's initial balance
@@ -5497,11 +5500,11 @@ fn test_claim_refund_share() {
     let entry_fee = EntryFee {
         token_address: contracts.erc20.contract_address,
         amount: entry_amount,
+        tournament_creator_share: 0,
+        game_creator_share: 0,
+        refund_share: 2000, // 20% refund to each depositor
         distribution: Distribution::Linear(10),
-        tournament_creator_share: Option::None,
-        game_creator_share: Option::None,
-        refund_share: Option::Some(2000), // 20% refund to each depositor
-        distribution_positions: Option::None,
+        distribution_count: 0,
     };
 
     let tournament = contracts
@@ -5513,6 +5516,9 @@ fn test_claim_refund_share() {
             test_game_config(contracts.minigame.contract_address),
             Option::Some(entry_fee),
             Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // Mint tokens for entry fee
@@ -5525,7 +5531,7 @@ fn test_claim_refund_share() {
     stop_cheat_caller_address(contracts.erc20.contract_address);
 
     // Start registration period
-    let time = TEST_REGISTRATION_START_TIME().into();
+    let time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
@@ -5533,19 +5539,23 @@ fn test_claim_refund_share() {
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
     let (player1_token, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 2, 0);
 
     // Move to game period
-    let game_time = TEST_END_TIME().into();
+    let game_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, game_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, game_time);
 
     // Submit score for player
-    contracts.minigame.end_game(player1_token, 100);
+    contracts.minigame.end_game(player1_token.into(), 100);
     contracts.budokan.submit_score(tournament.id, player1_token, 1);
 
     // Move to finalized period
-    let finalized_time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD + 1).into();
+    let finalized_time = (TEST_GAME_START_DELAY()
+        + TEST_GAME_END_DELAY()
+        + MIN_SUBMISSION_PERIOD
+        + 1)
+        .into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, finalized_time);
 
     // Record initial balance
@@ -5597,11 +5607,11 @@ fn test_claim_all_shares_combined() {
     let entry_fee = EntryFee {
         token_address: contracts.erc20.contract_address,
         amount: entry_amount,
+        tournament_creator_share: 1000, // 10%
+        game_creator_share: 500, // 5%
+        refund_share: 1000, // 10%
         distribution: Distribution::Linear(10),
-        tournament_creator_share: Option::Some(1000), // 10%
-        game_creator_share: Option::Some(500), // 5%
-        refund_share: Option::Some(1000), // 10%
-        distribution_positions: Option::None,
+        distribution_count: 0,
     };
 
     let tournament = contracts
@@ -5613,6 +5623,9 @@ fn test_claim_all_shares_combined() {
             test_game_config(contracts.minigame.contract_address),
             Option::Some(entry_fee),
             Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     // Mint tokens to owner for entry fees
@@ -5626,38 +5639,42 @@ fn test_claim_all_shares_combined() {
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
 
     // Start registration period
-    let time = TEST_REGISTRATION_START_TIME().into();
+    let time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // Enter 3 players into tournament
     let (player1, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 2, 0);
     let (player2, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player2', owner, Option::None);
+        .enter_tournament(tournament.id, 'player2', owner, Option::None, 3, 0);
     let (player3, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player3', owner, Option::None);
+        .enter_tournament(tournament.id, 'player3', owner, Option::None, 4, 0);
 
     // Move to game period
-    let game_time = TEST_END_TIME().into();
+    let game_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, game_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, game_time);
 
     // Submit scores for all players
-    contracts.minigame.end_game(player1, 300);
+    contracts.minigame.end_game(player1.into(), 300);
     contracts.budokan.submit_score(tournament.id, player1, 1);
 
-    contracts.minigame.end_game(player2, 200);
+    contracts.minigame.end_game(player2.into(), 200);
     contracts.budokan.submit_score(tournament.id, player2, 2);
 
-    contracts.minigame.end_game(player3, 100);
+    contracts.minigame.end_game(player3.into(), 100);
     contracts.budokan.submit_score(tournament.id, player3, 3);
 
     // Move to finalized period
-    let finalized_time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD + 1).into();
+    let finalized_time = (TEST_GAME_START_DELAY()
+        + TEST_GAME_END_DELAY()
+        + MIN_SUBMISSION_PERIOD
+        + 1)
+        .into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, finalized_time);
 
     // Record initial balances
@@ -5791,11 +5808,11 @@ fn test_cannot_claim_tournament_creator_share_twice() {
     let entry_fee = EntryFee {
         token_address: contracts.erc20.contract_address,
         amount: entry_amount,
+        tournament_creator_share: 1000, // 10%
+        game_creator_share: 0,
+        refund_share: 0,
         distribution: Distribution::Linear(10),
-        tournament_creator_share: Option::Some(1000), // 10%
-        game_creator_share: Option::None,
-        refund_share: Option::None,
-        distribution_positions: Option::None,
+        distribution_count: 0,
     };
 
     let tournament = contracts
@@ -5807,6 +5824,9 @@ fn test_cannot_claim_tournament_creator_share_twice() {
             test_game_config(contracts.minigame.contract_address),
             Option::Some(entry_fee),
             Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     contracts.erc20.mint(owner, total_pool);
@@ -5815,22 +5835,26 @@ fn test_cannot_claim_tournament_creator_share_twice() {
     stop_cheat_caller_address(contracts.erc20.contract_address);
 
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
-    let time = TEST_REGISTRATION_START_TIME().into();
+    let time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     let (player1, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 2, 0);
 
-    let game_time = TEST_END_TIME().into();
+    let game_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, game_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, game_time);
 
-    contracts.minigame.end_game(player1, 100);
+    contracts.minigame.end_game(player1.into(), 100);
     contracts.budokan.submit_score(tournament.id, player1, 1);
 
-    let finalized_time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD + 1).into();
+    let finalized_time = (TEST_GAME_START_DELAY()
+        + TEST_GAME_END_DELAY()
+        + MIN_SUBMISSION_PERIOD
+        + 1)
+        .into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, finalized_time);
 
     // Claim once - should succeed
@@ -5860,11 +5884,11 @@ fn test_cannot_claim_game_creator_share_twice() {
     let entry_fee = EntryFee {
         token_address: contracts.erc20.contract_address,
         amount: entry_amount,
+        tournament_creator_share: 0,
+        game_creator_share: 500, // 5%
+        refund_share: 0,
         distribution: Distribution::Linear(10),
-        tournament_creator_share: Option::None,
-        game_creator_share: Option::Some(500), // 5%
-        refund_share: Option::None,
-        distribution_positions: Option::None,
+        distribution_count: 0,
     };
 
     let tournament = contracts
@@ -5876,6 +5900,9 @@ fn test_cannot_claim_game_creator_share_twice() {
             test_game_config(contracts.minigame.contract_address),
             Option::Some(entry_fee),
             Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     contracts.erc20.mint(owner, total_pool);
@@ -5884,22 +5911,26 @@ fn test_cannot_claim_game_creator_share_twice() {
     stop_cheat_caller_address(contracts.erc20.contract_address);
 
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
-    let time = TEST_REGISTRATION_START_TIME().into();
+    let time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     let (player1, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 2, 0);
 
-    let game_time = TEST_END_TIME().into();
+    let game_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, game_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, game_time);
 
-    contracts.minigame.end_game(player1, 100);
+    contracts.minigame.end_game(player1.into(), 100);
     contracts.budokan.submit_score(tournament.id, player1, 1);
 
-    let finalized_time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD + 1).into();
+    let finalized_time = (TEST_GAME_START_DELAY()
+        + TEST_GAME_END_DELAY()
+        + MIN_SUBMISSION_PERIOD
+        + 1)
+        .into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, finalized_time);
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -5916,7 +5947,7 @@ fn test_cannot_claim_game_creator_share_twice() {
         .claim_reward(tournament.id, RewardType::EntryFee(EntryFeeRewardType::GameCreator));
 }
 
-#[should_panic(expected: "Budokan: Refund share already claimed for token 2")]
+#[should_panic(expected: "Budokan: Refund share already claimed for token")]
 #[test]
 fn test_cannot_claim_refund_twice() {
     let owner = OWNER;
@@ -5931,11 +5962,11 @@ fn test_cannot_claim_refund_twice() {
     let entry_fee = EntryFee {
         token_address: contracts.erc20.contract_address,
         amount: entry_amount,
+        tournament_creator_share: 0,
+        game_creator_share: 0,
+        refund_share: 1000, // 10%
         distribution: Distribution::Linear(10),
-        tournament_creator_share: Option::None,
-        game_creator_share: Option::None,
-        refund_share: Option::Some(1000), // 10%
-        distribution_positions: Option::None,
+        distribution_count: 0,
     };
 
     let tournament = contracts
@@ -5947,6 +5978,9 @@ fn test_cannot_claim_refund_twice() {
             test_game_config(contracts.minigame.contract_address),
             Option::Some(entry_fee),
             Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
         );
 
     contracts.erc20.mint(owner, total_pool);
@@ -5955,22 +5989,26 @@ fn test_cannot_claim_refund_twice() {
     stop_cheat_caller_address(contracts.erc20.contract_address);
 
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
-    let time = TEST_REGISTRATION_START_TIME().into();
+    let time = TEST_REGISTRATION_START_DELAY().into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     let (player1_token_id, _) = contracts
         .budokan
-        .enter_tournament(tournament.id, 'player1', owner, Option::None);
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 2, 0);
 
-    let game_time = TEST_END_TIME().into();
+    let game_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, game_time);
     start_cheat_block_timestamp(contracts.minigame.contract_address, game_time);
 
-    contracts.minigame.end_game(player1_token_id, 100);
+    contracts.minigame.end_game(player1_token_id.into(), 100);
     contracts.budokan.submit_score(tournament.id, player1_token_id, 1);
 
-    let finalized_time = (TEST_END_TIME() + MIN_SUBMISSION_PERIOD + 1).into();
+    let finalized_time = (TEST_GAME_START_DELAY()
+        + TEST_GAME_END_DELAY()
+        + MIN_SUBMISSION_PERIOD
+        + 1)
+        .into();
     start_cheat_block_timestamp(contracts.budokan.contract_address, finalized_time);
 
     // Claim once - should succeed
@@ -5986,4 +6024,297 @@ fn test_cannot_claim_refund_twice() {
         .claim_reward(
             tournament.id, RewardType::EntryFee(EntryFeeRewardType::Refund(player1_token_id)),
         );
+}
+
+//
+// LeaderboardConfig tests
+//
+
+#[test]
+fn test_create_tournament_with_leaderboard_config() {
+    let contracts = setup();
+    let owner = OWNER;
+
+    start_cheat_caller_address(contracts.budokan.contract_address, owner);
+
+    let leaderboard_config = LeaderboardConfig { ascending: true, game_must_be_over: true };
+
+    let tournament = contracts
+        .budokan
+        .create_tournament(
+            owner,
+            test_metadata(),
+            test_schedule(),
+            test_game_config(contracts.minigame.contract_address),
+            Option::None,
+            Option::None,
+            leaderboard_config,
+            1,
+            0,
+        );
+
+    // Verify leaderboard_config is stored and returned correctly
+    assert!(tournament.leaderboard_config.ascending == true, "ascending should be true");
+    assert!(
+        tournament.leaderboard_config.game_must_be_over == true, "game_must_be_over should be true",
+    );
+
+    // Verify via tournament() getter
+    let fetched = contracts.budokan.tournament(tournament.id);
+    assert!(fetched.leaderboard_config.ascending == true, "fetched ascending mismatch");
+    assert!(
+        fetched.leaderboard_config.game_must_be_over == true, "fetched game_must_be_over mismatch",
+    );
+
+    stop_cheat_caller_address(contracts.budokan.contract_address);
+}
+
+#[test]
+fn test_ascending_leaderboard() {
+    let contracts = setup();
+    let owner = OWNER;
+
+    start_cheat_caller_address(contracts.budokan.contract_address, owner);
+
+    // Create tournament with ascending=true (lower scores are better)
+    let leaderboard_config = LeaderboardConfig { ascending: true, game_must_be_over: false };
+    let tournament = contracts
+        .budokan
+        .create_tournament(
+            owner,
+            test_metadata(),
+            test_schedule(),
+            test_game_config(contracts.minigame.contract_address),
+            Option::None,
+            Option::None,
+            leaderboard_config,
+            1,
+            0,
+        );
+
+    let mut time = TEST_REGISTRATION_START_DELAY().into();
+    start_cheat_block_timestamp(contracts.budokan.contract_address, time);
+    start_cheat_block_timestamp(contracts.minigame.contract_address, time);
+
+    // Enter tournament with two players
+    let (token_id1, _) = contracts
+        .budokan
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 2, 0);
+    let (token_id2, _) = contracts
+        .budokan
+        .enter_tournament(tournament.id, 'player2', owner, Option::None, 3, 0);
+
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
+    start_cheat_block_timestamp(contracts.budokan.contract_address, time);
+    start_cheat_block_timestamp(contracts.minigame.contract_address, time);
+
+    // End games: player1 scores 50 (better in ascending), player2 scores 100
+    contracts.minigame.end_game(token_id1.into(), 50);
+    contracts.minigame.end_game(token_id2.into(), 100);
+
+    // Submit scores - lower score should be first
+    contracts.budokan.submit_score(tournament.id, token_id1, 1); // 50 points - first place
+    contracts.budokan.submit_score(tournament.id, token_id2, 2); // 100 points - second place
+
+    // Verify leaderboard ordering: lower score first
+    let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
+    assert!(leaderboard.len() == 2, "leaderboard should have 2 entries");
+    assert!(*leaderboard.at(0) == token_id1, "lower score should be first");
+    assert!(*leaderboard.at(1) == token_id2, "higher score should be second");
+
+    stop_cheat_caller_address(contracts.budokan.contract_address);
+    stop_cheat_block_timestamp(contracts.budokan.contract_address);
+    stop_cheat_block_timestamp(contracts.minigame.contract_address);
+}
+
+#[should_panic(expected: "Budokan: Score too low for position")]
+#[test]
+fn test_ascending_leaderboard_rejects_higher_score_at_top() {
+    let contracts = setup();
+    let owner = OWNER;
+
+    start_cheat_caller_address(contracts.budokan.contract_address, owner);
+
+    // Create ascending tournament (lower scores are better)
+    let leaderboard_config = LeaderboardConfig { ascending: true, game_must_be_over: false };
+    let tournament = contracts
+        .budokan
+        .create_tournament(
+            owner,
+            test_metadata(),
+            test_schedule(),
+            test_game_config(contracts.minigame.contract_address),
+            Option::None,
+            Option::None,
+            leaderboard_config,
+            1,
+            0,
+        );
+
+    let mut time = TEST_REGISTRATION_START_DELAY().into();
+    start_cheat_block_timestamp(contracts.budokan.contract_address, time);
+    start_cheat_block_timestamp(contracts.minigame.contract_address, time);
+
+    let (token_id1, _) = contracts
+        .budokan
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 2, 0);
+    let (token_id2, _) = contracts
+        .budokan
+        .enter_tournament(tournament.id, 'player2', owner, Option::None, 3, 0);
+
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
+    start_cheat_block_timestamp(contracts.budokan.contract_address, time);
+    start_cheat_block_timestamp(contracts.minigame.contract_address, time);
+
+    // player1 scores 50 (good), player2 scores 100 (worse in ascending)
+    contracts.minigame.end_game(token_id1.into(), 50);
+    contracts.minigame.end_game(token_id2.into(), 100);
+
+    // Submit first player at position 1
+    contracts.budokan.submit_score(tournament.id, token_id1, 1);
+
+    // Try to submit higher score at position 1 - should fail in ascending mode
+    contracts.budokan.submit_score(tournament.id, token_id2, 1);
+}
+
+#[should_panic(expected: 'Budokan: Game not over')]
+#[test]
+fn test_game_must_be_over_rejects_in_progress_game() {
+    let contracts = setup();
+    let owner = OWNER;
+
+    start_cheat_caller_address(contracts.budokan.contract_address, owner);
+
+    // Create tournament with game_must_be_over=true
+    let leaderboard_config = LeaderboardConfig { ascending: false, game_must_be_over: true };
+    let tournament = contracts
+        .budokan
+        .create_tournament(
+            owner,
+            test_metadata(),
+            test_schedule(),
+            test_game_config(contracts.minigame.contract_address),
+            Option::None,
+            Option::None,
+            leaderboard_config,
+            1,
+            0,
+        );
+
+    let mut time = TEST_REGISTRATION_START_DELAY().into();
+    start_cheat_block_timestamp(contracts.budokan.contract_address, time);
+    start_cheat_block_timestamp(contracts.minigame.contract_address, time);
+
+    let (token_id, _) = contracts
+        .budokan
+        .enter_tournament(tournament.id, 'player', owner, Option::None, 2, 0);
+
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
+    start_cheat_block_timestamp(contracts.budokan.contract_address, time);
+    start_cheat_block_timestamp(contracts.minigame.contract_address, time);
+
+    // Start game but don't end it - game_over will return false
+    contracts.minigame.start_game(token_id.into());
+
+    // Try to submit score - should panic because game is not over
+    contracts.budokan.submit_score(tournament.id, token_id, 1);
+}
+
+#[test]
+fn test_game_must_be_over_accepts_finished_game() {
+    let contracts = setup();
+    let owner = OWNER;
+
+    start_cheat_caller_address(contracts.budokan.contract_address, owner);
+
+    // Create tournament with game_must_be_over=true
+    let leaderboard_config = LeaderboardConfig { ascending: false, game_must_be_over: true };
+    let tournament = contracts
+        .budokan
+        .create_tournament(
+            owner,
+            test_metadata(),
+            test_schedule(),
+            test_game_config(contracts.minigame.contract_address),
+            Option::None,
+            Option::None,
+            leaderboard_config,
+            1,
+            0,
+        );
+
+    let mut time = TEST_REGISTRATION_START_DELAY().into();
+    start_cheat_block_timestamp(contracts.budokan.contract_address, time);
+    start_cheat_block_timestamp(contracts.minigame.contract_address, time);
+
+    let (token_id, _) = contracts
+        .budokan
+        .enter_tournament(tournament.id, 'player', owner, Option::None, 2, 0);
+
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
+    start_cheat_block_timestamp(contracts.budokan.contract_address, time);
+    start_cheat_block_timestamp(contracts.minigame.contract_address, time);
+
+    // End game properly - game_over returns true
+    contracts.minigame.end_game(token_id.into(), 100);
+
+    // Submit score - should succeed because game is over
+    contracts.budokan.submit_score(tournament.id, token_id, 1);
+
+    let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
+    assert!(leaderboard.len() == 1, "leaderboard should have 1 entry");
+
+    stop_cheat_caller_address(contracts.budokan.contract_address);
+    stop_cheat_block_timestamp(contracts.budokan.contract_address);
+    stop_cheat_block_timestamp(contracts.minigame.contract_address);
+}
+
+#[test]
+fn test_game_must_be_over_false_accepts_in_progress_game() {
+    let contracts = setup();
+    let owner = OWNER;
+
+    start_cheat_caller_address(contracts.budokan.contract_address, owner);
+
+    // Create tournament with game_must_be_over=false (default behavior)
+    let leaderboard_config = LeaderboardConfig { ascending: false, game_must_be_over: false };
+    let tournament = contracts
+        .budokan
+        .create_tournament(
+            owner,
+            test_metadata(),
+            test_schedule(),
+            test_game_config(contracts.minigame.contract_address),
+            Option::None,
+            Option::None,
+            leaderboard_config,
+            1,
+            0,
+        );
+
+    let mut time = TEST_REGISTRATION_START_DELAY().into();
+    start_cheat_block_timestamp(contracts.budokan.contract_address, time);
+    start_cheat_block_timestamp(contracts.minigame.contract_address, time);
+
+    let (token_id, _) = contracts
+        .budokan
+        .enter_tournament(tournament.id, 'player', owner, Option::None, 2, 0);
+
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
+    start_cheat_block_timestamp(contracts.budokan.contract_address, time);
+    start_cheat_block_timestamp(contracts.minigame.contract_address, time);
+
+    // End game to set a score (end_game sets both score and game_over=true,
+    // but what matters is game_must_be_over=false means we don't check)
+    contracts.minigame.end_game(token_id.into(), 100);
+
+    // Submit score - should succeed regardless of game_over status
+    contracts.budokan.submit_score(tournament.id, token_id, 1);
+
+    let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
+    assert!(leaderboard.len() == 1, "leaderboard should have 1 entry");
+
+    stop_cheat_caller_address(contracts.budokan.contract_address);
+    stop_cheat_block_timestamp(contracts.budokan.contract_address);
+    stop_cheat_block_timestamp(contracts.minigame.contract_address);
 }

@@ -1,28 +1,26 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 // Import types from other interface packages
-pub use budokan_interfaces::distribution::Distribution;
-pub use budokan_interfaces::entry_requirement::{
+pub use game_components_interfaces::distribution::Distribution;
+pub use game_components_interfaces::entry_requirement::{
     EntryRequirement, EntryRequirementType, ExtensionConfig, NFTQualification, QualificationProof,
 };
-pub use budokan_interfaces::prize::{ERC20Data, ERC721Data, Prize, PrizeType, TokenTypeData};
+pub use game_components_interfaces::prize::{
+    ERC20Data, ERC721Data, PrizeData, PrizeType, TokenTypeData,
+};
 use starknet::ContractAddress;
 
 // ==============================================
 // SCHEDULE MODELS
 // ==============================================
 
-#[derive(Copy, Drop, Serde, PartialEq, starknet::Store)]
+#[derive(Copy, Drop, Serde, PartialEq)]
 pub struct Schedule {
-    pub registration: Option<Period>,
-    pub game: Period,
-    pub submission_duration: u64,
-}
-
-#[derive(Copy, Drop, Serde, PartialEq, starknet::Store)]
-pub struct Period {
-    pub start: u64,
-    pub end: u64,
+    pub registration_start_delay: u32,
+    pub registration_end_delay: u32,
+    pub game_start_delay: u32,
+    pub game_end_delay: u32,
+    pub submission_duration: u32,
 }
 
 #[derive(Copy, Drop, Serde, PartialEq)]
@@ -36,6 +34,16 @@ pub enum Phase {
 }
 
 // ==============================================
+// LEADERBOARD CONFIG
+// ==============================================
+
+#[derive(Copy, Drop, Serde, PartialEq)]
+pub struct LeaderboardConfig {
+    pub ascending: bool, // true = lower scores better, false = higher scores better
+    pub game_must_be_over: bool // true = game_over() must return true before score submission
+}
+
+// ==============================================
 // BUDOKAN CORE MODELS
 // ==============================================
 
@@ -43,11 +51,11 @@ pub enum Phase {
 pub struct EntryFee {
     pub token_address: ContractAddress,
     pub amount: u128,
+    pub tournament_creator_share: u16,
+    pub game_creator_share: u16,
+    pub refund_share: u16,
     pub distribution: Distribution,
-    pub tournament_creator_share: Option<u16>,
-    pub game_creator_share: Option<u16>,
-    pub refund_share: Option<u16>,
-    pub distribution_positions: Option<u32>,
+    pub distribution_count: u32,
 }
 
 #[derive(Drop, Serde)]
@@ -55,12 +63,13 @@ pub struct Tournament {
     pub id: u64,
     pub created_at: u64,
     pub created_by: ContractAddress,
-    pub creator_token_id: u64,
+    pub creator_token_id: felt252,
     pub metadata: Metadata,
     pub schedule: Schedule,
     pub game_config: GameConfig,
     pub entry_fee: Option<EntryFee>,
     pub entry_requirement: Option<EntryRequirement>,
+    pub leaderboard_config: LeaderboardConfig,
 }
 
 #[derive(Clone, Drop, Serde, starknet::Store)]
@@ -71,10 +80,12 @@ pub struct Metadata {
 
 #[derive(Drop, Serde)]
 pub struct GameConfig {
-    pub address: ContractAddress,
+    pub game_address: ContractAddress,
     pub settings_id: u32,
     pub soulbound: bool,
-    pub play_url: ByteArray,
+    pub paymaster: bool,
+    pub client_url: Option<ByteArray>,
+    pub renderer: Option<ContractAddress>,
 }
 
 #[derive(Copy, Drop, Serde)]
@@ -82,7 +93,7 @@ pub enum EntryFeeRewardType {
     Position: u32,
     TournamentCreator,
     GameCreator,
-    Refund: u64,
+    Refund: felt252,
 }
 
 #[derive(Copy, Drop, Serde)]
@@ -101,7 +112,7 @@ pub trait IBudokan<TState> {
     fn total_tournaments(self: @TState) -> u64;
     fn tournament(self: @TState, tournament_id: u64) -> Tournament;
     fn tournament_entries(self: @TState, tournament_id: u64) -> u32;
-    fn get_leaderboard(self: @TState, tournament_id: u64) -> Array<u64>;
+    fn get_leaderboard(self: @TState, tournament_id: u64) -> Array<felt252>;
     fn current_phase(self: @TState, tournament_id: u64) -> Phase;
 
     // Write functions
@@ -113,6 +124,9 @@ pub trait IBudokan<TState> {
         game_config: GameConfig,
         entry_fee: Option<EntryFee>,
         entry_requirement: Option<EntryRequirement>,
+        leaderboard_config: LeaderboardConfig,
+        salt: u16,
+        metadata_value: u16,
     ) -> Tournament;
 
     fn enter_tournament(
@@ -121,11 +135,15 @@ pub trait IBudokan<TState> {
         player_name: felt252,
         player_address: ContractAddress,
         qualification: Option<QualificationProof>,
-    ) -> (u64, u32);
+        salt: u16,
+        metadata_value: u16,
+    ) -> (felt252, u32);
 
-    fn ban_entry(ref self: TState, tournament_id: u64, game_token_id: u64, proof: Span<felt252>);
+    fn ban_entry(
+        ref self: TState, tournament_id: u64, game_token_id: felt252, proof: Span<felt252>,
+    );
 
-    fn submit_score(ref self: TState, tournament_id: u64, token_id: u64, position: u8);
+    fn submit_score(ref self: TState, tournament_id: u64, token_id: felt252, position: u32);
 
     fn claim_reward(ref self: TState, tournament_id: u64, reward_type: RewardType);
 
@@ -135,5 +153,5 @@ pub trait IBudokan<TState> {
         token_address: ContractAddress,
         token_type: TokenTypeData,
         position: Option<u32>,
-    ) -> Prize;
+    ) -> PrizeData;
 }
