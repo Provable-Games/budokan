@@ -132,7 +132,8 @@ const Tournament = () => {
   // Derive loading and existence from query state — no effect-based sync needed
   const loading = !initialLoadDone;
   const tournamentId = Number(id || 0);
-  const tournamentExists = !EXCLUDED_TOURNAMENT_IDS.includes(tournamentId) && tournamentData !== null;
+  const excludedIds = EXCLUDED_TOURNAMENT_IDS[selectedChainConfig?.chainId ?? ""] ?? [];
+  const tournamentExists = !excludedIds.includes(tournamentId) && tournamentData !== null;
 
   // Get leaderboard size from distribution_count if specified, otherwise default to 10
   const leaderboardSize =

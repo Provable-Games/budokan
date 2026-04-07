@@ -2,6 +2,7 @@ import { HoverCardContent } from "@/components/ui/hover-card";
 import type { Tournament } from "@provable-games/budokan-sdk";
 import { useMemo } from "react";
 import { useTokenUri } from "@provable-games/denshokan-sdk/react";
+import { getObjectImage } from "@/assets/games";
 
 interface EntryInfoProps {
   entryNumber: string;
@@ -53,13 +54,19 @@ const EntryInfo = ({
         {isLoading ? (
           <span className="text-center text-neutral">Loading...</span>
         ) : parsedImage ? (
-          <object
-            data={parsedImage}
-            type="image/svg+xml"
-            className="w-full h-auto px-4"
-          >
-            <img src={parsedImage} alt="metadata" className="w-full h-auto px-4" />
-          </object>
+          <div className="w-full px-4">
+            {getObjectImage(tournamentModel?.gameAddress ?? "") ? (
+              <object
+                data={parsedImage}
+                type="image/svg+xml"
+                className="w-full h-auto"
+              >
+                <img src={parsedImage} alt="metadata" className="w-full h-auto" />
+              </object>
+            ) : (
+              <img src={parsedImage} alt="metadata" className="w-full h-auto" />
+            )}
+          </div>
         ) : (
           <span className="text-center text-neutral">No Token URI</span>
         )}

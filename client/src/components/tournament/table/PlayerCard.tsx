@@ -3,11 +3,11 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { VERIFIED, QUESTION } from "@/components/Icons";
 import { Ban, Eye, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getWatchLink, getReplayLink } from "@/assets/games";
+import { getWatchLink, getReplayLink, getObjectImage } from "@/assets/games";
 import { useTokenUri } from "@provable-games/denshokan-sdk/react";
 import { useMemo } from "react";
 
-const TokenUriImage = ({ tokenId }: { tokenId: string }) => {
+const TokenUriImage = ({ tokenId, gameAddress }: { tokenId: string; gameAddress?: string }) => {
   const { data: tokenUri, isLoading } = useTokenUri(tokenId);
 
   const parsedImage = useMemo(() => {
@@ -29,14 +29,22 @@ const TokenUriImage = ({ tokenId }: { tokenId: string }) => {
     return <span className="text-center text-neutral">No Token URI</span>;
   }
 
+  const useObject = gameAddress ? getObjectImage(gameAddress) : false;
+
   return (
-    <object
-      data={parsedImage}
-      type="image/svg+xml"
-      className="w-full h-auto px-4"
-    >
-      <img src={parsedImage} alt="metadata" className="w-full h-auto px-4" />
-    </object>
+    <div className="w-full px-4">
+      {useObject ? (
+        <object
+          data={parsedImage}
+          type="image/svg+xml"
+          className="w-full h-auto"
+        >
+          <img src={parsedImage} alt="metadata" className="w-full h-auto" />
+        </object>
+      ) : (
+        <img src={parsedImage} alt="metadata" className="w-full h-auto" />
+      )}
+    </div>
   );
 };
 
@@ -81,7 +89,7 @@ export const PlayerDetails = ({
       </div>
       <div className="w-full h-0.5 bg-brand/50" />
       {tokenId ? (
-        <TokenUriImage tokenId={tokenId} />
+        <TokenUriImage tokenId={tokenId} gameAddress={gameAddress} />
       ) : (
         <span className="text-center text-neutral">No Token URI</span>
       )}

@@ -204,7 +204,7 @@ const Overview = () => {
           sort: currentSortBy as any,
           offset: currentPage * 12,
           limit: 12,
-          excludeIds: EXCLUDED_TOURNAMENT_IDS.map(String),
+          excludeIds: (EXCLUDED_TOURNAMENT_IDS[selectedChainConfig?.chainId ?? ""] ?? []).map(String),
           includePrizeSummary: "summary",
         }
       : undefined,
