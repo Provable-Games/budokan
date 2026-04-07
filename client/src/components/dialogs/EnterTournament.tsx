@@ -91,7 +91,6 @@ interface EnterTournamentDialogProps {
   tournamentsData: Tournament[];
   duration: number;
   totalPrizesValueUSD: number;
-  onEntryComplete?: () => void;
 }
 
 const ENTRY_BATCH_SIZE = 20;
@@ -166,7 +165,6 @@ export function EnterTournamentDialog({
   tournamentsData,
   duration,
   totalPrizesValueUSD,
-  onEntryComplete,
 }: EnterTournamentDialogProps) {
   const { selectedChainConfig } = useChainConfig();
   const metagameClient = useMetagameClient();
@@ -296,14 +294,11 @@ export function EnterTournamentDialog({
         (current, total) => setBatchProgress({ current, total }),
       );
 
-      console.log("[EnterTournament] Entry confirmed, calling onEntryComplete");
+      setBatchProgress(null);
       setPlayerName("");
       setControllerUsername("");
       setPlayerAddress(undefined);
       setNumEntries(1);
-      setBatchProgress(null);
-      onEntryComplete?.();
-      console.log("[EnterTournament] Closing dialog");
       onOpenChange(false);
       setIsEntering(false);
     } catch (error) {
@@ -1081,7 +1076,7 @@ export function EnterTournamentDialog({
         <DialogHeader>
           <DialogTitle className="text-xl">Enter Tournament</DialogTitle>
         </DialogHeader>
-        {batchProgress && (
+        {batchProgress && batchProgress.total > 1 && (
           <div className="bg-brand/10 border border-brand p-4 rounded-lg">
             <div className="flex items-center gap-3">
               <LoadingSpinner />
@@ -2044,7 +2039,7 @@ export function EnterTournamentDialog({
                   <div className="flex items-center gap-2">
                     <LoadingSpinner />
                     <span>
-                      {batchProgress
+                      {batchProgress && batchProgress.total > 1
                         ? `Batch ${batchProgress.current}/${batchProgress.total}`
                         : "Entering..."}
                     </span>

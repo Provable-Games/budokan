@@ -298,13 +298,12 @@ const Tournament = () => {
   // Note: We no longer use reward claims aggregations since we calculate
   // actual claimable count directly from filtered prizes
 
-  // Refetch data when WebSocket messages arrive — only what the channel indicates changed.
-  // ScoreTable and MyEntries handle their own registration/token refetches via lastMessage prop.
+  // Refetch data when WebSocket messages arrive.
   useEffect(() => {
     if (!lastMessage) return;
     const ch = lastMessage.channel;
     if (ch === "tournaments" || ch === "registrations") {
-      refetchTournament(); // entryCount lives on the tournament model
+      refetchTournament();
     }
     if (ch === "prizes") {
       refetchAggregations();
@@ -878,7 +877,6 @@ const Tournament = () => {
             tournamentsData={tournamentsData}
             duration={durationSeconds}
             totalPrizesValueUSD={totalPrizesValueUSD}
-            onEntryComplete={refetchTournament}
           />
           <SubmitScoresDialog
             open={submitScoresDialogOpen}

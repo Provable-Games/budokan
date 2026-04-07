@@ -104,7 +104,10 @@ export const PlayerDetails = ({
                   variant="outline"
                   size="sm"
                   className="mx-4"
-                  onClick={() => window.open(`${replayLink}${tokenId}`, "_blank")}
+                  onClick={() => {
+                    const hexId = tokenId!.startsWith("0x") ? tokenId : "0x" + BigInt(tokenId!).toString(16);
+                    window.open(`${replayLink}${hexId}`, "_blank");
+                  }}
                 >
                   <RotateCcw className="w-4 h-4 mr-2" />
                   Watch Replay
@@ -120,7 +123,10 @@ export const PlayerDetails = ({
                   variant="outline"
                   size="sm"
                   className="mx-4"
-                  onClick={() => window.open(`${watchLink}${tokenId}`, "_blank")}
+                  onClick={() => {
+                    const hexId = tokenId!.startsWith("0x") ? tokenId : "0x" + BigInt(tokenId!).toString(16);
+                    window.open(`${watchLink}${hexId}`, "_blank");
+                  }}
                 >
                   <Eye className="w-4 h-4 mr-2" />
                   Watch Live

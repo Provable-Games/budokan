@@ -174,9 +174,6 @@ export const useSystemCalls = () => {
 
       await waitForTournamentEntry(tournamentId, entryCount + numEntries, player_address.toString());
 
-      // Small delay to let API reflect the indexed data before callers refetch
-      await new Promise((r) => setTimeout(r, 1000));
-
       if (tx) {
         showTournamentEntry({
           tournamentName,

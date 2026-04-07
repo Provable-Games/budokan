@@ -138,7 +138,7 @@ export function SubmitScoresDialog({
         <DialogHeader>
           <DialogTitle>Submit Scores</DialogTitle>
         </DialogHeader>
-        {batchProgress && (
+        {batchProgress && batchProgress.total > 1 && (
           <div className="bg-brand/10 border border-brand p-4 rounded-lg mx-5">
             <div className="flex items-center gap-3">
               <LoadingSpinner />
@@ -195,7 +195,7 @@ export function SubmitScoresDialog({
               {isSubmitting ? (
                 <div className="flex items-center gap-2">
                   <LoadingSpinner />
-                  {batchProgress ? (
+                  {batchProgress && batchProgress.total > 1 ? (
                     <span>
                       Batch {batchProgress.current}/{batchProgress.total}
                     </span>
