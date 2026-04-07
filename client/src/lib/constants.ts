@@ -26,5 +26,8 @@ export const ADMIN_ADDRESS =
 
 export const STARTING_TOURNAMENT_ID = 2;
 
-// Tournament IDs to exclude from display
-export const EXCLUDED_TOURNAMENT_IDS: number[] = [1, 2, 3];
+// Tournament IDs to exclude from display, keyed by chain
+export const EXCLUDED_TOURNAMENT_IDS: Record<string, number[]> = {
+  SN_MAIN: [1, 2, 3],
+  SN_SEPOLIA: [],
+};

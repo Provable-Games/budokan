@@ -16,6 +16,8 @@ export interface Game {
   defaultEntryFeeToken?: string;
   defaultGameFeePercentage?: number;
   averageGasCostUsd?: number;
+  /** Use <object> tag for token URI SVGs (enables CSS animations). Default: false (uses <img>) */
+  objectImage?: boolean;
 }
 
 // STRK token address (same on mainnet and sepolia)
@@ -77,6 +79,12 @@ export const getReplayLink = (gameAddress: string): string | undefined => {
   return game?.replayLink;
 };
 
+export const getObjectImage = (gameAddress: string): boolean => {
+  const games = getGames();
+  const game = games.find((game) => game.contract_address === gameAddress);
+  return game?.objectImage ?? false;
+};
+
 export const getGamesForChain = (chainId: string): Game[] => {
   const isSepolia = chainId === ChainId.SN_SEPOLIA;
   const isMainnet = chainId === ChainId.SN_MAIN;
@@ -125,6 +133,7 @@ export const getGamesForChain = (chainId: string): Game[] => {
         controllerOnly: true,
         minEntryFeeUsd: 0.25,
         defaultEntryFeeToken: STRK_ADDRESS,
+        objectImage: true,
       },
       {
         contract_address:
