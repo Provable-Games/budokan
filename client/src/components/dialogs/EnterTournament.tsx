@@ -862,7 +862,7 @@ export function EnterTournamentDialog({
         : 0n;
       const tokenIds = Array.isArray(lb.token_ids)
         ? lb.token_ids.map((id: any) =>
-            String(Number(addAddressPadding(bigintToHex(BigInt(id))))),
+            addAddressPadding(bigintToHex(BigInt(id))),
           )
         : [];
       return {
