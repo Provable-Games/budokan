@@ -27,7 +27,4 @@ export const ADMIN_ADDRESS =
 export const STARTING_TOURNAMENT_ID = 2;
 
 // Tournament IDs to exclude from display
-export const EXCLUDED_TOURNAMENT_IDS: number[] = [
-  // Add tournament IDs here that you want to hide
-  // Example: 1, 2, 3
-];
+export const EXCLUDED_TOURNAMENT_IDS: number[] = [1, 2, 3];
