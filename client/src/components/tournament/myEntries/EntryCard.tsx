@@ -117,9 +117,10 @@ const EntryCard = ({
               size="sm"
               onClick={() => {
                 const tokenId = game.tokenId?.toString() ?? "0";
+                const hexTokenId = tokenId.startsWith("0x") ? tokenId : "0x" + BigInt(tokenId).toString(16);
                 const url = playUrl.includes("{tokenId}")
-                  ? playUrl.replace("{tokenId}", tokenId.startsWith("0x") ? tokenId : "0x" + BigInt(tokenId).toString(16))
-                  : `${playUrl}${Number(tokenId)}`;
+                  ? playUrl.replace("{tokenId}", hexTokenId)
+                  : `${playUrl}${hexTokenId}`;
                 window.open(url, "_blank");
               }}
             >

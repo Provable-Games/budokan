@@ -118,9 +118,9 @@ export const getGamesForChain = (chainId: string): Game[] => {
       },
       {
         contract_address:
-          "0x70ce27ec32c1e70b9034d63eb64dd35243564d2b7c96414a4d46b1d715527d8",
-        name: "Fun Factory",
-        url: "https://funfactory.gg",
+          "0x3a2ea07f0f49c770035eed9a010eb3d1e1bc3cb92e1d47eef2ad75a25c6bdb2",
+        name: "Number Guess",
+        url: "https://funfactory.gg/games/1",
         playUrl: "https://funfactory.gg/tokens/{tokenId}/play",
         controllerOnly: true,
         minEntryFeeUsd: 0.25,
@@ -153,18 +153,18 @@ export const getGamesForChain = (chainId: string): Game[] => {
       },
       {
         contract_address:
-          "0x05e2dfbdc3c193de629e5beb116083b06bd944c1608c9c793351d5792ba29863",
-        name: "Loot Survivor",
+          "0x4de0351ceab4ecd50be6ee09329b0dcb3b96a9da88cc158f453823a389722fa",
+        name: "Death Mountain",
         image: lsLogo,
-        url: "https://lootsurvivor.io/budokan",
-        playUrl: "https://lootsurvivor.io/budokan/play?id=",
+        url: "https://super-death-mountain.vercel.app/",
+        playUrl: "https://super-death-mountain.vercel.app/play?id=",
         controllerOnly: true,
-        watchLink: "https://lootsurvivor.io/budokan/watch?id=",
-        replayLink: "https://lootsurvivor.io/budokan/replay?id=",
+        watchLink: "https://super-death-mountain.vercel.app/watch?id=",
+        replayLink: "https://super-death-mountain.vercel.app/replay?id=",
         minEntryFeeUsd: 0.25,
         defaultEntryFeeToken: STRK_ADDRESS,
         defaultGameFeePercentage: 5,
-        averageGasCostUsd: 0.5,
+        averageGasCostUsd: 0.25,
       },
       {
         contract_address:

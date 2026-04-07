@@ -18,13 +18,14 @@ import {
 
 const app = new Hono();
 
-// SQL helpers for computing absolute timestamps from created_at + schedule delays
+// SQL helpers for computing absolute timestamps from created_at + cumulative delays
+// Each phase delay is relative to the previous phase, not to created_at
 // Registration delays of 0 mean "no registration period" — treat as NULL
 const gameStartTime = sql`(${tournaments.createdAt} + (${tournaments.schedule}->>'game_start_delay')::bigint)`;
-const gameEndTime = sql`(${tournaments.createdAt} + (${tournaments.schedule}->>'game_end_delay')::bigint)`;
+const gameEndTime = sql`(${tournaments.createdAt} + (${tournaments.schedule}->>'game_start_delay')::bigint + (${tournaments.schedule}->>'game_end_delay')::bigint)`;
 const regStartTime = sql`CASE WHEN (${tournaments.schedule}->>'registration_start_delay')::bigint > 0 THEN (${tournaments.createdAt} + (${tournaments.schedule}->>'registration_start_delay')::bigint) ELSE NULL END`;
-const regEndTime = sql`CASE WHEN (${tournaments.schedule}->>'registration_end_delay')::bigint > 0 THEN (${tournaments.createdAt} + (${tournaments.schedule}->>'registration_end_delay')::bigint) ELSE NULL END`;
-const submissionEndTime = sql`(${tournaments.createdAt} + (${tournaments.schedule}->>'game_end_delay')::bigint + (${tournaments.schedule}->>'submission_duration')::bigint)`;
+const regEndTime = sql`CASE WHEN (${tournaments.schedule}->>'registration_end_delay')::bigint > 0 THEN (${tournaments.createdAt} + (${tournaments.schedule}->>'registration_start_delay')::bigint + (${tournaments.schedule}->>'registration_end_delay')::bigint) ELSE NULL END`;
+const submissionEndTime = sql`(${tournaments.createdAt} + (${tournaments.schedule}->>'game_start_delay')::bigint + (${tournaments.schedule}->>'game_end_delay')::bigint + (${tournaments.schedule}->>'submission_duration')::bigint)`;
 
 // ─── GET / ── List tournaments ──────────────────────────────────────────────
 // Query params: game_address, creator, phase, sort, include_prizes,
@@ -650,11 +651,12 @@ function serializeTournament(t: typeof tournaments.$inferSelect) {
     createdAtBlock: t.createdAtBlock?.toString() ?? null,
     txHash: t.txHash,
     // Computed absolute timestamps (Unix seconds)
+    // Delays are cumulative: each phase offset is relative to the previous phase
     registrationStartTime: regStartDelay > 0 ? String(base + regStartDelay) : null,
-    registrationEndTime: regEndDelay > 0 ? String(base + regEndDelay) : null,
+    registrationEndTime: regEndDelay > 0 ? String(base + regStartDelay + regEndDelay) : null,
     gameStartTime: String(base + gameStartDelay),
-    gameEndTime: String(base + gameEndDelay),
-    submissionEndTime: String(base + gameEndDelay + submissionDuration),
+    gameEndTime: String(base + gameStartDelay + gameEndDelay),
+    submissionEndTime: String(base + gameStartDelay + gameEndDelay + submissionDuration),
   };
 }
 

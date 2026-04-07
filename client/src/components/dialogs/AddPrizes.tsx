@@ -348,7 +348,7 @@ export function AddPrizesDialog({
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto pr-2">
-            {batchProgress && (
+            {batchProgress && batchProgress.total > 1 && (
               <div className="bg-brand/10 border border-brand p-4 rounded-lg mb-4">
                 <div className="flex items-center gap-3">
                   <LoadingSpinner />

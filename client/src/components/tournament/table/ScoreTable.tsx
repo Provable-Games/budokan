@@ -152,12 +152,16 @@ const ScoreTable = ({
     }
   }, [gameTokens, hasInitialized]);
 
-  // Refetch registrations on budokan WS events (bans, submissions)
+  // Refetch on budokan WS registration events.
+  // Registrations refetch immediately (budokan data is ready).
+  // Token refetch is delayed — the denshokan indexer needs time to index the mint.
   useEffect(() => {
     if (lastMessage?.channel === "registrations") {
       refetchRegistrations();
+      const timer = setTimeout(() => refetchTokens(), 3000);
+      return () => clearTimeout(timer);
     }
-  }, [lastMessage, refetchRegistrations]);
+  }, [lastMessage, refetchTokens, refetchRegistrations]);
 
   const loading = tokensLoading;
 

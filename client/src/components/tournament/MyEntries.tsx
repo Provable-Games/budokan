@@ -90,12 +90,16 @@ const MyEntries = ({
     }
   }, [address, myEntriesCount, totalEntryCount]);
 
-  // Refetch registrations on budokan WS registration events
+  // Refetch on budokan WS registration events.
+  // Registrations refetch immediately (budokan data is ready).
+  // Token refetch is delayed — the denshokan indexer needs time to index the mint.
   useEffect(() => {
     if (lastMessage?.channel === "registrations") {
       refetchRegistrations();
+      const timer = setTimeout(() => refetch(), 3000);
+      return () => clearTimeout(timer);
     }
-  }, [lastMessage, refetchRegistrations]);
+  }, [lastMessage, refetch, refetchRegistrations]);
 
   // Refetch when a ban operation completes
   useEffect(() => {

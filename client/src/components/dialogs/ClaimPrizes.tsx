@@ -232,7 +232,7 @@ export function ClaimPrizesDialog({
             Distribute Prizes ({totalPrizeCount} unclaimed)
           </DialogTitle>
         </DialogHeader>
-        {batchProgress && (
+        {batchProgress && batchProgress.total > 1 && (
           <div className="bg-brand/10 border border-brand p-4 rounded-lg mx-5">
             <div className="flex items-center gap-3">
               <LoadingSpinner />
@@ -345,7 +345,7 @@ export function ClaimPrizesDialog({
               {isProcessing ? (
                 <div className="flex items-center gap-2">
                   <LoadingSpinner />
-                  {batchProgress ? (
+                  {batchProgress && batchProgress.total > 1 ? (
                     <span>
                       Batch {batchProgress.current}/{batchProgress.total}
                     </span>
