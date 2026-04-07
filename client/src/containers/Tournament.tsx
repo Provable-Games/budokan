@@ -878,6 +878,7 @@ const Tournament = () => {
             tournamentsData={tournamentsData}
             duration={durationSeconds}
             totalPrizesValueUSD={totalPrizesValueUSD}
+            onEntryComplete={refetchTournament}
           />
           <SubmitScoresDialog
             open={submitScoresDialogOpen}

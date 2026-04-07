@@ -91,6 +91,7 @@ interface EnterTournamentDialogProps {
   tournamentsData: Tournament[];
   duration: number;
   totalPrizesValueUSD: number;
+  onEntryComplete?: () => void;
 }
 
 const ENTRY_BATCH_SIZE = 20;
@@ -165,6 +166,7 @@ export function EnterTournamentDialog({
   tournamentsData,
   duration,
   totalPrizesValueUSD,
+  onEntryComplete,
 }: EnterTournamentDialogProps) {
   const { selectedChainConfig } = useChainConfig();
   const metagameClient = useMetagameClient();
@@ -294,11 +296,14 @@ export function EnterTournamentDialog({
         (current, total) => setBatchProgress({ current, total }),
       );
 
+      console.log("[EnterTournament] Entry confirmed, calling onEntryComplete");
       setPlayerName("");
       setControllerUsername("");
       setPlayerAddress(undefined);
       setNumEntries(1);
       setBatchProgress(null);
+      onEntryComplete?.();
+      console.log("[EnterTournament] Closing dialog");
       onOpenChange(false);
       setIsEntering(false);
     } catch (error) {
