@@ -133,7 +133,7 @@ export function decodeByteArray(
   startIndex: number,
 ): { value: string; consumed: number } {
   const dataLen = Number(hexToBigInt(data[startIndex]));
-  let result = "";
+  const bytes: number[] = [];
   let idx = startIndex + 1;
 
   // Decode full 31-byte chunks
@@ -142,8 +142,8 @@ export function decodeByteArray(
     // Each chunk is 31 bytes (248 bits), stored in felt252
     const hex = chunk.toString(16).padStart(62, "0"); // 31 bytes = 62 hex chars
     for (let j = 0; j < 62; j += 2) {
-      const charCode = parseInt(hex.substring(j, j + 2), 16);
-      if (charCode > 0) result += String.fromCharCode(charCode);
+      const byte = parseInt(hex.substring(j, j + 2), 16);
+      if (byte > 0) bytes.push(byte);
     }
     idx++;
   }
@@ -155,10 +155,13 @@ export function decodeByteArray(
   if (pendingWordLen > 0) {
     const hex = pendingWord.toString(16).padStart(pendingWordLen * 2, "0");
     for (let i = 0; i < hex.length; i += 2) {
-      const charCode = parseInt(hex.substring(i, i + 2), 16);
-      if (charCode > 0) result += String.fromCharCode(charCode);
+      const byte = parseInt(hex.substring(i, i + 2), 16);
+      if (byte > 0) bytes.push(byte);
     }
   }
+
+  // Use TextDecoder for proper UTF-8 decoding (handles multi-byte chars like emojis)
+  const result = new TextDecoder("utf-8").decode(new Uint8Array(bytes));
 
   return { value: result, consumed: 1 + dataLen + 2 };
 }
