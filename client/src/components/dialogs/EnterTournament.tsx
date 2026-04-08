@@ -174,7 +174,7 @@ export function EnterTournamentDialog({
   const { connector } = useConnect();
   const { approveAndEnterTournament } = useSystemCalls();
   const [playerName, setPlayerName] = useState("");
-  const [quantity, setQuantity] = useState(1);
+  // Removed separate `quantity` state — use `numEntries` for all entry count logic
   const [controllerUsername, setControllerUsername] = useState("");
   const [playerAddress, setPlayerAddress] = useState<string | undefined>(
     undefined,
@@ -491,7 +491,7 @@ export function EnterTournamentDialog({
       setIsEntering(false);
       setSelectedPaymentToken(null);
       setIsEditingPlayerName(false);
-      setQuantity(1);
+      setNumEntries(1);
       setBatchProgress(null);
     }
   }, [open]);
@@ -519,7 +519,7 @@ export function EnterTournamentDialog({
   }, [entryToken, address, provider]);
 
   const hasBalance =
-    BigInt(balance) >= BigInt(entryAmount ?? 0) * BigInt(quantity);
+    BigInt(balance) >= BigInt(entryAmount ?? 0) * BigInt(numEntries);
 
   // Check if user can pay (either directly or via swap)
   const canPay = useMemo(() => {
@@ -547,14 +547,14 @@ export function EnterTournamentDialog({
 
       return (
         BigInt(selectedTokenBalance.balance) >=
-        BigInt(quote.quote.total) * BigInt(quantity)
+        BigInt(quote.quote.total) * BigInt(numEntries)
       );
     }
   }, [
     selectedPaymentToken,
     entryToken,
     hasBalance,
-    quantity,
+    numEntries,
     ekuboQuotes,
     tokenBalances,
   ]);
@@ -1238,8 +1238,8 @@ export function EnterTournamentDialog({
             <div className="flex items-center justify-between p-3 border border-brand/25 rounded-lg bg-neutral/5">
               <span className="text-sm text-brand-muted">Entries</span>
               <QuantitySelector
-                quantity={quantity}
-                setQuantity={setQuantity}
+                quantity={numEntries}
+                setQuantity={setNumEntries}
                 maxQuantity={maxQuantity}
               />
             </div>
@@ -1271,17 +1271,17 @@ export function EnterTournamentDialog({
                   creatorShare={creatorShare}
                   gameShare={gameShare}
                   prizePoolShare={prizePoolShare}
-                  quantity={quantity}
+                  quantity={numEntries}
                 />
               </div>
               {maxQuantity > 1 && (
                 <div className="flex flex-col items-center gap-1">
                   <QuantitySelector
-                    quantity={quantity}
-                    setQuantity={setQuantity}
+                    quantity={numEntries}
+                    setQuantity={setNumEntries}
                     maxQuantity={maxQuantity}
                   />
-                  {quantity > 1 && (
+                  {numEntries > 1 && (
                     <span className="text-xs text-brand-muted">
                       ${formatUsdValue(totalEntryFeeUsdCost)}
                     </span>
