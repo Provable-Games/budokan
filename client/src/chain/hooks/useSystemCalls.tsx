@@ -178,7 +178,7 @@ export const useSystemCalls = () => {
         showTournamentEntry({
           tournamentName,
           game,
-          entryFeeUsdCost: entryFeeUsdCost * numEntries,
+          entryFeeUsdCost,
           hasEntryFee: !!entryFeeData?.tokenAddress,
           startsIn,
           duration,

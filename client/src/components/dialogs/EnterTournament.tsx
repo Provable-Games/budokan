@@ -174,7 +174,6 @@ export function EnterTournamentDialog({
   const { connector } = useConnect();
   const { approveAndEnterTournament } = useSystemCalls();
   const [playerName, setPlayerName] = useState("");
-  // Removed separate `quantity` state — use `numEntries` for all entry count logic
   const [controllerUsername, setControllerUsername] = useState("");
   const [playerAddress, setPlayerAddress] = useState<string | undefined>(
     undefined,
