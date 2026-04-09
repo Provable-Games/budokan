@@ -265,7 +265,7 @@ app.get("/:id/registrations", async (c) => {
     const playerAddress = isValidAddress(c.req.query("player_address"));
     const hasSubmitted = c.req.query("has_submitted");
     const isBanned = c.req.query("is_banned");
-    const limit = parseLimit(c.req.query("limit"), 50, 100);
+    const limit = parseLimit(c.req.query("limit"), 50, 1000);
     const offset = parseOffset(c.req.query("offset"));
 
     const conditions = [eq(registrations.tournamentId, tournamentId)];
