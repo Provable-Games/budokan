@@ -29,7 +29,9 @@ export function isValidAddress(addr?: string): string | null {
   const trimmed = addr.trim().toLowerCase();
   // Accept 0x-prefixed hex strings of 1-64 hex digits
   if (/^0x[0-9a-f]{1,64}$/.test(trimmed)) {
-    return trimmed;
+    // Normalize to unpadded hex to match indexer storage format (feltToHex)
+    const stripped = trimmed.slice(2).replace(/^0+/, "");
+    return "0x" + (stripped || "0");
   }
   return null;
 }
