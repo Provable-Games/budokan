@@ -272,7 +272,18 @@ app.get("/:id/registrations", async (c) => {
     const conditions: SQL[] = [eq(registrations.tournamentId, tournamentId)];
     if (playerAddress) conditions.push(eq(registrations.playerAddress, playerAddress));
     if (gameTokenIdsRaw) {
-      const ids = gameTokenIdsRaw.split(",").map((id) => id.trim()).filter(Boolean);
+      const raw = [...new Set(gameTokenIdsRaw.split(",").map((id) => id.trim()).filter(Boolean))];
+      if (raw.length > 1000) {
+        return c.json({ error: "Too many game_token_ids (max 1000)" }, 400);
+      }
+      const ids: string[] = [];
+      for (const id of raw) {
+        try {
+          ids.push(BigInt(id).toString());
+        } catch {
+          return c.json({ error: `Invalid game_token_id: ${id}` }, 400);
+        }
+      }
       if (ids.length > 0) conditions.push(inArray(registrations.gameTokenId, ids));
     }
     if (hasSubmitted !== undefined && hasSubmitted !== null) {
