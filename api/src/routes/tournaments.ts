@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { eq, sql, and, desc, asc, notInArray, SQL } from "drizzle-orm";
+import { eq, sql, and, desc, asc, notInArray, inArray, SQL } from "drizzle-orm";
 import { db } from "../db/client.js";
 import {
   tournaments,
@@ -254,7 +254,7 @@ app.get("/:id/leaderboard", async (c) => {
 });
 
 // ─── GET /:id/registrations ── Registrations for tournament ────────────────
-// Query params: player_address, has_submitted, is_banned, limit, offset
+// Query params: player_address, game_token_ids, has_submitted, is_banned, limit, offset
 app.get("/:id/registrations", async (c) => {
   try {
     const tournamentId = parseTournamentId(c.req.param("id"));
@@ -263,13 +263,29 @@ app.get("/:id/registrations", async (c) => {
     }
 
     const playerAddress = isValidAddress(c.req.query("player_address"));
+    const gameTokenIdsRaw = c.req.query("game_token_ids");
     const hasSubmitted = c.req.query("has_submitted");
     const isBanned = c.req.query("is_banned");
     const limit = parseLimit(c.req.query("limit"), 50, 1000);
     const offset = parseOffset(c.req.query("offset"));
 
-    const conditions = [eq(registrations.tournamentId, tournamentId)];
+    const conditions: SQL[] = [eq(registrations.tournamentId, tournamentId)];
     if (playerAddress) conditions.push(eq(registrations.playerAddress, playerAddress));
+    if (gameTokenIdsRaw) {
+      const raw = [...new Set(gameTokenIdsRaw.split(",").map((id) => id.trim()).filter(Boolean))];
+      if (raw.length > 1000) {
+        return c.json({ error: "Too many game_token_ids (max 1000)" }, 400);
+      }
+      const ids: string[] = [];
+      for (const id of raw) {
+        try {
+          ids.push(BigInt(id).toString());
+        } catch {
+          return c.json({ error: `Invalid game_token_id: ${id}` }, 400);
+        }
+      }
+      if (ids.length > 0) conditions.push(inArray(registrations.gameTokenId, ids));
+    }
     if (hasSubmitted !== undefined && hasSubmitted !== null) {
       conditions.push(eq(registrations.hasSubmitted, hasSubmitted === "true"));
     }

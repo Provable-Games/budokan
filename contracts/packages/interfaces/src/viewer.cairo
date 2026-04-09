@@ -84,6 +84,12 @@ pub trait IBudokanViewer<TState> {
     fn tournament_registrations(
         self: @TState, tournament_id: u64, offset: u32, limit: u32,
     ) -> RegistrationResult;
+    fn tournament_registrations_by_owner(
+        self: @TState, tournament_id: u64, owner: ContractAddress, offset: u32, limit: u32,
+    ) -> RegistrationResult;
+    fn tournament_registrations_by_token_ids(
+        self: @TState, tournament_id: u64, token_ids: Array<felt252>, offset: u32, limit: u32,
+    ) -> RegistrationResult;
 
     // === LEADERBOARD ===
     fn leaderboard(
