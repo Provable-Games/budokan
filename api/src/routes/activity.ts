@@ -3,6 +3,7 @@ import { eq, and, sql, desc } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { tournamentEvents, platformStats, prizes } from "../db/schema.js";
 import {
+  isValidAddress,
   parseLimit,
   parseOffset,
   parseTournamentId,
@@ -11,17 +12,19 @@ import {
 const app = new Hono();
 
 // ─── GET / ── Event timeline ─────────────────────────────────────────────────
-// Query params: event_type, tournament_id, limit, offset
+// Query params: event_type, tournament_id, player_address, limit, offset
 app.get("/", async (c) => {
   try {
     const eventType = c.req.query("event_type") || null;
     const tournamentId = parseTournamentId(c.req.query("tournament_id"));
+    const playerAddress = isValidAddress(c.req.query("player_address"));
     const limit = parseLimit(c.req.query("limit"), 50, 100);
     const offset = parseOffset(c.req.query("offset"));
 
     const conditions = [];
     if (eventType) conditions.push(eq(tournamentEvents.eventType, eventType));
     if (tournamentId !== null) conditions.push(eq(tournamentEvents.tournamentId, tournamentId));
+    if (playerAddress) conditions.push(eq(tournamentEvents.playerAddress, playerAddress));
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 

@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { eq, sql, and, desc } from "drizzle-orm";
+import { eq, sql, and, desc, SQL } from "drizzle-orm";
 import { db } from "../db/client.js";
 import {
   tournaments,
@@ -11,11 +11,12 @@ import {
   parseLimit,
   parseOffset,
 } from "../utils/validation.js";
+import { applyPhaseCondition } from "./tournaments.js";
 
 const app = new Hono();
 
 // ─── GET /:address/tournaments ── Tournaments for a game address ───────────
-// Query params: creator, limit, offset
+// Query params: creator, phase, limit, offset
 app.get("/:address/tournaments", async (c) => {
   try {
     const gameAddress = isValidAddress(c.req.param("address"));
@@ -24,11 +25,13 @@ app.get("/:address/tournaments", async (c) => {
     }
 
     const creator = isValidAddress(c.req.query("creator"));
+    const phase = c.req.query("phase") || null;
     const limit = parseLimit(c.req.query("limit"), 50, 100);
     const offset = parseOffset(c.req.query("offset"));
 
-    const conditions = [eq(tournaments.gameAddress, gameAddress)];
+    const conditions: SQL[] = [eq(tournaments.gameAddress, gameAddress)];
     if (creator) conditions.push(eq(tournaments.createdBy, creator));
+    if (phase) applyPhaseCondition(phase, conditions);
 
     const where = and(...conditions);
 
