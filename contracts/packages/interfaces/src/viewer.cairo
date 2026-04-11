@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 use budokan_interfaces::budokan::{Phase, RewardType, Tournament};
-use game_components_interfaces::prize::{PrizeData, PrizeType};
+use game_components_interfaces::prize::PrizeData;
 use game_components_interfaces::registration::Registration;
 use starknet::ContractAddress;
 
