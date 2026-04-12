@@ -9,8 +9,8 @@ use budokan::structs::budokan::{
     QualificationProof, RewardType, TokenTypeData,
 };
 use budokan::structs::constants::{
-    MAX_REGISTRATION_PERIOD, MAX_SUBMISSION_PERIOD, MAX_TOURNAMENT_LENGTH, MIN_REGISTRATION_PERIOD,
-    MIN_SUBMISSION_PERIOD, MIN_TOURNAMENT_LENGTH,
+    MAX_SUBMISSION_PERIOD, MAX_TOURNAMENT_LENGTH, MIN_REGISTRATION_PERIOD, MIN_SUBMISSION_PERIOD,
+    MIN_TOURNAMENT_LENGTH,
 };
 use budokan::structs::schedule::{Phase, Schedule};
 use budokan::tests::constants::{
@@ -1406,7 +1406,7 @@ fn test_extension_gated_tournament() {
     let qualification_proof = Option::Some(QualificationProof::Extension(array![].span()));
 
     // OWNER already has an ERC721 token (minted in setup), so they should be able to enter
-    let (token_id, entry_id) = contracts
+    let (_token_id, entry_id) = contracts
         .budokan
         .enter_tournament(tournament.id, 'test_player', owner, qualification_proof, 2, 0);
 
@@ -1504,7 +1504,7 @@ fn test_enter_tournament() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // enter tournament
-    let (game_token_id, entry_id) = contracts
+    let (_game_token_id, entry_id) = contracts
         .budokan
         .enter_tournament(tournament.id, 'test_player', owner, Option::None, 1, 0);
 
@@ -1567,7 +1567,7 @@ fn test_enter_tournament_season() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // enter tournament
-    let (game_token_id, entry_id) = contracts
+    let (_game_token_id, entry_id) = contracts
         .budokan
         .enter_tournament(tournament.id, 'test_player', owner, Option::None, 2, 0);
 
@@ -2610,7 +2610,7 @@ fn test_tournament_gated_caller_does_not_own_qualifying_token() {
     let entry_requirement = EntryRequirement { entry_limit: 0, entry_requirement_type };
     let entry_requirement = Option::Some(entry_requirement);
 
-    let current_time = settled_time;
+    let _current_time = settled_time;
 
     let schedule = Schedule {
         registration_start_delay: 0,
@@ -2937,7 +2937,7 @@ fn test_get_registration() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // Enter tournament
-    let (entry_token_id, entry_id) = contracts
+    let (_entry_token_id, entry_id) = contracts
         .budokan
         .enter_tournament(tournament.id, 'test_player', owner, Option::None, 1, 0);
 
@@ -4203,7 +4203,7 @@ fn test_ban_game_ids_during_registration() {
     let (game_id_1, entry_id_1) = contracts
         .budokan
         .enter_tournament(tournament.id, 'player1', owner, Option::Some(qualification), 2, 0);
-    let (game_id_2, entry_id_2) = contracts
+    let (_game_id_2, entry_id_2) = contracts
         .budokan
         .enter_tournament(tournament.id, 'player2', owner, Option::Some(qualification), 3, 0);
 
@@ -4598,7 +4598,7 @@ fn test_ban_multiple_game_ids() {
     let (game_id_1, entry_id_1) = contracts
         .budokan
         .enter_tournament(tournament.id, 'player1', owner, Option::Some(qualification), 2, 0);
-    let (game_id_2, entry_id_2) = contracts
+    let (_game_id_2, entry_id_2) = contracts
         .budokan
         .enter_tournament(tournament.id, 'player2', owner, Option::Some(qualification), 3, 0);
     let (game_id_3, entry_id_3) = contracts
@@ -5031,7 +5031,7 @@ fn test_use_host_token_to_qualify_into_tournament_gated_tournament() {
     let entry_requirement = EntryRequirement { entry_limit: 0, entry_requirement_type };
     let entry_requirement = Option::Some(entry_requirement);
 
-    let current_time = settled_time;
+    let _current_time = settled_time;
 
     let schedule = Schedule {
         registration_start_delay: 0,
@@ -5125,7 +5125,7 @@ fn test_enter_tournament_wrong_submission_type() {
     let entry_requirement = EntryRequirement { entry_limit: 0, entry_requirement_type };
     let entry_requirement = Option::Some(entry_requirement);
 
-    let current_time = settled_time;
+    let _current_time = settled_time;
 
     let schedule = Schedule {
         registration_start_delay: 0,
