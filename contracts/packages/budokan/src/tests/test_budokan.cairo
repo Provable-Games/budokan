@@ -31,7 +31,12 @@ use budokan_interfaces::budokan::{IBudokanDispatcher, IBudokanDispatcherTrait};
 use core::option::Option;
 use core::serde::Serde;
 use game_components_embeddable_game_standard::metagame::interface::IMETAGAME_ID;
-use game_components_embeddable_game_standard::token::interface::IMinigameTokenMixinDispatcher;
+use game_components_embeddable_game_standard::registry::interface::{
+    IMinigameRegistryDispatcher, IMinigameRegistryDispatcherTrait,
+};
+use game_components_embeddable_game_standard::token::interface::{
+    IMinigameTokenMixinDispatcher, IMinigameTokenMixinDispatcherTrait,
+};
 use game_components_interfaces::prize::{IPrizeDispatcher, IPrizeDispatcherTrait};
 use game_components_interfaces::registration::{
     IRegistrationDispatcher, IRegistrationDispatcherTrait,
@@ -654,6 +659,90 @@ fn test_create_tournament_with_entry_fee() {
         Option::Some(fee) => {
             assert(fee.token_address == contracts.erc20.contract_address, 'Invalid fee token');
             assert(fee.amount == 100, 'Invalid fee amount');
+        },
+        Option::None => panic!("Tournament should have entry fee"),
+    }
+}
+
+#[test]
+#[should_panic(expected: "Budokan: game_creator_share (400) is below the game's required fee (500)")]
+fn test_create_tournament_game_creator_share_below_registry_fee() {
+    let contracts = setup();
+    let owner = OWNER;
+
+    // Set a registry-level fee of 500 bps (5%) on the game
+    let registry_address = contracts.denshokan.game_registry_address();
+    let registry = IMinigameRegistryDispatcher { contract_address: registry_address };
+    registry.set_default_game_fee("EGS License", 500);
+
+    start_cheat_caller_address(contracts.budokan.contract_address, owner);
+
+    let entry_fee = EntryFee {
+        token_address: contracts.erc20.contract_address,
+        amount: 100,
+        tournament_creator_share: 1000,
+        game_creator_share: 400, // Below required 500
+        refund_share: 0,
+        distribution: Distribution::Linear(10),
+        distribution_count: 0,
+    };
+
+    contracts
+        .budokan
+        .create_tournament(
+            owner,
+            test_metadata(),
+            test_schedule(),
+            test_game_config(contracts.minigame.contract_address),
+            Option::Some(entry_fee),
+            Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
+        );
+}
+
+#[test]
+fn test_create_tournament_game_creator_share_meets_registry_fee() {
+    let contracts = setup();
+    let owner = OWNER;
+
+    // Set a registry-level fee of 500 bps (5%) on the game
+    let registry_address = contracts.denshokan.game_registry_address();
+    let registry = IMinigameRegistryDispatcher { contract_address: registry_address };
+    registry.set_default_game_fee("EGS License", 500);
+
+    start_cheat_caller_address(contracts.budokan.contract_address, owner);
+
+    let entry_fee = EntryFee {
+        token_address: contracts.erc20.contract_address,
+        amount: 100,
+        tournament_creator_share: 1000,
+        game_creator_share: 500, // Meets required 500
+        refund_share: 0,
+        distribution: Distribution::Linear(10),
+        distribution_count: 0,
+    };
+
+    let tournament = contracts
+        .budokan
+        .create_tournament(
+            owner,
+            test_metadata(),
+            test_schedule(),
+            test_game_config(contracts.minigame.contract_address),
+            Option::Some(entry_fee),
+            Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
+        );
+
+    stop_cheat_caller_address(contracts.budokan.contract_address);
+
+    match tournament.entry_fee {
+        Option::Some(fee) => {
+            assert(fee.game_creator_share == 500, 'Invalid game creator share');
         },
         Option::None => panic!("Tournament should have entry fee"),
     }
