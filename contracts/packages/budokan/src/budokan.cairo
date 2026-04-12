@@ -28,6 +28,7 @@ pub mod Budokan {
     use game_components_embeddable_game_standard::metagame::extensions::context::structs::{
         GameContext, GameContextDetails,
     };
+    use game_components_embeddable_game_standard::metagame::metagame::get_game_fee_info;
     use game_components_embeddable_game_standard::metagame::metagame_component::MetagameComponent;
     use game_components_embeddable_game_standard::minigame::extensions::settings::interface::{
         IMinigameSettingsDispatcher, IMinigameSettingsDispatcherTrait,
@@ -304,6 +305,11 @@ pub mod Budokan {
             // Validate entry fee shares don't exceed 100%
             if let Option::Some(ef) = @entry_fee {
                 self._assert_valid_entry_fee_shares(ef);
+            }
+
+            // Enforce game registry fee: game_creator_share must meet the registry minimum
+            if let Option::Some(ef) = @entry_fee {
+                self._assert_game_fee_met(game_config.game_address, *ef.game_creator_share);
             }
 
             if let Option::Some(entry_requirement) = entry_requirement {
@@ -1191,6 +1197,18 @@ pub mod Budokan {
                 *entry_fee.tournament_creator_share,
                 *entry_fee.game_creator_share,
                 *entry_fee.refund_share,
+            );
+        }
+
+        fn _assert_game_fee_met(
+            self: @ContractState, game_address: ContractAddress, game_creator_share: u16,
+        ) {
+            let game_fee_info = get_game_fee_info(game_address);
+            assert!(
+                game_creator_share >= game_fee_info.fee_numerator,
+                "Budokan: game_creator_share ({}) is below the game's required fee ({})",
+                game_creator_share,
+                game_fee_info.fee_numerator,
             );
         }
 
