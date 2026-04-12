@@ -10,18 +10,16 @@
 // 4. Edge cases with distribution_count
 
 use budokan::structs::budokan::{
-    Distribution, ERC20Data, EntryFeeRewardType, PrizeType, RewardType, TokenTypeData,
+    Distribution, ERC20Data, PrizeType, RewardType, TokenTypeData,
 };
-use budokan::structs::constants::MIN_SUBMISSION_PERIOD;
 use budokan::tests::constants::{
-    OWNER, STARTING_BALANCE, TEST_GAME_END_DELAY, TEST_GAME_START_DELAY,
+    OWNER, TEST_GAME_END_DELAY, TEST_GAME_START_DELAY,
     TEST_REGISTRATION_START_DELAY, TEST_SUBMISSION_DURATION,
 };
 use budokan::tests::helpers::create_basic_tournament;
-use budokan::tests::interfaces::{IERC20MockDispatcher, IERC20MockDispatcherTrait};
+use budokan::tests::interfaces::IERC20MockDispatcherTrait;
 use budokan::tests::test_budokan::setup;
 use budokan_interfaces::budokan::IBudokanDispatcherTrait;
-use game_components_interfaces::prize::IPrizeDispatcherTrait;
 use game_components_test_common::mocks::minigame_mock::IMinigameMockDispatcherTrait;
 use snforge_std::{
     start_cheat_block_timestamp, start_cheat_caller_address, stop_cheat_block_timestamp,

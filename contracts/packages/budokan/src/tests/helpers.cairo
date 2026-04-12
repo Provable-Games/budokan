@@ -1,6 +1,6 @@
 use budokan::structs::budokan::{GameConfig, LeaderboardConfig, Metadata, Tournament};
 use budokan::structs::constants::{
-    MIN_REGISTRATION_PERIOD, MIN_SUBMISSION_PERIOD, MIN_TOURNAMENT_LENGTH,
+    MIN_SUBMISSION_PERIOD, MIN_TOURNAMENT_LENGTH,
 };
 use budokan::structs::schedule::Schedule;
 use budokan::tests::constants::{
