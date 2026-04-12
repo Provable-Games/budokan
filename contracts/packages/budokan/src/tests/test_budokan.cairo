@@ -665,7 +665,9 @@ fn test_create_tournament_with_entry_fee() {
 }
 
 #[test]
-#[should_panic(expected: "Budokan: game_creator_share (400) is below the game's required fee (500)")]
+#[should_panic(
+    expected: "Budokan: game_creator_share (400) is below the game's required fee (500)",
+)]
 fn test_create_tournament_game_creator_share_below_registry_fee() {
     let contracts = setup();
     let owner = OWNER;
