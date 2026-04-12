@@ -398,6 +398,82 @@ pub mod BudokanViewer {
             RegistrationResult { entries, total }
         }
 
+        fn tournament_registrations_by_owner(
+            self: @ContractState,
+            tournament_id: u64,
+            owner: ContractAddress,
+            offset: u32,
+            limit: u32,
+        ) -> RegistrationResult {
+            let registration = self._registration();
+            let metagame = IMetagameDispatcher { contract_address: self.budokan_address.read() };
+            let denshokan = IERC721Dispatcher { contract_address: metagame.context_address() };
+            let entry_count = registration.get_entry_count(tournament_id);
+
+            let mut matched: u32 = 0;
+            let mut skipped: u32 = 0;
+            let mut entries: Array<Registration> = array![];
+
+            let mut eid: u32 = 1;
+            while eid <= entry_count {
+                let entry = registration.get_entry(tournament_id, eid);
+                let token_id: u256 = entry.game_token_id.into();
+                let token_owner = denshokan.owner_of(token_id);
+                if token_owner == owner {
+                    if skipped < offset {
+                        skipped += 1;
+                    } else if entries.len() < limit {
+                        entries.append(entry);
+                    }
+                    matched += 1;
+                }
+                eid += 1;
+            }
+
+            RegistrationResult { entries, total: matched }
+        }
+
+        fn tournament_registrations_by_token_ids(
+            self: @ContractState,
+            tournament_id: u64,
+            token_ids: Array<felt252>,
+            offset: u32,
+            limit: u32,
+        ) -> RegistrationResult {
+            let registration = self._registration();
+            let entry_count = registration.get_entry_count(tournament_id);
+            let token_ids_span = token_ids.span();
+
+            let mut matched: u32 = 0;
+            let mut skipped: u32 = 0;
+            let mut entries: Array<Registration> = array![];
+
+            let mut eid: u32 = 1;
+            while eid <= entry_count {
+                let entry = registration.get_entry(tournament_id, eid);
+                let mut found = false;
+                let mut i: u32 = 0;
+                while i < token_ids_span.len() {
+                    if *token_ids_span.at(i) == entry.game_token_id {
+                        found = true;
+                        break;
+                    }
+                    i += 1;
+                }
+                if found {
+                    if skipped < offset {
+                        skipped += 1;
+                    } else if entries.len() < limit {
+                        entries.append(entry);
+                    }
+                    matched += 1;
+                }
+                eid += 1;
+            }
+
+            RegistrationResult { entries, total: matched }
+        }
+
         // === LEADERBOARD ===
 
         fn leaderboard(
