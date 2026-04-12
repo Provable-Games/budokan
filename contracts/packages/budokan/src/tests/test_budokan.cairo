@@ -9,8 +9,8 @@ use budokan::structs::budokan::{
     QualificationProof, RewardType, TokenTypeData,
 };
 use budokan::structs::constants::{
-    MAX_SUBMISSION_PERIOD, MAX_TOURNAMENT_LENGTH, MIN_REGISTRATION_PERIOD,
-    MIN_SUBMISSION_PERIOD, MIN_TOURNAMENT_LENGTH,
+    MAX_SUBMISSION_PERIOD, MAX_TOURNAMENT_LENGTH, MIN_REGISTRATION_PERIOD, MIN_SUBMISSION_PERIOD,
+    MIN_TOURNAMENT_LENGTH,
 };
 use budokan::structs::schedule::{Phase, Schedule};
 use budokan::tests::constants::{

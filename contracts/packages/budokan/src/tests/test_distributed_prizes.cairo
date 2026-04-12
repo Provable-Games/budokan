@@ -9,12 +9,10 @@
 // 3. Refund scenarios (no entrants, partial entrants)
 // 4. Edge cases with distribution_count
 
-use budokan::structs::budokan::{
-    Distribution, ERC20Data, PrizeType, RewardType, TokenTypeData,
-};
+use budokan::structs::budokan::{Distribution, ERC20Data, PrizeType, RewardType, TokenTypeData};
 use budokan::tests::constants::{
-    OWNER, TEST_GAME_END_DELAY, TEST_GAME_START_DELAY,
-    TEST_REGISTRATION_START_DELAY, TEST_SUBMISSION_DURATION,
+    OWNER, TEST_GAME_END_DELAY, TEST_GAME_START_DELAY, TEST_REGISTRATION_START_DELAY,
+    TEST_SUBMISSION_DURATION,
 };
 use budokan::tests::helpers::create_basic_tournament;
 use budokan::tests::interfaces::IERC20MockDispatcherTrait;

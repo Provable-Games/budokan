@@ -203,8 +203,8 @@ pub impl ScheduleAssertionsImpl of ScheduleAssertionsTrait {
 #[cfg(test)]
 mod tests {
     use budokan::structs::constants::{
-        MAX_SUBMISSION_PERIOD, MAX_TOURNAMENT_LENGTH,
-        MIN_REGISTRATION_PERIOD, MIN_SUBMISSION_PERIOD, MIN_TOURNAMENT_LENGTH,
+        MAX_SUBMISSION_PERIOD, MAX_TOURNAMENT_LENGTH, MIN_REGISTRATION_PERIOD,
+        MIN_SUBMISSION_PERIOD, MIN_TOURNAMENT_LENGTH,
     };
     use super::{Phase, Schedule, ScheduleAssertionsTrait, ScheduleTrait};
 
