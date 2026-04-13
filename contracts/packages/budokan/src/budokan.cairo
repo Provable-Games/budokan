@@ -302,6 +302,8 @@ pub mod Budokan {
             salt: u16,
             metadata_value: u16,
         ) -> TournamentModel {
+            self.reentrancy_guard.start();
+
             schedule.assert_is_valid();
             self._assert_valid_game_config(@game_config);
 
@@ -352,7 +354,7 @@ pub mod Budokan {
                     metadata_value,
                 );
 
-            self
+            let tournament = self
                 ._create_tournament(
                     creator_token_id,
                     metadata,
@@ -362,7 +364,11 @@ pub mod Budokan {
                     distribution,
                     entry_requirement,
                     leaderboard_config,
-                )
+                );
+
+            self.reentrancy_guard.end();
+
+            tournament
         }
 
         fn enter_tournament(
