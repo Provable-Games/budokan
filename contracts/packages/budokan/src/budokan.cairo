@@ -72,6 +72,7 @@ pub mod Budokan {
     use openzeppelin_interfaces::introspection::{ISRC5Dispatcher, ISRC5DispatcherTrait};
     use openzeppelin_interfaces::upgrades::IUpgradeable;
     use openzeppelin_introspection::src5::SRC5Component;
+    use openzeppelin_security::reentrancyguard::ReentrancyGuardComponent;
     use openzeppelin_upgrades::UpgradeableComponent;
     use starknet::storage::{
         Map, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess,
@@ -94,6 +95,9 @@ pub mod Budokan {
         path: EntryRequirementComponent, storage: entry_requirement, event: EntryRequirementEvent,
     );
     component!(path: PrizeComponent, storage: prize, event: PrizeEvent);
+    component!(
+        path: ReentrancyGuardComponent, storage: reentrancy_guard, event: ReentrancyGuardEvent,
+    );
 
     #[abi(embed_v0)]
     impl MetagameImpl = MetagameComponent::MetagameImpl<ContractState>;
@@ -110,6 +114,7 @@ pub mod Budokan {
     impl OwnableInternalImpl = OwnableComponent::InternalImpl<ContractState>;
 
     impl UpgradeableInternalImpl = UpgradeableComponent::InternalImpl<ContractState>;
+    impl ReentrancyGuardInternalImpl = ReentrancyGuardComponent::InternalImpl<ContractState>;
 
     // Budokan component embeddable implementations
     #[abi(embed_v0)]
@@ -145,6 +150,8 @@ pub mod Budokan {
         entry_requirement: EntryRequirementComponent::Storage,
         #[substorage(v0)]
         prize: PrizeComponent::Storage,
+        #[substorage(v0)]
+        reentrancy_guard: ReentrancyGuardComponent::Storage,
         // Platform-wide metrics
         total_tournaments: u64,
         // Tournament base data
@@ -192,6 +199,8 @@ pub mod Budokan {
         EntryRequirementEvent: EntryRequirementComponent::Event,
         #[flat]
         PrizeEvent: PrizeComponent::Event,
+        #[flat]
+        ReentrancyGuardEvent: ReentrancyGuardComponent::Event,
         TournamentCreated: events::TournamentCreated,
         TournamentRegistration: events::TournamentRegistration,
         LeaderboardUpdated: events::LeaderboardUpdated,
@@ -365,6 +374,8 @@ pub mod Budokan {
             salt: u16,
             metadata_value: u16,
         ) -> (felt252, u32) {
+            self.reentrancy_guard.start();
+
             let tournament = self._get_tournament(tournament_id);
 
             self._assert_tournament_exists(tournament_id);
@@ -483,6 +494,8 @@ pub mod Budokan {
             };
             self._set_registration(tournament.game_config.game_address, @registration);
 
+            self.reentrancy_guard.end();
+
             // return game token id and entry number
             (game_token_id, entry_id)
         }
@@ -493,6 +506,8 @@ pub mod Budokan {
             game_token_id: felt252,
             proof: Span<felt252>,
         ) {
+            self.reentrancy_guard.start();
+
             // Assert tournament exists
             self._assert_tournament_exists(tournament_id);
 
@@ -580,11 +595,15 @@ pub mod Budokan {
                         is_banned: true,
                     },
                 );
+
+            self.reentrancy_guard.end();
         }
 
         fn submit_score(
             ref self: ContractState, tournament_id: u64, token_id: felt252, position: u32,
         ) {
+            self.reentrancy_guard.start();
+
             // assert tournament exists
             self._assert_tournament_exists(tournament_id);
 
@@ -656,9 +675,13 @@ pub mod Budokan {
                     panic!("Budokan: Invalid leaderboard config");
                 },
             }
+
+            self.reentrancy_guard.end();
         }
 
         fn claim_reward(ref self: ContractState, tournament_id: u64, reward_type: RewardType) {
+            self.reentrancy_guard.start();
+
             let tournament = self._get_tournament(tournament_id);
 
             // assert tournament exists
@@ -671,15 +694,25 @@ pub mod Budokan {
             match reward_type {
                 RewardType::Prize(prize_type) => {
                     self._assert_prize_not_claimed(tournament_id, prize_type);
-                    self._claim_prize(tournament_id, tournament, prize_type);
                 },
                 RewardType::EntryFee(entry_fee_type) => {
                     self._assert_entry_fee_reward_not_claimed(tournament_id, entry_fee_type);
+                },
+            }
+
+            // CEI: mark claimed BEFORE external calls
+            self._set_reward_claim(tournament_id, reward_type);
+
+            match reward_type {
+                RewardType::Prize(prize_type) => {
+                    self._claim_prize(tournament_id, tournament, prize_type);
+                },
+                RewardType::EntryFee(entry_fee_type) => {
                     self._claim_entry_fee_reward(tournament_id, tournament, entry_fee_type);
                 },
             }
 
-            self._set_reward_claim(tournament_id, reward_type);
+            self.reentrancy_guard.end();
         }
 
         fn add_prize(
@@ -689,6 +722,8 @@ pub mod Budokan {
             token_type: TokenTypeData,
             position: Option<u32>,
         ) -> PrizeData {
+            self.reentrancy_guard.start();
+
             // assert tournament exists
             self._assert_tournament_exists(tournament_id);
 
@@ -728,7 +763,11 @@ pub mod Budokan {
             self._emit_prize_added(self.prize._get_prize(prize_id));
 
             // Return prize
-            self.prize._get_prize(prize_id)
+            let prize_data = self.prize._get_prize(prize_id);
+
+            self.reentrancy_guard.end();
+
+            prize_data
         }
     }
 

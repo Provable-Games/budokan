@@ -25,6 +25,7 @@ openzeppelin_introspection.workspace = true
 openzeppelin_token.workspace = true
 openzeppelin_interfaces.workspace = true
 openzeppelin_upgrades.workspace = true
+openzeppelin_security.workspace = true
 game_components_embeddable_game_standard.workspace = true
 game_components_metagame.workspace = true
 game_components_utilities.workspace = true

@@ -19,6 +19,7 @@ openzeppelin_introspection = { git = "https://github.com/OpenZeppelin/cairo-cont
 openzeppelin_token = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0" }
 openzeppelin_interfaces = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0" }
 openzeppelin_upgrades = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0" }
+openzeppelin_security = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0" }
 game_components_embeddable_game_standard = { git = "https://github.com/Provable-Games/game-components.git", branch = "main" }
 game_components_metagame = { git = "https://github.com/Provable-Games/game-components.git", branch = "main" }
 game_components_utilities = { git = "https://github.com/Provable-Games/game-components.git", branch = "main" }
