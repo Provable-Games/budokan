@@ -137,10 +137,10 @@ export const getGamesForChain = (chainId: string): Game[] => {
       },
       {
         contract_address:
-          "0x063410083d205c7e66cd2cdcd59614a233b682b9394f46d44e838d3a32048a7a",
+          "0x5e02a1f750b3fa0e835d454705b664ecb23166cdb49459b1c96c1e3eaf9a2f4",
         name: "zKube",
-        url: "https://localhost:5173/",
-        playUrl: "https://localhost:5173/play/",
+        url: "https://zkube-budokan-sepolia.vercel.app",
+        playUrl: "https://zkube-budokan-sepolia.vercel.app/play/",
         controllerOnly: true,
         minEntryFeeUsd: 0.25,
         defaultEntryFeeToken: STRK_ADDRESS,

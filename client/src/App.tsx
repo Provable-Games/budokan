@@ -36,12 +36,13 @@ function App() {
   useSubscription(["tournaments", "registrations", "prizes"]);
 
   const { data: gamesResult, isLoading: minigamesLoading } = useGames();
-  const minigames = useMemo(() =>
-    gamesResult?.data?.map((game) => ({
-      ...game,
-      contract_address: game.contractAddress,
-      image: game.imageUrl ?? "",
-    })) ?? null,
+  const minigames = useMemo(
+    () =>
+      gamesResult?.data?.map((game) => ({
+        ...game,
+        contract_address: game.contractAddress,
+        image: game.imageUrl ?? "",
+      })) ?? null,
     [gamesResult],
   );
 

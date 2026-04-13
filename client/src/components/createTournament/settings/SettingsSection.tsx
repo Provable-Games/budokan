@@ -8,7 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import SmallSettingsTable from "./SmallSettingsTable";
 import { UseFormReturn, ControllerRenderProps } from "react-hook-form";
-import { useSettings, useSettingsCount } from "@provable-games/denshokan-sdk/react";
+import { useSettings } from "@provable-games/denshokan-sdk/react";
 import { useGameSetting } from "@/hooks/useDenshokanQueries";
 import { useEffect, useState } from "react";
 import { SettingsDialog } from "@/components/dialogs/CreateSettings";
@@ -34,19 +34,19 @@ const GameSettingsField = ({ form, field }: GameSettingsFieldProps) => {
   });
   const setting = singleSetting ? [singleSetting] : [];
 
-  const { data: settingsCountData } = useSettingsCount(gameAddress || undefined);
-  const settingsCount = settingsCountData ?? 0;
-
-  const totalPages = Math.ceil(settingsCount / settingsPerPage);
-
   const { data: settingsResult, isLoading: isLoadingSettings } = useSettings(
-    gameAddress ? {
-      gameAddress,
-      limit: settingsPerPage,
-      offset: (currentPage - 1) * settingsPerPage,
-    } : undefined,
+    gameAddress
+      ? {
+          gameAddress,
+          limit: settingsPerPage,
+          offset: (currentPage - 1) * settingsPerPage,
+        }
+      : undefined,
   );
   const settings = settingsResult?.data ?? null;
+  const settingsCount = settingsResult?.total ?? 0;
+
+  const totalPages = Math.ceil(settingsCount / settingsPerPage);
 
   useEffect(() => {
     if (open) {
