@@ -62,6 +62,7 @@ dependencies = [
  "openzeppelin_access",
  "openzeppelin_interfaces",
  "openzeppelin_introspection",
+ "openzeppelin_security",
  "openzeppelin_token",
  "openzeppelin_upgrades",
  "snforge_std",
@@ -185,6 +186,14 @@ source = "git+https://github.com/OpenZeppelin/cairo-contracts.git?tag=v3.0.0#ddd
 
 [[package]]
 name = "openzeppelin_introspection"
+version = "3.0.0"
+source = "git+https://github.com/OpenZeppelin/cairo-contracts.git?tag=v3.0.0#ddd3338e787a3fbf4a92b366640a57ee364390cb"
+dependencies = [
+ "openzeppelin_interfaces",
+]
+
+[[package]]
+name = "openzeppelin_security"
 version = "3.0.0"
 source = "git+https://github.com/OpenZeppelin/cairo-contracts.git?tag=v3.0.0#ddd3338e787a3fbf4a92b366640a57ee364390cb"
 dependencies = [
