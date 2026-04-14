@@ -765,7 +765,7 @@ const Tournament = () => {
               sideOffset={5}
               className="bg-black text-neutral border border-brand-muted px-2 py-1 rounded text-sm z-50"
             >
-              <div className="flex flex-col gap-1">
+              <div className="flex flex-col items-center gap-1">
                 <span>{gameName ? gameName : "Unknown"}</span>
                 {gameAddress && (
                   <a
