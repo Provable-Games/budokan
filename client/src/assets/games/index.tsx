@@ -49,9 +49,19 @@ export const getGameUrl = (gameAddress: string): string => {
   return game?.url || "";
 };
 
-export const getPlayUrl = (gameAddress: string): string => {
+export const getPlayUrl = (
+  gameAddress: string,
+  gameName?: string,
+): string => {
   const games = getGames();
-  const game = games.find((game) => game.contract_address === gameAddress);
+  let game = games.find((game) => game.contract_address === gameAddress);
+  // Fall back to matching by name so play URLs work across different
+  // contract addresses (e.g. on Sepolia where addresses change often)
+  if (!game && gameName) {
+    game = games.find(
+      (g) => g.name.toLowerCase() === gameName.toLowerCase(),
+    );
+  }
   return game?.playUrl || "";
 };
 

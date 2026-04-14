@@ -48,7 +48,20 @@ const Details = ({ form }: StepProps) => {
 
         // Prefill play_url with the game's playUrl if available
         const games = getGamesForChain(chainId);
-        const game = games.find((g) => g.contract_address === gameAddress);
+        let game = games.find((g) => g.contract_address === gameAddress);
+        // On Sepolia, fall back to matching by name so play URLs work
+        // across different contract addresses for the same game
+        if (!game && chainId === ChainId.SN_SEPOLIA) {
+          const metadataGame = gameData.find(
+            (g) => g.contract_address === gameAddress,
+          );
+          if (metadataGame?.name) {
+            game = games.find(
+              (g) =>
+                g.name.toLowerCase() === metadataGame.name.toLowerCase(),
+            );
+          }
+        }
         if (game?.playUrl) {
           form.setValue("play_url", game.playUrl);
         }
