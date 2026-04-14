@@ -1,4 +1,4 @@
-import { VERIFIED } from "@/components/Icons";
+import { VERIFIED, EXTERNAL_LINK } from "@/components/Icons";
 import TokenGameIcon from "@/components/icons/TokenGameIcon";
 import { Button } from "@/components/ui/button";
 import {
@@ -7,6 +7,7 @@ import {
   TooltipContent,
 } from "@/components/ui/tooltip";
 import { GameData } from "@/hooks/useUIStore";
+import { useChainConfig } from "@/context/chain";
 
 interface GameButtonProps {
   game: GameData;
@@ -19,6 +20,7 @@ export const GameButton = ({
   gameFilters,
   setGameFilters,
 }: GameButtonProps) => {
+  const { selectedChainConfig } = useChainConfig();
   const isDisabled = !game.existsInMetadata || game.disabled;
   const comingSoon = game.isWhitelisted && !game.existsInMetadata;
   const whitelisted = game.isWhitelisted && game.existsInMetadata;
@@ -65,10 +67,19 @@ export const GameButton = ({
         </div>
       </TooltipTrigger>
       <TooltipContent side="bottom">
-        <p className="font-mono text-xs">
+        <a
+          href={`${selectedChainConfig.blockExplorerUrl}/contract/${game.contract_address}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1 font-mono text-xs hover:underline"
+          onClick={(e) => e.stopPropagation()}
+        >
           {game.contract_address.slice(0, 6)}...
           {game.contract_address.slice(-4)}
-        </p>
+          <span className="w-3 h-3">
+            <EXTERNAL_LINK />
+          </span>
+        </a>
       </TooltipContent>
     </Tooltip>
   );

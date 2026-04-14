@@ -25,6 +25,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { getGameDefaults, getGamesForChain } from "@/assets/games";
+import { EXTERNAL_LINK } from "@/components/Icons";
 import { useChainConfig } from "@/context/chain";
 import { ChainId } from "@/chain/setup/networks";
 import { mainnetTokens } from "@/lib/mainnetTokens";
@@ -143,10 +144,19 @@ const Details = ({ form }: StepProps) => {
                             </Card>
                           </TooltipTrigger>
                           <TooltipContent className="border-brand bg-black text-neutral">
-                            <p className="font-mono text-xs">
+                            <a
+                              href={`${selectedChainConfig.blockExplorerUrl}/contract/${game.contract_address}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 font-mono text-xs hover:underline"
+                              onClick={(e) => e.stopPropagation()}
+                            >
                               {game.contract_address.slice(0, 6)}...
                               {game.contract_address.slice(-4)}
-                            </p>
+                              <span className="w-3 h-3">
+                                <EXTERNAL_LINK />
+                              </span>
+                            </a>
                           </TooltipContent>
                         </Tooltip>
                       ))}
