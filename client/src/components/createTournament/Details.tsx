@@ -119,34 +119,36 @@ const Details = ({ form }: StepProps) => {
                   <FormControl>
                     <div className="flex flex-row gap-5 overflow-x-auto pb-2">
                       {gameData.map((game) => (
-                        <Card
-                          key={game.contract_address}
-                          variant={
-                            field.value === game.contract_address
-                              ? "default"
-                              : "outline"
-                          }
-                          className={`flex flex-col justify-between sm:h-[100px] 3xl:h-[120px] w-[100px] 3xl:w-[120px] flex-shrink-0 p-2 hover:cursor-pointer ${
-                            field.value === game.contract_address &&
-                            "bg-brand-muted"
-                          }`}
-                          onClick={() => field.onChange(game.contract_address)}
-                          disabled={!game.existsInMetadata || game.disabled}
-                        >
-                          <TokenGameIcon size="md" image={game.image} />
-                          <Tooltip delayDuration={50}>
-                            <TooltipTrigger asChild>
+                        <Tooltip key={game.contract_address} delayDuration={50}>
+                          <TooltipTrigger asChild>
+                            <Card
+                              variant={
+                                field.value === game.contract_address
+                                  ? "default"
+                                  : "outline"
+                              }
+                              className={`flex flex-col justify-between sm:h-[100px] 3xl:h-[120px] w-[100px] 3xl:w-[120px] flex-shrink-0 p-2 hover:cursor-pointer ${
+                                field.value === game.contract_address &&
+                                "bg-brand-muted"
+                              }`}
+                              onClick={() =>
+                                field.onChange(game.contract_address)
+                              }
+                              disabled={!game.existsInMetadata || game.disabled}
+                            >
+                              <TokenGameIcon size="md" image={game.image} />
                               <p className="font-brand text-center truncate w-full 3xl:text-lg">
                                 {game.name}
                               </p>
-                            </TooltipTrigger>
-                            <TooltipContent className="border-brand bg-black text-neutral">
-                              <p className="font-mono text-xs">
-                                {game.contract_address}
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </Card>
+                            </Card>
+                          </TooltipTrigger>
+                          <TooltipContent className="border-brand bg-black text-neutral">
+                            <p className="font-mono text-xs">
+                              {game.contract_address.slice(0, 6)}...
+                              {game.contract_address.slice(-4)}
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
                       ))}
                     </div>
                   </FormControl>

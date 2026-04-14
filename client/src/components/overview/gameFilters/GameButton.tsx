@@ -65,7 +65,10 @@ export const GameButton = ({
         </div>
       </TooltipTrigger>
       <TooltipContent side="bottom">
-        <p className="font-mono text-xs">{game.contract_address}</p>
+        <p className="font-mono text-xs">
+          {game.contract_address.slice(0, 6)}...
+          {game.contract_address.slice(-4)}
+        </p>
       </TooltipContent>
     </Tooltip>
   );
