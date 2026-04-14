@@ -6409,3 +6409,41 @@ fn test_game_must_be_over_false_accepts_in_progress_game() {
     stop_cheat_block_timestamp(contracts.budokan.contract_address);
     stop_cheat_block_timestamp(contracts.minigame.contract_address);
 }
+
+#[test]
+fn test_submit_score_after_submission_period() {
+    let contracts = setup();
+    let owner = OWNER;
+
+    start_cheat_caller_address(contracts.budokan.contract_address, owner);
+
+    let tournament = create_basic_tournament(
+        contracts.budokan, contracts.minigame.contract_address,
+    );
+
+    let mut time = TEST_REGISTRATION_START_DELAY().into();
+    start_cheat_block_timestamp(contracts.budokan.contract_address, time);
+    start_cheat_block_timestamp(contracts.minigame.contract_address, time);
+
+    let (token_id, _) = contracts
+        .budokan
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 1, 0);
+
+    // Advance past the submission period into Finalized phase
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY() + TEST_SUBMISSION_DURATION() + 100)
+        .into();
+    start_cheat_block_timestamp(contracts.budokan.contract_address, time);
+    start_cheat_block_timestamp(contracts.minigame.contract_address, time);
+
+    contracts.minigame.end_game(token_id.into(), 100);
+
+    // Submit score after submission period - should succeed
+    contracts.budokan.submit_score(tournament.id, token_id, 1);
+
+    let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
+    assert!(leaderboard.len() == 1, "leaderboard should have 1 entry");
+
+    stop_cheat_caller_address(contracts.budokan.contract_address);
+    stop_cheat_block_timestamp(contracts.budokan.contract_address);
+    stop_cheat_block_timestamp(contracts.minigame.contract_address);
+}

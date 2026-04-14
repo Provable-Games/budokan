@@ -1808,8 +1808,9 @@ pub mod Budokan {
             created_at: u64,
             registration: @Registration,
         ) {
+            let phase = schedule.current_phase(created_at, get_block_timestamp());
             assert!(
-                schedule.current_phase(created_at, get_block_timestamp()) == Phase::Submission,
+                phase == Phase::Submission || phase == Phase::Finalized,
                 "Budokan: Not in submission period",
             );
 
