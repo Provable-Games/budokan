@@ -7,6 +7,8 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import useUIStore from "./hooks/useUIStore";
 import { getGames } from "./assets/games";
 import Header from "@/components/Header";
+import { useChainConfig } from "@/context/chain";
+import { ChainId } from "@/chain/setup/networks";
 import LoadingPage from "@/containers/LoadingPage";
 import { useSyncNetworkUrl } from "@/chain/hooks/useSyncNetworkUrl";
 import { useSwitchToUrlNetwork } from "@/chain/hooks/useSwitchToUrlNetwork";
@@ -28,6 +30,8 @@ const CreateTournament = lazy(() => import("@/containers/CreateTournament"));
 
 function App() {
   const { setGameData, setGameDataLoading } = useUIStore();
+  const { selectedChainConfig } = useChainConfig();
+  const isSepolia = selectedChainConfig.chainId === ChainId.SN_SEPOLIA;
 
   // Network management hooks
   useSwitchToUrlNetwork(); // Switch to network from URL on initial load
@@ -51,6 +55,15 @@ function App() {
   // Create a unified array of all games with flags
   const allGames = useMemo(() => {
     if (!minigames) return [];
+
+    // On Sepolia, show all metadata games without filtering
+    if (isSepolia) {
+      return minigames.map((game) => ({
+        ...game,
+        isWhitelisted: false,
+        existsInMetadata: true,
+      }));
+    }
 
     // Define contract addresses to filter out
     const filteredAddresses = [
@@ -128,7 +141,7 @@ function App() {
       if (!a.existsInMetadata && b.existsInMetadata) return 1;
       return 0;
     });
-  }, [minigames, whitelistedGames]);
+  }, [minigames, whitelistedGames, isSepolia]);
 
   // Store the stringified version of allGames to detect actual changes
   const allGamesStringified = useMemo(() => {
