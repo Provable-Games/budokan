@@ -140,8 +140,10 @@ const Details = ({ form }: StepProps) => {
                                 {game.name}
                               </p>
                             </TooltipTrigger>
-                            <TooltipContent className="border-brand bg-black text-neutral 3xl:text-lg">
-                              {game.name}
+                            <TooltipContent className="border-brand bg-black text-neutral">
+                              <p className="font-mono text-xs">
+                                {game.contract_address}
+                              </p>
                             </TooltipContent>
                           </Tooltip>
                         </Card>
