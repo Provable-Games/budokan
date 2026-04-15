@@ -7,6 +7,7 @@ import {
   GIFT,
   SPACE_INVADER_SOLID,
   SLIDERS,
+  EXTERNAL_LINK,
 } from "@/components/Icons";
 import { useNavigate, useParams } from "react-router-dom";
 import { useProvider } from "@starknet-react/core";
@@ -764,7 +765,23 @@ const Tournament = () => {
               sideOffset={5}
               className="bg-black text-neutral border border-brand-muted px-2 py-1 rounded text-sm z-50"
             >
-              {gameName ? gameName : "Unknown"}
+              <div className="flex flex-col items-center gap-1">
+                <span>{gameName ? gameName : "Unknown"}</span>
+                {gameAddress && (
+                  <a
+                    href={`${selectedChainConfig.blockExplorerUrl}/contract/${gameAddress}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 font-mono text-xs hover:underline"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {gameAddress.slice(0, 6)}...{gameAddress.slice(-4)}
+                    <span className="w-3 h-3">
+                      <EXTERNAL_LINK />
+                    </span>
+                  </a>
+                )}
+              </div>
             </TooltipContent>
           </Tooltip>
           {settings[0] && (

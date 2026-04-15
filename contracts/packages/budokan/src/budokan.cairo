@@ -1814,8 +1814,16 @@ pub mod Budokan {
                 "Budokan: Not in submission period",
             );
 
-            // Delegate validation to registration component
-            self.registration.assert_valid_for_submission(registration, tournament_id);
+            // Allow re-submission if the entry was evicted from the leaderboard
+            if *registration.has_submitted {
+                let stored_pos = LeaderboardStore::get_token_position(
+                    self.leaderboard, tournament_id, *registration.game_token_id,
+                );
+                assert!(stored_pos == 0, "Registration: Score already submitted");
+                assert!(!*registration.is_banned, "Registration: Game ID is banned");
+            } else {
+                self.registration.assert_valid_for_submission(registration, tournament_id);
+            }
         }
 
         fn _mark_score_submitted(

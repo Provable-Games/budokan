@@ -400,13 +400,18 @@ fn test_leaderboard_with_submissions() {
     let submission_start: u64 = 1000 + game_start_delay().into() + game_end_delay().into() + 1;
     start_cheat_block_timestamp(contracts.budokan.contract_address, submission_start);
 
-    // Submit scores
+    // Submit scores — O(1) overwrite means displaced entries must be re-submitted
     start_cheat_caller_address(contracts.budokan.contract_address, PLAYER1);
     contracts.budokan.submit_score(tid, token_id_1, 1);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     start_cheat_caller_address(contracts.budokan.contract_address, PLAYER2);
-    contracts.budokan.submit_score(tid, token_id_2, 1);
+    contracts.budokan.submit_score(tid, token_id_2, 1); // evicts player 1
+    stop_cheat_caller_address(contracts.budokan.contract_address);
+
+    // Re-submit player 1 at position 2 after eviction
+    start_cheat_caller_address(contracts.budokan.contract_address, PLAYER1);
+    contracts.budokan.submit_score(tid, token_id_1, 2);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     // Check leaderboard

@@ -36,9 +36,8 @@ const EntryCard = ({
 
   const isActive = isStarted && !isEnded;
 
-  const playUrl = getPlayUrl(gameAddress);
-
   const gameName = getGameName(gameAddress);
+  const playUrl = getPlayUrl(gameAddress, gameName);
   const gameImage = getGameImage(gameAddress);
 
   const entryNumber = registration?.entryNumber;

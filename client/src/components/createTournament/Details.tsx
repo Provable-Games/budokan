@@ -25,6 +25,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { getGameDefaults, getGamesForChain } from "@/assets/games";
+import { EXTERNAL_LINK } from "@/components/Icons";
 import { useChainConfig } from "@/context/chain";
 import { ChainId } from "@/chain/setup/networks";
 import { mainnetTokens } from "@/lib/mainnetTokens";
@@ -47,7 +48,20 @@ const Details = ({ form }: StepProps) => {
 
         // Prefill play_url with the game's playUrl if available
         const games = getGamesForChain(chainId);
-        const game = games.find((g) => g.contract_address === gameAddress);
+        let game = games.find((g) => g.contract_address === gameAddress);
+        // On Sepolia, fall back to matching by name so play URLs work
+        // across different contract addresses for the same game
+        if (!game && chainId === ChainId.SN_SEPOLIA) {
+          const metadataGame = gameData.find(
+            (g) => g.contract_address === gameAddress,
+          );
+          if (metadataGame?.name) {
+            game = games.find(
+              (g) =>
+                g.name.toLowerCase() === metadataGame.name.toLowerCase(),
+            );
+          }
+        }
         if (game?.playUrl) {
           form.setValue("play_url", game.playUrl);
         }
@@ -119,32 +133,45 @@ const Details = ({ form }: StepProps) => {
                   <FormControl>
                     <div className="flex flex-row gap-5 overflow-x-auto pb-2">
                       {gameData.map((game) => (
-                        <Card
-                          key={game.contract_address}
-                          variant={
-                            field.value === game.contract_address
-                              ? "default"
-                              : "outline"
-                          }
-                          className={`flex flex-col justify-between sm:h-[100px] 3xl:h-[120px] w-[100px] 3xl:w-[120px] flex-shrink-0 p-2 hover:cursor-pointer ${
-                            field.value === game.contract_address &&
-                            "bg-brand-muted"
-                          }`}
-                          onClick={() => field.onChange(game.contract_address)}
-                          disabled={!game.existsInMetadata || game.disabled}
-                        >
-                          <TokenGameIcon size="md" image={game.image} />
-                          <Tooltip delayDuration={50}>
-                            <TooltipTrigger asChild>
+                        <Tooltip key={game.contract_address} delayDuration={50}>
+                          <TooltipTrigger asChild>
+                            <Card
+                              variant={
+                                field.value === game.contract_address
+                                  ? "default"
+                                  : "outline"
+                              }
+                              className={`flex flex-col justify-between sm:h-[100px] 3xl:h-[120px] w-[100px] 3xl:w-[120px] flex-shrink-0 p-2 hover:cursor-pointer ${
+                                field.value === game.contract_address &&
+                                "bg-brand-muted"
+                              }`}
+                              onClick={() =>
+                                field.onChange(game.contract_address)
+                              }
+                              disabled={!game.existsInMetadata || game.disabled}
+                            >
+                              <TokenGameIcon size="md" image={game.image} />
                               <p className="font-brand text-center truncate w-full 3xl:text-lg">
                                 {game.name}
                               </p>
-                            </TooltipTrigger>
-                            <TooltipContent className="border-brand bg-black text-neutral 3xl:text-lg">
-                              {game.name}
-                            </TooltipContent>
-                          </Tooltip>
-                        </Card>
+                            </Card>
+                          </TooltipTrigger>
+                          <TooltipContent className="border-brand bg-black text-neutral">
+                            <a
+                              href={`${selectedChainConfig.blockExplorerUrl}/contract/${game.contract_address}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 font-mono text-xs hover:underline"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {game.contract_address.slice(0, 6)}...
+                              {game.contract_address.slice(-4)}
+                              <span className="w-3 h-3">
+                                <EXTERNAL_LINK />
+                              </span>
+                            </a>
+                          </TooltipContent>
+                        </Tooltip>
                       ))}
                     </div>
                   </FormControl>
