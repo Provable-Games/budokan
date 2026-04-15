@@ -49,18 +49,13 @@ export const getGameUrl = (gameAddress: string): string => {
   return game?.url || "";
 };
 
-export const getPlayUrl = (
-  gameAddress: string,
-  gameName?: string,
-): string => {
+export const getPlayUrl = (gameAddress: string, gameName?: string): string => {
   const games = getGames();
   let game = games.find((game) => game.contract_address === gameAddress);
   // Fall back to matching by name so play URLs work across different
   // contract addresses (e.g. on Sepolia where addresses change often)
   if (!game && gameName) {
-    game = games.find(
-      (g) => g.name.toLowerCase() === gameName.toLowerCase(),
-    );
+    game = games.find((g) => g.name.toLowerCase() === gameName.toLowerCase());
   }
   return game?.playUrl || "";
 };
@@ -97,7 +92,6 @@ export const getObjectImage = (gameAddress: string): boolean => {
 
 export const getGamesForChain = (chainId: string): Game[] => {
   const isSepolia = chainId === ChainId.SN_SEPOLIA;
-  const isMainnet = chainId === ChainId.SN_MAIN;
 
   let games: Game[] = [];
 
@@ -156,20 +150,8 @@ export const getGamesForChain = (chainId: string): Game[] => {
         defaultEntryFeeToken: STRK_ADDRESS,
       },
     ];
-  } else if (isMainnet) {
+  } else {
     games = [
-      {
-        contract_address:
-          "0x03451230bc1bbec7bb1f337f22c9f6699d238429638ac357dba53af193674c70",
-        name: "Dark Shuffle",
-        image: "https://darkshuffle.io/favicon.svg",
-        url: "https://darkshuffle.io",
-        playUrl: "https://darkshuffle.io/play/",
-        controllerOnly: true,
-        disabled: true, // Temporarily disabled
-        minEntryFeeUsd: 0.25,
-        defaultEntryFeeToken: STRK_ADDRESS,
-      },
       {
         contract_address:
           "0x4de0351ceab4ecd50be6ee09329b0dcb3b96a9da88cc158f453823a389722fa",
@@ -187,84 +169,11 @@ export const getGamesForChain = (chainId: string): Game[] => {
       },
       {
         contract_address:
-          "0x012bf5118f03d2bbb8a2a31c72e0020ab85af172dd965ccd55c3132066ad8554",
-        name: "DopeWars",
-        url: "https://dopewars-kappa.vercel.app/",
-        playUrl: "https://dopewars-kappa.vercel.app/",
-        controllerOnly: true,
-        disabled: true, // Temporarily disabled
-        minEntryFeeUsd: 0.25,
-        defaultEntryFeeToken: STRK_ADDRESS,
-      },
-      {
-        contract_address:
-          "0x079c30d00719faea99297075e22fd84260f39960e14239f2018ba5d1dc1ab907",
-        name: "zKube",
-        image: "https://app.zkube.xyz/assets/pwa-512x512.png",
-        url: "https://app.zkube.xyz",
-        playUrl: "https://app.zkube.xyz/play/",
-        controllerOnly: true,
-        disabled: true, // Temporarily disabled
-        minEntryFeeUsd: 0.25,
-        defaultEntryFeeToken: STRK_ADDRESS,
-      },
-      {
-        contract_address:
-          "0x0473a834b65e8129652dec5788c5d9427fe1ea7e2e79fbe0493e38df816259d9",
-        name: "Nums",
-        url: "https://nums.gg/",
-        playUrl: "https://nums.gg/",
-        controllerOnly: true,
-        disabled: true, // Temporarily disabled
-        minEntryFeeUsd: 0.25,
-        defaultEntryFeeToken: STRK_ADDRESS,
-      },
-    ];
-  } else {
-    games = [
-      {
-        contract_address:
-          "0x0035389eec883a077ca4cc036cbe17fc802d297a08e8d7e930781de9ed492d05",
-        name: "Loot Survivor",
-        image: lsLogo,
-        url: "https://lootsurvivor.io",
-        minEntryFeeUsd: 0.25,
-        defaultEntryFeeToken: STRK_ADDRESS,
-        defaultGameFeePercentage: 5,
-      },
-      {
-        contract_address:
-          "0x075bd3616602ebec162c920492e4d032155fd0d199f1ed44edcb2eec120feb3d",
-        name: "Dark Shuffle",
-        image: "https://darkshuffle.io/favicon.svg",
-        url: "https://darkshuffle.io",
-        minEntryFeeUsd: 0.25,
-        defaultEntryFeeToken: STRK_ADDRESS,
-      },
-      {
-        contract_address:
-          "0x075bd3616602ebec142c920492e4d042155fd0d199f1ed44edcb2eec120feb3d",
+          "0x642f228f70b1ca7edb4ab7ff0bab067369c2e276ddc2570ca18802d4e758edc",
         name: "zKube",
         image: "https://zkube.io/favicon.svg",
         url: "https://zkube.io",
-        minEntryFeeUsd: 0.25,
-        defaultEntryFeeToken: STRK_ADDRESS,
-      },
-      {
-        contract_address:
-          "0x075bd3616652ebec162c920492e4d042155fd0d199f1ed44edcb2eec120feb3d",
-        name: "Dope Wars",
-        image: "https://dopewars.gg/favicon.ico",
-        url: "https://dopewars.gg",
-        minEntryFeeUsd: 0.25,
-        defaultEntryFeeToken: STRK_ADDRESS,
-      },
-      {
-        contract_address:
-          "0x075bd3616302ebec162c920492e4d042155fd0d199f1ed44edcb2eec120feb3d",
-        name: "Jokers of Neon",
-        image: "https://jokersofneon.com/icon.png",
-        url: "https://jokersofneon.com",
+        playUrl: "https://zkube.io/play/",
         minEntryFeeUsd: 0.25,
         defaultEntryFeeToken: STRK_ADDRESS,
       },
