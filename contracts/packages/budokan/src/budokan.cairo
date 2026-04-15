@@ -1808,10 +1808,11 @@ pub mod Budokan {
             created_at: u64,
             registration: @Registration,
         ) {
-            let phase = schedule.current_phase(created_at, get_block_timestamp());
+            let game_end: u64 = created_at
+                + schedule.game_start_delay.into()
+                + schedule.game_end_delay.into();
             assert!(
-                phase == Phase::Submission || phase == Phase::Finalized,
-                "Budokan: Not in submission period",
+                get_block_timestamp() >= game_end, "Budokan: Not in submission period",
             );
 
             // Allow re-submission if the entry was evicted from the leaderboard
