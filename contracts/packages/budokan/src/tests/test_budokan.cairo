@@ -1688,11 +1688,12 @@ fn test_submit_score_multiple_positions() {
     contracts.minigame.end_game(token_id3.into(), 75);
     contracts.minigame.end_game(token_id4.into(), 1);
 
-    // Submit scores in different order than final ranking
-    contracts.budokan.submit_score(tournament.id, token_id3, 1); // 75 points
-    contracts.budokan.submit_score(tournament.id, token_id1, 1); // 100 points
-    contracts.budokan.submit_score(tournament.id, token_id2, 3); // 50 points
-    contracts.budokan.submit_score(tournament.id, token_id4, 4); // 1 point
+    // Submit scores — O(1) overwrite means displaced entries must be re-submitted
+    contracts.budokan.submit_score(tournament.id, token_id3, 1); // 75 → pos 1
+    contracts.budokan.submit_score(tournament.id, token_id1, 1); // 100 → pos 1 (evicts token_id3)
+    contracts.budokan.submit_score(tournament.id, token_id3, 2); // 75 → re-submit at pos 2
+    contracts.budokan.submit_score(tournament.id, token_id2, 3); // 50 → pos 3
+    contracts.budokan.submit_score(tournament.id, token_id4, 4); // 1 → pos 4
 
     // Verify leaderboard
     let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
@@ -3382,10 +3383,15 @@ fn test_leaderboard_ordering_by_score() {
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
     contracts.budokan.submit_score(tournament.id, entry_token_id_1, 1);
 
-    // Player 2 submits with higher score, takes position 1
+    // Player 2 submits with higher score, takes position 1 (evicts player 1)
     stop_cheat_caller_address(contracts.budokan.contract_address);
     start_cheat_caller_address(contracts.budokan.contract_address, player2);
     contracts.budokan.submit_score(tournament.id, entry_token_id_2, 1);
+
+    // Player 1 re-submits at position 2 after being evicted
+    stop_cheat_caller_address(contracts.budokan.contract_address);
+    start_cheat_caller_address(contracts.budokan.contract_address, owner);
+    contracts.budokan.submit_score(tournament.id, entry_token_id_1, 2);
 
     // Get leaderboard - player 2 should be first (higher score)
     let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
@@ -4021,8 +4027,11 @@ fn test_submit_score_tie_lower_game_id() {
     // First submit player2 (higher game ID)
     contracts.budokan.submit_score(tournament.id, player2, 1);
 
-    // Then submit player1 (lower game ID) - should take first place
+    // Then submit player1 (lower game ID) - takes first place (evicts player2)
     contracts.budokan.submit_score(tournament.id, player1, 1);
+
+    // Re-submit player2 at position 2 after being evicted
+    contracts.budokan.submit_score(tournament.id, player2, 2);
 
     // Get leaderboard - player1 should be first due to lower game ID
     let leaderboard = contracts.budokan.get_leaderboard(tournament.id);
