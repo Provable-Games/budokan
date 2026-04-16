@@ -103,7 +103,7 @@ export const PlayerDetails = ({
       )}
       {isStarted && gameAddress && tokenId && (
         <>
-          {hasSubmitted ? (
+          {isEnded || hasSubmitted ? (
             // Game is over, show replay link if available
             (() => {
               const replayLink = getReplayLink(gameAddress);
@@ -123,7 +123,7 @@ export const PlayerDetails = ({
               ) : null;
             })()
           ) : (
-            // Game is not over, show watch link if available
+            // Game is still live, show watch link if available
             (() => {
               const watchLink = getWatchLink(gameAddress);
               return watchLink ? (

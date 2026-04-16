@@ -437,7 +437,7 @@ const CreateTournament = () => {
         Number(tournamentCount),
         Number(prizeCount)
       );
-      await createTournamentAndApproveAndAddPrizes(
+      const createdTournamentId = await createTournamentAndApproveAndAddPrizes(
         processedTournament,
         processedPrizes,
         formData.entryFees?.value ?? 0,
@@ -445,7 +445,7 @@ const CreateTournament = () => {
       );
       form.reset();
       setShowConfirmation(false);
-      navigate(`/tournament/${Number(tournamentCount) + 1}`);
+      navigate(`/tournament/${createdTournamentId ?? Number(tournamentCount) + 1}`);
     } catch (error) {
       console.error("Error creating tournament:", error);
     }

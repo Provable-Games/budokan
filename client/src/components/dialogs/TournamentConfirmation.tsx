@@ -1092,7 +1092,91 @@ const TournamentConfirmation = ({
               </>
             )}
 
-            {/* Bonus Prizes section removed */}
+            {/* Prizes */}
+            {formData.prizes && formData.prizes.length > 0 && (
+              <>
+                <div className="w-full h-0.5 bg-brand/25 mt-2" />
+                <div className="space-y-2">
+                  <h3 className="font-bold text-lg">Prizes</h3>
+                  <div className="flex flex-col gap-2">
+                    {formData.prizes.map((prize, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between p-3 border border-brand-muted rounded-md"
+                      >
+                        {prize.type === "ERC20" &&
+                        prize.distribution &&
+                        prize.distributionCount ? (
+                          <>
+                            <div className="flex flex-col gap-1">
+                              <span className="text-sm text-neutral">
+                                Top {prize.distributionCount} positions
+                              </span>
+                              <span className="text-xs text-neutral capitalize">
+                                {prize.distribution} distribution
+                              </span>
+                            </div>
+                            <div className="flex flex-row gap-2 items-center">
+                              <span>{formatPrizeAmount(prize.amount)}</span>
+                              <img
+                                src={getTokenLogoUrl(
+                                  selectedChainConfig.chainId ?? "",
+                                  prize.token.address
+                                )}
+                                alt={prize.token.symbol}
+                                className="w-6 h-6 rounded-full"
+                              />
+                              <span className="text-neutral">
+                                {prize.token.symbol}
+                              </span>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <span className="font-brand w-10">
+                              {`${prize.position}${getOrdinalSuffix(prize.position)}`}:
+                            </span>
+                            <div className="flex flex-row gap-2 items-center">
+                              {prize.type === "ERC20" ? (
+                                <>
+                                  <span>{formatPrizeAmount(prize.amount)}</span>
+                                  <img
+                                    src={getTokenLogoUrl(
+                                      selectedChainConfig.chainId ?? "",
+                                      prize.token.address
+                                    )}
+                                    alt={prize.token.symbol}
+                                    className="w-6 h-6 rounded-full"
+                                  />
+                                  <span className="text-neutral">
+                                    {prize.token.symbol}
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  <span>Token #{prize.tokenId}</span>
+                                  <img
+                                    src={getTokenLogoUrl(
+                                      selectedChainConfig.chainId ?? "",
+                                      prize.token.address
+                                    )}
+                                    alt={prize.token.symbol}
+                                    className="w-6 h-6 rounded-full"
+                                  />
+                                  <span className="text-neutral">
+                                    {prize.token.symbol}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
