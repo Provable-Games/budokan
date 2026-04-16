@@ -19,6 +19,7 @@ import {
   Uint256,
   CairoCustomEnum,
   Contract,
+  hash,
 } from "starknet";
 import { feltToString } from "@/lib/utils";
 import useUIStore from "@/hooks/useUIStore";
@@ -32,6 +33,32 @@ import {
 import { useToastMessages } from "@/components/toast";
 import { useEntityUpdates } from "@/chain/hooks/useEntityUpdates";
 import BUDOKAN_ABI from "@/lib/abis/budokan";
+
+const TOURNAMENT_CREATED_SELECTOR = hash.getSelectorFromName("TournamentCreated");
+
+/**
+ * Parse the tournament ID from a transaction receipt by finding the
+ * TournamentCreated event emitted by the budokan contract.
+ * Event keys layout: [selector, tournament_id, game_address]
+ */
+function parseTournamentIdFromReceipt(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  receipt: any,
+  contractAddress: string,
+): number | undefined {
+  const normalise = (addr: string) => addr.toLowerCase().replace(/^0x0*/, "0x");
+  const normContract = normalise(contractAddress);
+  for (const event of receipt.events ?? []) {
+    if (
+      normalise(event.from_address) === normContract &&
+      event.keys[0] === TOURNAMENT_CREATED_SELECTOR &&
+      event.keys.length >= 2
+    ) {
+      return Number(BigInt(event.keys[1]));
+    }
+  }
+  return undefined;
+}
 
 export const useSystemCalls = () => {
   const { selectedChainConfig } = useChainConfig();
@@ -557,7 +584,7 @@ export const useSystemCalls = () => {
     prizes: Prize[],
     entryFeeUsdCost: number,
     duration: number
-  ) => {
+  ): Promise<number | undefined> => {
     const budokanContract = initializeBudokanContract();
     const game = getGameName(tournament.game_config.game_address);
     try {
@@ -573,13 +600,56 @@ export const useSystemCalls = () => {
         0, // metadata_value
       ]);
 
-      let calls = [];
       const createCall = {
         contractAddress: tournamentAddress,
         entrypoint: "create_tournament",
         calldata: call.calldata,
       };
-      calls.push(createCall);
+
+      // If no prizes, just create the tournament
+      if (prizes.length === 0) {
+        const tx = await account?.execute([createCall]);
+        let tournamentId: number | undefined;
+        if (tx?.transaction_hash) {
+          const receipt = await account?.waitForTransaction(tx.transaction_hash);
+          if (receipt) {
+            tournamentId = parseTournamentIdFromReceipt(receipt, tournamentAddress);
+          }
+        }
+        await waitForTournamentCreation(Number(tournament.id));
+
+        if (tx) {
+          const resolvedId = tournamentId ?? Number(tournament.id);
+          showTournamentCreation({
+            tournamentName: feltToString(tournament.metadata.name),
+            tournamentId: resolvedId.toString(),
+            game,
+            hasEntryFee: tournament.entry_fee.isSome(),
+            entryFeeUsdCost: entryFeeUsdCost,
+            startsIn: Number(tournament.created_at) + Number(tournament.schedule.game_start_delay) - Date.now() / 1000,
+            duration,
+          });
+        }
+        return tournamentId;
+      }
+
+      // Create tournament first and get the real ID from the receipt
+      const createTx = await account?.execute([createCall]);
+      let tournamentId: number | undefined;
+      if (createTx?.transaction_hash) {
+        const receipt = await account?.waitForTransaction(createTx.transaction_hash);
+        if (receipt) {
+          tournamentId = parseTournamentIdFromReceipt(receipt, tournamentAddress);
+        }
+      }
+
+      if (!tournamentId) {
+        console.error("Failed to get tournament ID from transaction receipt");
+        throw new Error("Tournament created but could not confirm ID");
+      }
+
+      // Now build prize calls with the real tournament ID
+      let prizeCalls = [];
 
       // Separate ERC20 and ERC721 prizes
       const erc20Prizes = prizes.filter((p) => p.token_type.variant.erc20);
@@ -630,7 +700,7 @@ export const useSystemCalls = () => {
         ]),
       }));
 
-      calls.push(...erc20ApprovalCalls, ...erc721ApprovalCalls);
+      prizeCalls.push(...erc20ApprovalCalls, ...erc721ApprovalCalls);
       for (const prize of prizes) {
         // Create position as CairoOption
         const position = (prize as any).position
@@ -641,23 +711,23 @@ export const useSystemCalls = () => {
           contractAddress: tournamentAddress,
           entrypoint: "add_prize",
           calldata: CallData.compile([
-            prize.context_id, // Changed from tournament_id
+            tournamentId, // Use real tournament ID from receipt
             prize.token_address,
             prize.token_type,
             position, // Position as Option<u32>
           ]),
         };
-        calls.push(addPrizesCall);
+        prizeCalls.push(addPrizesCall);
       }
 
-      const tx = await account?.execute(calls);
+      const tx = await account?.execute(prizeCalls);
 
-      await waitForTournamentCreation(Number(tournament.id));
+      await waitForAddPrizes(prizes.length, tournamentId);
 
       if (tx) {
         showTournamentCreation({
           tournamentName: feltToString(tournament.metadata.name),
-          tournamentId: Number(tournament.id).toString(),
+          tournamentId: tournamentId.toString(),
           game,
           hasEntryFee: tournament.entry_fee.isSome(),
           entryFeeUsdCost: entryFeeUsdCost,
@@ -665,6 +735,7 @@ export const useSystemCalls = () => {
           duration,
         });
       }
+      return tournamentId;
     } catch (error) {
       console.error("Error executing create tournament:", error);
       throw error;
@@ -677,7 +748,7 @@ export const useSystemCalls = () => {
     entryFeeUsdCost: number,
     duration: number,
     batchSize: number = 50
-  ) => {
+  ): Promise<number | undefined> => {
     const game = getGameName(tournament.game_config.game_address);
     try {
       // Manually convert description to ByteArray to avoid stack overflow
@@ -706,6 +777,21 @@ export const useSystemCalls = () => {
           0, // metadata_value
         ]),
       };
+
+      // Create tournament first and get the real ID from the receipt
+      const createTx = await account?.execute([createCall]);
+      let tournamentId: number | undefined;
+      if (createTx?.transaction_hash) {
+        const receipt = await account?.waitForTransaction(createTx.transaction_hash);
+        if (receipt) {
+          tournamentId = parseTournamentIdFromReceipt(receipt, tournamentAddress);
+        }
+      }
+
+      if (!tournamentId) {
+        console.error("Failed to get tournament ID from transaction receipt");
+        throw new Error("Tournament created but could not confirm ID");
+      }
 
       // Separate ERC20 and ERC721 prizes
       const erc20Prizes = prizes.filter((p) => p.token_type.variant.erc20);
@@ -769,15 +855,12 @@ export const useSystemCalls = () => {
       for (const [index, batch] of batches.entries()) {
         let calls = [];
 
-        // First batch includes tournament creation and approvals
-        if (index === 0) {
-          calls.push(createCall);
-          if (approvalCalls.length > 0) {
-            calls.push(...approvalCalls);
-          }
+        // First batch includes approvals
+        if (index === 0 && approvalCalls.length > 0) {
+          calls.push(...approvalCalls);
         }
 
-        // Add prize calls
+        // Add prize calls with real tournament ID
         const prizeCalls = batch.map((prize) => {
           // Create position as CairoOption
           const position = (prize as any).position
@@ -788,7 +871,7 @@ export const useSystemCalls = () => {
             contractAddress: tournamentAddress,
             entrypoint: "add_prize",
             calldata: CallData.compile([
-              prize.context_id, // Changed from tournament_id
+              tournamentId, // Use real tournament ID
               prize.token_address,
               prize.token_type,
               position, // Position as Option<u32>
@@ -802,7 +885,7 @@ export const useSystemCalls = () => {
             prizeCalls.length
           } prizes${
             index === 0
-              ? `, tournament creation, and ${approvalCalls.length} approvals`
+              ? ` and ${approvalCalls.length} approvals`
               : ""
           }`
         );
@@ -817,17 +900,12 @@ export const useSystemCalls = () => {
           await account?.waitForTransaction(tx.transaction_hash);
           console.log(`Transaction ${tx.transaction_hash} confirmed`);
         }
-
-        // Wait for tournament creation after first batch
-        if (index === 0) {
-          await waitForTournamentCreation(Number(tournament.id));
-        }
       }
 
       if (tx) {
         showTournamentCreation({
           tournamentName: feltToString(tournament.metadata.name),
-          tournamentId: Number(tournament.id).toString(),
+          tournamentId: tournamentId.toString(),
           game,
           hasEntryFee: tournament.entry_fee.isSome(),
           entryFeeUsdCost: entryFeeUsdCost,
@@ -835,6 +913,7 @@ export const useSystemCalls = () => {
           duration,
         });
       }
+      return tournamentId;
     } catch (error) {
       console.error(
         "Error executing create tournament with batched prizes:",
