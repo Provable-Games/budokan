@@ -17,7 +17,7 @@ import BonusPrizes from "@/components/createTournament/BonusPrizes";
 import TournamentConfirmation from "@/components/dialogs/TournamentConfirmation";
 import { processPrizes, processTournamentData } from "@/lib/utils/formatting";
 import { useAccount } from "@starknet-react/core";
-import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
+import { useSystemCalls, type CreationStep } from "@/chain/hooks/useSystemCalls";
 import { Tournament } from "@/generated/models.gen";
 import { useChainConfig } from "@/context/chain";
 import { FormToken } from "@/lib/types";
@@ -417,7 +417,9 @@ const CreateTournament = () => {
     }
   };
 
-  const handleCreateTournament = async () => {
+  const handleCreateTournament = async (
+    onProgress?: (step: CreationStep) => void
+  ) => {
     try {
       const formData = form.getValues();
       // Get extension addresses for the current chain
@@ -441,7 +443,8 @@ const CreateTournament = () => {
         processedTournament,
         processedPrizes,
         formData.entryFees?.value ?? 0,
-        formData.duration
+        formData.duration,
+        onProgress
       );
       form.reset();
       setShowConfirmation(false);

@@ -14,6 +14,7 @@ import { useAccount } from "@starknet-react/core";
 import { useConnectToSelectedChain } from "@/chain/hooks/useChain";
 import useUIStore from "@/hooks/useUIStore";
 import {
+  cn,
   feltToString,
   formatNumber,
   formatPrizeAmount,
@@ -33,18 +34,78 @@ import { useGameSetting } from "@/hooks/useDenshokanQueries";
 import { getExtensionAddresses, identifyExtensionType } from "@provable-games/metagame-sdk";
 import { getTokenByAddress } from "@/lib/tokenUtils";
 import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
+import { type CreationStep } from "@/chain/hooks/useSystemCalls";
 import { OPUS } from "@/components/Icons";
 import {
   validateTournamentCreation,
   calculateEntryFeePrizePoolValue,
   formatValidationMessage,
 } from "@/lib/utils/tournamentValidation";
+import { Check } from "lucide-react";
 
 interface TournamentConfirmationProps {
   formData: TournamentFormData;
-  onConfirm: () => void;
+  onConfirm: (onProgress?: (step: CreationStep) => void) => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+}
+
+const STEP_ORDER: CreationStep[] = ["creating", "confirming", "adding-prizes", "done"];
+
+const STEP_LABELS: Record<CreationStep, string> = {
+  "creating": "Create Tournament",
+  "confirming": "Confirming Transaction",
+  "adding-prizes": "Adding Prizes",
+  "done": "Complete",
+};
+
+function CreationProgress({ step, hasPrizes }: { step: CreationStep; hasPrizes: boolean }) {
+  const steps = hasPrizes
+    ? STEP_ORDER
+    : STEP_ORDER.filter((s) => s !== "adding-prizes");
+  const currentIndex = steps.indexOf(step);
+
+  return (
+    <div className="flex flex-col gap-2 py-2">
+      {steps.map((s, i) => {
+        const isComplete = i < currentIndex;
+        const isCurrent = i === currentIndex;
+
+        return (
+          <div key={s} className="flex items-center gap-3">
+            <div
+              className={cn(
+                "w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 border",
+                isComplete
+                  ? "bg-brand border-brand text-background"
+                  : isCurrent
+                  ? "border-brand"
+                  : "border-brand-muted/50"
+              )}
+            >
+              {isComplete ? (
+                <Check className="w-3.5 h-3.5" />
+              ) : isCurrent ? (
+                <LoadingSpinner />
+              ) : null}
+            </div>
+            <span
+              className={cn(
+                "text-sm",
+                isComplete
+                  ? "text-brand"
+                  : isCurrent
+                  ? "text-foreground font-medium"
+                  : "text-muted-foreground"
+              )}
+            >
+              {STEP_LABELS[s]}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 const TournamentConfirmation = ({
@@ -58,6 +119,8 @@ const TournamentConfirmation = ({
   const { selectedChainConfig } = useChainConfig();
   const { gameData, getGameImage } = useUIStore();
   const [isCreating, setIsCreating] = useState(false);
+  const [creationStep, setCreationStep] = useState<CreationStep | null>(null);
+  const hasPrizes = formData.prizes && formData.prizes.length > 0;
 
   // Get CASH token for display
   const cashToken = useMemo(() => {
@@ -358,12 +421,15 @@ const TournamentConfirmation = ({
 
   const handleConfirm = async () => {
     setIsCreating(true);
+    setCreationStep(null);
     try {
-      await onConfirm();
+      await onConfirm((step) => setCreationStep(step));
       setIsCreating(false);
+      setCreationStep(null);
     } catch (error) {
       console.error("Failed to create tournament:", error);
       setIsCreating(false);
+      setCreationStep(null);
     }
   };
 
@@ -1180,34 +1246,40 @@ const TournamentConfirmation = ({
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 sm:mt-4 2xl:mt-6">
-          <DialogClose asChild>
-            <Button variant="outline">Cancel</Button>
-          </DialogClose>
-          {address ? (
-            <Button
-              onClick={handleConfirm}
-              disabled={
-                !isStartTimeValid ||
-                !isDurationValid ||
-                hasRegistrationConflict ||
-                hasEntryBarrierError ||
-                isCreating
-              }
-            >
-              {isCreating ? (
-                <div className="flex items-center gap-2">
-                  <LoadingSpinner />
-                  <span>Creating...</span>
-                </div>
-              ) : (
-                "Confirm & Create"
-              )}
-            </Button>
-          ) : (
-            <Button onClick={() => connect()}>Connect Wallet</Button>
-          )}
-        </div>
+        {isCreating && creationStep ? (
+          <div className="flex flex-col gap-3 sm:mt-4 2xl:mt-6">
+            <CreationProgress step={creationStep} hasPrizes={hasPrizes} />
+          </div>
+        ) : (
+          <div className="flex justify-end gap-2 sm:mt-4 2xl:mt-6">
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            {address ? (
+              <Button
+                onClick={handleConfirm}
+                disabled={
+                  !isStartTimeValid ||
+                  !isDurationValid ||
+                  hasRegistrationConflict ||
+                  hasEntryBarrierError ||
+                  isCreating
+                }
+              >
+                {isCreating ? (
+                  <div className="flex items-center gap-2">
+                    <LoadingSpinner />
+                    <span>Creating...</span>
+                  </div>
+                ) : (
+                  "Confirm & Create"
+                )}
+              </Button>
+            ) : (
+              <Button onClick={() => connect()}>Connect Wallet</Button>
+            )}
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

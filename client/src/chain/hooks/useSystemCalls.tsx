@@ -34,6 +34,8 @@ import { useToastMessages } from "@/components/toast";
 import { useEntityUpdates } from "@/chain/hooks/useEntityUpdates";
 import BUDOKAN_ABI from "@/lib/abis/budokan";
 
+export type CreationStep = "creating" | "confirming" | "adding-prizes" | "done";
+
 const TOURNAMENT_CREATED_SELECTOR = hash.getSelectorFromName("TournamentCreated");
 
 /**
@@ -583,7 +585,8 @@ export const useSystemCalls = () => {
     tournament: Tournament,
     prizes: Prize[],
     entryFeeUsdCost: number,
-    duration: number
+    duration: number,
+    onProgress?: (step: CreationStep) => void
   ): Promise<number | undefined> => {
     const budokanContract = initializeBudokanContract();
     const game = getGameName(tournament.game_config.game_address);
@@ -606,11 +609,14 @@ export const useSystemCalls = () => {
         calldata: call.calldata,
       };
 
+      onProgress?.("creating");
+
       // If no prizes, just create the tournament
       if (prizes.length === 0) {
         const tx = await account?.execute([createCall]);
         let tournamentId: number | undefined;
         if (tx?.transaction_hash) {
+          onProgress?.("confirming");
           const receipt = await account?.waitForTransaction(tx.transaction_hash);
           if (receipt) {
             tournamentId = parseTournamentIdFromReceipt(receipt, tournamentAddress);
@@ -619,6 +625,7 @@ export const useSystemCalls = () => {
           const resolvedId = tournamentId ?? Number(tournament.id);
           await waitForTournamentCreation(resolvedId);
 
+          onProgress?.("done");
           showTournamentCreation({
             tournamentName: feltToString(tournament.metadata.name),
             tournamentId: resolvedId.toString(),
@@ -634,6 +641,7 @@ export const useSystemCalls = () => {
 
       // Create tournament first and get the real ID from the receipt
       const createTx = await account?.execute([createCall]);
+      onProgress?.("confirming");
       let tournamentId: number | undefined;
       if (createTx?.transaction_hash) {
         const receipt = await account?.waitForTransaction(createTx.transaction_hash);
@@ -646,6 +654,8 @@ export const useSystemCalls = () => {
         console.error("Failed to get tournament ID from transaction receipt");
         throw new Error("Tournament created but could not confirm ID");
       }
+
+      onProgress?.("adding-prizes");
 
       // Now build prize calls with the real tournament ID
       let prizeCalls = [];
@@ -723,6 +733,7 @@ export const useSystemCalls = () => {
 
       await waitForAddPrizes(prizes.length, tournamentId);
 
+      onProgress?.("done");
       if (tx) {
         showTournamentCreation({
           tournamentName: feltToString(tournament.metadata.name),
