@@ -615,11 +615,10 @@ export const useSystemCalls = () => {
           if (receipt) {
             tournamentId = parseTournamentIdFromReceipt(receipt, tournamentAddress);
           }
-        }
-        await waitForTournamentCreation(Number(tournament.id));
 
-        if (tx) {
           const resolvedId = tournamentId ?? Number(tournament.id);
+          await waitForTournamentCreation(resolvedId);
+
           showTournamentCreation({
             tournamentName: feltToString(tournament.metadata.name),
             tournamentId: resolvedId.toString(),
@@ -901,6 +900,9 @@ export const useSystemCalls = () => {
           console.log(`Transaction ${tx.transaction_hash} confirmed`);
         }
       }
+
+      // Wait for indexer to process prizes before showing confirmation
+      await waitForAddPrizes(prizes.length, tournamentId);
 
       if (tx) {
         showTournamentCreation({
