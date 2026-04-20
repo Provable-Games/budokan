@@ -1353,21 +1353,21 @@ pub mod Budokan {
             // Validate SRC5 interfaces (ERC721 for token, IEntryRequirementExtension for extension)
             self.entry_requirement.assert_valid_entry_requirement(entry_requirement);
 
-            // Extension-specific budokan logic: registration_only check and add_config
+            // Extension-specific budokan logic: add_config then check bannable
             if let EntryRequirementType::extension(extension_config) = entry_requirement
                 .entry_requirement_type {
                 let entry_validator_dispatcher = IEntryRequirementExtensionDispatcher {
                     contract_address: extension_config.address,
                 };
-                let registration_only = entry_validator_dispatcher.registration_only();
-                if registration_only {
-                    schedule.assert_has_registration_period_before_game_start();
-                }
                 let tournament_id = self.total_tournaments.read();
                 entry_validator_dispatcher
                     .add_config(
                         tournament_id + 1, entry_requirement.entry_limit, extension_config.config,
                     );
+                let bannable = entry_validator_dispatcher.bannable(tournament_id + 1);
+                if bannable {
+                    schedule.assert_has_registration_period_before_game_start();
+                }
             }
         }
 

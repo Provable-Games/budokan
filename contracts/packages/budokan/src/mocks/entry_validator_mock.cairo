@@ -30,7 +30,7 @@ pub mod entry_validator_mock {
         #[substorage(v0)]
         src5: SRC5Component::Storage,
         owner_address: ContractAddress,
-        registration_only: bool,
+        bannable: Map<u64, bool>,
         tournament_erc721_address: Map<u64, ContractAddress>,
         tournament_entry_limit: Map<u64, u32>,
         tournament_entries: Map<(u64, ContractAddress), u32>,
@@ -44,11 +44,8 @@ pub mod entry_validator_mock {
     }
 
     #[constructor]
-    fn constructor(
-        ref self: ContractState, budokan_address: ContractAddress, registration_only: bool,
-    ) {
+    fn constructor(ref self: ContractState, budokan_address: ContractAddress) {
         self.owner_address.write(budokan_address);
-        self.registration_only.write(registration_only);
         self.src5.register_interface(IENTRY_REQUIREMENT_EXTENSION_ID);
     }
 
@@ -58,8 +55,8 @@ pub mod entry_validator_mock {
             self.owner_address.read()
         }
 
-        fn registration_only(self: @ContractState) -> bool {
-            self.registration_only.read()
+        fn bannable(self: @ContractState, context_id: u64) -> bool {
+            self.bannable.read(context_id)
         }
 
         fn valid_entry(

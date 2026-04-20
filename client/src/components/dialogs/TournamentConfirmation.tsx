@@ -24,7 +24,7 @@ import {
 import { calculatePaidPlaces } from "@/lib/utils/formatting";
 import { getTokenLogoUrl, getTokenDecimals } from "@/lib/tokensMeta";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { useChainConfig } from "@/context/chain";
 import { useMerkleTrees } from "@provable-games/metagame-sdk/react";
 // import { calculateTotalValue } from "@/lib/utils/formatting";
@@ -32,7 +32,6 @@ import { LoadingSpinner } from "@/components/ui/spinner";
 import { useGameSetting } from "@/hooks/useDenshokanQueries";
 import { getExtensionAddresses, identifyExtensionType } from "@provable-games/metagame-sdk";
 import { getTokenByAddress } from "@/lib/tokenUtils";
-import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 import { OPUS } from "@/components/Icons";
 import {
   validateTournamentCreation,
@@ -66,8 +65,8 @@ const TournamentConfirmation = ({
       selectedChainConfig?.chainId ?? ""
     );
   }, [selectedChainConfig?.chainId]);
-  const [extensionRequiresRegistration, setExtensionRequiresRegistration] = useState(false);
-  const { checkRegistrationOnly } = useSystemCalls();
+  const [extensionRequiresRegistration, _setExtensionRequiresRegistration] =
+    useState(false);
 
   const { data: settingData } = useGameSetting({
     settingsId: Number(formData.settings),
@@ -92,30 +91,8 @@ const TournamentConfirmation = ({
     formData.type === "fixed" ? startTime - currentTime >= 900n : true;
   const isDurationValid = formData.duration >= 900n;
 
-  // Check if extension requires registration period by calling the contract
-  useEffect(() => {
-    const checkExtensionRegistrationRequirement = async () => {
-      if (
-        formData.enableGating &&
-        formData.gatingOptions?.type === "extension" &&
-        formData.gatingOptions.extension?.address
-      ) {
-        const requiresReg = await checkRegistrationOnly(
-          formData.gatingOptions.extension.address
-        );
-        setExtensionRequiresRegistration(requiresReg);
-      } else {
-        setExtensionRequiresRegistration(false);
-      }
-    };
-
-    checkExtensionRegistrationRequirement();
-  }, [
-    formData.enableGating,
-    formData.gatingOptions?.type,
-    formData.gatingOptions?.extension?.address,
-    checkRegistrationOnly,
-  ]);
+  // Note: bannable is now per-context (set via config at tournament creation).
+  // The on-chain contract enforces registration period when bannable is true.
 
   // Check if there's a conflict between extension requirement and tournament type
   const hasRegistrationConflict =
