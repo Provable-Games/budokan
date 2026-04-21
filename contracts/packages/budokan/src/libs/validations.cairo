@@ -55,10 +55,7 @@ pub fn assert_valid_entry_fee_distribution_count(
 ) {
     assert!(
         validate_entry_fee_distribution_count(
-            tournament_creator_share,
-            game_creator_share,
-            refund_share,
-            distribution_count,
+            tournament_creator_share, game_creator_share, refund_share, distribution_count,
         ),
         "Budokan: distribution_count > 0 requires a non-zero prize pool",
     );
