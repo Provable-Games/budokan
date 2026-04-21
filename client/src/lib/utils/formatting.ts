@@ -1038,11 +1038,21 @@ export const calculatePaidPlaces = (
 ): number => {
   const positions = new Set<number>();
 
-  // Add entry fee distribution positions
+  // Add entry fee distribution positions — only when the prize pool actually
+  // has a non-zero share. Otherwise every distribution slot computes to 0.
   if (entryFee?.isSome() && Number(entryFee.Some?.distribution_count ?? 0) > 0) {
-    const distributionCount = Number(entryFee.Some?.distribution_count);
-    for (let i = 1; i <= distributionCount; i++) {
-      positions.add(i);
+    const tournamentCreatorBps = Number(
+      entryFee.Some?.tournament_creator_share ?? 0,
+    );
+    const gameCreatorBps = Number(entryFee.Some?.game_creator_share ?? 0);
+    const refundBps = Number(entryFee.Some?.refund_share ?? 0);
+    const prizePoolBps =
+      10000 - tournamentCreatorBps - gameCreatorBps - refundBps;
+    if (prizePoolBps > 0) {
+      const distributionCount = Number(entryFee.Some?.distribution_count);
+      for (let i = 1; i <= distributionCount; i++) {
+        positions.add(i);
+      }
     }
   }
 

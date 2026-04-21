@@ -198,7 +198,24 @@ app.get("/:id", async (c) => {
     const entryFeeDistCount = Number(
       tournamentRows[0].entryFeeDistributionCount ?? 0,
     );
-    const paidPlaces = Math.max(paidPlacesFromPrizes, entryFeeDistCount);
+    // Only count entry-fee distribution slots when the prize pool has a
+    // non-zero share — otherwise every position row computes to 0 and isn't
+    // actually claimable (mirrors the phantom-prize contract check).
+    const tournamentCreatorShare = Number(
+      tournamentRows[0].entryFeeTournamentCreatorShare ?? 0,
+    );
+    const gameCreatorShare = Number(
+      tournamentRows[0].entryFeeGameCreatorShare ?? 0,
+    );
+    const refundShare = Number(tournamentRows[0].entryFeeRefundShare ?? 0);
+    const prizePoolBps =
+      10000 - tournamentCreatorShare - gameCreatorShare - refundShare;
+    const effectiveEntryFeeDistCount =
+      prizePoolBps > 0 ? entryFeeDistCount : 0;
+    const paidPlaces = Math.max(
+      paidPlacesFromPrizes,
+      effectiveEntryFeeDistCount,
+    );
 
     return c.json({
       data: {
