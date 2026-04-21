@@ -3,7 +3,7 @@ import { useEntryQualification } from "@provable-games/metagame-sdk/react";
 import {
   checkExtensionValidEntry as sdkCheckValidEntry,
   getExtensionEntriesLeft as sdkGetEntriesLeft,
-  getUserTotalTroveDebt,
+  getUserAssetFilteredTroveDebt,
 } from "@provable-games/metagame-sdk/rpc";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -733,14 +733,30 @@ export function EnterTournamentDialog({
     merkleValidatorConfig?.treeId,
   ]);
 
-  // Fetch trove debt for Opus Troves validator using SDK RPC
+  // Fetch trove debt for Opus Troves validator using SDK RPC.
+  // Uses asset-filtered debt so the displayed amount matches what the on-chain
+  // validator will actually count (only troves with the configured collateral).
+  const opusAssetFilterKey = useMemo(
+    () =>
+      (opusTrovesValidatorConfig?.assetAddresses ?? [])
+        .map((a) => String(a))
+        .join(","),
+    [opusTrovesValidatorConfig?.assetAddresses],
+  );
+
   useEffect(() => {
     const fetchTroveDebt = async () => {
       if (isOpusTrovesValidatorExtension && address && open && provider) {
         try {
           setLoadingTroveDebt(true);
-          const totalDebt = await getUserTotalTroveDebt(provider, address);
-          setTroveDebt(totalDebt);
+          const filteredDebt = await getUserAssetFilteredTroveDebt(
+            provider,
+            address,
+            (opusTrovesValidatorConfig?.assetAddresses ?? []).map((a) =>
+              String(a),
+            ),
+          );
+          setTroveDebt(filteredDebt);
         } catch (error) {
           console.error("Error fetching trove debt:", error);
           setTroveDebt(null);
@@ -753,7 +769,13 @@ export function EnterTournamentDialog({
     };
 
     fetchTroveDebt();
-  }, [isOpusTrovesValidatorExtension, address, open, provider]);
+  }, [
+    isOpusTrovesValidatorExtension,
+    address,
+    open,
+    provider,
+    opusAssetFilterKey,
+  ]);
 
   // Fetch NFTs using Voyager API with pagination
   const {
@@ -1725,7 +1747,11 @@ export function EnterTournamentDialog({
                                   <X />
                                 </span>
                                 <span className="text-warning">
-                                  Insufficient debt for entry
+                                  {troveDebt === 0n &&
+                                  (opusTrovesValidatorConfig?.assetAddresses
+                                    ?.length ?? 0) > 0
+                                    ? "No debt in troves with the required collateral"
+                                    : "Insufficient debt for entry"}
                                 </span>
                               </div>
                             )}

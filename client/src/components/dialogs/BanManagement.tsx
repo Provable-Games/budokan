@@ -157,6 +157,7 @@ export const BanManagementDialog = ({
             threshold: opusTrovesValidatorConfig.threshold,
             valuePerEntry: opusTrovesValidatorConfig.valuePerEntry,
             maxEntries: opusTrovesValidatorConfig.maxEntries,
+            bannable: false,
           }
         : undefined,
       isOpusTrovesValidatorExtension && open,

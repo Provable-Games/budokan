@@ -45,8 +45,20 @@ const ScheduleSlider = ({
   disablePastStartDates,
   disablePastEndDates,
 }: ScheduleSliderProps) => {
-  // Minimum submission period: 1 hour for privileged users, 1 day for others
-  const MIN_SUBMISSION_PERIOD = allowShortSubmissionPeriod ? SECONDS_IN_HOUR : SECONDS_IN_DAY;
+  // Minimum submission period.
+  // Production default: 1 day (privileged users: 1 hour, matching the contract's
+  // MIN_SUBMISSION_PERIOD = 3600s).
+  // Local override: set VITE_MIN_SUBMISSION_PERIOD_SECONDS in .env.local (any
+  // positive integer in seconds). Used for local devnets where contract limits
+  // may also be relaxed — values below 3600s will revert against mainnet.
+  const envMinRaw = Number(
+    import.meta.env.VITE_MIN_SUBMISSION_PERIOD_SECONDS,
+  );
+  const envMinOverride =
+    Number.isFinite(envMinRaw) && envMinRaw > 0 ? envMinRaw : null;
+  const MIN_SUBMISSION_PERIOD =
+    envMinOverride ??
+    (allowShortSubmissionPeriod ? SECONDS_IN_HOUR : SECONDS_IN_DAY);
 
   const sliderRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState<string | null>(null);

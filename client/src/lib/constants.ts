@@ -24,10 +24,12 @@ export const TOKEN_ADDRESSES: Record<string, string> = {
 export const ADMIN_ADDRESS =
   "0x077b8ed8356a7c1f0903fc4ba6e15f9b09cf437ce04f21b2cbf32dc2790183d0";
 
-export const STARTING_TOURNAMENT_ID = 2;
-
-// Tournament IDs to exclude from display, keyed by chain
-export const EXCLUDED_TOURNAMENT_IDS: Record<string, number[]> = {
-  SN_MAIN: [1, 2, 3],
-  SN_SEPOLIA: [],
-};
+// Tournament IDs to exclude from display, keyed by chain.
+// Disabled in local dev so all tournaments are visible.
+export const EXCLUDED_TOURNAMENT_IDS: Record<string, number[]> = import.meta.env
+  .DEV
+  ? { SN_MAIN: [], SN_SEPOLIA: [] }
+  : {
+      SN_MAIN: [1],
+      SN_SEPOLIA: [],
+    };

@@ -2,9 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useFormContext } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
-import { Slider } from "@/components/ui/slider";
-import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   FormControl,
   FormItem,
@@ -39,6 +37,7 @@ export const OpusTrovesConfig = ({
   const [opusValuePerEntryUSD, setOpusValuePerEntryUSD] = useState("");
   const [opusMaxEntries, setOpusMaxEntries] = useState("");
   const [opusProportionalMode, setOpusProportionalMode] = useState(false);
+  const [opusBannable, setOpusBannable] = useState(false);
 
   // Get CASH token for display
   const cashToken = useMemo(() => {
@@ -75,7 +74,8 @@ export const OpusTrovesConfig = ({
     assets: FormToken[],
     threshold: string,
     valPerEntry: string,
-    maxEntr: string
+    maxEntr: string,
+    bannable: boolean
   ) => {
     const assetCount = assets.length;
     const assetAddresses = assets.map((asset) => indexAddress(asset.address));
@@ -91,6 +91,7 @@ export const OpusTrovesConfig = ({
       thresholdValue,
       valPerEntryValue,
       maxEntrValue,
+      bannable ? "1" : "0",
     ];
 
     const config = configArray.join(",");
@@ -139,21 +140,73 @@ export const OpusTrovesConfig = ({
 
       setOpusTroveAssets(assets);
 
-      // Extract threshold, value_per_entry, max_entries
+      // Extract threshold, value_per_entry, max_entries, bannable
       const threshold = configParts[assetCount + 1];
       const valPerEntry = configParts[assetCount + 2];
       const maxEntr = configParts[assetCount + 3];
+      const bannable = configParts[assetCount + 4];
 
       setOpusThreshold(threshold);
       setOpusThresholdUSD(cashWeiToUSD(threshold));
       setOpusValuePerEntry(valPerEntry);
       setOpusValuePerEntryUSD(cashWeiToUSD(valPerEntry));
       setOpusMaxEntries(maxEntr);
+      setOpusBannable(bannable === "1");
 
       // Set proportional mode if value per entry > 0
       setOpusProportionalMode(valPerEntry !== "0" && valPerEntry !== "");
     }
   }, []); // Only on mount to restore from saved config
+
+  // Live human-readable summary of the current config
+  const ruleSummary = useMemo(() => {
+    const thresholdUSDNum = parseFloat(opusThresholdUSD || "0");
+    const valuePerEntryUSDNum = parseFloat(opusValuePerEntryUSD || "0");
+    const maxEntriesNum = parseInt(opusMaxEntries || "0", 10);
+
+    const formatUSD = (n: number) =>
+      `$${n % 1 === 0 ? n.toFixed(0) : n.toFixed(2)}`;
+
+    const assetClause =
+      opusTroveAssets.length === 0
+        ? "any Opus collateral"
+        : `Opus troves backed by ${opusTroveAssets
+            .map((a) => a.symbol)
+            .join(" or ")}`;
+
+    const thresholdClause =
+      thresholdUSDNum > 0
+        ? `at least ${formatUSD(thresholdUSDNum)} of CASH from ${assetClause}`
+        : `any amount of CASH from ${assetClause}`;
+
+    if (opusProportionalMode) {
+      if (valuePerEntryUSDNum <= 0) {
+        return "Set a CASH-per-entry value to preview the rule.";
+      }
+      const cap =
+        maxEntriesNum > 0
+          ? `, capped at ${maxEntriesNum} ${
+              maxEntriesNum === 1 ? "entry" : "entries"
+            }`
+          : "";
+      return `Players who borrowed ${thresholdClause} get 1 entry per ${formatUSD(
+        valuePerEntryUSDNum
+      )} borrowed${cap}.`;
+    }
+
+    if (maxEntriesNum <= 0) {
+      return "Set the fixed entry count to preview the rule.";
+    }
+    return `Players who borrowed ${thresholdClause} get ${maxEntriesNum} ${
+      maxEntriesNum === 1 ? "entry" : "entries"
+    }.`;
+  }, [
+    opusThresholdUSD,
+    opusValuePerEntryUSD,
+    opusMaxEntries,
+    opusTroveAssets,
+    opusProportionalMode,
+  ]);
 
   return (
     <div className="space-y-4">
@@ -168,56 +221,103 @@ export const OpusTrovesConfig = ({
         </div>
       </div>
 
-      {/* Entry Mode Switch */}
+      {/* Live rule preview */}
+      <div className="rounded-lg border border-brand/40 bg-brand/5 p-3">
+        <div className="flex items-start gap-2">
+          <span className="text-xs uppercase tracking-wide text-brand font-brand mt-0.5">
+            Rule
+          </span>
+          <p className="text-sm text-foreground flex-1">{ruleSummary}</p>
+        </div>
+      </div>
+
+      {/* Entry Mode Checkbox */}
       <div className="border-2 border-brand-muted rounded-lg p-4 bg-black/20">
-        <div className="flex flex-row items-center justify-between gap-4">
+        <label className="flex flex-row items-start gap-3 cursor-pointer">
+          <Checkbox
+            id="opus-proportional-mode"
+            className="mt-1"
+            checked={opusProportionalMode}
+            onCheckedChange={(checked) => {
+              const isChecked = checked === true;
+              setOpusProportionalMode(isChecked);
+              if (!isChecked) {
+                // Fixed mode - set value per entry to 0
+                const newValuePerEntry = "0";
+                setOpusValuePerEntry(newValuePerEntry);
+                setOpusValuePerEntryUSD("0");
+                updateFormConfig(
+                  opusTroveAssets,
+                  opusThreshold,
+                  newValuePerEntry,
+                  opusMaxEntries,
+                  opusBannable
+                );
+              } else {
+                // Proportional mode - set default value
+                const defaultUSD = "1";
+                const defaultWei = usdToCashWei(defaultUSD);
+                setOpusValuePerEntry(defaultWei);
+                setOpusValuePerEntryUSD(defaultUSD);
+                updateFormConfig(
+                  opusTroveAssets,
+                  opusThreshold,
+                  defaultWei,
+                  opusMaxEntries,
+                  opusBannable
+                );
+              }
+            }}
+          />
           <div className="flex flex-col gap-1 flex-1">
-            <FormLabel className="font-brand text-base">
-              Entry Calculation Mode
+            <FormLabel
+              htmlFor="opus-proportional-mode"
+              className="font-brand text-base cursor-pointer"
+            >
+              Proportional entries (more borrowed = more entries)
             </FormLabel>
             <FormDescription className="text-xs">
               {opusProportionalMode
-                ? "Proportional - Entries based on CASH borrowed per entry value"
-                : "Fixed - Set number of entries for meeting threshold"}
+                ? "Players get one entry per CASH amount borrowed above the threshold"
+                : "Each qualifying player gets the same fixed number of entries (no scaling)"}
             </FormDescription>
           </div>
-          <div className="flex flex-row items-center gap-2">
-            <span className="text-xs text-muted-foreground">
-              {opusProportionalMode ? "Proportional" : "Fixed"}
-            </span>
-            <Switch
-              checked={opusProportionalMode}
-              onCheckedChange={(checked) => {
-                setOpusProportionalMode(checked);
-                if (!checked) {
-                  // Fixed mode - set value per entry to 0
-                  const newValuePerEntry = "0";
-                  const newValuePerEntryUSD = "0";
-                  setOpusValuePerEntry(newValuePerEntry);
-                  setOpusValuePerEntryUSD(newValuePerEntryUSD);
-                  updateFormConfig(
-                    opusTroveAssets,
-                    opusThreshold,
-                    newValuePerEntry,
-                    opusMaxEntries
-                  );
-                } else {
-                  // Proportional mode - set default value
-                  const defaultUSD = "1";
-                  const defaultWei = usdToCashWei(defaultUSD);
-                  setOpusValuePerEntry(defaultWei);
-                  setOpusValuePerEntryUSD(defaultUSD);
-                  updateFormConfig(
-                    opusTroveAssets,
-                    opusThreshold,
-                    defaultWei,
-                    opusMaxEntries
-                  );
-                }
-              }}
-            />
+        </label>
+      </div>
+
+      {/* Bannable Checkbox */}
+      <div className="border-2 border-brand-muted rounded-lg p-4 bg-black/20">
+        <label className="flex flex-row items-start gap-3 cursor-pointer">
+          <Checkbox
+            id="opus-bannable"
+            className="mt-1"
+            checked={opusBannable}
+            onCheckedChange={(checked) => {
+              const isChecked = checked === true;
+              setOpusBannable(isChecked);
+              updateFormConfig(
+                opusTroveAssets,
+                opusThreshold,
+                opusValuePerEntry,
+                opusMaxEntries,
+                isChecked
+              );
+            }}
+          />
+          <div className="flex flex-col gap-1 flex-1">
+            <FormLabel
+              htmlFor="opus-bannable"
+              className="font-brand text-base cursor-pointer"
+            >
+              Allow removing invalid entries before games start
+            </FormLabel>
+            <FormDescription className="text-xs">
+              {opusBannable
+                ? "During the registration window, entries can be removed if the borrower's debt drops below threshold or exceeds quota. Requires a registration period."
+                : "Entries are locked in once registered — borrowers can change their position without losing their entry."}
+            </FormDescription>
           </div>
-        </div>
+        </label>
       </div>
 
       {extensionError && (
@@ -236,13 +336,42 @@ export const OpusTrovesConfig = ({
           </FormDescription>
         </div>
         <div className="flex flex-col gap-2">
-          {opusTroveAssets.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {opusTroveAssets.map((asset, index) => (
+          <div className="flex flex-row items-center flex-wrap gap-2">
+            <TokenDialog
+              selectedToken={undefined}
+              onSelect={(token) => {
+                if (!opusTroveAssets.some((a) => a.address === token.address)) {
+                  const newAssets = [...opusTroveAssets, token];
+                  setOpusTroveAssets(newAssets);
+                  updateFormConfig(
+                    newAssets,
+                    opusThreshold,
+                    opusValuePerEntry,
+                    opusMaxEntries,
+                    opusBannable
+                  );
+                }
+              }}
+              type="erc20"
+              allowedAddresses={allowedAssetAddresses}
+            />
+            {opusTroveAssets.map((asset, index) => {
+              const tokenMeta = getTokenByAddress(
+                asset.address,
+                selectedChainConfig?.chainId ?? ""
+              );
+              return (
                 <div
                   key={index}
                   className="inline-flex items-center gap-2 p-2 border border-brand-muted rounded"
                 >
+                  {tokenMeta?.logo_url && (
+                    <img
+                      src={tokenMeta.logo_url}
+                      alt={asset.symbol}
+                      className="w-4 h-4"
+                    />
+                  )}
                   <span className="text-sm uppercase">{asset.symbol}</span>
                   <span
                     className="h-4 w-4 hover:cursor-pointer"
@@ -255,33 +384,17 @@ export const OpusTrovesConfig = ({
                         newAssets,
                         opusThreshold,
                         opusValuePerEntry,
-                        opusMaxEntries
+                        opusMaxEntries,
+                        opusBannable
                       );
                     }}
                   >
                     <X />
                   </span>
                 </div>
-              ))}
-            </div>
-          )}
-          <TokenDialog
-            selectedToken={undefined}
-            onSelect={(token) => {
-              if (!opusTroveAssets.some((a) => a.address === token.address)) {
-                const newAssets = [...opusTroveAssets, token];
-                setOpusTroveAssets(newAssets);
-                updateFormConfig(
-                  newAssets,
-                  opusThreshold,
-                  opusValuePerEntry,
-                  opusMaxEntries
-                );
-              }
-            }}
-            type="erc20"
-            allowedAddresses={allowedAssetAddresses}
-          />
+              );
+            })}
+          </div>
           <FormDescription className="text-xs">
             {opusTroveAssets.length === 0
               ? "No assets selected - wildcard mode (all troves qualify)"
@@ -292,7 +405,13 @@ export const OpusTrovesConfig = ({
         </div>
       </FormItem>
 
-      <div className="space-y-4">
+      <div
+        className={
+          opusProportionalMode
+            ? "grid grid-cols-1 md:grid-cols-2 gap-4"
+            : "space-y-4"
+        }
+      >
         <FormItem>
           <div className="flex flex-row items-center gap-2">
             <FormLabel>Minimum CASH Borrowed Threshold</FormLabel>
@@ -304,10 +423,9 @@ export const OpusTrovesConfig = ({
               />
             )}
           </div>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            {/* Template buttons */}
+          <div className="flex flex-col gap-2">
             <div className="flex flex-wrap gap-2">
-              {[0, 1, 5, 10].map((usd) => (
+              {[0, 1, 5, 10, 50, 100].map((usd) => (
                 <Button
                   key={usd}
                   type="button"
@@ -324,7 +442,8 @@ export const OpusTrovesConfig = ({
                       opusTroveAssets,
                       wei,
                       opusValuePerEntry,
-                      opusMaxEntries
+                      opusMaxEntries,
+                      opusBannable
                     );
                   }}
                 >
@@ -332,19 +451,19 @@ export const OpusTrovesConfig = ({
                 </Button>
               ))}
             </div>
-
-            {/* Slider */}
-            <div className="flex-1 flex flex-col gap-1 min-w-[200px]">
-              <div className="flex justify-between items-center">
-                <Label className="text-xs">Custom</Label>
-                <span className="text-xs text-muted-foreground">
-                  ${opusThresholdUSD || "0"}
-                </span>
-              </div>
-              <Slider
-                value={[parseFloat(opusThresholdUSD || "0")]}
-                onValueChange={([usd]) => {
-                  const usdStr = usd.toString();
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none">
+                $
+              </span>
+              <Input
+                type="number"
+                min="0"
+                step="any"
+                className="pl-7"
+                placeholder="0"
+                value={opusThresholdUSD}
+                onChange={(e) => {
+                  const usdStr = e.target.value;
                   const wei = usdToCashWei(usdStr);
                   setOpusThresholdUSD(usdStr);
                   setOpusThreshold(wei);
@@ -352,12 +471,10 @@ export const OpusTrovesConfig = ({
                     opusTroveAssets,
                     wei,
                     opusValuePerEntry,
-                    opusMaxEntries
+                    opusMaxEntries,
+                    opusBannable
                   );
                 }}
-                max={10000}
-                min={0}
-                step={10}
               />
             </div>
           </div>
@@ -379,10 +496,9 @@ export const OpusTrovesConfig = ({
                 />
               )}
             </div>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-              {/* Template buttons */}
+            <div className="flex flex-col gap-2">
               <div className="flex flex-wrap gap-2">
-                {[1, 5, 10].map((usd) => (
+                {[1, 5, 10, 25, 50].map((usd) => (
                   <Button
                     key={usd}
                     type="button"
@@ -401,7 +517,8 @@ export const OpusTrovesConfig = ({
                         opusTroveAssets,
                         opusThreshold,
                         wei,
-                        opusMaxEntries
+                        opusMaxEntries,
+                        opusBannable
                       );
                     }}
                   >
@@ -409,19 +526,19 @@ export const OpusTrovesConfig = ({
                   </Button>
                 ))}
               </div>
-
-              {/* Slider */}
-              <div className="flex-1 flex flex-col gap-1 min-w-[200px]">
-                <div className="flex justify-between items-center">
-                  <Label className="text-xs">Custom</Label>
-                  <span className="text-xs text-muted-foreground">
-                    ${opusValuePerEntryUSD || "0"}
-                  </span>
-                </div>
-                <Slider
-                  value={[parseFloat(opusValuePerEntryUSD || "0")]}
-                  onValueChange={([usd]) => {
-                    const usdStr = usd.toString();
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none">
+                  $
+                </span>
+                <Input
+                  type="number"
+                  min="0"
+                  step="any"
+                  className="pl-7"
+                  placeholder="1"
+                  value={opusValuePerEntryUSD}
+                  onChange={(e) => {
+                    const usdStr = e.target.value;
                     const wei = usdToCashWei(usdStr);
                     setOpusValuePerEntryUSD(usdStr);
                     setOpusValuePerEntry(wei);
@@ -429,12 +546,10 @@ export const OpusTrovesConfig = ({
                       opusTroveAssets,
                       opusThreshold,
                       wei,
-                      opusMaxEntries
+                      opusMaxEntries,
+                      opusBannable
                     );
                   }}
-                  max={1000}
-                  min={0}
-                  step={1}
                 />
               </div>
             </div>
@@ -450,10 +565,37 @@ export const OpusTrovesConfig = ({
           </FormLabel>
           <FormControl>
             <div className="flex flex-col gap-2">
+              <div className="flex flex-wrap gap-2">
+                {(opusProportionalMode
+                  ? [0, 5, 10, 25, 100]
+                  : [1, 3, 5, 10, 25]
+                ).map((n) => (
+                  <Button
+                    key={n}
+                    type="button"
+                    size="sm"
+                    variant={
+                      opusMaxEntries === n.toString() ? "default" : "outline"
+                    }
+                    onClick={() => {
+                      const valueStr = n.toString();
+                      setOpusMaxEntries(valueStr);
+                      updateFormConfig(
+                        opusTroveAssets,
+                        opusThreshold,
+                        opusValuePerEntry,
+                        valueStr,
+                        opusBannable
+                      );
+                    }}
+                  >
+                    {opusProportionalMode && n === 0 ? "No cap" : n}
+                  </Button>
+                ))}
+              </div>
               <Input
                 type="number"
                 min="0"
-                max="255"
                 placeholder={
                   opusProportionalMode ? "0 (no cap)" : "Number of entries"
                 }
@@ -465,7 +607,8 @@ export const OpusTrovesConfig = ({
                     opusTroveAssets,
                     opusThreshold,
                     opusValuePerEntry,
-                    value
+                    value,
+                    opusBannable
                   );
                 }}
               />
@@ -473,8 +616,8 @@ export const OpusTrovesConfig = ({
           </FormControl>
           <FormDescription className="text-xs">
             {opusProportionalMode
-              ? "Maximum entries cap (0-255, 0 = no cap based on CASH borrowed)"
-              : "Number of entries granted for meeting threshold (0-255)"}
+              ? "Maximum entries cap (0 = no cap based on CASH borrowed)"
+              : "Number of entries granted for meeting threshold"}
           </FormDescription>
         </FormItem>
       </div>
