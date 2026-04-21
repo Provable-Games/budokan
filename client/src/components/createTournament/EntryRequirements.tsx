@@ -48,10 +48,8 @@ import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { PRESET_EXTENSIONS } from "@/lib/extensionPresets";
-import {
-  getExtensionAddresses,
-  getOpusSupportedAssets,
-} from "@provable-games/metagame-sdk";
+import { getExtensionAddresses } from "@provable-games/metagame-sdk";
+import { useOpusYangAddresses } from "@/hooks/useOpusYangAddresses";
 import { ERC20BalanceConfig } from "./extensions/ERC20BalanceConfig";
 import { OpusTrovesConfig } from "./extensions/OpusTrovesConfig";
 import { MerkleConfig } from "./extensions/MerkleConfig";
@@ -71,6 +69,10 @@ const EntryRequirements = ({ form }: StepProps) => {
   const { gameData, getGameImage } = useUIStore();
   const [extensionError, setExtensionError] = useState("");
   const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
+  const { yangAddresses: opusYangAddresses } = useOpusYangAddresses({
+    chainId: selectedChainConfig?.chainId ?? "",
+    enabled: selectedPreset === "opus_troves",
+  });
 
   const ENTRY_LIMIT_OPTIONS = [
     { value: 1, label: "1" },
@@ -894,9 +896,7 @@ const EntryRequirements = ({ form }: StepProps) => {
                       {/* Opus Troves Preset Configuration */}
                       {selectedPreset === "opus_troves" && (
                         <OpusTrovesConfig
-                          allowedAssetAddresses={getOpusSupportedAssets(
-                            selectedChainConfig?.chainId ?? ""
-                          )}
+                          allowedAssetAddresses={opusYangAddresses}
                           extensionError={extensionError}
                         />
                       )}

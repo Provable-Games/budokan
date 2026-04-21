@@ -966,60 +966,109 @@ const TournamentConfirmation = ({
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-sm">
-                    <span className="text-muted-foreground">Creator Fee:</span>
-                    <div className="flex flex-row items-center gap-2">
-                      <span>{formData.entryFees.creatorFeePercentage}%</span>
-                      <span>
-                        {formatNumber(
-                          ((formData.entryFees.creatorFeePercentage ?? 0) *
-                            (formData.entryFees.amount ?? 0)) /
-                            100
-                        )}
-                      </span>
-                      <img
-                        src={getTokenLogoUrl(
-                          selectedChainConfig?.chainId ?? "",
-                          formData.entryFees.token?.address ?? ""
-                        )}
-                        alt={formData.entryFees.token?.symbol ?? ""}
-                        className="w-6 h-6 rounded-full"
-                      />
-                      <span className="text-neutral">
-                        ~$
-                        {(
-                          ((formData.entryFees.creatorFeePercentage ?? 0) *
-                            (formData.entryFees.value ?? 0)) /
-                          100
-                        )?.toFixed(2) ?? "0.00"}
-                      </span>
-                    </div>
-                    <span className="text-muted-foreground">Game Fee:</span>
-                    <div className="flex flex-row items-center gap-2">
-                      <span>{formData.entryFees.gameFeePercentage}%</span>
-                      <span>
-                        {formatNumber(
-                          ((formData.entryFees.gameFeePercentage ?? 0) *
-                            (formData.entryFees.amount ?? 0)) /
-                            100
-                        )}
-                      </span>
-                      <img
-                        src={getTokenLogoUrl(
-                          selectedChainConfig?.chainId ?? "",
-                          formData.entryFees.token?.address ?? ""
-                        )}
-                        alt={formData.entryFees.token?.symbol ?? ""}
-                        className="w-6 h-6 rounded-full"
-                      />
-                      <span className="text-neutral">
-                        ~$
-                        {(
-                          ((formData.entryFees.gameFeePercentage ?? 0) *
-                            (formData.entryFees.value ?? 0)) /
-                          100
-                        )?.toFixed(2) ?? "0.00"}
-                      </span>
-                    </div>
+                    {(formData.entryFees.creatorFeePercentage ?? 0) > 0 && (
+                      <>
+                        <span className="text-muted-foreground">
+                          Creator Fee:
+                        </span>
+                        <div className="flex flex-row items-center gap-2">
+                          <span>
+                            {formData.entryFees.creatorFeePercentage}%
+                          </span>
+                          <span>
+                            {formatNumber(
+                              ((formData.entryFees.creatorFeePercentage ?? 0) *
+                                (formData.entryFees.amount ?? 0)) /
+                                100
+                            )}
+                          </span>
+                          <img
+                            src={getTokenLogoUrl(
+                              selectedChainConfig?.chainId ?? "",
+                              formData.entryFees.token?.address ?? ""
+                            )}
+                            alt={formData.entryFees.token?.symbol ?? ""}
+                            className="w-6 h-6 rounded-full"
+                          />
+                          <span className="text-neutral">
+                            ~$
+                            {(
+                              ((formData.entryFees.creatorFeePercentage ?? 0) *
+                                (formData.entryFees.value ?? 0)) /
+                              100
+                            )?.toFixed(2) ?? "0.00"}
+                          </span>
+                        </div>
+                      </>
+                    )}
+                    {(formData.entryFees.gameFeePercentage ?? 0) > 0 && (
+                      <>
+                        <span className="text-muted-foreground">Game Fee:</span>
+                        <div className="flex flex-row items-center gap-2">
+                          <span>
+                            {formData.entryFees.gameFeePercentage}%
+                          </span>
+                          <span>
+                            {formatNumber(
+                              ((formData.entryFees.gameFeePercentage ?? 0) *
+                                (formData.entryFees.amount ?? 0)) /
+                                100
+                            )}
+                          </span>
+                          <img
+                            src={getTokenLogoUrl(
+                              selectedChainConfig?.chainId ?? "",
+                              formData.entryFees.token?.address ?? ""
+                            )}
+                            alt={formData.entryFees.token?.symbol ?? ""}
+                            className="w-6 h-6 rounded-full"
+                          />
+                          <span className="text-neutral">
+                            ~$
+                            {(
+                              ((formData.entryFees.gameFeePercentage ?? 0) *
+                                (formData.entryFees.value ?? 0)) /
+                              100
+                            )?.toFixed(2) ?? "0.00"}
+                          </span>
+                        </div>
+                      </>
+                    )}
+                    {(formData.entryFees.refundSharePercentage ?? 0) > 0 && (
+                      <>
+                        <span className="text-muted-foreground">
+                          Refund per entry:
+                        </span>
+                        <div className="flex flex-row items-center gap-2">
+                          <span>
+                            {formData.entryFees.refundSharePercentage}%
+                          </span>
+                          <span>
+                            {formatNumber(
+                              ((formData.entryFees.refundSharePercentage ?? 0) *
+                                (formData.entryFees.amount ?? 0)) /
+                                100
+                            )}
+                          </span>
+                          <img
+                            src={getTokenLogoUrl(
+                              selectedChainConfig?.chainId ?? "",
+                              formData.entryFees.token?.address ?? ""
+                            )}
+                            alt={formData.entryFees.token?.symbol ?? ""}
+                            className="w-6 h-6 rounded-full"
+                          />
+                          <span className="text-neutral">
+                            ~$
+                            {(
+                              ((formData.entryFees.refundSharePercentage ?? 0) *
+                                (formData.entryFees.value ?? 0)) /
+                              100
+                            )?.toFixed(2) ?? "0.00"}
+                          </span>
+                        </div>
+                      </>
+                    )}
                     {(() => {
                       const prizePoolPercentage = Math.max(
                         0,
