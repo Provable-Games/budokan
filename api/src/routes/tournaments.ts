@@ -451,14 +451,20 @@ app.get("/:id/reward-claims/summary", async (c) => {
       const entryCount = t.entryCount ?? 0;
       const amount = BigInt(t.entryFeeAmount ?? "0");
       if (amount > 0n && entryCount > 0) {
+        const tournamentCreatorShare =
+          Number(t.entryFeeTournamentCreatorShare ?? 0);
+        const gameCreatorShare = Number(t.entryFeeGameCreatorShare ?? 0);
+        const refundShare = Number(t.entryFeeRefundShare ?? 0);
+        const prizePoolBps =
+          10000 - tournamentCreatorShare - gameCreatorShare - refundShare;
         const distCount = Number(t.entryFeeDistributionCount ?? 0);
-        if (distCount > 0) entryFeePrizeCount += distCount;
-        if (Number(t.entryFeeTournamentCreatorShare ?? 0) > 0)
-          entryFeePrizeCount++;
-        if (Number(t.entryFeeGameCreatorShare ?? 0) > 0) entryFeePrizeCount++;
+        // Position slots only count when there's an actual pool to distribute —
+        // otherwise every distribution row computes to 0 and isn't claimable.
+        if (distCount > 0 && prizePoolBps > 0) entryFeePrizeCount += distCount;
+        if (tournamentCreatorShare > 0) entryFeePrizeCount++;
+        if (gameCreatorShare > 0) entryFeePrizeCount++;
         // Per-token refund: one slot per entry when refund share is set.
-        if (Number(t.entryFeeRefundShare ?? 0) > 0)
-          entryFeePrizeCount += entryCount;
+        if (refundShare > 0) entryFeePrizeCount += entryCount;
       }
     }
 

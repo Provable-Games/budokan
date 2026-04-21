@@ -169,12 +169,20 @@ const Tournament = () => {
     const ef = tournamentModel?.entryFee;
     if (!ef || !ef.amount || entryCount === 0) return 0;
     let count = 0;
-    // Distribution positions
+    const tournamentCreatorShare = Number(ef.tournamentCreatorShare ?? 0);
+    const gameCreatorShare = Number(ef.gameCreatorShare ?? 0);
+    const refundShare = Number(ef.refundShare ?? 0);
+    const prizePoolBps =
+      10000 - tournamentCreatorShare - gameCreatorShare - refundShare;
+    // Distribution positions — only count when the pool has non-zero share
+    // (otherwise every distribution row computes to 0 and is filtered out).
     const distCount = Number(ef.distributionCount ?? 0);
-    if (distCount > 0) count += distCount;
+    if (distCount > 0 && prizePoolBps > 0) count += distCount;
     // Creator shares (if non-zero)
-    if (Number(ef.tournamentCreatorShare ?? 0) > 0) count++;
-    if (Number(ef.gameCreatorShare ?? 0) > 0) count++;
+    if (tournamentCreatorShare > 0) count++;
+    if (gameCreatorShare > 0) count++;
+    // Per-token refund: one slot per entry
+    if (refundShare > 0) count += entryCount;
     return count;
   }, [tournamentModel?.entryFee, entryCount]);
 

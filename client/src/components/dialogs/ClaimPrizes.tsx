@@ -10,8 +10,14 @@ import {
 import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 import { useAccount } from "@starknet-react/core";
 import { RewardClaim } from "@/generated/models.gen";
-import type { Tournament } from "@provable-games/budokan-sdk";
-import { formatNumber, getOrdinalSuffix, indexAddress } from "@/lib/utils";
+import type { Registration, Tournament } from "@provable-games/budokan-sdk";
+import {
+  displayAddress,
+  formatNumber,
+  getOrdinalSuffix,
+  indexAddress,
+} from "@/lib/utils";
+import { useGetUsernames } from "@/hooks/useController";
 import {
   extractEntryFeePrizes,
   getClaimablePrizes,
@@ -78,12 +84,12 @@ export function ClaimPrizesDialog({
   // tokens by the tournament contract's address).
   const { registrations: registrationsResult } = useRegistrations(
     open && tournamentId ? tournamentId : undefined,
-    { limit: 1000 },
+    { limit: 10_000 },
   );
   const registeredTokenIds = useMemo(
     () =>
       (registrationsResult?.data ?? [])
-        .map((r: any) =>
+        .map((r: Registration) =>
           r.gameTokenId !== undefined && r.gameTokenId !== null
             ? BigInt(r.gameTokenId).toString()
             : null,
@@ -91,6 +97,28 @@ export function ClaimPrizesDialog({
         .filter((id): id is string => id !== null),
     [registrationsResult],
   );
+
+  // Map token_id -> owner address for refund row grouping.
+  const tokenOwnerByTokenId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of (registrationsResult?.data ?? []) as Registration[]) {
+      if (
+        r.gameTokenId !== undefined &&
+        r.gameTokenId !== null &&
+        r.playerAddress
+      ) {
+        map.set(BigInt(r.gameTokenId).toString(), r.playerAddress);
+      }
+    }
+    return map;
+  }, [registrationsResult]);
+
+  // Resolve Cartridge usernames for the registrants that have a refund claim.
+  const refundOwnerAddresses = useMemo(
+    () => Array.from(new Set(tokenOwnerByTokenId.values())),
+    [tokenOwnerByTokenId],
+  );
+  const { usernames: refundUsernames } = useGetUsernames(refundOwnerAddresses);
 
   const claimedRewards: RewardClaim[] = (rewardClaimsData ||
     []) as unknown as RewardClaim[];
@@ -224,6 +252,11 @@ export function ClaimPrizesDialog({
         groupKey = "tournament_creator";
         groupLabel = "Tournament Creator Share";
         position = Number.MAX_SAFE_INTEGER - 2;
+      } else if (prize.type === "entry_fee_refund") {
+        // Aggregate all per-token refunds under a single row.
+        groupKey = "refunds";
+        groupLabel = "Entry Fee Refunds";
+        position = Number.MAX_SAFE_INTEGER - 3;
       } else if (
         prize.type === "entry_fee" ||
         prize.type === "sponsored_distributed"
@@ -278,7 +311,94 @@ export function ClaimPrizesDialog({
           </div>
         )}
         <div className="space-y-4 px-5 py-2 max-h-[500px] overflow-y-auto">
-          {groupedPrizes.map((group, groupIndex) => (
+          {groupedPrizes.map((group, groupIndex) => {
+            // Refunds are per-token on-chain but we show them as one summed
+            // row here — the `Entry Fee Refunds` group always has type
+            // entry_fee_refund and all prizes share a token_address.
+            const isRefundGroup = group.prizes[0]?.type === "entry_fee_refund";
+            if (isRefundGroup) {
+              // Group refund prizes by owner address (via token_id -> owner)
+              // so players with multiple entries show as a single row.
+              const firstPrize = group.prizes[0];
+              const tokenDecimals = getTokenDecimals(
+                chainId,
+                firstPrize.token_address,
+              );
+              const tokenPrice =
+                prices[indexAddress(firstPrize.token_address ?? "")] ?? 0;
+
+              type OwnerBucket = { amount: bigint; count: number };
+              const byOwner = new Map<string, OwnerBucket>();
+              for (const p of group.prizes) {
+                const tokenIdStr = String((p as any).id);
+                const owner = tokenOwnerByTokenId.get(tokenIdStr);
+                // Skip refunds whose token isn't in the registrations page —
+                // merging them under a junk address would display a bogus row.
+                if (!owner) continue;
+                const amt = getPrizeAmount(p);
+                const b = byOwner.get(owner);
+                if (b) {
+                  b.amount += amt;
+                  b.count += 1;
+                } else {
+                  byOwner.set(owner, { amount: amt, count: 1 });
+                }
+              }
+              const ownerRows = Array.from(byOwner.entries()).sort(
+                (a, b) => (b[1].amount > a[1].amount ? 1 : -1),
+              );
+
+              return (
+                <div key={groupIndex} className="space-y-2">
+                  <div className="font-semibold text-brand border-b border-brand/20 pb-1">
+                    {group.label}
+                  </div>
+                  <div className="space-y-1 pl-3">
+                    {ownerRows.map(([owner, bucket]) => {
+                      const username = refundUsernames?.get(
+                        indexAddress(owner),
+                      );
+                      const label = username ?? displayAddress(owner);
+                      // Split on the decimal point so 18-decimal amounts
+                      // (> 2^53) stay precise.
+                      const divisor = 10n ** BigInt(tokenDecimals);
+                      const prizeAmount =
+                        Number(bucket.amount / divisor) +
+                        Number(bucket.amount % divisor) / Number(divisor);
+                      return (
+                        <div
+                          key={owner}
+                          className="flex flex-row items-center justify-between text-sm"
+                        >
+                          <span className="text-muted-foreground">
+                            {label}{" "}
+                            <span className="text-xs">
+                              ({bucket.count}{" "}
+                              {bucket.count === 1 ? "entry" : "entries"})
+                            </span>
+                          </span>
+                          <div className="flex flex-row items-center gap-2">
+                            <span>{formatNumber(prizeAmount)}</span>
+                            <img
+                              src={getTokenLogoUrl(
+                                chainId,
+                                firstPrize.token_address,
+                              )}
+                              className="w-5 h-5"
+                              alt="token"
+                            />
+                            <span className="text-neutral text-xs">
+                              ~${(prizeAmount * tokenPrice).toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            }
+            return (
             <div key={groupIndex} className="space-y-2">
               <div className="font-semibold text-brand border-b border-brand/20 pb-1">
                 {group.label}
@@ -364,7 +484,8 @@ export function ClaimPrizesDialog({
                 })}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
         <div className="flex justify-end gap-2 mt-6">
           <DialogClose asChild>

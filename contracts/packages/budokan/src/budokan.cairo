@@ -1243,6 +1243,12 @@ pub mod Budokan {
                 *entry_fee.game_creator_share,
                 *entry_fee.refund_share,
             );
+            budokan::libs::validations::assert_valid_entry_fee_distribution_count(
+                *entry_fee.tournament_creator_share,
+                *entry_fee.game_creator_share,
+                *entry_fee.refund_share,
+                *entry_fee.distribution_count,
+            );
         }
 
         fn _assert_game_fee_met(
