@@ -1,6 +1,6 @@
 {
   "name": "@provable-games/budokan-api",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
