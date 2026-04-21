@@ -202,53 +202,82 @@ export const processTournamentData = (
       renderer: new CairoOption(CairoOptionVariant.None),
     },
     entry_fee: formData.enableEntryFees
-      ? new CairoOption(CairoOptionVariant.Some, {
-          token_address: formData.entryFees?.token?.address!,
-          amount: addAddressPadding(
-            bigintToHex(
-              formData.entryFees?.amount! *
-                10 ** (formData.entryFees?.tokenDecimals || 18)
-            )
-          ),
-          tournament_creator_share: Math.round(
-            (formData.entryFees?.creatorFeePercentage ?? 0) * 100
-          ),
-          game_creator_share: Math.round(
-            (formData.entryFees?.gameFeePercentage ?? 1) * 100
-          ),
-          refund_share: Math.round(
-            (formData.entryFees?.refundSharePercentage ?? 0) * 100
-          ),
-          distribution: (() => {
-            const distributionType = formData.entryFees?.distributionType ?? "exponential";
-            const weight = formData.entryFees?.distributionWeight ?? 1;
-            const scaledWeight = Math.round(weight * 10);
+      ? new CairoOption(
+          CairoOptionVariant.Some,
+          (() => {
+            const tournamentCreatorBps = Math.round(
+              (formData.entryFees?.creatorFeePercentage ?? 0) * 100
+            );
+            const gameCreatorBps = Math.round(
+              (formData.entryFees?.gameFeePercentage ?? 1) * 100
+            );
+            const refundBps = Math.round(
+              (formData.entryFees?.refundSharePercentage ?? 0) * 100
+            );
+            // No pool left for position payouts → force distribution to
+            // Uniform with count 0 so downstream (indexer / claim UIs /
+            // on-chain reads) see an unambiguous "no positions" signal.
+            const hasPrizePool =
+              10000 - tournamentCreatorBps - gameCreatorBps - refundBps > 0;
+            const formPayoutCount =
+              formData.entryFees?.prizePoolPayoutCount ?? 0;
 
-            if (distributionType === "linear") {
-              return new CairoCustomEnum({
-                Linear: scaledWeight,
-                Exponential: undefined,
-                Uniform: undefined,
-                Custom: undefined,
-              });
-            } else if (distributionType === "exponential") {
-              return new CairoCustomEnum({
+            let distribution: CairoCustomEnum;
+            let distributionCount: number;
+            if (!hasPrizePool) {
+              distribution = new CairoCustomEnum({
                 Linear: undefined,
-                Exponential: scaledWeight,
-                Uniform: undefined,
+                Exponential: undefined,
+                Uniform: {},
                 Custom: undefined,
               });
+              distributionCount = 0;
             } else {
-              return new CairoCustomEnum({
-                Linear: undefined,
-                Exponential: undefined,
-                Uniform: undefined,
-                Custom: undefined,
-              });
+              const distributionType =
+                formData.entryFees?.distributionType ?? "exponential";
+              const weight = formData.entryFees?.distributionWeight ?? 1;
+              const scaledWeight = Math.round(weight * 10);
+              if (distributionType === "linear") {
+                distribution = new CairoCustomEnum({
+                  Linear: scaledWeight,
+                  Exponential: undefined,
+                  Uniform: undefined,
+                  Custom: undefined,
+                });
+              } else if (distributionType === "exponential") {
+                distribution = new CairoCustomEnum({
+                  Linear: undefined,
+                  Exponential: scaledWeight,
+                  Uniform: undefined,
+                  Custom: undefined,
+                });
+              } else {
+                distribution = new CairoCustomEnum({
+                  Linear: undefined,
+                  Exponential: undefined,
+                  Uniform: {},
+                  Custom: undefined,
+                });
+              }
+              distributionCount = formPayoutCount;
             }
-          })(),
-          distribution_count: formData.entryFees?.prizePoolPayoutCount ?? 0,
-        })
+
+            return {
+              token_address: formData.entryFees?.token?.address!,
+              amount: addAddressPadding(
+                bigintToHex(
+                  formData.entryFees?.amount! *
+                    10 ** (formData.entryFees?.tokenDecimals || 18)
+                )
+              ),
+              tournament_creator_share: tournamentCreatorBps,
+              game_creator_share: gameCreatorBps,
+              refund_share: refundBps,
+              distribution,
+              distribution_count: distributionCount,
+            };
+          })()
+        )
       : new CairoOption(CairoOptionVariant.None),
     entry_requirement: formData.enableGating
       ? new CairoOption(CairoOptionVariant.Some, entryRequirement)

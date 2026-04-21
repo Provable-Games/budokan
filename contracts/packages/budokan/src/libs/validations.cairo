@@ -25,6 +25,45 @@ pub fn assert_valid_entry_fee_shares(
     );
 }
 
+/// Validates the position-distribution config against the share split.
+/// `distribution_count = 0` means "dynamic — use the actual leaderboard size
+/// at payout time" and is valid whenever any pool exists. The only invalid
+/// combo is a non-zero `distribution_count` when there's no pool to
+/// distribute (the slots would all compute to 0, polluting claim UIs and
+/// indexed data).
+pub fn validate_entry_fee_distribution_count(
+    tournament_creator_share: u16,
+    game_creator_share: u16,
+    refund_share: u16,
+    distribution_count: u32,
+) -> bool {
+    if distribution_count == 0 {
+        return true;
+    }
+    let shares_total: u32 = tournament_creator_share.into()
+        + game_creator_share.into()
+        + refund_share.into();
+    shares_total < BASIS_POINTS.into()
+}
+
+/// Asserts the position-distribution config matches the share split.
+pub fn assert_valid_entry_fee_distribution_count(
+    tournament_creator_share: u16,
+    game_creator_share: u16,
+    refund_share: u16,
+    distribution_count: u32,
+) {
+    assert!(
+        validate_entry_fee_distribution_count(
+            tournament_creator_share,
+            game_creator_share,
+            refund_share,
+            distribution_count,
+        ),
+        "Budokan: distribution_count > 0 requires a non-zero prize pool",
+    );
+}
+
 /// Validates that a position is within valid range (1 to winner_count inclusive)
 pub fn validate_position(position: u32, winner_count: u32) -> bool {
     position > 0 && position <= winner_count
@@ -72,7 +111,10 @@ pub fn assert_prize_exists(token_address: ContractAddress, prize_id: u64) {
 
 #[cfg(test)]
 mod tests {
-    use super::{contains_address, validate_entry_fee_shares, validate_position};
+    use super::{
+        contains_address, validate_entry_fee_distribution_count, validate_entry_fee_shares,
+        validate_position,
+    };
 
     #[test]
     fn test_validate_entry_fee_shares_valid() {
@@ -95,6 +137,40 @@ mod tests {
     #[test]
     fn test_validate_entry_fee_shares_all_zero() {
         assert!(validate_entry_fee_shares(0, 0, 0));
+    }
+
+    #[test]
+    fn test_validate_distribution_count_pool_with_slots() {
+        // 90% shares → 10% pool, 3 fixed slots: OK
+        assert!(validate_entry_fee_distribution_count(3000, 3000, 3000, 3));
+    }
+
+    #[test]
+    fn test_validate_distribution_count_no_shares_with_slots() {
+        // 0% shares → full pool, 10 slots: OK
+        assert!(validate_entry_fee_distribution_count(0, 0, 0, 10));
+    }
+
+    #[test]
+    fn test_validate_distribution_count_pool_with_dynamic_count() {
+        // Non-zero pool + count=0 (dynamic, uses leaderboard size): OK
+        assert!(validate_entry_fee_distribution_count(1000, 500, 0, 0));
+        assert!(validate_entry_fee_distribution_count(0, 0, 0, 0));
+    }
+
+    #[test]
+    fn test_validate_distribution_count_full_shares_zero_count() {
+        // 100% shares → no pool, count=0: OK
+        assert!(validate_entry_fee_distribution_count(5000, 5000, 0, 0));
+        // 5% game + 95% refund, count=0: OK (nothing to distribute)
+        assert!(validate_entry_fee_distribution_count(0, 500, 9500, 0));
+    }
+
+    #[test]
+    fn test_validate_distribution_count_full_shares_with_slots() {
+        // 100% shares + 10 slots = invalid (slots would all compute to 0)
+        assert!(!validate_entry_fee_distribution_count(0, 500, 9500, 10));
+        assert!(!validate_entry_fee_distribution_count(5000, 5000, 0, 1));
     }
 
     #[test]
