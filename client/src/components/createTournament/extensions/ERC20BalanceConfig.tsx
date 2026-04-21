@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useFormContext } from "react-hook-form";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   FormControl,
   FormItem,
@@ -30,6 +31,7 @@ export const ERC20BalanceConfig = ({
   const [maxThreshold, setMaxThreshold] = useState("");
   const [valuePerEntry, setValuePerEntry] = useState("");
   const [maxEntries, setMaxEntries] = useState("");
+  const [bannable, setBannable] = useState(false);
 
   // Calculate USD value for display
   // Note: Price data not currently available, returns "0"
@@ -43,7 +45,8 @@ export const ERC20BalanceConfig = ({
     minThresh: string,
     maxThresh: string,
     valPerEntry: string,
-    maxEntr: string
+    maxEntr: string,
+    bannableFlag: boolean
   ) => {
     if (!token) {
       form.setValue("gatingOptions.extension.config", "");
@@ -64,6 +67,7 @@ export const ERC20BalanceConfig = ({
       maxThreshValue,
       valPerEntryValue,
       maxEntrValue,
+      bannableFlag ? "1" : "0",
     ];
 
     const config = configArray.join(",");
@@ -113,6 +117,9 @@ export const ERC20BalanceConfig = ({
       setMaxThreshold(maxThresh);
       setValuePerEntry(valPerEntry);
       setMaxEntries(maxEntr);
+      if (configParts.length >= 6) {
+        setBannable(configParts[5] === "1");
+      }
     }
   }, []); // Only on mount to restore from saved config
 
@@ -142,7 +149,8 @@ export const ERC20BalanceConfig = ({
                 minThreshold,
                 maxThreshold,
                 valuePerEntry,
-                maxEntries
+                maxEntries,
+                bannable
               );
             }}
             type="erc20"
@@ -167,7 +175,8 @@ export const ERC20BalanceConfig = ({
                   value,
                   maxThreshold,
                   valuePerEntry,
-                  maxEntries
+                  maxEntries,
+                  bannable
                 );
               }}
             />
@@ -198,7 +207,8 @@ export const ERC20BalanceConfig = ({
                   minThreshold,
                   value,
                   valuePerEntry,
-                  maxEntries
+                  maxEntries,
+                  bannable
                 );
               }}
             />
@@ -231,7 +241,8 @@ export const ERC20BalanceConfig = ({
                   minThreshold,
                   maxThreshold,
                   value,
-                  maxEntries
+                  maxEntries,
+                  bannable
                 );
               }}
             />
@@ -264,7 +275,8 @@ export const ERC20BalanceConfig = ({
                   minThreshold,
                   maxThreshold,
                   valuePerEntry,
-                  value
+                  value,
+                  bannable
                 );
               }}
             />
@@ -273,6 +285,36 @@ export const ERC20BalanceConfig = ({
             Maximum number of entries allowed (0 for unlimited based on balance)
           </FormDescription>
         </FormItem>
+      </div>
+
+      {/* Bannable Switch */}
+      <div className="border-2 border-brand-muted rounded-lg p-4 bg-black/20">
+        <div className="flex flex-row items-center justify-between gap-4">
+          <div className="flex flex-col gap-1 flex-1">
+            <FormLabel className="font-brand text-base">
+              Allow Banning Mid-Tournament
+            </FormLabel>
+            <FormDescription className="text-xs">
+              {bannable
+                ? "Entries can be banned if balance drops below threshold or quota is exceeded — requires a registration period"
+                : "Entries are locked in once registered — players can move tokens without losing their entry"}
+            </FormDescription>
+          </div>
+          <Switch
+            checked={bannable}
+            onCheckedChange={(checked) => {
+              setBannable(checked);
+              updateFormConfig(
+                erc20Token,
+                minThreshold,
+                maxThreshold,
+                valuePerEntry,
+                maxEntries,
+                checked
+              );
+            }}
+          />
+        </div>
       </div>
     </div>
   );

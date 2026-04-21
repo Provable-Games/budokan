@@ -39,6 +39,7 @@ export const OpusTrovesConfig = ({
   const [opusValuePerEntryUSD, setOpusValuePerEntryUSD] = useState("");
   const [opusMaxEntries, setOpusMaxEntries] = useState("");
   const [opusProportionalMode, setOpusProportionalMode] = useState(false);
+  const [opusBannable, setOpusBannable] = useState(false);
 
   // Get CASH token for display
   const cashToken = useMemo(() => {
@@ -75,7 +76,8 @@ export const OpusTrovesConfig = ({
     assets: FormToken[],
     threshold: string,
     valPerEntry: string,
-    maxEntr: string
+    maxEntr: string,
+    bannable: boolean
   ) => {
     const assetCount = assets.length;
     const assetAddresses = assets.map((asset) => indexAddress(asset.address));
@@ -91,6 +93,7 @@ export const OpusTrovesConfig = ({
       thresholdValue,
       valPerEntryValue,
       maxEntrValue,
+      bannable ? "1" : "0",
     ];
 
     const config = configArray.join(",");
@@ -139,16 +142,18 @@ export const OpusTrovesConfig = ({
 
       setOpusTroveAssets(assets);
 
-      // Extract threshold, value_per_entry, max_entries
+      // Extract threshold, value_per_entry, max_entries, bannable
       const threshold = configParts[assetCount + 1];
       const valPerEntry = configParts[assetCount + 2];
       const maxEntr = configParts[assetCount + 3];
+      const bannable = configParts[assetCount + 4];
 
       setOpusThreshold(threshold);
       setOpusThresholdUSD(cashWeiToUSD(threshold));
       setOpusValuePerEntry(valPerEntry);
       setOpusValuePerEntryUSD(cashWeiToUSD(valPerEntry));
       setOpusMaxEntries(maxEntr);
+      setOpusBannable(bannable === "1");
 
       // Set proportional mode if value per entry > 0
       setOpusProportionalMode(valPerEntry !== "0" && valPerEntry !== "");
@@ -199,7 +204,8 @@ export const OpusTrovesConfig = ({
                     opusTroveAssets,
                     opusThreshold,
                     newValuePerEntry,
-                    opusMaxEntries
+                    opusMaxEntries,
+                    opusBannable
                   );
                 } else {
                   // Proportional mode - set default value
@@ -211,12 +217,42 @@ export const OpusTrovesConfig = ({
                     opusTroveAssets,
                     opusThreshold,
                     defaultWei,
-                    opusMaxEntries
+                    opusMaxEntries,
+                    opusBannable
                   );
                 }
               }}
             />
           </div>
+        </div>
+      </div>
+
+      {/* Bannable Switch */}
+      <div className="border-2 border-brand-muted rounded-lg p-4 bg-black/20">
+        <div className="flex flex-row items-center justify-between gap-4">
+          <div className="flex flex-col gap-1 flex-1">
+            <FormLabel className="font-brand text-base">
+              Allow Banning Mid-Tournament
+            </FormLabel>
+            <FormDescription className="text-xs">
+              {opusBannable
+                ? "Entries can be banned if borrower's debt drops below threshold or quota is exceeded — requires a registration period"
+                : "Entries are locked in once registered — borrowers can repay debt without losing their entry"}
+            </FormDescription>
+          </div>
+          <Switch
+            checked={opusBannable}
+            onCheckedChange={(checked) => {
+              setOpusBannable(checked);
+              updateFormConfig(
+                opusTroveAssets,
+                opusThreshold,
+                opusValuePerEntry,
+                opusMaxEntries,
+                checked
+              );
+            }}
+          />
         </div>
       </div>
 
@@ -255,7 +291,8 @@ export const OpusTrovesConfig = ({
                         newAssets,
                         opusThreshold,
                         opusValuePerEntry,
-                        opusMaxEntries
+                        opusMaxEntries,
+                        opusBannable
                       );
                     }}
                   >
@@ -275,7 +312,8 @@ export const OpusTrovesConfig = ({
                   newAssets,
                   opusThreshold,
                   opusValuePerEntry,
-                  opusMaxEntries
+                  opusMaxEntries,
+                  opusBannable
                 );
               }
             }}
@@ -324,7 +362,8 @@ export const OpusTrovesConfig = ({
                       opusTroveAssets,
                       wei,
                       opusValuePerEntry,
-                      opusMaxEntries
+                      opusMaxEntries,
+                      opusBannable
                     );
                   }}
                 >
@@ -352,7 +391,8 @@ export const OpusTrovesConfig = ({
                     opusTroveAssets,
                     wei,
                     opusValuePerEntry,
-                    opusMaxEntries
+                    opusMaxEntries,
+                    opusBannable
                   );
                 }}
                 max={10000}
@@ -401,7 +441,8 @@ export const OpusTrovesConfig = ({
                         opusTroveAssets,
                         opusThreshold,
                         wei,
-                        opusMaxEntries
+                        opusMaxEntries,
+                        opusBannable
                       );
                     }}
                   >
@@ -429,7 +470,8 @@ export const OpusTrovesConfig = ({
                       opusTroveAssets,
                       opusThreshold,
                       wei,
-                      opusMaxEntries
+                      opusMaxEntries,
+                      opusBannable
                     );
                   }}
                   max={1000}
@@ -465,7 +507,8 @@ export const OpusTrovesConfig = ({
                     opusTroveAssets,
                     opusThreshold,
                     opusValuePerEntry,
-                    value
+                    value,
+                    opusBannable
                   );
                 }}
               />
