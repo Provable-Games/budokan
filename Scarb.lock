@@ -98,11 +98,10 @@ source = "git+https://github.com/EkuboProtocol/starknet-contracts.git?tag=v4.0.1
 
 [[package]]
 name = "game_components_embeddable_game_standard"
-version = "1.1.4"
-source = "git+https://github.com/Provable-Games/game-components.git?tag=v1.1.4#4300b879236abe6374be8c749bf0eeb208ead8e4"
+version = "1.1.5"
+source = "git+https://github.com/Provable-Games/game-components.git?tag=v1.1.5#eb8d458dab1671e662c54767352c978e8dcc5142"
 dependencies = [
  "game_components_interfaces",
- "game_components_metagame",
  "game_components_utilities",
  "openzeppelin_access",
  "openzeppelin_interfaces",
@@ -112,8 +111,8 @@ dependencies = [
 
 [[package]]
 name = "game_components_interfaces"
-version = "1.1.4"
-source = "git+https://github.com/Provable-Games/game-components.git?tag=v1.1.4#4300b879236abe6374be8c749bf0eeb208ead8e4"
+version = "1.1.5"
+source = "git+https://github.com/Provable-Games/game-components.git?tag=v1.1.5#eb8d458dab1671e662c54767352c978e8dcc5142"
 dependencies = [
  "ekubo",
  "metagame_extensions_interfaces",
@@ -121,8 +120,8 @@ dependencies = [
 
 [[package]]
 name = "game_components_metagame"
-version = "1.1.4"
-source = "git+https://github.com/Provable-Games/game-components.git?tag=v1.1.4#4300b879236abe6374be8c749bf0eeb208ead8e4"
+version = "1.1.5"
+source = "git+https://github.com/Provable-Games/game-components.git?tag=v1.1.5#eb8d458dab1671e662c54767352c978e8dcc5142"
 dependencies = [
  "game_components_embeddable_game_standard",
  "game_components_interfaces",
@@ -134,8 +133,8 @@ dependencies = [
 
 [[package]]
 name = "game_components_test_common"
-version = "1.1.4"
-source = "git+https://github.com/Provable-Games/game-components.git?tag=v1.1.4#4300b879236abe6374be8c749bf0eeb208ead8e4"
+version = "1.1.5"
+source = "git+https://github.com/Provable-Games/game-components.git?tag=v1.1.5#eb8d458dab1671e662c54767352c978e8dcc5142"
 dependencies = [
  "game_components_embeddable_game_standard",
  "game_components_interfaces",
@@ -151,8 +150,8 @@ dependencies = [
 
 [[package]]
 name = "game_components_utilities"
-version = "1.1.4"
-source = "git+https://github.com/Provable-Games/game-components.git?tag=v1.1.4#4300b879236abe6374be8c749bf0eeb208ead8e4"
+version = "1.1.5"
+source = "git+https://github.com/Provable-Games/game-components.git?tag=v1.1.5#eb8d458dab1671e662c54767352c978e8dcc5142"
 dependencies = [
  "alexandria_encoding",
  "game_components_embeddable_game_standard",
@@ -167,8 +166,8 @@ source = "git+https://github.com/provable-games/graffiti#085657596d0779299f1087b
 
 [[package]]
 name = "metagame_extensions_interfaces"
-version = "0.1.2"
-source = "git+https://github.com/Provable-Games/metagame_extensions.git?tag=v0.1.2#296a62059593be6d91ca14e81b591211e4342b87"
+version = "0.1.3"
+source = "git+https://github.com/Provable-Games/metagame_extensions.git?tag=v0.1.3#dee660459f293dc967ea6628ace2a3d17255a424"
 
 [[package]]
 name = "openzeppelin_access"

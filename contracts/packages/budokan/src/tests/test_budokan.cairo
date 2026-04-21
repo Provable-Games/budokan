@@ -97,7 +97,6 @@ fn deploy_entry_validator_mock(budokan_address: ContractAddress) -> ContractAddr
         .contract_class();
     let mut calldata = array![];
     calldata.append(budokan_address.into());
-    calldata.append(false.into());
     let (contract_address, _) = contract_class.deploy(@calldata).expect('deploy validator fail');
     contract_address
 }
@@ -108,7 +107,6 @@ fn deploy_tournament_validator_mock(budokan_address: ContractAddress) -> Contrac
         .contract_class();
     let mut calldata = array![];
     calldata.append(budokan_address.into()); // budokan_address
-    calldata.append(false.into()); // registration_only
     let (contract_address, _) = contract_class.deploy(@calldata).expect('deploy tourn val fail');
     contract_address
 }
@@ -4935,16 +4933,16 @@ fn test_soulbound_tournament_prevents_token_transfer() {
     denshokan_erc721.transfer_from(owner, recipient, game_token_id.into());
 }
 
-// ==================== Extension with Registration Only Tests ====================
+// ==================== Extension with Bannable Tests ====================
 
 #[test]
-fn test_extension_with_registration_only_requires_registration_period() {
+fn test_extension_with_bannable_requires_registration_period() {
     let owner = OWNER;
     let contracts = setup();
 
     start_cheat_caller_address(contracts.budokan.contract_address, owner);
 
-    // Use the entry validator from setup (not registration_only, but we can test with it)
+    // Use the entry validator from setup (not bannable, but we can test with it)
     // Create extension config with the validator
     let extension_config = ExtensionConfig {
         address: contracts.entry_validator.contract_address,

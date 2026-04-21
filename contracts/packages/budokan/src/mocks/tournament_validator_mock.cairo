@@ -63,8 +63,8 @@ pub mod tournament_validator_mock {
         budokan_address: ContractAddress,
         /// Owner address (the metagame/budokan contract)
         owner_address: ContractAddress,
-        /// Registration only flag
-        registration_only: bool,
+        /// Bannable flag per context
+        bannable: Map<u64, bool>,
         /// Qualifier type per tournament (0 = participants, 1 = winners)
         qualifier_type: Map<u64, felt252>,
         /// Qualifying tournament IDs per tournament
@@ -83,12 +83,9 @@ pub mod tournament_validator_mock {
     }
 
     #[constructor]
-    fn constructor(
-        ref self: ContractState, budokan_address: ContractAddress, registration_only: bool,
-    ) {
+    fn constructor(ref self: ContractState, budokan_address: ContractAddress) {
         self.budokan_address.write(budokan_address);
         self.owner_address.write(budokan_address);
-        self.registration_only.write(registration_only);
         self.src5.register_interface(IENTRY_REQUIREMENT_EXTENSION_ID);
     }
 
@@ -98,8 +95,8 @@ pub mod tournament_validator_mock {
             self.owner_address.read()
         }
 
-        fn registration_only(self: @ContractState) -> bool {
-            self.registration_only.read()
+        fn bannable(self: @ContractState, context_id: u64) -> bool {
+            self.bannable.read(context_id)
         }
 
         fn valid_entry(

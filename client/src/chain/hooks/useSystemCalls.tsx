@@ -1170,22 +1170,23 @@ export const useSystemCalls = () => {
     return sdkCheckExtensionValidEntry(provider, extensionAddress, tournamentId, playerAddress, qualification);
   };
 
-  const checkRegistrationOnly = async (
-    extensionAddress: string
+  const checkBannable = async (
+    extensionAddress: string,
+    contextId: BigNumberish
   ): Promise<boolean> => {
     try {
       if (!provider) return false;
 
       const result = await provider.callContract({
         contractAddress: extensionAddress,
-        entrypoint: "registration_only",
-        calldata: [],
+        entrypoint: "bannable",
+        calldata: [contextId.toString()],
       });
 
       // Result is a boolean (0 = false, 1 = true)
       return result[0] === "0x1" || BigInt(result[0]) === 1n;
     } catch (error) {
-      console.error("Error checking registration_only:", error);
+      console.error("Error checking bannable:", error);
       // If the function doesn't exist, assume it doesn't require registration
       return false;
     }
@@ -1250,7 +1251,7 @@ export const useSystemCalls = () => {
     registerToken,
     checkExtensionValidEntry,
     getExtensionEntriesLeft,
-    checkRegistrationOnly,
+    checkBannable,
     checkShouldBan,
     getUserTroveIds,
     getTroveHealth,
