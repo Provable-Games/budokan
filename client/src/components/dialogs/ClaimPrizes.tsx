@@ -10,7 +10,7 @@ import {
 import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 import { useAccount } from "@starknet-react/core";
 import { RewardClaim } from "@/generated/models.gen";
-import type { Tournament } from "@provable-games/budokan-sdk";
+import type { Registration, Tournament } from "@provable-games/budokan-sdk";
 import {
   displayAddress,
   formatNumber,
@@ -84,12 +84,12 @@ export function ClaimPrizesDialog({
   // tokens by the tournament contract's address).
   const { registrations: registrationsResult } = useRegistrations(
     open && tournamentId ? tournamentId : undefined,
-    { limit: 1000 },
+    { limit: 10_000 },
   );
   const registeredTokenIds = useMemo(
     () =>
       (registrationsResult?.data ?? [])
-        .map((r: any) =>
+        .map((r: Registration) =>
           r.gameTokenId !== undefined && r.gameTokenId !== null
             ? BigInt(r.gameTokenId).toString()
             : null,
@@ -101,16 +101,13 @@ export function ClaimPrizesDialog({
   // Map token_id -> owner address for refund row grouping.
   const tokenOwnerByTokenId = useMemo(() => {
     const map = new Map<string, string>();
-    for (const r of registrationsResult?.data ?? []) {
+    for (const r of (registrationsResult?.data ?? []) as Registration[]) {
       if (
-        (r as any).gameTokenId !== undefined &&
-        (r as any).gameTokenId !== null &&
-        (r as any).playerAddress
+        r.gameTokenId !== undefined &&
+        r.gameTokenId !== null &&
+        r.playerAddress
       ) {
-        map.set(
-          BigInt((r as any).gameTokenId).toString(),
-          String((r as any).playerAddress),
-        );
+        map.set(BigInt(r.gameTokenId).toString(), r.playerAddress);
       }
     }
     return map;
@@ -334,13 +331,11 @@ export function ClaimPrizesDialog({
               const byOwner = new Map<string, OwnerBucket>();
               for (const p of group.prizes) {
                 const tokenIdStr = String((p as any).id);
-                const owner =
-                  tokenOwnerByTokenId.get(tokenIdStr) ?? "0x0";
-                const amt = BigInt(
-                  (p as any).token_type?.variant?.erc20?.amount ||
-                    (p as any)["token_type.erc20.amount"] ||
-                    "0",
-                );
+                const owner = tokenOwnerByTokenId.get(tokenIdStr);
+                // Skip refunds whose token isn't in the registrations page —
+                // merging them under a junk address would display a bogus row.
+                if (!owner) continue;
+                const amt = getPrizeAmount(p);
                 const b = byOwner.get(owner);
                 if (b) {
                   b.amount += amt;
@@ -364,8 +359,12 @@ export function ClaimPrizesDialog({
                         indexAddress(owner),
                       );
                       const label = username ?? displayAddress(owner);
+                      // Split on the decimal point so 18-decimal amounts
+                      // (> 2^53) stay precise.
+                      const divisor = 10n ** BigInt(tokenDecimals);
                       const prizeAmount =
-                        Number(bucket.amount) / 10 ** tokenDecimals;
+                        Number(bucket.amount / divisor) +
+                        Number(bucket.amount % divisor) / Number(divisor);
                       return (
                         <div
                           key={owner}
