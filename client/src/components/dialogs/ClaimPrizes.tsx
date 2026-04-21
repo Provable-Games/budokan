@@ -26,7 +26,11 @@ import {
 } from "@/lib/tokensMeta";
 import { useChainConfig } from "@/context/chain";
 import { LoadingSpinner } from "@/components/ui/spinner";
-import { usePrizes, useRewardClaims } from "@provable-games/budokan-sdk/react";
+import {
+  usePrizes,
+  useRewardClaims,
+  useRegistrations,
+} from "@provable-games/budokan-sdk/react";
 
 interface ClaimPrizesDialogProps {
   open: boolean;
@@ -68,6 +72,26 @@ export function ClaimPrizesDialog({
   );
   const rewardClaimsData = rewardClaimsResult?.data ?? null;
 
+  // Fetch all registrations for this tournament — one per entry.
+  // Used to build per-token refund claims when refund_share > 0.
+  // Registrations work regardless of game soulbound state (unlike filtering
+  // tokens by the tournament contract's address).
+  const { registrations: registrationsResult } = useRegistrations(
+    open && tournamentId ? tournamentId : undefined,
+    { limit: 1000 },
+  );
+  const registeredTokenIds = useMemo(
+    () =>
+      (registrationsResult?.data ?? [])
+        .map((r: any) =>
+          r.gameTokenId !== undefined && r.gameTokenId !== null
+            ? BigInt(r.gameTokenId).toString()
+            : null,
+        )
+        .filter((id): id is string => id !== null),
+    [registrationsResult],
+  );
+
   const claimedRewards: RewardClaim[] = (rewardClaimsData ||
     []) as unknown as RewardClaim[];
 
@@ -78,17 +102,22 @@ export function ClaimPrizesDialog({
       : entryCount;
 
   // Calculate entry fee prizes based on tournament settings
-  const { tournamentCreatorShare, gameCreatorShare, distributionPrizes } =
-    useMemo(
-      () =>
-        extractEntryFeePrizes(
-          tournamentModel?.id,
-          entryFeeData,
-          BigInt(entryCount || 0),
-          leaderboardSize
-        ),
-      [tournamentModel?.id, entryFeeData, entryCount]
-    );
+  const {
+    tournamentCreatorShare,
+    gameCreatorShare,
+    distributionPrizes,
+    refundShares,
+  } = useMemo(
+    () =>
+      extractEntryFeePrizes(
+        tournamentModel?.id,
+        entryFeeData,
+        BigInt(entryCount || 0),
+        leaderboardSize,
+        registeredTokenIds
+      ),
+    [tournamentModel?.id, entryFeeData, entryCount, registeredTokenIds]
+  );
 
   // Expand distributed sponsored prizes into individual positions
   const expandedSponsoredPrizes = useMemo(
@@ -102,12 +131,14 @@ export function ClaimPrizesDialog({
       ...distributionPrizes,
       ...tournamentCreatorShare,
       ...gameCreatorShare,
+      ...refundShares,
       ...expandedSponsoredPrizes,
     ];
   }, [
     distributionPrizes,
     tournamentCreatorShare,
     gameCreatorShare,
+    refundShares,
     expandedSponsoredPrizes,
   ]);
 
@@ -277,6 +308,8 @@ export function ClaimPrizesDialog({
                   let sourceLabel = "";
                   if (prize.type === "entry_fee") {
                     sourceLabel = "Entry Fee Pool";
+                  } else if (prize.type === "entry_fee_refund") {
+                    sourceLabel = `Entry Fee Refund (#${prize.id})`;
                   } else if (prize.type === "sponsored_distributed") {
                     sourceLabel = `Prize Pool #${prizeIndex + 1}`;
                   } else if (

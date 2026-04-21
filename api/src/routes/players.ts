@@ -81,7 +81,13 @@ app.get("/:address/tournaments", async (c) => {
           name: row.tournament.name,
           gameAddress: row.tournament.gameAddress,
           createdAt: row.tournament.createdAt?.toString() ?? null,
-          schedule: row.tournament.schedule,
+          schedule: {
+            registration_start_delay: row.tournament.scheduleRegStartDelay,
+            registration_end_delay: row.tournament.scheduleRegEndDelay,
+            game_start_delay: row.tournament.scheduleGameStartDelay,
+            game_end_delay: row.tournament.scheduleGameEndDelay,
+            submission_duration: row.tournament.scheduleSubmissionDuration,
+          },
         },
       })),
       pagination: {

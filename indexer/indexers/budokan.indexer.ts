@@ -197,6 +197,25 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
             );
             logger.info(`  Decoded tournament ${decoded.tournamentId}: name="${decoded.name}", game=${decoded.gameAddress}`);
 
+            const sched = decoded.schedule as Record<string, number>;
+            const gc = decoded.gameConfig as Record<string, unknown>;
+            const ef = decoded.entryFee as Record<string, unknown> | null;
+            const er = decoded.entryRequirement as
+              | Record<string, unknown>
+              | null;
+            const lb = decoded.leaderboardConfig as Record<string, unknown>;
+
+            // Entry fee fields (optional — all null when no entry fee)
+            const efDist = (ef?.distribution ?? null) as
+              | Record<string, unknown>
+              | null;
+
+            // Entry requirement fields (optional — all null when no requirement)
+            const erType = er?.entry_requirement_type as
+              | Record<string, unknown>
+              | undefined;
+            const erTypeDiscriminator = (erType?.type as string | undefined) ?? null;
+
             tournamentRows.push({
               tournamentId: decoded.tournamentId,
               gameAddress: decoded.gameAddress,
@@ -205,11 +224,59 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
               creatorTokenId: decoded.creatorTokenId,
               name: decoded.name,
               description: decoded.description,
-              schedule: decoded.schedule,
-              gameConfig: decoded.gameConfig,
-              entryFee: decoded.entryFee,
-              entryRequirement: decoded.entryRequirement,
-              leaderboardConfig: decoded.leaderboardConfig,
+
+              scheduleRegStartDelay: Number(sched.registration_start_delay ?? 0),
+              scheduleRegEndDelay: Number(sched.registration_end_delay ?? 0),
+              scheduleGameStartDelay: Number(sched.game_start_delay ?? 0),
+              scheduleGameEndDelay: Number(sched.game_end_delay ?? 0),
+              scheduleSubmissionDuration: Number(sched.submission_duration ?? 0),
+
+              gameConfigSettingsId: Number(gc.settings_id ?? 0),
+              gameConfigSoulbound: Boolean(gc.soulbound),
+              gameConfigPaymaster: Boolean(gc.paymaster),
+              gameConfigClientUrl: (gc.client_url as string | null) ?? null,
+              gameConfigRenderer: (gc.renderer as string | null) ?? null,
+
+              entryFeeTokenAddress: (ef?.token_address as string | null) ?? null,
+              entryFeeAmount: (ef?.amount as string | null) ?? null,
+              entryFeeTournamentCreatorShare:
+                ef !== null ? Number(ef.tournament_creator_share ?? 0) : null,
+              entryFeeGameCreatorShare:
+                ef !== null ? Number(ef.game_creator_share ?? 0) : null,
+              entryFeeRefundShare:
+                ef !== null ? Number(ef.refund_share ?? 0) : null,
+              entryFeeDistributionType:
+                (efDist?.type as string | null) ?? null,
+              entryFeeDistributionWeight:
+                efDist && typeof efDist.weight === "number"
+                  ? (efDist.weight as number)
+                  : null,
+              entryFeeDistributionShares:
+                efDist?.type === "Custom"
+                  ? ((efDist.shares as unknown[]) ?? null)
+                  : null,
+              entryFeeDistributionCount:
+                ef !== null ? Number(ef.distribution_count ?? 0) : null,
+
+              entryRequirementEntryLimit:
+                er !== null ? Number(er.entry_limit ?? 0) : null,
+              entryRequirementType: erTypeDiscriminator,
+              entryRequirementTokenAddress:
+                erTypeDiscriminator === "token"
+                  ? ((erType?.token_address as string | null) ?? null)
+                  : null,
+              entryRequirementExtensionAddress:
+                erTypeDiscriminator === "extension"
+                  ? ((erType?.address as string | null) ?? null)
+                  : null,
+              entryRequirementExtensionConfig:
+                erTypeDiscriminator === "extension"
+                  ? ((erType?.config as unknown[]) ?? null)
+                  : null,
+
+              leaderboardAscending: Boolean(lb.ascending),
+              leaderboardGameMustBeOver: Boolean(lb.game_must_be_over),
+
               createdAtBlock: blockNumber,
               txHash,
             });

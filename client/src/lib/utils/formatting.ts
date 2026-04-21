@@ -383,11 +383,13 @@ export const extractEntryFeePrizes = (
   tournamentId: BigNumberish,
   entryFee: any,
   entryCount: BigNumberish,
-  distributionPositions?: number
+  distributionPositions?: number,
+  entryTokenIds: BigNumberish[] = []
 ): {
   tournamentCreatorShare: DisplayPrize[];
   gameCreatorShare: DisplayPrize[];
   distributionPrizes: DisplayPrize[];
+  refundShares: DisplayPrize[];
 } => {
   // Support both SDK shape (entryFee as plain object) and absence
   const fee = entryFee;
@@ -398,6 +400,7 @@ export const extractEntryFeePrizes = (
       tournamentCreatorShare: [],
       gameCreatorShare: [],
       distributionPrizes: [],
+      refundShares: [],
     };
   }
   const totalFeeAmount = BigInt(amount) * BigInt(entryCount);
@@ -411,6 +414,7 @@ export const extractEntryFeePrizes = (
       tournamentCreatorShare: [],
       gameCreatorShare: [],
       distributionPrizes: [],
+      refundShares: [],
     };
   }
 
@@ -534,10 +538,47 @@ export const extractEntryFeePrizes = (
 
   const distrbutionPrizes = calculateDistributionPrizes();
 
+  // Per-token refund shares. The contract computes the refund per token as
+  // (refund_share_bps / total_entries) * total_pool, which mathematically
+  // simplifies to (refund_share_bps * per_entry_amount) / 10000 — so each
+  // token gets back refundShareBps% of a single entry's fee, regardless of
+  // how many total entries there are.
+  const refundShareBps = Number(fee.refundShare ?? fee.refund_share ?? 0);
+  const perEntryAmount = BigInt(amount);
+  const refundPerToken =
+    refundShareBps > 0
+      ? (perEntryAmount * BigInt(refundShareBps)) / 10000n
+      : 0n;
+
+  const refundShares: DisplayPrize[] =
+    refundPerToken > 0n && entryTokenIds.length > 0
+      ? entryTokenIds.map((tokenId) => {
+          const tokenIdStr = BigInt(tokenId).toString();
+          return {
+            // `id` doubles as the token_id carrier for refund claims
+            id: tokenIdStr,
+            context_id: tournamentId,
+            position: 0,
+            token_address: tokenAddress,
+            token_type: new CairoCustomEnum({
+              erc20: {
+                amount: refundPerToken.toString(),
+                distribution: new CairoOption(CairoOptionVariant.None),
+                distribution_count: new CairoOption(CairoOptionVariant.None),
+              } as ERC20Data,
+              erc721: undefined,
+            }),
+            sponsor_address: "0x0",
+            type: "entry_fee_refund",
+          } as unknown as DisplayPrize;
+        })
+      : [];
+
   return {
     tournamentCreatorShare,
     gameCreatorShare,
     distributionPrizes: distrbutionPrizes,
+    refundShares,
   };
 };
 
@@ -575,6 +616,10 @@ export const getClaimablePrizes = (
             entryFeeVariant === "Position"
               ? claimedPrize.reward_type.variant.EntryFee.variant.Position
               : null,
+          prizeId:
+            entryFeeVariant === "Refund"
+              ? claimedPrize.reward_type.variant.EntryFee.variant.Refund
+              : undefined,
         };
       } else if (variant === "Prize") {
         const prizeVariant =
@@ -695,6 +740,16 @@ export const getClaimablePrizes = (
       });
     } else if (prize.type === "entry_fee") {
       return !claimedEntryFeePositions.includes(prize.position ?? 0);
+    } else if (prize.type === "entry_fee_refund") {
+      const tokenIdStr = String(prize.id);
+      return !claimedRewards.some((claimedReward) => {
+        const info = getRewardTypeInfo(claimedReward);
+        return (
+          info.type === "EntryFee" &&
+          info.role === "Refund" &&
+          String(info.prizeId) === tokenIdStr
+        );
+      });
     } else if (prize.type === "sponsored_distributed") {
       // For distributed prizes, check if this specific (prize_id, payout_index) combo is claimed
       const prizeIdNum =
@@ -1251,6 +1306,17 @@ export const formatRewardTypes = (prizes: DisplayPrize[]): CairoCustomEnum[] => 
           TournamentCreator: {},
           GameCreator: undefined,
           Refund: undefined,
+        }),
+      });
+    } else if (prize.type === "entry_fee_refund") {
+      // Per-token refund — `prize.id` carries the game token_id
+      return new CairoCustomEnum({
+        Prize: undefined,
+        EntryFee: new CairoCustomEnum({
+          Position: undefined,
+          TournamentCreator: undefined,
+          GameCreator: undefined,
+          Refund: prize.id,
         }),
       });
     } else if (prize.type === "sponsored_distributed") {
