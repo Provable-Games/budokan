@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "npm run db:cleanup && apibara dev",
     "build": "apibara build",
-    "start": "npm run db:migrate && npm run db:cleanup && apibara start",
+    "start": "npm run db:migrate && tsx scripts/start-with-retry.ts",
     "check-dna": "tsx scripts/check-dna-status.ts",
     "db:cleanup": "tsx scripts/cleanup-triggers.ts",
     "db:generate": "drizzle-kit generate",
