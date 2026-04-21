@@ -11,7 +11,7 @@ import {
   parseLimit,
   parseOffset,
 } from "../utils/validation.js";
-import { applyPhaseCondition } from "./tournaments.js";
+import { applyPhaseCondition, serializeTournament } from "./tournaments.js";
 
 const app = new Hono();
 
@@ -50,25 +50,7 @@ app.get("/:address/tournaments", async (c) => {
     ]);
 
     return c.json({
-      data: rows.map((t) => ({
-        id: t.tournamentId.toString(),
-        gameAddress: t.gameAddress,
-        createdBy: t.createdBy,
-        creatorTokenId: t.creatorTokenId ?? null,
-        name: t.name,
-        description: t.description,
-        schedule: t.schedule,
-        gameConfig: t.gameConfig,
-        entryFee: t.entryFee,
-        entryRequirement: t.entryRequirement,
-        leaderboardConfig: t.leaderboardConfig,
-        entryCount: t.entryCount,
-        prizeCount: t.prizeCount,
-        submissionCount: t.submissionCount,
-        createdAt: t.createdAt?.toString() ?? null,
-        createdAtBlock: t.createdAtBlock?.toString() ?? null,
-        txHash: t.txHash,
-      })),
+      data: rows.map(serializeTournament),
       pagination: {
         total: countResult[0]?.count ?? 0,
         limit,

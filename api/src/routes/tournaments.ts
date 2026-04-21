@@ -18,14 +18,14 @@ import {
 
 const app = new Hono();
 
-// SQL helpers for computing absolute timestamps from created_at + cumulative delays
-// Each phase delay is relative to the previous phase, not to created_at
-// Registration delays of 0 mean "no registration period" — treat as NULL
-const gameStartTime = sql`(${tournaments.createdAt} + (${tournaments.schedule}->>'game_start_delay')::bigint)`;
-const gameEndTime = sql`(${tournaments.createdAt} + (${tournaments.schedule}->>'game_start_delay')::bigint + (${tournaments.schedule}->>'game_end_delay')::bigint)`;
-const regStartTime = sql`CASE WHEN (${tournaments.schedule}->>'registration_start_delay')::bigint > 0 THEN (${tournaments.createdAt} + (${tournaments.schedule}->>'registration_start_delay')::bigint) ELSE NULL END`;
-const regEndTime = sql`CASE WHEN (${tournaments.schedule}->>'registration_end_delay')::bigint > 0 THEN (${tournaments.createdAt} + (${tournaments.schedule}->>'registration_start_delay')::bigint + (${tournaments.schedule}->>'registration_end_delay')::bigint) ELSE NULL END`;
-const submissionEndTime = sql`(${tournaments.createdAt} + (${tournaments.schedule}->>'game_start_delay')::bigint + (${tournaments.schedule}->>'game_end_delay')::bigint + (${tournaments.schedule}->>'submission_duration')::bigint)`;
+// SQL helpers for computing absolute timestamps from created_at + cumulative delays.
+// Each phase delay is relative to the previous phase, not to created_at.
+// Registration delays of 0 mean "no registration period" — treat as NULL.
+const gameStartTime = sql`(${tournaments.createdAt} + ${tournaments.scheduleGameStartDelay})`;
+const gameEndTime = sql`(${tournaments.createdAt} + ${tournaments.scheduleGameStartDelay} + ${tournaments.scheduleGameEndDelay})`;
+const regStartTime = sql`CASE WHEN ${tournaments.scheduleRegStartDelay} > 0 THEN (${tournaments.createdAt} + ${tournaments.scheduleRegStartDelay}) ELSE NULL END`;
+const regEndTime = sql`CASE WHEN ${tournaments.scheduleRegEndDelay} > 0 THEN (${tournaments.createdAt} + ${tournaments.scheduleRegStartDelay} + ${tournaments.scheduleRegEndDelay}) ELSE NULL END`;
+const submissionEndTime = sql`(${tournaments.createdAt} + ${tournaments.scheduleGameStartDelay} + ${tournaments.scheduleGameEndDelay} + ${tournaments.scheduleSubmissionDuration})`;
 
 // ─── GET / ── List tournaments ──────────────────────────────────────────────
 // Query params: game_address, creator, phase, sort, include_prizes,
@@ -69,8 +69,8 @@ app.get("/", async (c) => {
         const addressList = sql.join(whitelist.map(a => sql`${a}`), sql`, `);
         conditions.push(
           sql`NOT (
-            ${tournaments.entryRequirement}->>'type' = 'extension'
-            AND lower(${tournaments.entryRequirement}->>'address') NOT IN (${addressList})
+            ${tournaments.entryRequirementType} = 'extension'
+            AND lower(${tournaments.entryRequirementExtensionAddress}) NOT IN (${addressList})
           )`
         );
       }
@@ -195,7 +195,9 @@ app.get("/:id", async (c) => {
 
     const tid = tournamentId.toString();
     const paidPlacesFromPrizes = paidPlacesMap.get(tid) ?? 0;
-    const entryFeeDistCount = Number((tournamentRows[0].entryFee as any)?.distribution_count ?? 0);
+    const entryFeeDistCount = Number(
+      tournamentRows[0].entryFeeDistributionCount ?? 0,
+    );
     const paidPlaces = Math.max(paidPlacesFromPrizes, entryFeeDistCount);
 
     return c.json({
@@ -419,8 +421,13 @@ app.get("/:id/reward-claims/summary", async (c) => {
     const [tournamentRows, prizeRows, claimedResult] = await Promise.all([
       db
         .select({
-          entryFee: tournaments.entryFee,
           entryCount: tournaments.entryCount,
+          entryFeeAmount: tournaments.entryFeeAmount,
+          entryFeeTournamentCreatorShare:
+            tournaments.entryFeeTournamentCreatorShare,
+          entryFeeGameCreatorShare: tournaments.entryFeeGameCreatorShare,
+          entryFeeRefundShare: tournaments.entryFeeRefundShare,
+          entryFeeDistributionCount: tournaments.entryFeeDistributionCount,
         })
         .from(tournaments)
         .where(tid)
@@ -441,13 +448,17 @@ app.get("/:id/reward-claims/summary", async (c) => {
     let entryFeePrizeCount = 0;
     const t = tournamentRows[0];
     if (t) {
-      const ef = t.entryFee as Record<string, unknown> | null;
       const entryCount = t.entryCount ?? 0;
-      if (ef && Number(ef.amount ?? 0) > 0 && entryCount > 0) {
-        const distCount = Number(ef.distribution_count ?? 0);
+      const amount = BigInt(t.entryFeeAmount ?? "0");
+      if (amount > 0n && entryCount > 0) {
+        const distCount = Number(t.entryFeeDistributionCount ?? 0);
         if (distCount > 0) entryFeePrizeCount += distCount;
-        if (Number(ef.tournament_creator_share ?? 0) > 0) entryFeePrizeCount++;
-        if (Number(ef.game_creator_share ?? 0) > 0) entryFeePrizeCount++;
+        if (Number(t.entryFeeTournamentCreatorShare ?? 0) > 0)
+          entryFeePrizeCount++;
+        if (Number(t.entryFeeGameCreatorShare ?? 0) > 0) entryFeePrizeCount++;
+        // Per-token refund: one slot per entry when refund share is set.
+        if (Number(t.entryFeeRefundShare ?? 0) > 0)
+          entryFeePrizeCount += entryCount;
       }
     }
 
@@ -638,15 +649,67 @@ async function fetchPaidPlaces(
 
 // ─── Serialization helpers ───────────────────────────────────────────────────
 
-function serializeTournament(t: typeof tournaments.$inferSelect) {
-  // Compute absolute timestamps from created_at + schedule delays
-  const sched = t.schedule as Record<string, number> | null;
+export function serializeTournament(t: typeof tournaments.$inferSelect) {
+  // Compute absolute timestamps from created_at + schedule delays.
+  // Delays are cumulative: each phase offset is relative to the previous phase.
   const base = Number(t.createdAt ?? 0);
-  const regStartDelay = sched?.registration_start_delay ?? 0;
-  const regEndDelay = sched?.registration_end_delay ?? 0;
-  const gameStartDelay = sched?.game_start_delay ?? 0;
-  const gameEndDelay = sched?.game_end_delay ?? 0;
-  const submissionDuration = sched?.submission_duration ?? 0;
+  const regStartDelay = t.scheduleRegStartDelay ?? 0;
+  const regEndDelay = t.scheduleRegEndDelay ?? 0;
+  const gameStartDelay = t.scheduleGameStartDelay ?? 0;
+  const gameEndDelay = t.scheduleGameEndDelay ?? 0;
+  const submissionDuration = t.scheduleSubmissionDuration ?? 0;
+
+  const schedule = {
+    registration_start_delay: regStartDelay,
+    registration_end_delay: regEndDelay,
+    game_start_delay: gameStartDelay,
+    game_end_delay: gameEndDelay,
+    submission_duration: submissionDuration,
+  };
+
+  const gameConfig = {
+    // Mirror the Cairo `GameConfig` field order for SDK consumers.
+    game_address: t.gameAddress,
+    settings_id: t.gameConfigSettingsId ?? 0,
+    soulbound: t.gameConfigSoulbound ?? false,
+    paymaster: t.gameConfigPaymaster ?? false,
+    client_url: t.gameConfigClientUrl,
+    renderer: t.gameConfigRenderer,
+  };
+
+  const entryFee = t.entryFeeTokenAddress
+    ? {
+        token_address: t.entryFeeTokenAddress,
+        amount: t.entryFeeAmount,
+        tournament_creator_share: t.entryFeeTournamentCreatorShare ?? 0,
+        game_creator_share: t.entryFeeGameCreatorShare ?? 0,
+        refund_share: t.entryFeeRefundShare ?? 0,
+        distribution: buildDistribution(
+          t.entryFeeDistributionType,
+          t.entryFeeDistributionWeight,
+          t.entryFeeDistributionShares,
+        ),
+        distribution_count: t.entryFeeDistributionCount ?? 0,
+      }
+    : null;
+
+  const entryRequirement =
+    t.entryRequirementType !== null && t.entryRequirementType !== undefined
+      ? {
+          entry_limit: t.entryRequirementEntryLimit ?? 0,
+          entry_requirement_type: buildEntryRequirementType(
+            t.entryRequirementType,
+            t.entryRequirementTokenAddress,
+            t.entryRequirementExtensionAddress,
+            t.entryRequirementExtensionConfig,
+          ),
+        }
+      : null;
+
+  const leaderboardConfig = {
+    ascending: t.leaderboardAscending ?? false,
+    game_must_be_over: t.leaderboardGameMustBeOver ?? false,
+  };
 
   return {
     id: t.tournamentId.toString(),
@@ -655,11 +718,11 @@ function serializeTournament(t: typeof tournaments.$inferSelect) {
     creatorTokenId: t.creatorTokenId ?? null,
     name: t.name,
     description: t.description,
-    schedule: t.schedule,
-    gameConfig: t.gameConfig,
-    entryFee: t.entryFee,
-    entryRequirement: t.entryRequirement,
-    leaderboardConfig: t.leaderboardConfig,
+    schedule,
+    gameConfig,
+    entryFee,
+    entryRequirement,
+    leaderboardConfig,
     entryCount: t.entryCount,
     prizeCount: t.prizeCount,
     submissionCount: t.submissionCount,
@@ -667,13 +730,49 @@ function serializeTournament(t: typeof tournaments.$inferSelect) {
     createdAtBlock: t.createdAtBlock?.toString() ?? null,
     txHash: t.txHash,
     // Computed absolute timestamps (Unix seconds)
-    // Delays are cumulative: each phase offset is relative to the previous phase
     registrationStartTime: regStartDelay > 0 ? String(base + regStartDelay) : null,
     registrationEndTime: regEndDelay > 0 ? String(base + regStartDelay + regEndDelay) : null,
     gameStartTime: String(base + gameStartDelay),
     gameEndTime: String(base + gameStartDelay + gameEndDelay),
     submissionEndTime: String(base + gameStartDelay + gameEndDelay + submissionDuration),
   };
+}
+
+function buildDistribution(
+  type: string | null,
+  weight: number | null,
+  shares: unknown,
+): Record<string, unknown> | null {
+  if (!type) return null;
+  if (type === "Linear" || type === "Exponential") {
+    return { type, weight: weight ?? 0 };
+  }
+  if (type === "Uniform") {
+    return { type };
+  }
+  if (type === "Custom") {
+    return { type, shares: Array.isArray(shares) ? shares : [] };
+  }
+  return { type };
+}
+
+function buildEntryRequirementType(
+  type: string,
+  tokenAddress: string | null,
+  extensionAddress: string | null,
+  extensionConfig: unknown,
+): Record<string, unknown> {
+  if (type === "token") {
+    return { type, token_address: tokenAddress };
+  }
+  if (type === "extension") {
+    return {
+      type,
+      address: extensionAddress,
+      config: Array.isArray(extensionConfig) ? extensionConfig : [],
+    };
+  }
+  return { type };
 }
 
 function serializeLeaderboardEntry(entry: typeof leaderboards.$inferSelect) {

@@ -24,7 +24,12 @@ export interface TokenMetadata {
 // extra metadata like position (for display) and type categorization
 export type DisplayPrize = Prize & {
   position?: number | BigNumberish; // Virtual position for display purposes
-  type?: "entry_fee" | "entry_fee_game_creator" | "entry_fee_tournament_creator" | string;
+  type?:
+    | "entry_fee"
+    | "entry_fee_game_creator"
+    | "entry_fee_tournament_creator"
+    | "entry_fee_refund"
+    | string;
 };
 
 export type TokenPrizes = Record<

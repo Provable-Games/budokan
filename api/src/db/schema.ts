@@ -36,11 +36,72 @@ export const tournaments = pgTable(
     creatorTokenId: text("creator_token_id"),
     name: text("name"),
     description: text("description"),
-    schedule: jsonb("schedule"),
-    gameConfig: jsonb("game_config"),
-    entryFee: jsonb("entry_fee"),
-    entryRequirement: jsonb("entry_requirement"),
-    leaderboardConfig: jsonb("leaderboard_config"),
+
+    // Flattened from Cairo `Schedule` — all u32 delays in seconds.
+    scheduleRegStartDelay: integer("schedule_registration_start_delay")
+      .notNull()
+      .default(0),
+    scheduleRegEndDelay: integer("schedule_registration_end_delay")
+      .notNull()
+      .default(0),
+    scheduleGameStartDelay: integer("schedule_game_start_delay")
+      .notNull()
+      .default(0),
+    scheduleGameEndDelay: integer("schedule_game_end_delay")
+      .notNull()
+      .default(0),
+    scheduleSubmissionDuration: integer("schedule_submission_duration")
+      .notNull()
+      .default(0),
+
+    // Flattened from Cairo `GameConfig`. The game address field from the Cairo
+    // struct is redundant with `tournaments.game_address` above and intentionally
+    // not duplicated.
+    gameConfigSettingsId: integer("game_config_settings_id").notNull().default(0),
+    gameConfigSoulbound: boolean("game_config_soulbound")
+      .notNull()
+      .default(false),
+    gameConfigPaymaster: boolean("game_config_paymaster")
+      .notNull()
+      .default(false),
+    gameConfigClientUrl: text("game_config_client_url"),
+    gameConfigRenderer: text("game_config_renderer"),
+
+    // Flattened from Cairo `Option<EntryFee>` — all null when entry fee absent.
+    entryFeeTokenAddress: text("entry_fee_token_address"),
+    entryFeeAmount: text("entry_fee_amount"),
+    entryFeeTournamentCreatorShare: integer(
+      "entry_fee_tournament_creator_share",
+    ),
+    entryFeeGameCreatorShare: integer("entry_fee_game_creator_share"),
+    entryFeeRefundShare: integer("entry_fee_refund_share"),
+    entryFeeDistributionType: text("entry_fee_distribution_type"),
+    entryFeeDistributionWeight: integer("entry_fee_distribution_weight"),
+    // Variable-length list for Custom distribution variant only.
+    entryFeeDistributionShares: jsonb("entry_fee_distribution_shares"),
+    entryFeeDistributionCount: integer("entry_fee_distribution_count"),
+
+    // Flattened from Cairo `Option<EntryRequirement>` — all null when absent.
+    entryRequirementEntryLimit: integer("entry_requirement_entry_limit"),
+    // Discriminator: "token" | "extension"
+    entryRequirementType: text("entry_requirement_type"),
+    // Populated only when entryRequirementType = "token"
+    entryRequirementTokenAddress: text("entry_requirement_token_address"),
+    // Populated only when entryRequirementType = "extension"
+    entryRequirementExtensionAddress: text(
+      "entry_requirement_extension_address",
+    ),
+    // Variable-length felt252 array passed to the extension's add_config.
+    entryRequirementExtensionConfig: jsonb("entry_requirement_extension_config"),
+
+    // Flattened from Cairo `LeaderboardConfig`.
+    leaderboardAscending: boolean("leaderboard_ascending")
+      .notNull()
+      .default(false),
+    leaderboardGameMustBeOver: boolean("leaderboard_game_must_be_over")
+      .notNull()
+      .default(false),
+
     entryCount: integer("entry_count").default(0),
     prizeCount: integer("prize_count").default(0),
     submissionCount: integer("submission_count").default(0),
@@ -50,6 +111,9 @@ export const tournaments = pgTable(
   (table) => ({
     gameAddressIdx: index("tournaments_game_address_idx").on(table.gameAddress),
     createdByIdx: index("tournaments_created_by_idx").on(table.createdBy),
+    entryRequirementExtensionAddressIdx: index(
+      "tournaments_entry_requirement_extension_address_idx",
+    ).on(table.entryRequirementExtensionAddress),
   }),
 );
 
