@@ -16,7 +16,7 @@
     "@hookform/resolvers": "^3.10.0",
     "@metamask/sdk": "^0.32.1",
     "@provable-games/budokan-sdk": "0.1.12",
-    "@provable-games/denshokan-sdk": "0.1.28",
+    "@provable-games/denshokan-sdk": "0.1.30",
     "@provable-games/ekubo-sdk": "0.1.17",
     "@provable-games/metagame-sdk": "0.1.8",
     "@vercel/functions": "^2.0.0",

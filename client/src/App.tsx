@@ -28,6 +28,20 @@ const Tournament = lazy(() => import("@/containers/Tournament"));
 const Play = lazy(() => import("@/containers/Play"));
 const CreateTournament = lazy(() => import("@/containers/CreateTournament"));
 
+// Test routes are enabled in dev by default and can be opted into for
+// production builds via VITE_ENABLE_TEST_PAGES=true. The conditional lazy
+// imports let Vite tree-shake the test chunks out of production bundles.
+const testRoutesEnabled =
+  import.meta.env.DEV ||
+  import.meta.env.VITE_ENABLE_TEST_PAGES === "true";
+
+const TournamentDetailTest = testRoutesEnabled
+  ? lazy(() => import("@/containers/test/TournamentDetailTest"))
+  : null;
+const TournamentDetailTestSingle = testRoutesEnabled
+  ? lazy(() => import("@/containers/test/TournamentDetailTestSingle"))
+  : null;
+
 function App() {
   const { setGameData, setGameDataLoading } = useUIStore();
   const { selectedChainConfig } = useChainConfig();
@@ -176,7 +190,7 @@ function App() {
     <TooltipProvider>
       <div className="flex flex-col min-h-screen h-screen overflow-hidden">
         <Header />
-        <main className="flex-1 px-4 pt-4 xl:px-10 xl:pt-10 2xl:px-20 2xl:pt-20 overflow-hidden">
+        <main className="flex-1 px-4 pt-3 xl:px-10 xl:pt-4 2xl:px-20 2xl:pt-6 overflow-hidden">
           <Routes>
             <Route
               path="/"
@@ -224,6 +238,32 @@ function App() {
                 </Suspense>
               }
             />
+            {TournamentDetailTest && TournamentDetailTestSingle && (
+              <>
+                <Route
+                  path="/test/tournament-detail"
+                  element={
+                    <Suspense
+                      fallback={
+                        <LoadingPage message={`Loading test scenarios...`} />
+                      }
+                    >
+                      <TournamentDetailTest />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/test/tournament-detail/:scenarioId"
+                  element={
+                    <Suspense
+                      fallback={<LoadingPage message={`Loading scenario...`} />}
+                    >
+                      <TournamentDetailTestSingle />
+                    </Suspense>
+                  }
+                />
+              </>
+            )}
             <Route
               path="*"
               element={

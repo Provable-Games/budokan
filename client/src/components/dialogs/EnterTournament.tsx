@@ -1140,9 +1140,28 @@ export function EnterTournamentDialog({
                     }
                   </span>
                   {!isNaN(entryFeeUsdCost) && entryFeeUsdCost > 0 ? (
-                    <span className="text-lg font-bold text-brand">
-                      ${entryFeeUsdCost.toFixed(2)}
-                    </span>
+                    <>
+                      <span className="text-lg font-bold text-brand">
+                        ${entryFeeUsdCost.toFixed(2)}
+                      </span>
+                      {refundShare > 0 && (
+                        <span className="flex items-center gap-1 px-1.5 py-0.5 rounded border border-success/40 bg-success/10 text-success whitespace-nowrap">
+                          <span className="text-[10px] uppercase tracking-wider opacity-80">
+                            Net
+                          </span>
+                          <span className="font-bold text-sm">
+                            $
+                            {formatUsdValue(
+                              (entryFeeUsdCost * (10000 - refundShare)) /
+                                10000,
+                            )}
+                          </span>
+                          <span className="text-[10px] opacity-80">
+                            ({(refundShare / 100).toFixed(0)}% back)
+                          </span>
+                        </span>
+                      )}
+                    </>
                   ) : (
                     <Skeleton className="h-6 w-16" />
                   )}
@@ -1224,7 +1243,7 @@ export function EnterTournamentDialog({
                       {refundShare > 0 && (
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-neutral/20 rounded cursor-help">
+                            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-success/20 border border-success/40 rounded cursor-help text-success font-semibold">
                               <span className="w-4 h-4">
                                 <REFRESH />
                               </span>
@@ -1239,8 +1258,7 @@ export function EnterTournamentDialog({
                           <TooltipContent>
                             <p>
                               Refundable on Exit (
-                              {(refundShare / 100).toFixed(0)}
-                              %)
+                              {(refundShare / 100).toFixed(0)}% back).
                             </p>
                           </TooltipContent>
                         </Tooltip>
