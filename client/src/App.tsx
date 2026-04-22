@@ -128,20 +128,34 @@ function App() {
       ...uniqueMetadataMap.keys(),
     ]);
 
+    // Contracts where the whitelisted image should win over the on-chain
+    // metadata image. Keep in lower-case for case-insensitive matching.
+    const imageOverrides: Record<string, string> = {
+      // Dark Shuffle
+      "0x04359aee29873cd9603207d29b4140468bac3e042aa10daab2e1a8b2dd60ef7b":
+        "https://darkshuffle.io/favicon.svg",
+      // zKube (sepolia)
+      "0x5e02a1f750b3fa0e835d454705b664ecb23166cdb49459b1c96c1e3eaf9a2f4":
+        "https://zkube-budokan-sepolia.vercel.app/assets/logo.png",
+      // zKube (mainnet)
+      "0x642f228f70b1ca7edb4ab7ff0bab067369c2e276ddc2570ca18802d4e758edc":
+        "https://zkube-budokan-sepolia.vercel.app/assets/logo.png",
+    };
+
     // Create the unified array
     const games = Array.from(allAddresses).map((address) => {
       const metadata = uniqueMetadataMap.get(address);
       const whitelisted = whitelistedMap.get(address);
 
+      const overrideImage =
+        imageOverrides[address] ??
+        imageOverrides[metadata?.contract_address ?? ""];
+
       return {
         ...whitelisted,
         ...metadata,
-        image: metadata?.image
-          ? metadata?.contract_address ===
-            "0x04359aee29873cd9603207d29b4140468bac3e042aa10daab2e1a8b2dd60ef7b"
-            ? "https://darkshuffle.io/favicon.svg"
-            : metadata?.image
-          : whitelisted?.image,
+        image:
+          overrideImage ?? (metadata?.image ? metadata.image : whitelisted?.image),
         name: whitelisted?.name ? whitelisted?.name : metadata?.name,
         // Add flags
         isWhitelisted: !!whitelisted,
