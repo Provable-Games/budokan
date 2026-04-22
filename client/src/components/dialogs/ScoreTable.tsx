@@ -12,20 +12,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
 import Pagination from "@/components/table/Pagination";
 import { useState, useEffect, useMemo } from "react";
 import { BigNumberish, addAddressPadding } from "starknet";
 import { useTokens } from "@provable-games/denshokan-sdk/react";
 import { REFRESH, VERIFIED } from "@/components/Icons";
-import { Ban } from "lucide-react";
+import { Ban, ExternalLink } from "lucide-react";
 import { useRegistrations } from "@provable-games/budokan-sdk/react";
 import { useChainConfig } from "@/context/chain";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { cn, getOrdinalSuffix } from "@/lib/utils";
+import type { PositionPrizeDisplay } from "@/components/tournament-detail/EntrantsTable";
 
 interface ScoreTableDialogProps {
   open: boolean;
@@ -35,19 +31,62 @@ interface ScoreTableDialogProps {
   isStarted: boolean;
   isEnded: boolean;
   banRefreshTrigger?: number;
+  prizesByPosition?: Map<number, PositionPrizeDisplay>;
 }
 
-/** Parse a base64 data URI token URI into the image URL */
-function parseTokenUriImage(raw?: string): string {
-  if (!raw) return "";
-  try {
-    const match = raw.match(/^data:application\/json;base64,(.+)$/);
-    const json = match ? atob(match[1]) : raw;
-    return JSON.parse(json)?.image ?? "";
-  } catch {
-    return "";
+const formatUSDCompact = (value: number) => {
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 10_000) return `$${(value / 1_000).toFixed(1)}K`;
+  if (value >= 1) return `$${value.toFixed(2)}`;
+  return `$${value.toFixed(3)}`;
+};
+
+const positionLabel = (pos0: number) => {
+  if (pos0 === 0) return "🥇";
+  if (pos0 === 1) return "🥈";
+  if (pos0 === 2) return "🥉";
+  const pos = pos0 + 1;
+  return `${pos}${getOrdinalSuffix(pos)}`;
+};
+
+const PrizeCell = ({
+  prize,
+  highlight,
+}: {
+  prize?: PositionPrizeDisplay;
+  highlight?: boolean;
+}) => {
+  if (!prize) {
+    return (
+      <span className="text-xs text-brand-muted/30">—</span>
+    );
   }
-}
+  return (
+    <div className="flex flex-row items-center justify-end gap-1 min-w-[60px]">
+      {prize.tokenLogo && (
+        <img
+          src={prize.tokenLogo}
+          alt=""
+          className="w-3.5 h-3.5 rounded-full flex-shrink-0"
+        />
+      )}
+      {prize.usd != null ? (
+        <span
+          className={cn(
+            "font-brand text-xs font-bold",
+            highlight ? "text-brand" : "text-brand-muted",
+          )}
+        >
+          {formatUSDCompact(prize.usd)}
+        </span>
+      ) : (
+        <span className="font-brand text-xs text-brand-muted">
+          {prize.tokenAmountDisplay ?? prize.tokenSymbol ?? "?"}
+        </span>
+      )}
+    </div>
+  );
+};
 
 export const ScoreTableDialog = ({
   open,
@@ -57,14 +96,16 @@ export const ScoreTableDialog = ({
   isStarted,
   isEnded,
   banRefreshTrigger,
+  prizesByPosition,
 }: ScoreTableDialogProps) => {
   const { selectedChainConfig } = useChainConfig();
   const tournamentAddress = selectedChainConfig.budokanAddress!;
+  const blockExplorerUrl = selectedChainConfig.blockExplorerUrl;
 
   const [currentPage, setCurrentPage] = useState(0);
   const pageSize = 10;
 
-  // Paginated tokens with URI
+  // Paginated tokens (no URI needed — we show prize per position instead)
   const {
     data: tokensResult,
     isLoading: loading,
@@ -77,7 +118,6 @@ export const ScoreTableDialog = ({
           sort: { field: "score", direction: "desc" },
           limit: pageSize,
           offset: currentPage * pageSize,
-          includeUri: true,
         }
       : undefined,
   );
@@ -134,14 +174,14 @@ export const ScoreTableDialog = ({
               {isStarted ? "Scores" : "Entrants"} Table
             </DialogTitle>
             <div className="flex items-center gap-3 mr-6">
-              <Button
+              <button
                 onClick={refetch}
                 disabled={loading}
-                size="xs"
-                variant="outline"
+                aria-label="Refresh"
+                className="flex items-center justify-center h-8 w-8 rounded-md border border-brand/30 bg-black text-brand hover:bg-brand/10 transition-colors disabled:opacity-50"
               >
-                <REFRESH className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} />
-              </Button>
+                <REFRESH className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              </button>
               <span className="text-sm text-muted-foreground">
                 {loading ? "Loading..." : `${totalCount} ${totalCount === 1 ? "entry" : "entries"}`}
               </span>
@@ -159,7 +199,7 @@ export const ScoreTableDialog = ({
                 {isEnded && (
                   <TableHead className="text-center">Submitted</TableHead>
                 )}
-                <TableHead className="w-16">Image</TableHead>
+                <TableHead className="w-24 text-right">Prize</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody className="overflow-y-auto">
@@ -171,24 +211,48 @@ export const ScoreTableDialog = ({
                   const reg = regMap.get(entry.tokenId);
                   const hasSubmitted = !!reg?.hasSubmitted;
                   const isBanned = !!reg?.isBanned;
-                  const rank = currentPage * pageSize + index + 1;
-                  const image = parseTokenUriImage(entry.tokenUri);
+                  const pos0 = currentPage * pageSize + index;
+                  const prize = prizesByPosition?.get(pos0 + 1);
 
                   return (
                     <TableRow key={entry.tokenId} className={isBanned ? "opacity-60" : ""}>
-                      <TableCell className="text-center font-medium">
-                        {rank}
+                      <TableCell className="text-center font-medium font-brand">
+                        {positionLabel(pos0)}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <div className="flex flex-col flex-1">
-                            <span className="font-medium">
+                          <div className="flex flex-col flex-1 min-w-0">
+                            <span className="font-medium truncate">
                               {playerName || shortAddress}
                             </span>
                             {playerName && (
-                              <span className="text-xs text-muted-foreground">
-                                {shortAddress}
-                              </span>
+                              <div className="flex flex-row items-center gap-1 text-xs text-muted-foreground">
+                                <span>{shortAddress}</span>
+                                {blockExplorerUrl && (
+                                  <a
+                                    href={`${blockExplorerUrl}/contract/${ownerAddress}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="text-brand-muted hover:text-brand transition-colors"
+                                    aria-label="View on explorer"
+                                  >
+                                    <ExternalLink className="w-3 h-3" />
+                                  </a>
+                                )}
+                              </div>
+                            )}
+                            {!playerName && blockExplorerUrl && (
+                              <a
+                                href={`${blockExplorerUrl}/contract/${ownerAddress}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-brand-muted hover:text-brand transition-colors"
+                                aria-label="View on explorer"
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
                             )}
                           </div>
                           {isBanned && (
@@ -212,43 +276,8 @@ export const ScoreTableDialog = ({
                           )}
                         </TableCell>
                       )}
-                      <TableCell className="p-1">
-                        {image ? (
-                          <Tooltip delayDuration={50}>
-                            <TooltipTrigger asChild>
-                              <div className="w-14 h-14 cursor-pointer">
-                                <object
-                                  data={image}
-                                  type="image/svg+xml"
-                                  className="w-14 h-14 rounded-md pointer-events-none"
-                                >
-                                  <img
-                                    src={image}
-                                    alt=""
-                                    className="w-14 h-14 rounded-md"
-                                  />
-                                </object>
-                              </div>
-                            </TooltipTrigger>
-                            <TooltipContent
-                              className="bg-black p-2 border border-brand/20 z-[9999]"
-                              side="left"
-                              sideOffset={10}
-                            >
-                              <object
-                                data={image}
-                                type="image/svg+xml"
-                                className="w-[280px] h-auto rounded-md"
-                              >
-                                <img
-                                  src={image}
-                                  alt=""
-                                  className="w-[280px] h-auto rounded-md"
-                                />
-                              </object>
-                            </TooltipContent>
-                          </Tooltip>
-                        ) : null}
+                      <TableCell className="text-right">
+                        <PrizeCell prize={prize} highlight={pos0 < 3} />
                       </TableCell>
                     </TableRow>
                   );

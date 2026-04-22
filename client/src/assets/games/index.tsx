@@ -143,6 +143,7 @@ export const getGamesForChain = (chainId: string): Game[] => {
         contract_address:
           "0x5e02a1f750b3fa0e835d454705b664ecb23166cdb49459b1c96c1e3eaf9a2f4",
         name: "zKube",
+        image: "https://zkube-budokan-sepolia.vercel.app/assets/logo.png",
         url: "https://zkube-budokan-sepolia.vercel.app",
         playUrl: "https://zkube-budokan-sepolia.vercel.app/play/",
         controllerOnly: true,
@@ -171,7 +172,7 @@ export const getGamesForChain = (chainId: string): Game[] => {
         contract_address:
           "0x642f228f70b1ca7edb4ab7ff0bab067369c2e276ddc2570ca18802d4e758edc",
         name: "zKube",
-        image: "https://zkube.io/favicon.svg",
+        image: "https://zkube-budokan-sepolia.vercel.app/assets/logo.png",
         url: "https://zkube.io",
         playUrl: "https://zkube.io/play/",
         minEntryFeeUsd: 0.25,

@@ -284,7 +284,7 @@ export const TournamentCard = ({
 
         {/* Zone B — Hero Area (Prize Pool) */}
         <div className="flex flex-col items-center justify-center flex-1 min-h-0 overflow-hidden">
-          {totalPrizesValueUSD > 0 || uniquePrizeTokens.length > 0 ? (
+          {totalPrizesValueUSD > 0 ? (
             <>
               <div className="flex flex-row items-center gap-1">
                 {uniquePrizeTokens.length > 0 && (

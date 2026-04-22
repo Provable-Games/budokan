@@ -6,6 +6,7 @@ import {
 } from "@/components/Icons";
 import { Clock } from "lucide-react";
 import TimelineCard from "@/components/TimelineCard";
+import { cn } from "@/lib/utils";
 
 interface TournamentTimelineProps {
   type: string;
@@ -16,6 +17,7 @@ interface TournamentTimelineProps {
   registrationStartTime?: number;
   registrationEndTime?: number;
   pulse?: boolean;
+  inline?: boolean;
 }
 
 const TournamentTimeline = ({
@@ -27,6 +29,7 @@ const TournamentTimeline = ({
   registrationStartTime,
   registrationEndTime,
   pulse = false,
+  inline = false,
 }: TournamentTimelineProps) => {
   const effectiveRegistrationStartTime = registrationStartTime ?? createdTime;
   const registrationStartDate = new Date(effectiveRegistrationStartTime * 1000);
@@ -56,12 +59,32 @@ const TournamentTimeline = ({
   const isInPreparationPeriod = hasGap && isRegistrationEnded && !isStarted;
 
   return (
-    <div className="w-full overflow-x-auto">
-      <div className="flex flex-row items-center justify-center gap-2 sm:gap-4 lg:gap-6 mt-4 px-2">
+    <div
+      className={cn(
+        "overflow-x-auto",
+        inline
+          ? "w-fit max-w-full mx-auto border border-brand/20 rounded-lg bg-black/30 px-4 py-2"
+          : "w-full",
+      )}
+    >
+      <div
+        className={cn(
+          "flex flex-row items-center justify-center px-2",
+          inline
+            ? "mt-0 gap-6 sm:gap-10 lg:gap-12"
+            : "mt-4 gap-8 sm:gap-14 lg:gap-20",
+        )}
+      >
       {type === "fixed" && (
         <TimelineCard
           icon={
-            <span className="w-4 sm:w-5 lg:w-6 3xl:w-8">
+            <span
+              className={
+                inline
+                  ? "w-3 sm:w-4 lg:w-5 3xl:w-6"
+                  : "w-4 sm:w-5 lg:w-6 3xl:w-8"
+              }
+            >
               <REGISTER />
             </span>
           }
@@ -72,11 +95,20 @@ const TournamentTimeline = ({
           active={pulse ? !isRegistrationEnded : false}
           completed={isRegistrationEnded}
           highlighted={!isRegistrationEnded}
+          compact={inline}
         />
       )}
       {type === "fixed" && hasGap && (
         <TimelineCard
-          icon={<Clock className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5 3xl:w-7 3xl:h-7" />}
+          icon={
+            <Clock
+              className={
+                inline
+                  ? "w-3 h-3 sm:w-3.5 sm:h-3.5 lg:w-4 lg:h-4 3xl:w-5 3xl:h-5"
+                  : "w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5 3xl:w-7 3xl:h-7"
+              }
+            />
+          }
           date={registrationEndDate}
           duraton={gapDuration}
           label="Preparation"
@@ -84,11 +116,18 @@ const TournamentTimeline = ({
           active={pulse ? !!isInPreparationPeriod : false}
           completed={isStarted}
           highlighted={!!isInPreparationPeriod}
+          compact={inline}
         />
       )}
       <TimelineCard
         icon={
-          <span className="w-3 sm:w-4 lg:w-5 3xl:w-7">
+          <span
+            className={
+              inline
+                ? "w-3 sm:w-3.5 lg:w-4 3xl:w-5"
+                : "w-3 sm:w-4 lg:w-5 3xl:w-7"
+            }
+          >
             <START_FLAG />
           </span>
         }
@@ -99,10 +138,17 @@ const TournamentTimeline = ({
         active={pulse ? isStarted && !isEnded : false}
         completed={isStarted}
         highlighted={isStarted && !isEnded}
+        compact={inline}
       />
       <TimelineCard
         icon={
-          <span className="w-3 sm:w-4 lg:w-5 3xl:w-7">
+          <span
+            className={
+              inline
+                ? "w-3 sm:w-3.5 lg:w-4 3xl:w-5"
+                : "w-3 sm:w-4 lg:w-5 3xl:w-7"
+            }
+          >
             <END_FLAG />
           </span>
         }
@@ -113,15 +159,23 @@ const TournamentTimeline = ({
         active={pulse ? isEnded && !isSubmissionEnded : false}
         completed={isEnded}
         highlighted={isEnded && !isSubmissionEnded}
+        compact={inline}
       />
       <TimelineCard
         icon={
-          <span className="w-4 sm:w-5 lg:w-6 3xl:w-8">
+          <span
+            className={
+              inline
+                ? "w-3 sm:w-4 lg:w-5 3xl:w-6"
+                : "w-4 sm:w-5 lg:w-6 3xl:w-8"
+            }
+          >
             <LEADERBOARD />
           </span>
         }
         date={submissionEndDate}
         completed={isSubmissionEnded}
+        compact={inline}
       />
       </div>
     </div>

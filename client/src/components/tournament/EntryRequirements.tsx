@@ -1,4 +1,3 @@
-import { Card } from "@/components/ui/card";
 import type { Tournament } from "@provable-games/budokan-sdk";
 import {
   displayAddress,
@@ -18,7 +17,6 @@ import {
   TROPHY,
   CLOCK,
   LOCK,
-  COUNTER,
   EXTERNAL_LINK,
   INFO,
   OPUS,
@@ -274,85 +272,103 @@ const EntryRequirements = ({
 
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  const renderContent = () => {
+  const chipContent: { icon: React.ReactNode; value: React.ReactNode } = (() => {
     if (activeVariant === "token") {
-      return (
-        <div className="text-brand flex flex-row items-center gap-1 w-full">
-          {token?.logo_url ? (
-            <img
-              src={token.logo_url}
-              alt={token.name || "Token"}
-              className="w-8 h-8 object-cover rounded"
-            />
-          ) : (
-            <span className="w-8">
-              <COIN />
-            </span>
-          )}
-          {tokenLoading ? (
-            <Skeleton className="hidden sm:block h-4 w-20" />
-          ) : (
-            <span className="hidden sm:block text-xs">{token?.name}</span>
-          )}
-        </div>
+      const iconNode = token?.logo_url ? (
+        <img
+          src={token.logo_url}
+          alt={token.name || "Token"}
+          className="w-4 h-4 rounded-full object-cover"
+        />
+      ) : (
+        <span className="w-4 h-4 text-brand opacity-70">
+          <COIN />
+        </span>
       );
-    } else if (activeVariant === "extension") {
+      return {
+        icon: iconNode,
+        value: tokenLoading ? (
+          <Skeleton className="h-3 w-16" />
+        ) : (
+          <span className="font-brand font-bold text-sm text-brand truncate max-w-[120px]">
+            {token?.name ?? "Token"}
+          </span>
+        ),
+      };
+    }
+    if (activeVariant === "extension") {
       if (isTournamentValidatorExtension) {
-        return (
-          <div className="flex flex-row items-center gap-1 w-full">
-            <span className="w-6">
+        return {
+          icon: (
+            <span className="w-4 h-4 text-brand opacity-70">
               <TROPHY />
             </span>
-            <span className="hidden sm:block capitalize">
+          ),
+          value: (
+            <span className="font-brand font-bold text-sm text-brand capitalize">
               {tournamentValidatorConfig?.requirementType || "Tournament"}
             </span>
-          </div>
-        );
+          ),
+        };
       }
       if (isERC20BalanceValidatorExtension) {
-        return (
-          <div className="flex flex-row items-center gap-1 w-full">
-            <Coins className="w-5 h-5 flex-shrink-0" />
-            <span className="hidden sm:block text-xs">
-              {erc20Token?.name || "Token Balance"}
+        return {
+          icon: <Coins className="w-4 h-4 text-brand opacity-70" />,
+          value: (
+            <span className="font-brand font-bold text-sm text-brand truncate max-w-[120px]">
+              {erc20Token?.name || "Token"}
             </span>
-          </div>
-        );
+          ),
+        };
       }
       if (isOpusTrovesValidatorExtension) {
-        return (
-          <div className="flex flex-row items-center gap-1 w-full">
-            <span className="w-6">
+        return {
+          icon: (
+            <span className="w-4 h-4 text-brand opacity-70">
               <OPUS />
             </span>
-            <span className="hidden sm:block text-xs">Opus Troves</span>
-          </div>
-        );
+          ),
+          value: (
+            <span className="font-brand font-bold text-sm text-brand">
+              Opus
+            </span>
+          ),
+        };
       }
       if (isMerkleValidatorExtension) {
-        return (
-          <div className="flex flex-row items-center gap-1 w-full">
-            <ListChecks className="w-5 h-5 flex-shrink-0" />
-            <span className="hidden sm:block text-xs">
+        return {
+          icon: <ListChecks className="w-4 h-4 text-brand opacity-70" />,
+          value: (
+            <span className="font-brand font-bold text-sm text-brand truncate max-w-[120px]">
               {merkleTreeName || "Allowlist"}
             </span>
-          </div>
-        );
+          ),
+        };
       }
-      // Unknown extension
-      return (
-        <div className="flex flex-row items-center gap-1 w-full">
-          <span className="w-6">
+      return {
+        icon: (
+          <span className="w-4 h-4 text-brand opacity-70">
             <EXTERNAL_LINK />
           </span>
-          <span className="hidden sm:block text-xs">
+        ),
+        value: (
+          <span className="font-brand font-bold text-sm text-brand font-mono">
             {displayAddress(extensionConfig?.address ?? "0x0")}
           </span>
-        </div>
-      );
+        ),
+      };
     }
-    return null;
-  };
+    return {
+      icon: (
+        <span className="w-4 h-4 text-brand opacity-70">
+          <LOCK />
+        </span>
+      ),
+      value: (
+        <span className="font-brand font-bold text-sm text-brand">Gated</span>
+      ),
+    };
+  })();
 
   const renderHoverContent = () => {
     if (activeVariant === "token") {
@@ -829,24 +845,19 @@ const EntryRequirements = ({
   };
 
   const TriggerCard = ({ onClick = () => {} }) => (
-    <Card
-      variant="outline"
-      className="relative flex flex-row items-center justify-between sm:w-36 h-full p-1 px-2 hover:cursor-pointer"
+    <button
       onClick={onClick}
+      aria-label="Entry requirements"
+      className="flex flex-col items-center justify-center px-3 py-2 rounded-md border border-brand/10 bg-brand/5 hover:bg-brand/10 hover:border-brand/25 transition-colors cursor-pointer"
     >
-      <span className="hidden sm:block absolute left-0 -top-5 text-xs whitespace-nowrap uppercase text-brand-muted font-bold">
-        Entry Requirements:
+      <div className="flex flex-row items-center gap-1.5">
+        {chipContent.icon}
+        {chipContent.value}
+      </div>
+      <span className="text-[9px] uppercase tracking-wider text-brand-muted mt-0.5">
+        Requires
       </span>
-      <span className="absolute -top-2 -right-1 flex items-center justify-center text-brand-subtle h-6 w-6 2xl:h-7 2xl:w-7 text-xs">
-        <COUNTER />
-        <span className="absolute inset-0 flex items-center justify-center">
-          <span className="flex items-center justify-center text-brand w-4 h-4 2xl:w-5 2xl:h-5">
-            <LOCK />
-          </span>
-        </span>
-      </span>
-      {renderContent()}
-    </Card>
+    </button>
   );
 
   const ContentSection = () => (

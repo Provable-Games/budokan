@@ -1,155 +1,180 @@
-import TokenGameIcon from "@/components/icons/TokenGameIcon";
-import { HoverCardTrigger } from "@/components/ui/hover-card";
-import { Card } from "@/components/ui/card";
-import { HoverCard } from "@/components/ui/hover-card";
-import { INFO } from "@/components/Icons";
-import EntryInfo from "@/components/tournament/myEntries/EntryInfo";
-import { formatScore } from "@/lib/utils";
+import { Ban as BanIcon } from "lucide-react";
+import { BigNumberish } from "starknet";
+import { useTokenRank } from "@provable-games/denshokan-sdk/react";
 import { Button } from "@/components/ui/button";
 import { getPlayUrl } from "@/assets/games";
-import { TooltipContent } from "@/components/ui/tooltip";
-import { TooltipTrigger } from "@/components/ui/tooltip";
-import { Tooltip } from "@/components/ui/tooltip";
 import useUIStore from "@/hooks/useUIStore";
+import { cn, formatScore, getOrdinalSuffix, padAddress } from "@/lib/utils";
 import { GameTokenData } from "@/lib/types";
 import type { Tournament } from "@provable-games/budokan-sdk";
+import type { PositionPrizeDisplay } from "@/components/tournament-detail/EntrantsTable";
 
 interface EntryCardProps {
   gameAddress: string;
   game: GameTokenData;
   tournamentModel: Tournament;
+  tournamentId: BigNumberish;
+  tournamentAddress: string;
   registration: any;
   isStarted: boolean;
   isEnded: boolean;
+  prizesByPosition?: Map<number, PositionPrizeDisplay>;
 }
+
+const formatUSDCompact = (value: number) => {
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 10_000) return `$${(value / 1_000).toFixed(1)}K`;
+  if (value >= 1) return `$${value.toFixed(2)}`;
+  return `$${value.toFixed(3)}`;
+};
 
 const EntryCard = ({
   gameAddress,
   game,
-  tournamentModel,
+  tournamentModel: _tournamentModel,
+  tournamentId,
+  tournamentAddress,
   registration,
   isStarted,
   isEnded,
+  prizesByPosition,
 }: EntryCardProps) => {
-  const { getGameImage, getGameName } = useUIStore();
-  const gameOver = game?.gameOver;
-
+  const { getGameName } = useUIStore();
+  const gameOver = !!game?.gameOver;
   const isActive = isStarted && !isEnded;
-
-  const gameName = getGameName(gameAddress);
-  const playUrl = getPlayUrl(gameAddress, gameName);
-  const gameImage = getGameImage(gameAddress);
-
   const entryNumber = registration?.entryNumber;
   const isBanned = !!registration?.isBanned;
 
-  if (!entryNumber) {
-    return null;
-  }
+  const gameName = getGameName(gameAddress);
+  const playUrl = getPlayUrl(gameAddress, gameName);
+
+  // Fetch this token's rank within the tournament's leaderboard.
+  // Only meaningful once the tournament is live (scores exist).
+  const { data: tokenRank } = useTokenRank(
+    isStarted && !isBanned ? game.tokenId?.toString() : undefined,
+    {
+      contextId: Number(tournamentId),
+      minterAddress: padAddress(tournamentAddress),
+      live: isStarted && !isEnded,
+    },
+  );
+
+  if (!entryNumber) return null;
+
+  // Prize the entry is currently in line for at its rank
+  const prizeAtRank =
+    isStarted && !isBanned && tokenRank && prizesByPosition
+      ? prizesByPosition.get(tokenRank.rank)
+      : undefined;
+
+  const borderClass = isBanned
+    ? "border-destructive/40 bg-destructive/5"
+    : gameOver
+      ? "border-success/40 bg-success/5"
+      : isActive
+        ? "border-brand/30 bg-brand/5"
+        : "border-brand-muted/30 bg-brand-muted/5";
+
+  const statusLabel = isBanned
+    ? "Banned"
+    : gameOver
+      ? "Done"
+      : isActive
+        ? "Active"
+        : isEnded
+          ? "Ended"
+          : "Not Started";
+
+  const statusColor = isBanned
+    ? "text-destructive"
+    : gameOver
+      ? "text-success"
+      : isActive
+        ? "text-brand"
+        : "text-brand-muted";
 
   return (
-    <Card
-      variant="outline"
-      className={`flex-none flex flex-col items-center justify-between h-full w-[100px] 3xl:w-[120px] p-1 relative group ${
-        isBanned ? "opacity-60 border-destructive" : ""
-      }`}
-    >
-      {isBanned && (
-        <div className="absolute inset-0 bg-destructive/10 pointer-events-none z-10 rounded-md" />
+    <div
+      className={cn(
+        "relative min-w-[110px] w-[110px] rounded border p-2 flex flex-col items-center gap-1 flex-shrink-0 group",
+        borderClass,
       )}
-      <div className="flex flex-col items-center justify-between w-full h-full pt-2">
-        <Tooltip delayDuration={50}>
-          <TooltipTrigger asChild>
-            <span className="hover:cursor-pointer">
-              <TokenGameIcon image={gameImage} size={"sm"} />
-            </span>
-          </TooltipTrigger>
-          <TooltipContent
-            side="top"
-            align="center"
-            className="max-w-[300px] break-words"
-          >
-            <p className="text-sm font-medium">{gameName}</p>
-          </TooltipContent>
-        </Tooltip>
-        <div className="absolute top-1 left-1 text-xs 3xl:text-sm z-20">
+    >
+      <div className="flex flex-row items-center justify-between w-full">
+        <span className="font-brand text-[10px] text-brand-muted">
           #{Number(entryNumber)}
-        </div>
-        {isBanned && (
-          <div className="absolute top-6 right-1 bg-destructive text-white text-[8px] px-1 py-0.5 rounded z-20 font-bold">
-            BANNED
-          </div>
+        </span>
+        {isStarted && tokenRank && (
+          <span className="font-brand text-[10px] text-brand">
+            {tokenRank.rank}
+            {getOrdinalSuffix(tokenRank.rank)}
+          </span>
         )}
-        <HoverCard openDelay={50} closeDelay={0}>
-          <HoverCardTrigger asChild>
-            <div
-              className={`absolute top-0 right-0 text-brand-muted hover:cursor-pointer w-5 h-5 z-20 ${
-                isBanned ? "opacity-100" : ""
-              }`}
-            >
-              <INFO />
-            </div>
-          </HoverCardTrigger>
-          <EntryInfo
-            entryNumber={entryNumber.toString()}
-            tokenId={game.tokenId?.toString() ?? ""}
-            tournamentModel={tournamentModel}
-          />
-        </HoverCard>
-        <Tooltip delayDuration={50}>
-          <TooltipTrigger asChild>
-            <p className="text-xs truncate text-brand-muted w-full text-center cursor-pointer">
-              {game.playerName}
-            </p>
-          </TooltipTrigger>
-          <TooltipContent
-            side="top"
-            align="center"
-            className="max-w-[300px] break-words"
-          >
-            <p className="text-sm font-medium">{game.playerName ?? ""}</p>
-          </TooltipContent>
-        </Tooltip>
-        {isActive && !gameOver && !isBanned && (
-          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/60 transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">
-            <Button
-              size="sm"
-              onClick={() => {
-                const tokenId = game.tokenId?.toString() ?? "0";
-                const hexTokenId = tokenId.startsWith("0x") ? tokenId : "0x" + BigInt(tokenId).toString(16);
-                const url = playUrl.includes("{tokenId}")
-                  ? playUrl.replace("{tokenId}", hexTokenId)
-                  : `${playUrl}${hexTokenId}`;
-                window.open(url, "_blank");
-              }}
-            >
-              PLAY
-            </Button>
-          </div>
-        )}
-        {isStarted && (
-          <div className="flex flex-row items-center justify-center gap-1 w-full px-0.5">
-            <span className="text-[10px] text-neutral">Score:</span>
-            <span>{formatScore(Number(game.score))}</span>
-          </div>
-        )}
-        <div className="flex flex-row items-center justify-center w-full px-2">
-          {gameOver ? (
-            <>
-              <p className="text-xs 3xl:text-sm text-destructive">Game Over</p>
-            </>
-          ) : isActive ? (
-            <>
-              <p className="text-xs 3xl:text-sm text-success">Active</p>
-            </>
-          ) : isEnded ? (
-            <p className="text-xs 3xl:text-sm text-warning">Ended</p>
+        {isBanned && <BanIcon className="w-3 h-3 text-destructive" />}
+      </div>
+
+      <span className="text-xs text-neutral truncate max-w-full">
+        {game.playerName ?? "Unnamed"}
+      </span>
+
+      {isStarted && (
+        <span className="font-brand text-base text-brand">
+          {formatScore(Number(game.score ?? 0))}
+        </span>
+      )}
+
+      {prizeAtRank && (
+        <div className="flex flex-row items-center gap-1">
+          {prizeAtRank.tokenLogo && (
+            <img
+              src={prizeAtRank.tokenLogo}
+              alt=""
+              className="w-3 h-3 rounded-full"
+            />
+          )}
+          {prizeAtRank.usd != null ? (
+            <span className="font-brand font-bold text-[11px] text-brand">
+              {formatUSDCompact(prizeAtRank.usd)}
+            </span>
           ) : (
-            <p className="text-xs 3xl:text-sm text-warning">Not Started</p>
+            <span className="font-brand text-[11px] text-brand-muted">
+              {prizeAtRank.tokenAmountDisplay ??
+                prizeAtRank.tokenSymbol ??
+                "?"}
+            </span>
           )}
         </div>
-      </div>
-    </Card>
+      )}
+
+      <span
+        className={cn(
+          "text-[10px] uppercase tracking-wider font-semibold",
+          statusColor,
+        )}
+      >
+        {statusLabel}
+      </span>
+
+      {isActive && !gameOver && !isBanned && playUrl && (
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/70 transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100 rounded">
+          <Button
+            size="sm"
+            onClick={() => {
+              const tokenId = game.tokenId?.toString() ?? "0";
+              const hexTokenId = tokenId.startsWith("0x")
+                ? tokenId
+                : "0x" + BigInt(tokenId).toString(16);
+              const url = playUrl.includes("{tokenId}")
+                ? playUrl.replace("{tokenId}", hexTokenId)
+                : `${playUrl}${hexTokenId}`;
+              window.open(url, "_blank");
+            }}
+          >
+            PLAY
+          </Button>
+        </div>
+      )}
+    </div>
   );
 };
 

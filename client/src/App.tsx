@@ -28,6 +28,20 @@ const Tournament = lazy(() => import("@/containers/Tournament"));
 const Play = lazy(() => import("@/containers/Play"));
 const CreateTournament = lazy(() => import("@/containers/CreateTournament"));
 
+// Test routes are enabled in dev by default and can be opted into for
+// production builds via VITE_ENABLE_TEST_PAGES=true. The conditional lazy
+// imports let Vite tree-shake the test chunks out of production bundles.
+const testRoutesEnabled =
+  import.meta.env.DEV ||
+  import.meta.env.VITE_ENABLE_TEST_PAGES === "true";
+
+const TournamentDetailTest = testRoutesEnabled
+  ? lazy(() => import("@/containers/test/TournamentDetailTest"))
+  : null;
+const TournamentDetailTestSingle = testRoutesEnabled
+  ? lazy(() => import("@/containers/test/TournamentDetailTestSingle"))
+  : null;
+
 function App() {
   const { setGameData, setGameDataLoading } = useUIStore();
   const { selectedChainConfig } = useChainConfig();
@@ -114,20 +128,34 @@ function App() {
       ...uniqueMetadataMap.keys(),
     ]);
 
+    // Contracts where the whitelisted image should win over the on-chain
+    // metadata image. Keep in lower-case for case-insensitive matching.
+    const imageOverrides: Record<string, string> = {
+      // Dark Shuffle
+      "0x04359aee29873cd9603207d29b4140468bac3e042aa10daab2e1a8b2dd60ef7b":
+        "https://darkshuffle.io/favicon.svg",
+      // zKube (sepolia)
+      "0x5e02a1f750b3fa0e835d454705b664ecb23166cdb49459b1c96c1e3eaf9a2f4":
+        "https://zkube-budokan-sepolia.vercel.app/assets/logo.png",
+      // zKube (mainnet)
+      "0x642f228f70b1ca7edb4ab7ff0bab067369c2e276ddc2570ca18802d4e758edc":
+        "https://zkube-budokan-sepolia.vercel.app/assets/logo.png",
+    };
+
     // Create the unified array
     const games = Array.from(allAddresses).map((address) => {
       const metadata = uniqueMetadataMap.get(address);
       const whitelisted = whitelistedMap.get(address);
 
+      const overrideImage =
+        imageOverrides[address] ??
+        imageOverrides[metadata?.contract_address ?? ""];
+
       return {
         ...whitelisted,
         ...metadata,
-        image: metadata?.image
-          ? metadata?.contract_address ===
-            "0x04359aee29873cd9603207d29b4140468bac3e042aa10daab2e1a8b2dd60ef7b"
-            ? "https://darkshuffle.io/favicon.svg"
-            : metadata?.image
-          : whitelisted?.image,
+        image:
+          overrideImage ?? (metadata?.image ? metadata.image : whitelisted?.image),
         name: whitelisted?.name ? whitelisted?.name : metadata?.name,
         // Add flags
         isWhitelisted: !!whitelisted,
@@ -176,7 +204,7 @@ function App() {
     <TooltipProvider>
       <div className="flex flex-col min-h-screen h-screen overflow-hidden">
         <Header />
-        <main className="flex-1 px-4 pt-4 xl:px-10 xl:pt-10 2xl:px-20 2xl:pt-20 overflow-hidden">
+        <main className="flex-1 px-4 pt-3 xl:px-10 xl:pt-4 2xl:px-20 2xl:pt-6 overflow-hidden">
           <Routes>
             <Route
               path="/"
@@ -224,6 +252,32 @@ function App() {
                 </Suspense>
               }
             />
+            {TournamentDetailTest && TournamentDetailTestSingle && (
+              <>
+                <Route
+                  path="/test/tournament-detail"
+                  element={
+                    <Suspense
+                      fallback={
+                        <LoadingPage message={`Loading test scenarios...`} />
+                      }
+                    >
+                      <TournamentDetailTest />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path="/test/tournament-detail/:scenarioId"
+                  element={
+                    <Suspense
+                      fallback={<LoadingPage message={`Loading scenario...`} />}
+                    >
+                      <TournamentDetailTestSingle />
+                    </Suspense>
+                  }
+                />
+              </>
+            )}
             <Route
               path="*"
               element={
