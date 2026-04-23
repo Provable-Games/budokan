@@ -185,6 +185,12 @@ const PrizeBreakdownDialog = ({
     .filter((x): x is NonNullable<typeof x> => x !== null)
     .sort((a, b) => a.position - b.position);
 
+  // Quick lookup of entry-fee payout by position for the unified table.
+  const entryFeeByPos = new Map<number, { usd: number | null; pct: number }>();
+  for (const ef of entryFeePositions) {
+    entryFeeByPos.set(ef.position, { usd: ef.usd, pct: ef.pct });
+  }
+
   // Sponsored prizes aggregated by position (sum USD across any tokens)
   const sponsoredByPositionUsd = new Map<number, number>();
   let sponsoredTotalUsd = 0;
@@ -218,6 +224,30 @@ const PrizeBreakdownDialog = ({
     sponsoredTotalUsd += usd;
   }
   const sponsoredCount = sponsoredPrizes.length;
+
+  // Unified per-position list: the union of entry-fee payout positions and
+  // sponsored-prize positions, sorted ascending. We collapse the two tables
+  // into one so viewers see the total prize at each rank without mentally
+  // summing two lists — important for tournaments with many paid places.
+  const positionKeys = new Set<number>();
+  for (const ef of entryFeePositions) positionKeys.add(ef.position);
+  for (const pos of sponsoredByPositionUsd.keys()) positionKeys.add(pos);
+  const unifiedPositions = Array.from(positionKeys)
+    .sort((a, b) => a - b)
+    .map((pos) => {
+      const ef = entryFeeByPos.get(pos);
+      const sponsoredUsd = sponsoredByPositionUsd.get(pos) ?? 0;
+      const entryFeeUsd = ef?.usd ?? 0;
+      return {
+        position: pos,
+        entryFeePct: ef?.pct ?? null,
+        entryFeeUsd: ef ? ef.usd : null,
+        sponsoredUsd,
+        totalUsd: (entryFeeUsd ?? 0) + sponsoredUsd,
+      };
+    });
+  const hasEntryFeeColumn = entryFeePositions.length > 0;
+  const hasSponsoredColumn = sponsoredByPositionUsd.size > 0;
 
   const TokenStack = ({
     tokens,
@@ -458,34 +488,6 @@ const PrizeBreakdownDialog = ({
                   )}
                 </div>
 
-                {entryFeePositions.length > 0 && (
-                  <div className="flex flex-col border border-brand/10 rounded-md overflow-hidden">
-                    <div className="grid grid-cols-[44px_1fr_auto] items-center gap-2 px-3 py-1.5 text-[10px] uppercase tracking-wider text-brand-muted/70 bg-brand/5">
-                      <span>Pos</span>
-                      <span>Share</span>
-                      <span className="text-right">USD</span>
-                    </div>
-                    {entryFeePositions.map((p) => (
-                      <div
-                        key={p.position}
-                        className={cn(
-                          "grid grid-cols-[44px_1fr_auto] items-center gap-2 px-3 py-1.5 text-xs",
-                          p.position < 4 && "bg-brand/[0.03]",
-                        )}
-                      >
-                        <span className="font-brand text-brand">
-                          #{p.position}
-                        </span>
-                        <span className="font-mono text-brand-muted">
-                          {p.pct.toFixed(2)}%
-                        </span>
-                        <span className="font-brand text-brand text-right">
-                          {formatUSD(p.usd)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             )}
 
@@ -504,36 +506,130 @@ const PrizeBreakdownDialog = ({
           </section>
         )}
 
-        {/* Sponsored prizes */}
-        {sponsoredByPositionUsd.size > 0 && (
-          <section className="flex flex-col gap-2 border-t border-brand/15 pt-3">
-            <h4 className="font-brand text-base text-brand">
-              Sponsored Prizes
-            </h4>
-            <div className="flex flex-col border border-brand/10 rounded-md overflow-hidden">
-              <div className="grid grid-cols-[44px_1fr] items-center gap-2 px-3 py-1.5 text-[10px] uppercase tracking-wider text-brand-muted/70 bg-brand/5">
-                <span>Pos</span>
-                <span className="text-right">USD</span>
+        {/* Unified per-position prize table. Combines the entry-fee share
+            (percentage + USD) and sponsored USD for every rank, so viewers
+            see the full payout at each position without summing two lists.
+            Inner scroll keeps the dialog compact when there are many paid
+            places (e.g. 50-position leagues). */}
+        {unifiedPositions.length > 0 && (() => {
+          const showBoth = hasEntryFeeColumn && hasSponsoredColumn;
+          // Column layout:
+          //  - only entry fee: Pos | Share | USD
+          //  - only sponsored: Pos | USD
+          //  - both:           Pos | Entry Fee | Sponsored | Total
+          const gridCols = showBoth
+            ? "grid-cols-[44px_minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)]"
+            : hasEntryFeeColumn
+              ? "grid-cols-[44px_1fr_auto]"
+              : "grid-cols-[44px_1fr]";
+          return (
+            <section className="flex flex-col gap-2 border-t border-brand/15 pt-3">
+              <div className="flex flex-row items-baseline justify-between gap-2 flex-wrap">
+                <h4 className="font-brand text-base text-brand">
+                  Prize per Position
+                </h4>
+                <span className="text-[10px] uppercase tracking-wider text-brand-muted">
+                  {unifiedPositions.length}{" "}
+                  {unifiedPositions.length === 1 ? "position" : "positions"}
+                </span>
               </div>
-              {Array.from(sponsoredByPositionUsd.entries())
-                .sort((a, b) => a[0] - b[0])
-                .map(([pos, usd]) => (
-                  <div
-                    key={pos}
-                    className={cn(
-                      "grid grid-cols-[44px_1fr] items-center gap-2 px-3 py-1.5 text-xs",
-                      pos < 4 && "bg-brand/[0.03]",
-                    )}
-                  >
-                    <span className="font-brand text-brand">#{pos}</span>
-                    <span className="font-brand text-brand text-right">
-                      {formatUSD(usd)}
-                    </span>
-                  </div>
-                ))}
-            </div>
-          </section>
-        )}
+              <div className="flex flex-col border border-brand/10 rounded-md overflow-hidden">
+                {/* Header (sticky within the scroll container) */}
+                <div
+                  className={cn(
+                    "grid items-center gap-2 px-3 py-1.5 text-[10px] uppercase tracking-wider text-brand-muted/70 bg-brand/5",
+                    gridCols,
+                  )}
+                >
+                  <span>Pos</span>
+                  {showBoth ? (
+                    <>
+                      <span>Entry Fee</span>
+                      <span className="text-right">Sponsored</span>
+                      <span className="text-right">Total</span>
+                    </>
+                  ) : hasEntryFeeColumn ? (
+                    <>
+                      <span>Share</span>
+                      <span className="text-right">USD</span>
+                    </>
+                  ) : (
+                    <span className="text-right">USD</span>
+                  )}
+                </div>
+                {/* Body (scrollable) */}
+                <div className="max-h-64 overflow-y-auto">
+                  {unifiedPositions.map((row) => (
+                    <div
+                      key={row.position}
+                      className={cn(
+                        "grid items-center gap-2 px-3 py-1.5 text-xs",
+                        gridCols,
+                        row.position < 4 && "bg-brand/[0.03]",
+                      )}
+                    >
+                      <span className="font-brand text-brand">
+                        #{row.position}
+                      </span>
+                      {showBoth ? (
+                        <>
+                          <span className="flex flex-row items-baseline gap-1 min-w-0">
+                            {row.entryFeePct != null ? (
+                              <>
+                                <span className="font-mono text-brand-muted text-[11px] flex-shrink-0">
+                                  {row.entryFeePct.toFixed(2)}%
+                                </span>
+                                <span className="font-brand text-brand truncate">
+                                  {formatUSD(row.entryFeeUsd)}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-brand-muted/50">—</span>
+                            )}
+                          </span>
+                          <span className="font-brand text-brand text-right">
+                            {row.sponsoredUsd > 0
+                              ? formatUSD(row.sponsoredUsd)
+                              : (
+                                <span className="text-brand-muted/50">—</span>
+                              )}
+                          </span>
+                          <span className="font-brand text-brand text-right font-semibold">
+                            {formatUSD(row.totalUsd)}
+                          </span>
+                        </>
+                      ) : hasEntryFeeColumn ? (
+                        <>
+                          <span className="font-mono text-brand-muted">
+                            {row.entryFeePct != null
+                              ? `${row.entryFeePct.toFixed(2)}%`
+                              : "—"}
+                          </span>
+                          <span className="font-brand text-brand text-right">
+                            {formatUSD(row.entryFeeUsd)}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="font-brand text-brand text-right">
+                          {formatUSD(row.sponsoredUsd)}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {sponsoredCount > 0 && !hasEntryFeeColumn && (
+                <p className="text-[10px] text-brand-muted/70 italic leading-snug">
+                  {sponsoredCount}{" "}
+                  {sponsoredCount === 1
+                    ? "sponsored prize"
+                    : "sponsored prizes"}
+                  .
+                </p>
+              )}
+            </section>
+          );
+        })()}
       </DialogContent>
     </Dialog>
   );
