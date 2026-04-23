@@ -98,8 +98,8 @@ source = "git+https://github.com/EkuboProtocol/starknet-contracts.git?tag=v4.0.1
 
 [[package]]
 name = "game_components_embeddable_game_standard"
-version = "1.1.5"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=feat%2Fentry-fee-distribution#a2a98800167365a19de3ee21c0cf579f16a3ecb6"
+version = "1.1.6"
+source = "git+https://github.com/Provable-Games/game-components.git?tag=v1.1.6#fcf2a8fa27577565f12d2abbe478953d7ae9f6b2"
 dependencies = [
  "game_components_interfaces",
  "game_components_utilities",
@@ -111,8 +111,8 @@ dependencies = [
 
 [[package]]
 name = "game_components_interfaces"
-version = "1.1.5"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=feat%2Fentry-fee-distribution#a2a98800167365a19de3ee21c0cf579f16a3ecb6"
+version = "1.1.6"
+source = "git+https://github.com/Provable-Games/game-components.git?tag=v1.1.6#fcf2a8fa27577565f12d2abbe478953d7ae9f6b2"
 dependencies = [
  "ekubo",
  "metagame_extensions_interfaces",
@@ -120,8 +120,8 @@ dependencies = [
 
 [[package]]
 name = "game_components_metagame"
-version = "1.1.5"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=feat%2Fentry-fee-distribution#a2a98800167365a19de3ee21c0cf579f16a3ecb6"
+version = "1.1.6"
+source = "git+https://github.com/Provable-Games/game-components.git?tag=v1.1.6#fcf2a8fa27577565f12d2abbe478953d7ae9f6b2"
 dependencies = [
  "game_components_embeddable_game_standard",
  "game_components_interfaces",
@@ -133,8 +133,8 @@ dependencies = [
 
 [[package]]
 name = "game_components_test_common"
-version = "1.1.5"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=feat%2Fentry-fee-distribution#a2a98800167365a19de3ee21c0cf579f16a3ecb6"
+version = "1.1.6"
+source = "git+https://github.com/Provable-Games/game-components.git?tag=v1.1.6#fcf2a8fa27577565f12d2abbe478953d7ae9f6b2"
 dependencies = [
  "game_components_embeddable_game_standard",
  "game_components_interfaces",
@@ -150,8 +150,8 @@ dependencies = [
 
 [[package]]
 name = "game_components_utilities"
-version = "1.1.5"
-source = "git+https://github.com/Provable-Games/game-components.git?branch=feat%2Fentry-fee-distribution#a2a98800167365a19de3ee21c0cf579f16a3ecb6"
+version = "1.1.6"
+source = "git+https://github.com/Provable-Games/game-components.git?tag=v1.1.6#fcf2a8fa27577565f12d2abbe478953d7ae9f6b2"
 dependencies = [
  "alexandria_encoding",
  "game_components_embeddable_game_standard",
