@@ -1222,10 +1222,15 @@ export const expandDistributedPrizes = (
       let distributionPercentages: number[];
       if (distType === "custom") {
         // SDK flat format carries the raw basis-point shares on the prize
-        // record itself (JSON-serialised from the Cairo Span<u16>). Convert
-        // bp → percentage (bp / 100) when available; only fall back to a
-        // uniform split if the SDK failed to include the shares array.
+        // record itself (JSON-serialised from the Cairo Span<u16>). The
+        // canonical field name in @provable-games/budokan-sdk is
+        // `distributionShares`; we also accept legacy / snake_case variants
+        // for robustness across SDK versions. Convert bp → percentage
+        // (bp / 100) when available; only fall back to a uniform split if
+        // the shares array is missing or length-mismatched.
         const rawShares: unknown =
+          prize.distributionShares ??
+          prize.distribution_shares ??
           prize.customShares ??
           prize.custom_shares ??
           prize.distributionCustom ??
