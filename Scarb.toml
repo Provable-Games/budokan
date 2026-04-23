@@ -20,13 +20,13 @@ openzeppelin_token = { git = "https://github.com/OpenZeppelin/cairo-contracts.gi
 openzeppelin_interfaces = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0" }
 openzeppelin_upgrades = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0" }
 openzeppelin_security = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v3.0.0" }
-game_components_embeddable_game_standard = { git = "https://github.com/Provable-Games/game-components.git", tag = "v1.1.6" }
-game_components_metagame = { git = "https://github.com/Provable-Games/game-components.git", tag = "v1.1.6" }
-game_components_utilities = { git = "https://github.com/Provable-Games/game-components.git", tag = "v1.1.6" }
-game_components_interfaces = { git = "https://github.com/Provable-Games/game-components.git", tag = "v1.1.6" }
-game_components_test_common = { git = "https://github.com/Provable-Games/game-components.git", tag = "v1.1.6" }
-game_components_testing = { git = "https://github.com/Provable-Games/game-components.git", tag = "v1.1.6" }
-metagame_extensions_interfaces = { git = "https://github.com/Provable-Games/metagame_extensions.git", tag = "v0.1.3" }
+game_components_embeddable_game_standard = { git = "https://github.com/Provable-Games/game-components.git", tag = "v1.1.7" }
+game_components_metagame = { git = "https://github.com/Provable-Games/game-components.git", tag = "v1.1.7" }
+game_components_utilities = { git = "https://github.com/Provable-Games/game-components.git", tag = "v1.1.7" }
+game_components_interfaces = { git = "https://github.com/Provable-Games/game-components.git", tag = "v1.1.7" }
+game_components_test_common = { git = "https://github.com/Provable-Games/game-components.git", tag = "v1.1.7" }
+game_components_testing = { git = "https://github.com/Provable-Games/game-components.git", tag = "v1.1.7" }
+metagame_extensions_interfaces = { git = "https://github.com/Provable-Games/metagame_extensions.git", tag = "v0.1.4" }
 
 [scripts]
 test = "snforge test"

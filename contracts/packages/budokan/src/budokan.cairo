@@ -577,9 +577,16 @@ pub mod Budokan {
             // Get the current owner of this game token
             let current_owner = game_dispatcher.owner_of(game_token_id.into());
 
-            // Ask the extension if this entry should be banned
+            // Ask the extension if this entry should be banned.
+            // Budokan is the context owner — it was the caller at add_config time.
             let should_ban = entry_validator_dispatcher
-                .should_ban(tournament_id, game_token_id, current_owner, proof);
+                .should_ban(
+                    starknet::get_contract_address(),
+                    tournament_id,
+                    game_token_id,
+                    current_owner,
+                    proof,
+                );
 
             // Assert should be banned to avoid wasting gas on invalid ban attempts
             assert!(should_ban, "Budokan: Entry should not be banned");
@@ -1363,7 +1370,8 @@ pub mod Budokan {
                     .add_config(
                         tournament_id + 1, entry_requirement.entry_limit, extension_config.config,
                     );
-                let bannable = entry_validator_dispatcher.bannable(tournament_id + 1);
+                let bannable = entry_validator_dispatcher
+                    .bannable(starknet::get_contract_address(), tournament_id + 1);
                 if bannable {
                     schedule.assert_has_registration_period_before_game_start();
                 }

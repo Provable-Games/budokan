@@ -24,8 +24,12 @@ pub const QUALIFIER_TYPE_WINNERS: felt252 = 1;
 #[starknet::interface]
 pub trait ITournamentValidatorMock<TState> {
     fn get_budokan_address(self: @TState) -> ContractAddress;
-    fn get_qualifier_type(self: @TState, tournament_id: u64) -> felt252;
-    fn get_qualifying_tournament_ids(self: @TState, tournament_id: u64) -> Array<u64>;
+    fn get_qualifier_type(
+        self: @TState, context_owner: ContractAddress, tournament_id: u64,
+    ) -> felt252;
+    fn get_qualifying_tournament_ids(
+        self: @TState, context_owner: ContractAddress, tournament_id: u64,
+    ) -> Array<u64>;
 }
 
 #[starknet::contract]
@@ -43,11 +47,11 @@ pub mod tournament_validator_mock {
     use openzeppelin_interfaces::erc721::{IERC721Dispatcher, IERC721DispatcherTrait};
     use openzeppelin_introspection::src5::SRC5Component;
     use openzeppelin_introspection::src5::SRC5Component::InternalTrait as SRC5InternalTrait;
-    use starknet::ContractAddress;
     use starknet::storage::{
         Map, MutableVecTrait, StorageMapReadAccess, StorageMapWriteAccess, StoragePathEntry,
         StoragePointerReadAccess, StoragePointerWriteAccess, Vec, VecTrait,
     };
+    use starknet::{ContractAddress, get_caller_address};
     use super::{QUALIFIER_TYPE_PARTICIPANTS, QUALIFIER_TYPE_WINNERS};
 
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
@@ -59,20 +63,20 @@ pub mod tournament_validator_mock {
     struct Storage {
         #[substorage(v0)]
         src5: SRC5Component::Storage,
-        /// The Budokan contract address
+        /// The Budokan contract address (used for cross-contract lookups, not for ownership).
         budokan_address: ContractAddress,
-        /// Owner address (the metagame/budokan contract)
-        owner_address: ContractAddress,
-        /// Bannable flag per context
-        bannable: Map<u64, bool>,
-        /// Qualifier type per tournament (0 = participants, 1 = winners)
-        qualifier_type: Map<u64, felt252>,
-        /// Qualifying tournament IDs per tournament
-        qualifying_tournament_ids: Map<u64, Vec<u64>>,
-        /// Entry limit per tournament
-        tournament_entry_limit: Map<u64, u32>,
-        /// Entry count per (tournament_id, player_address)
-        tournament_entries: Map<(u64, ContractAddress), u32>,
+        /// Context registration flag per (context_owner, context_id).
+        registered: Map<(ContractAddress, u64), bool>,
+        /// Bannable flag per (context_owner, context_id).
+        bannable: Map<(ContractAddress, u64), bool>,
+        /// Qualifier type per (context_owner, context_id) (0 = participants, 1 = winners)
+        qualifier_type: Map<(ContractAddress, u64), felt252>,
+        /// Qualifying tournament IDs per (context_owner, context_id)
+        qualifying_tournament_ids: Map<(ContractAddress, u64), Vec<u64>>,
+        /// Entry limit per (context_owner, context_id)
+        tournament_entry_limit: Map<(ContractAddress, u64), u32>,
+        /// Entry count per (context_owner, context_id, player_address)
+        tournament_entries: Map<(ContractAddress, u64, ContractAddress), u32>,
     }
 
     #[event]
@@ -85,50 +89,54 @@ pub mod tournament_validator_mock {
     #[constructor]
     fn constructor(ref self: ContractState, budokan_address: ContractAddress) {
         self.budokan_address.write(budokan_address);
-        self.owner_address.write(budokan_address);
         self.src5.register_interface(IENTRY_REQUIREMENT_EXTENSION_ID);
     }
 
     #[abi(embed_v0)]
     impl EntryValidatorImpl of IEntryRequirementExtension<ContractState> {
-        fn context_owner(self: @ContractState, context_id: u64) -> ContractAddress {
-            self.owner_address.read()
+        fn is_context_registered(
+            self: @ContractState, context_owner: ContractAddress, context_id: u64,
+        ) -> bool {
+            self.registered.read((context_owner, context_id))
         }
 
-        fn bannable(self: @ContractState, context_id: u64) -> bool {
-            self.bannable.read(context_id)
+        fn bannable(self: @ContractState, context_owner: ContractAddress, context_id: u64) -> bool {
+            self.bannable.read((context_owner, context_id))
         }
 
         fn valid_entry(
             self: @ContractState,
+            context_owner: ContractAddress,
             context_id: u64,
             player_address: ContractAddress,
             qualification: Span<felt252>,
         ) -> bool {
-            self.validate_entry_internal(context_id, player_address, qualification)
+            self.validate_entry_internal(context_owner, context_id, player_address, qualification)
         }
 
         fn should_ban(
             self: @ContractState,
+            context_owner: ContractAddress,
             context_id: u64,
             game_token_id: felt252,
             current_owner: ContractAddress,
             qualification: Span<felt252>,
         ) -> bool {
-            !self.validate_entry_internal(context_id, current_owner, qualification)
+            !self.validate_entry_internal(context_owner, context_id, current_owner, qualification)
         }
 
         fn entries_left(
             self: @ContractState,
+            context_owner: ContractAddress,
             context_id: u64,
             player_address: ContractAddress,
             qualification: Span<felt252>,
         ) -> Option<u32> {
-            let entry_limit = self.tournament_entry_limit.read(context_id);
+            let entry_limit = self.tournament_entry_limit.read((context_owner, context_id));
             if entry_limit == 0 {
                 return Option::None; // Unlimited entries
             }
-            let key = (context_id, player_address);
+            let key = (context_owner, context_id, player_address);
             let current_entries = self.tournament_entries.read(key);
             let remaining_entries = entry_limit - current_entries;
             return Option::Some(remaining_entries);
@@ -150,11 +158,13 @@ pub mod tournament_validator_mock {
                 "Invalid qualifier type",
             );
 
-            self.qualifier_type.write(context_id, qualifier_type);
-            self.tournament_entry_limit.write(context_id, entry_limit);
+            let caller = get_caller_address();
+            self.registered.write((caller, context_id), true);
+            self.qualifier_type.write((caller, context_id), qualifier_type);
+            self.tournament_entry_limit.write((caller, context_id), entry_limit);
 
             // Store qualifying tournament IDs
-            let mut vec = self.qualifying_tournament_ids.entry(context_id);
+            let mut vec = self.qualifying_tournament_ids.entry((caller, context_id));
             let mut i: u32 = 1;
             loop {
                 if i >= config.len() {
@@ -173,8 +183,9 @@ pub mod tournament_validator_mock {
             player_address: ContractAddress,
             qualification: Span<felt252>,
         ) {
-            // Track entry count
-            let key = (context_id, player_address);
+            // Track entry count scoped to the calling context owner.
+            let caller = get_caller_address();
+            let key = (caller, context_id, player_address);
             let current_entries = self.tournament_entries.read(key);
             self.tournament_entries.write(key, current_entries + 1);
         }
@@ -186,8 +197,9 @@ pub mod tournament_validator_mock {
             player_address: ContractAddress,
             qualification: Span<felt252>,
         ) {
-            // Decrement entry count
-            let key = (context_id, player_address);
+            // Decrement entry count scoped to the calling context owner.
+            let caller = get_caller_address();
+            let key = (caller, context_id, player_address);
             let current_entries = self.tournament_entries.read(key);
             if current_entries > 0 {
                 self.tournament_entries.write(key, current_entries - 1);
@@ -199,6 +211,7 @@ pub mod tournament_validator_mock {
     impl InternalImpl of InternalTrait {
         fn validate_entry_internal(
             self: @ContractState,
+            context_owner: ContractAddress,
             tournament_id: u64,
             player_address: ContractAddress,
             qualification: Span<felt252>,
@@ -214,7 +227,8 @@ pub mod tournament_validator_mock {
             let token_id: felt252 = *qualification.at(1);
 
             // Check if qualifying tournament is in the valid set
-            if !self.is_qualifying_tournament(tournament_id, qualifying_tournament_id) {
+            if !self
+                .is_qualifying_tournament(context_owner, tournament_id, qualifying_tournament_id) {
                 return false;
             }
 
@@ -264,7 +278,7 @@ pub mod tournament_validator_mock {
                 return false;
             }
 
-            let qualifier_type = self.qualifier_type.read(tournament_id);
+            let qualifier_type = self.qualifier_type.read((context_owner, tournament_id));
 
             if qualifier_type == QUALIFIER_TYPE_WINNERS {
                 // For winners: must have submitted and be on the leaderboard
@@ -301,9 +315,12 @@ pub mod tournament_validator_mock {
         }
 
         fn is_qualifying_tournament(
-            self: @ContractState, tournament_id: u64, qualifying_tournament_id: u64,
+            self: @ContractState,
+            context_owner: ContractAddress,
+            tournament_id: u64,
+            qualifying_tournament_id: u64,
         ) -> bool {
-            let vec = self.qualifying_tournament_ids.entry(tournament_id);
+            let vec = self.qualifying_tournament_ids.entry((context_owner, tournament_id));
             let len = vec.len();
             let mut i: u64 = 0;
             loop {
@@ -326,12 +343,16 @@ pub mod tournament_validator_mock {
             self.budokan_address.read()
         }
 
-        fn get_qualifier_type(self: @ContractState, tournament_id: u64) -> felt252 {
-            self.qualifier_type.read(tournament_id)
+        fn get_qualifier_type(
+            self: @ContractState, context_owner: ContractAddress, tournament_id: u64,
+        ) -> felt252 {
+            self.qualifier_type.read((context_owner, tournament_id))
         }
 
-        fn get_qualifying_tournament_ids(self: @ContractState, tournament_id: u64) -> Array<u64> {
-            let vec = self.qualifying_tournament_ids.entry(tournament_id);
+        fn get_qualifying_tournament_ids(
+            self: @ContractState, context_owner: ContractAddress, tournament_id: u64,
+        ) -> Array<u64> {
+            let vec = self.qualifying_tournament_ids.entry((context_owner, tournament_id));
             let len = vec.len();
             let mut arr = ArrayTrait::new();
             let mut i: u64 = 0;
