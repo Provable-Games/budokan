@@ -77,9 +77,9 @@ const snSepoliaConfig: ChainConfig = {
   denshokanAddress:
     "0x0004e6e5bbf18424dfb825f1dbb65e10473b4603a1ec7b9ab02c143d877114f9",
   budokanAddress:
-    "0x02a97de0b33fb115f5c32a58232d9941c4a5b2598aa71d30c094076cc592f94d",
+    "0x0105573bf9184f0a3da78dda70a87055e6aafc7b3fb6e331732a0d25675b7be5",
   budokanViewerAddress:
-    "0x001f2be7ed811bfa859f8f6cf72d2458f36103ac172ff8e65a630bbcc6cf98c9",
+    "0x0414fe2f48db1e3598a83f017d17b4d06cec180b160141fea9244054267c1ff1",
   budokanApiUrl: "https://budokan-api-sepolia.up.railway.app",
   denshokanApiUrl: "https://denshokan-api-sepolia.up.railway.app",
 };
@@ -104,9 +104,9 @@ const snMainnetConfig: ChainConfig = {
   denshokanAddress:
     "0x00263cc540dac11334470a64759e03952ee2f84a290e99ba8cbc391245cd0bf9",
   budokanAddress:
-    "0x04dae41808911e51af8efe8ac3202cb3b2a32c10c169703010b7e0cbd885bf83",
+    "0x0765e6f07c1a5cebe08aba7f840741242dffb1ed77ac619120501f540ec9a52a",
   budokanViewerAddress:
-    "0x02ef405cf2a8e8aec2946e5be39fa4e8bcb51cea5ce3573760418e7cdc7e5a22",
+    "0x0232fb32bd06e38f3555000f255c01812198418d5fced3b6246900725bf2f4d1",
   budokanApiUrl: "https://budokan-api-production.up.railway.app",
   denshokanApiUrl: "https://denshokan-api-production.up.railway.app",
 } as const;
