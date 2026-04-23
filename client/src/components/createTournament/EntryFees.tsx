@@ -154,6 +154,14 @@ const EntryFees = ({ form }: StepProps) => {
   // Track if a token has ever been selected to prevent flickering when switching tokens
   const [tokenEverSelected, setTokenEverSelected] = React.useState(false);
 
+  // Owned here so the prize distribution visual can react to the toggle as
+  // well. When the prize pool is off (by toggle) OR computed-zero (fees
+  // consume 100%), we hide the Prize Distribution block entirely — there's
+  // nothing meaningful to visualise.
+  const [prizePoolEnabled, setPrizePoolEnabled] = React.useState(true);
+  const showPrizeDistribution =
+    prizePoolEnabled && prizePoolPercentage > 0;
+
   React.useEffect(() => {
     if (hasTokenSelected && !tokenEverSelected) {
       setTokenEverSelected(true);
@@ -272,8 +280,10 @@ const EntryFees = ({ form }: StepProps) => {
                 chainId,
                 form.watch("entryFees.token")?.address ?? "",
               )}
+              prizePoolEnabled={prizePoolEnabled}
+              onPrizePoolEnabledChange={setPrizePoolEnabled}
             />
-            {prizePoolPercentage > 0 && (
+            {showPrizeDistribution && (
               <>
                 <div className="w-full h-0.5 bg-brand/25" />
                 <PrizeDistributionVisual
@@ -312,6 +322,20 @@ const EntryFees = ({ form }: StepProps) => {
                     const next = [...customShares];
                     while (next.length < prizePoolPayoutCount) next.push(0);
                     next[index] = basisPoints;
+                    form.setValue("entryFees.customShares", next);
+                  }}
+                  onCustomSharesReplace={(shares) => {
+                    // Pad/trim to paid-places count so bulk imports that
+                    // don't cover every slot still yield a valid-length
+                    // array (the missing tail is 0s).
+                    const next = Array<number>(prizePoolPayoutCount).fill(0);
+                    for (
+                      let i = 0;
+                      i < Math.min(shares.length, prizePoolPayoutCount);
+                      i++
+                    ) {
+                      next[i] = shares[i] ?? 0;
+                    }
                     form.setValue("entryFees.customShares", next);
                   }}
                   onResetCustomShares={() => {

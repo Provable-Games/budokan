@@ -325,24 +325,41 @@ const Tournament = () => {
     if (distCount <= 0) return [];
 
     const parsed = parseDistribution(ef.distribution);
-    // Contract stores weight × 10 (fixed-point). Divide back out for the
-    // calculator which expects the user-entered weight.
-    const distType =
-      parsed.type === "linear" ||
-      parsed.type === "exponential" ||
-      parsed.type === "uniform"
-        ? parsed.type
-        : "uniform";
-    const weight = parsed.weight;
-
-    const percentages = calculateDistribution(
-      distCount,
-      weight / 10,
-      0,
-      0,
-      0,
-      distType,
-    );
+    // Percentages of the prize pool, per position. Custom distributions
+    // persist their own basis-point shares (sum == 10000), so we convert
+    // them directly rather than routing through `calculateDistribution`
+    // (which only handles the parametric shapes). Linear / Exponential /
+    // Uniform still go through the calculator, which returns percentages
+    // scaled to the user-entered weight (contract stores weight × 10).
+    let percentages: number[];
+    if (parsed.type === "custom") {
+      const customWeights =
+        parsed.customWeights && parsed.customWeights.length > 0
+          ? parsed.customWeights.slice(0, distCount)
+          : [];
+      if (customWeights.length === distCount) {
+        percentages = customWeights.map((bp) => bp / 100);
+      } else {
+        // Length mismatch with on-chain distribution_count — fall back to
+        // a uniform split so the breakdown still renders something sane.
+        percentages = calculateDistribution(distCount, 1, 0, 0, 0, "uniform");
+      }
+    } else {
+      const distType =
+        parsed.type === "linear" ||
+        parsed.type === "exponential" ||
+        parsed.type === "uniform"
+          ? parsed.type
+          : "uniform";
+      percentages = calculateDistribution(
+        distCount,
+        parsed.weight / 10,
+        0,
+        0,
+        0,
+        distType,
+      );
+    }
 
     return percentages.map((pct, i) => {
       const posAmount = (poolAmount * BigInt(Math.floor(pct * 100))) / 10000n;

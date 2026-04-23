@@ -1,11 +1,13 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { FormDescription, FormLabel } from "@/components/ui/form";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  autoBalanceBasisPointShares,
   formatNumber,
   getOrdinalSuffix,
+  parseCustomSharesBulkInput,
   type DistributionType,
 } from "@/lib/utils";
 
@@ -34,6 +36,10 @@ interface PrizeDistributionVisualProps {
   customShares?: number[];
   onCustomShareChange?: (index: number, basisPoints: number) => void;
   onResetCustomShares?: () => void;
+  // Bulk-replace the entire customShares array. Used by the paste importer
+  // and auto-balance button so they can land a length-N update in a single
+  // render (rather than firing N `onCustomShareChange` calls).
+  onCustomSharesReplace?: (shares: number[]) => void;
 }
 
 export const PrizeDistributionVisual = ({
@@ -52,7 +58,12 @@ export const PrizeDistributionVisual = ({
   customShares,
   onCustomShareChange,
   onResetCustomShares,
+  onCustomSharesReplace,
 }: PrizeDistributionVisualProps) => {
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkInput, setBulkInput] = useState("");
+  const [bulkErrors, setBulkErrors] = useState<string[]>([]);
+  const [bulkWarnings, setBulkWarnings] = useState<string[]>([]);
   // Calculate the maximum percentage for scaling the bars
   const maxPercentage = useMemo(() => {
     return Math.max(...distributions.map((d) => d.percentage), 1);
@@ -225,7 +236,7 @@ export const PrizeDistributionVisual = ({
                 Enter a percentage for each position. Shares must sum to exactly 100%.
               </FormDescription>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span
                 className={
                   customSumIsValid
@@ -235,6 +246,40 @@ export const PrizeDistributionVisual = ({
               >
                 Total: {(customTotalBp / 100).toFixed(2)}%
               </span>
+              {onCustomSharesReplace && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setBulkOpen((open) => !open);
+                    setBulkErrors([]);
+                    setBulkWarnings([]);
+                  }}
+                  disabled={disabled}
+                  className="h-8 text-xs"
+                >
+                  {bulkOpen ? "Hide paste" : "Paste list"}
+                </Button>
+              )}
+              {onCustomSharesReplace && !customSumIsValid && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const balanced = autoBalanceBasisPointShares(
+                      customShares ?? [],
+                    );
+                    if (balanced) onCustomSharesReplace(balanced);
+                  }}
+                  disabled={disabled}
+                  title="Absorb the remaining residual into the first non-zero position so the total hits exactly 100%."
+                  className="h-8 text-xs"
+                >
+                  Auto-balance
+                </Button>
+              )}
               {onResetCustomShares && (
                 <Button
                   type="button"
@@ -249,6 +294,110 @@ export const PrizeDistributionVisual = ({
               )}
             </div>
           </div>
+
+          {bulkOpen && onCustomSharesReplace && (
+            <div className="space-y-2 p-3 rounded-md border border-brand-muted bg-background/40">
+              <FormDescription className="text-xs">
+                Paste {leaderboardSize} percentages — comma-, newline-, or
+                tab-separated for position order, or
+                <span className="font-mono"> 1:40, 2:20, 3:15</span> for
+                explicit positions. Values are rounded to 2 decimals.
+              </FormDescription>
+              <textarea
+                value={bulkInput}
+                onChange={(e) => setBulkInput(e.target.value)}
+                placeholder={`e.g. 40, 20, 15, 10, 5, 5, 3, 2\n\nor: 1:40, 2:20, 3:15`}
+                disabled={disabled}
+                rows={4}
+                className="flex min-h-[96px] w-full rounded-md border border-brand-muted bg-black px-3 py-2 text-sm text-brand placeholder:text-neutral focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y font-mono"
+              />
+              {bulkErrors.length > 0 && (
+                <ul className="text-xs text-destructive list-disc list-inside space-y-0.5">
+                  {bulkErrors.map((err, i) => (
+                    <li key={`err-${i}`}>{err}</li>
+                  ))}
+                </ul>
+              )}
+              {bulkWarnings.length > 0 && (
+                <ul className="text-xs text-yellow-500 list-disc list-inside space-y-0.5">
+                  {bulkWarnings.map((w, i) => (
+                    <li key={`warn-${i}`}>{w}</li>
+                  ))}
+                </ul>
+              )}
+              <div className="flex items-center gap-2 justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setBulkInput("");
+                    setBulkErrors([]);
+                    setBulkWarnings([]);
+                  }}
+                  disabled={disabled || !bulkInput}
+                  className="h-8 text-xs"
+                >
+                  Clear
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const result = parseCustomSharesBulkInput(
+                      bulkInput,
+                      leaderboardSize,
+                    );
+                    setBulkErrors(result.errors);
+                    setBulkWarnings(result.warnings);
+                    // Apply the parsed values even on partial-parse so users
+                    // can see what landed in each slot and fix from there.
+                    // Skip only if parsing found zero valid numeric entries.
+                    const hasAnyValue = result.shares.some((bp) => bp > 0);
+                    if (hasAnyValue || result.errors.length === 0) {
+                      onCustomSharesReplace(result.shares);
+                    }
+                  }}
+                  disabled={disabled || !bulkInput.trim()}
+                  className="h-8 text-xs"
+                >
+                  Apply
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => {
+                    const parsed = parseCustomSharesBulkInput(
+                      bulkInput,
+                      leaderboardSize,
+                    );
+                    const balanced =
+                      autoBalanceBasisPointShares(parsed.shares);
+                    setBulkErrors(parsed.errors);
+                    setBulkWarnings([
+                      ...parsed.warnings,
+                      ...(balanced
+                        ? []
+                        : [
+                            "Auto-balance skipped — residual could not land on a valid slot.",
+                          ]),
+                    ]);
+                    if (balanced) {
+                      onCustomSharesReplace(balanced);
+                    } else if (parsed.errors.length === 0) {
+                      onCustomSharesReplace(parsed.shares);
+                    }
+                  }}
+                  disabled={disabled || !bulkInput.trim()}
+                  className="h-8 text-xs"
+                  title="Parse + adjust the first non-zero slot so the total hits exactly 100%."
+                >
+                  Apply &amp; balance
+                </Button>
+              </div>
+            </div>
+          )}
           <div className="w-full overflow-x-auto pb-1">
             <div className="flex gap-2 min-w-fit">
               {Array.from({ length: leaderboardSize }).map((_, index) => {

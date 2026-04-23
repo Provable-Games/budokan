@@ -1221,7 +1221,24 @@ export const expandDistributedPrizes = (
 
       let distributionPercentages: number[];
       if (distType === "custom") {
-        distributionPercentages = calculateDistribution(distCount, 1, 0, 0, 0, "uniform");
+        // SDK flat format carries the raw basis-point shares on the prize
+        // record itself (JSON-serialised from the Cairo Span<u16>). Convert
+        // bp → percentage (bp / 100) when available; only fall back to a
+        // uniform split if the SDK failed to include the shares array.
+        const rawShares: unknown =
+          prize.customShares ??
+          prize.custom_shares ??
+          prize.distributionCustom ??
+          prize.distribution_custom ??
+          [];
+        const sharesArr = Array.isArray(rawShares)
+          ? rawShares.map((v) => Number(v)).filter((v) => Number.isFinite(v))
+          : [];
+        if (sharesArr.length === distCount) {
+          distributionPercentages = sharesArr.map((bp) => bp / 100);
+        } else {
+          distributionPercentages = calculateDistribution(distCount, 1, 0, 0, 0, "uniform");
+        }
       } else {
         distributionPercentages = calculateDistribution(
           distCount,

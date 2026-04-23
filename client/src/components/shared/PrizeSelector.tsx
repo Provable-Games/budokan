@@ -406,6 +406,17 @@ export function PrizeSelector({
                 return next;
               });
             }}
+            onCustomSharesReplace={(shares) => {
+              const next = Array<number>(leaderboardSize).fill(0);
+              for (
+                let i = 0;
+                i < Math.min(shares.length, leaderboardSize);
+                i++
+              ) {
+                next[i] = shares[i] ?? 0;
+              }
+              setCustomShares(next);
+            }}
             onResetCustomShares={() => {
               setCustomShares(buildUniformBasisPointShares(leaderboardSize));
             }}

@@ -19,6 +19,11 @@ interface FeeDistributionVisualProps {
   usdValue?: number;
   tokenLogoUrl?: string;
   minGameFee?: number;
+  // Optional controlled prize-pool toggle. When provided, FeeDistributionVisual
+  // defers to the parent so other sections (e.g. Prize Distribution) can react
+  // to the same on/off signal. When omitted, falls back to internal state.
+  prizePoolEnabled?: boolean;
+  onPrizePoolEnabledChange?: (enabled: boolean) => void;
 }
 
 export const FeeDistributionVisual = ({
@@ -34,10 +39,17 @@ export const FeeDistributionVisual = ({
   usdValue = 0,
   tokenLogoUrl = "",
   minGameFee = 1,
+  prizePoolEnabled: prizePoolEnabledProp,
+  onPrizePoolEnabledChange,
 }: FeeDistributionVisualProps) => {
   const [creatorFeeEnabled, setCreatorFeeEnabled] = useState(creatorFee > 0);
   const [refundShareEnabled, setRefundShareEnabled] = useState(refundShare > 0);
-  const [prizePoolEnabled, setPrizePoolEnabled] = useState(true);
+  const [prizePoolEnabledInternal, setPrizePoolEnabledInternal] = useState(true);
+  const prizePoolEnabled = prizePoolEnabledProp ?? prizePoolEnabledInternal;
+  const setPrizePoolEnabled = (next: boolean) => {
+    if (onPrizePoolEnabledChange) onPrizePoolEnabledChange(next);
+    if (prizePoolEnabledProp === undefined) setPrizePoolEnabledInternal(next);
+  };
   const [draggingDivider, setDraggingDivider] = useState<number | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
 
