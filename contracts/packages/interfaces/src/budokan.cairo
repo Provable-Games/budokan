@@ -114,6 +114,12 @@ pub trait IBudokan<TState> {
     fn tournament_entries(self: @TState, tournament_id: u64) -> u32;
     fn get_leaderboard(self: @TState, tournament_id: u64) -> Array<felt252>;
     fn current_phase(self: @TState, tournament_id: u64) -> Phase;
+    /// For tournaments configured with `Distribution::Custom`, returns the
+    /// full shares array (summing to BASIS_POINTS). `tournament()` returns
+    /// `Custom([])` to keep that hot-path view small; callers that need the
+    /// shares call this method. Returns an empty array for non-Custom
+    /// distributions or unconfigured tournaments.
+    fn tournament_distribution_shares(self: @TState, tournament_id: u64) -> Array<u16>;
 
     // Write functions
     fn create_tournament(

@@ -285,6 +285,19 @@ pub mod Budokan {
             schedule.current_phase(config.created_at, get_block_timestamp())
         }
 
+        fn tournament_distribution_shares(self: @ContractState, tournament_id: u64) -> Array<u16> {
+            let stored_entry_fee = self.entry_fee._get_entry_fee(tournament_id);
+            match stored_entry_fee {
+                Option::Some(config) => match config.distribution {
+                    Option::Some(Distribution::Custom(_)) => self
+                        .entry_fee
+                        ._get_distribution_shares(tournament_id, config.distribution_count),
+                    _ => ArrayTrait::new(),
+                },
+                Option::None => ArrayTrait::new(),
+            }
+        }
+
         fn create_tournament(
             ref self: ContractState,
             creator_rewards_address: ContractAddress,
@@ -897,23 +910,13 @@ pub mod Budokan {
                         Option::Some(share) => share,
                         Option::None => 0,
                     };
-                    // Default to Linear(0) when the component has no distribution configured.
-                    // Callers gate position-based payout on entry_fee existence, so this
-                    // default is never consulted for actual payout math.
-                    //
-                    // `_get_entry_fee` returns Custom with an empty shares span for
-                    // performance (claim paths read a single share via the fast
-                    // path). The view model needs the full shares for UI display,
-                    // so we populate them here via `_get_distribution_shares`.
+                    // `_get_entry_fee` returns Custom with an empty shares span —
+                    // full-array reconstruction is O(N/15) storage reads and only
+                    // needed for UI views. Callers that need the shares call the
+                    // dedicated `tournament_distribution_shares(id)` view below.
+                    // Linear(0) default is never consulted for payout math since
+                    // claim paths gate on entry_fee existence.
                     let distribution = match entry_fee_config.distribution {
-                        Option::Some(Distribution::Custom(_)) => {
-                            let shares = self
-                                .entry_fee
-                                ._get_distribution_shares(
-                                    tournament_id, entry_fee_config.distribution_count,
-                                );
-                            Distribution::Custom(shares.span())
-                        },
                         Option::Some(d) => d,
                         Option::None => Distribution::Linear(0),
                     };
@@ -1051,7 +1054,7 @@ pub mod Budokan {
                     distribution_count: *fee.distribution_count,
                 };
                 let component_fee = ComponentEntryFee::Config(stored_config);
-                self.entry_fee.set_entry_fee(tournament_id, component_fee);
+                let _ = self.entry_fee.set_entry_fee(tournament_id, component_fee);
             }
 
             // Store entry requirement using component
