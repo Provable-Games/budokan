@@ -183,6 +183,9 @@ export const prizes = pgTable(
     tokenId: text("token_id"),
     distributionType: text("distribution_type"),
     distributionWeight: integer("distribution_weight"),
+    // Variable-length list for Custom prize distribution variant only.
+    // Basis-point shares (u16) summing to 10000, one per paid position.
+    distributionShares: jsonb("distribution_shares"),
     distributionCount: integer("distribution_count"),
     sponsorAddress: text("sponsor_address"),
     createdAtBlock: bigint("created_at_block", { mode: "bigint" }),

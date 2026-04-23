@@ -226,6 +226,9 @@ export interface DecodedPrizeAdded {
   tokenId: string | null;
   distributionType: string | null;
   distributionWeight: number | null;
+  /** Populated only for `distributionType === "Custom"`. Each entry is a u16
+   *  basis-points share summing to 10000. */
+  distributionShares: number[] | null;
   distributionCount: number | null;
   sponsorAddress: string;
 }
@@ -939,6 +942,9 @@ export function decodePrizeAdded(
     tokenId: (tt.type as string) === "erc721" ? (tt.id as string) : null,
     distributionType: dist ? (dist.type as string) : null,
     distributionWeight: dist?.weight != null ? Number(dist.weight) : null,
+    distributionShares: Array.isArray(dist?.shares)
+      ? (dist.shares as unknown[]).map((v) => Number(v))
+      : null,
     distributionCount: tt.distribution_count != null ? Number(tt.distribution_count) : null,
     sponsorAddress,
   };

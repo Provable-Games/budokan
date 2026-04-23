@@ -15,6 +15,13 @@
       "when": 1777420800000,
       "tag": "0001_flatten_tournament_jsonb",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1745360000000,
+      "tag": "0002_prize_distribution_shares",
+      "breakpoints": true
     }
   ]
 }
