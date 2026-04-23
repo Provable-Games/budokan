@@ -829,6 +829,11 @@ function serializePrize(p: typeof prizes.$inferSelect) {
     tokenId: p.tokenId,
     distributionType: p.distributionType,
     distributionWeight: p.distributionWeight,
+    // Populated only for `distributionType === "Custom"`. Each entry is
+    // a u16 basis-point share summing to 10000.
+    distributionShares: Array.isArray(p.distributionShares)
+      ? (p.distributionShares as number[])
+      : null,
     distributionCount: p.distributionCount,
     sponsorAddress: p.sponsorAddress,
     createdAtBlock: p.createdAtBlock?.toString() ?? null,

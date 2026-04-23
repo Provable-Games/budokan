@@ -398,6 +398,7 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
               tokenId: decoded.tokenId,
               distributionType: decoded.distributionType,
               distributionWeight: decoded.distributionWeight,
+              distributionShares: decoded.distributionShares,
               distributionCount: decoded.distributionCount,
               sponsorAddress: decoded.sponsorAddress,
               createdAtBlock: blockNumber,
