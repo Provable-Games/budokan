@@ -3910,19 +3910,26 @@ fn test_create_tournament_with_custom_distribution_roundtrip() {
             0,
         );
 
-    // Round-trip: reading the tournament must yield the same Custom shares
+    // Round-trip: `tournament()` returns Custom with an empty span (by
+    // design — keeps the hot-path view small). The distribution type tag
+    // and count must still be present. Callers fetch the full shares via
+    // the dedicated `tournament_distribution_shares(id)` view.
     let fetched = contracts.budokan.tournament(tournament.id);
     let fee = fetched.entry_fee.unwrap();
     match fee.distribution {
         Distribution::Custom(read_shares) => {
-            assert!(read_shares.len() == 3, "Custom shares length mismatch");
-            assert!(*read_shares.at(0) == 6000, "Share[0] mismatch");
-            assert!(*read_shares.at(1) == 3000, "Share[1] mismatch");
-            assert!(*read_shares.at(2) == 1000, "Share[2] mismatch");
+            assert!(read_shares.len() == 0, "tournament() should return Custom([])");
         },
-        _ => { panic!("Expected Distribution::Custom after roundtrip"); },
+        _ => { panic!("Expected Distribution::Custom tag after roundtrip"); },
     }
     assert!(fee.distribution_count == 3, "distribution_count should equal shares.len()");
+
+    // Dedicated view returns the actual shares
+    let read_shares = contracts.budokan.tournament_distribution_shares(tournament.id);
+    assert!(read_shares.len() == 3, "shares length mismatch");
+    assert!(*read_shares.at(0) == 6000, "Share[0] mismatch");
+    assert!(*read_shares.at(1) == 3000, "Share[1] mismatch");
+    assert!(*read_shares.at(2) == 1000, "Share[2] mismatch");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
 }
@@ -4095,19 +4102,22 @@ fn test_create_tournament_custom_distribution_multi_slot_roundtrip() {
             0,
         );
 
-    // Roundtrip must preserve all 20 shares across the 2 packed slots
+    // Sanity-check the view still surfaces the Custom tag + count
     let fetched = contracts.budokan.tournament(tournament.id);
     let fee = fetched.entry_fee.unwrap();
     match fee.distribution {
-        Distribution::Custom(read) => {
-            assert!(read.len() == 20, "length");
-            let mut i: u32 = 0;
-            while i < 20 {
-                assert!(*read.at(i) == *input.at(i), "share roundtrip mismatch");
-                i += 1;
-            }
-        },
-        _ => { panic!("Expected Distribution::Custom"); },
+        Distribution::Custom(_) => {},
+        _ => { panic!("Expected Distribution::Custom tag"); },
+    }
+    assert!(fee.distribution_count == 20, "distribution_count");
+
+    // Shares roundtrip across the 2 packed slots via the dedicated view
+    let read = contracts.budokan.tournament_distribution_shares(tournament.id);
+    assert!(read.len() == 20, "length");
+    let mut i: u32 = 0;
+    while i < 20 {
+        assert!(*read.at(i) == *input.at(i), "share roundtrip mismatch");
+        i += 1;
     }
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
