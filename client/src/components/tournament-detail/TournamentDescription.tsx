@@ -38,7 +38,7 @@ const TournamentDescription = ({
 
       {hasDescription ? (
         <div
-          className="markdown-content prose prose-sm prose-invert max-w-none text-neutral/80 overflow-hidden prose-hr:hidden [&_hr]:hidden"
+          className="markdown-content prose prose-sm prose-invert max-w-none text-neutral/80 overflow-hidden"
           style={{
             display: "-webkit-box",
             WebkitLineClamp: 8,
@@ -47,7 +47,11 @@ const TournamentDescription = ({
         >
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
-            components={{ hr: () => null }}
+            components={{
+              hr: () => (
+                <hr className="my-3 border-0 h-px bg-brand/20" />
+              ),
+            }}
           >
             {description}
           </ReactMarkdown>
@@ -63,10 +67,14 @@ const TournamentDescription = ({
           <div className="flex flex-col gap-4">
             <h3 className="font-brand text-xl text-brand">{tournamentName}</h3>
             <div className="w-full h-0.5 bg-brand/25" />
-            <div className="markdown-content prose prose-sm prose-invert max-w-none prose-hr:hidden [&_hr]:hidden">
+            <div className="markdown-content prose prose-sm prose-invert max-w-none">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
-                components={{ hr: () => null }}
+                components={{
+                  hr: () => (
+                    <hr className="my-4 border-0 h-px bg-brand/25" />
+                  ),
+                }}
               >
                 {description}
               </ReactMarkdown>
