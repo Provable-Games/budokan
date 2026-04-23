@@ -14,8 +14,7 @@ pub mod Budokan {
     };
     use budokan::structs::constants::GAME_CREATOR_TOKEN_ID;
     use budokan::structs::packed_storage::{
-        PackedDistribution, PackedDistributionStorePacking, TournamentConfig,
-        TournamentConfigStorePacking, unpack_created_at, unpack_game_schedule,
+        TournamentConfig, TournamentConfigStorePacking, unpack_created_at, unpack_game_schedule,
         unpack_game_start_delay, unpack_registration_end_delay, unpack_registration_start_delay,
     };
     use budokan::structs::schedule::{Phase, Schedule};
@@ -60,9 +59,7 @@ pub mod Budokan {
     use game_components_metagame::registration::registration_component::RegistrationComponent;
     use game_components_metagame::registration::registration_component::RegistrationComponent::RegistrationInternalTrait;
     use game_components_utilities::distribution::calculator;
-    use game_components_utilities::distribution::structs::{
-        BASIS_POINTS, DIST_TYPE_CUSTOM, DIST_TYPE_EXPONENTIAL, DIST_TYPE_LINEAR, DIST_TYPE_UNIFORM,
-    };
+    use game_components_utilities::distribution::structs::BASIS_POINTS;
     use game_components_utilities::utils::encoding::u128_to_ascii_felt;
     use metagame_extensions_interfaces::entry_requirement_extension::{
         IEntryRequirementExtensionDispatcher, IEntryRequirementExtensionDispatcherTrait,
@@ -164,8 +161,6 @@ pub mod Budokan {
         tournament_metadata: Map<u64, Metadata>,
         tournament_client_url: Map<u64, ByteArray>, // Optional client URL from GameConfig
         tournament_renderer_address: Map<u64, ContractAddress>, // Optional renderer (zero = none)
-        // Distribution config per tournament (packed into felt252)
-        tournament_distribution: Map<u64, PackedDistribution>,
         // Position-based entry fee claims: (tournament_id, position) -> claimed
         entry_fee_position_claimed: Map<(u64, u32), bool>,
         // Prize position mapping: prize_id -> position (for Single prizes)
@@ -307,12 +302,6 @@ pub mod Budokan {
             schedule.assert_is_valid();
             self._assert_valid_game_config(@game_config);
 
-            // Extract distribution from entry_fee (default to Linear if no entry fee)
-            let distribution = match @entry_fee {
-                Option::Some(ef) => *ef.distribution,
-                Option::None => Distribution::Linear(1),
-            };
-
             // Validate entry fee shares don't exceed 100%
             if let Option::Some(ef) = @entry_fee {
                 self._assert_valid_entry_fee_shares(ef);
@@ -361,7 +350,6 @@ pub mod Budokan {
                     schedule,
                     game_config,
                     entry_fee,
-                    distribution,
                     entry_requirement,
                     leaderboard_config,
                 );
@@ -424,6 +412,10 @@ pub mod Budokan {
                     game_creator_share,
                     refund_share,
                     additional_shares: array![].span(),
+                    // Deposit path doesn't need the distribution — the pool
+                    // shape is already persisted via set_entry_fee at creation.
+                    distribution: Option::None,
+                    distribution_count: 0,
                 };
                 self
                     .entry_fee
@@ -881,29 +873,15 @@ pub mod Budokan {
                 renderer,
             };
 
-            // Get stored entry_fee from component (without distribution)
+            // Get stored entry_fee from component (includes distribution)
             let stored_entry_fee = self.entry_fee._get_entry_fee(tournament_id);
 
-            // Get distribution from packed storage
-            let packed_dist = self.tournament_distribution.entry(tournament_id).read();
-            let distribution = if packed_dist.dist_type == DIST_TYPE_LINEAR {
-                Distribution::Linear(packed_dist.dist_param)
-            } else if packed_dist.dist_type == DIST_TYPE_EXPONENTIAL {
-                Distribution::Exponential(packed_dist.dist_param)
-            } else if packed_dist.dist_type == DIST_TYPE_UNIFORM {
-                Distribution::Uniform
-            } else {
-                // Custom distribution - shares not stored in packed format
-                Distribution::Custom(array![].span())
-            };
-
-            // Convert positions: 0 in storage means 0 (dynamic)
-            let distribution_count = packed_dist.positions;
-
-            // Reconstruct full EntryFee (with distribution) from stored data
+            // Reconstruct Budokan's EntryFee view from the component's config.
+            // The component persists everything including distribution; Budokan
+            // only projects the tournament_creator_share back out of the first
+            // additional_share.
             let entry_fee: Option<EntryFee> = match stored_entry_fee {
                 Option::Some(entry_fee_config) => {
-                    // First additional_share is tournament_creator_share (if present)
                     let tournament_creator_share: u16 = if entry_fee_config
                         .additional_shares
                         .len() > 0 {
@@ -919,6 +897,26 @@ pub mod Budokan {
                         Option::Some(share) => share,
                         Option::None => 0,
                     };
+                    // Default to Linear(0) when the component has no distribution configured.
+                    // Callers gate position-based payout on entry_fee existence, so this
+                    // default is never consulted for actual payout math.
+                    //
+                    // `_get_entry_fee` returns Custom with an empty shares span for
+                    // performance (claim paths read a single share via the fast
+                    // path). The view model needs the full shares for UI display,
+                    // so we populate them here via `_get_distribution_shares`.
+                    let distribution = match entry_fee_config.distribution {
+                        Option::Some(Distribution::Custom(_)) => {
+                            let shares = self
+                                .entry_fee
+                                ._get_distribution_shares(
+                                    tournament_id, entry_fee_config.distribution_count,
+                                );
+                            Distribution::Custom(shares.span())
+                        },
+                        Option::Some(d) => d,
+                        Option::None => Distribution::Linear(0),
+                    };
                     Option::Some(
                         EntryFee {
                             token_address: entry_fee_config.token_address,
@@ -927,7 +925,7 @@ pub mod Budokan {
                             game_creator_share,
                             refund_share,
                             distribution,
-                            distribution_count,
+                            distribution_count: entry_fee_config.distribution_count,
                         },
                     )
                 },
@@ -968,7 +966,6 @@ pub mod Budokan {
             schedule: Schedule,
             game_config: GameConfig,
             entry_fee: Option<EntryFee>,
-            distribution: Distribution,
             entry_requirement: Option<EntryRequirement>,
             leaderboard_config: LeaderboardConfig,
         ) -> TournamentModel {
@@ -1019,9 +1016,10 @@ pub mod Budokan {
                 }
             }
 
-            // Store entry fee using component (convert to storage format without distribution)
+            // Store entry fee using component. The component owns full
+            // entry-fee state: fees, additional-share recipients, the
+            // position distribution shape, and any Custom shares array.
             if let Option::Some(fee) = @entry_fee {
-                // Convert input EntryFee to StoredEntryFee (storage format without distribution)
                 // tournament_creator_share becomes the first additional_share
                 let additional_shares = if *fee.tournament_creator_share > 0 {
                     array![
@@ -1049,25 +1047,12 @@ pub mod Budokan {
                     game_creator_share,
                     refund_share,
                     additional_shares,
+                    distribution: Option::Some(*fee.distribution),
+                    distribution_count: *fee.distribution_count,
                 };
                 let component_fee = ComponentEntryFee::Config(stored_config);
-                let _ = self.entry_fee.set_entry_fee(tournament_id, component_fee);
+                self.entry_fee.set_entry_fee(tournament_id, component_fee);
             }
-
-            // Store distribution using PackedDistribution
-            let (dist_type, dist_param) = match distribution {
-                Distribution::Linear(weight) => (DIST_TYPE_LINEAR, weight),
-                Distribution::Exponential(weight) => (DIST_TYPE_EXPONENTIAL, weight),
-                Distribution::Uniform => (DIST_TYPE_UNIFORM, 0_u16),
-                Distribution::Custom(_) => (DIST_TYPE_CUSTOM, 0_u16),
-            };
-            // Get distribution_count from entry_fee if present, otherwise 0 (dynamic)
-            let positions: u32 = match @entry_fee {
-                Option::Some(fee) => *fee.distribution_count,
-                Option::None => 0_u32,
-            };
-            let packed_dist = PackedDistribution { dist_type, dist_param, positions };
-            self.tournament_distribution.entry(tournament_id).write(packed_dist);
 
             // Store entry requirement using component
             self.entry_requirement.set_entry_requirement(tournament_id, entry_requirement);
@@ -1249,6 +1234,11 @@ pub mod Budokan {
                 *entry_fee.refund_share,
                 *entry_fee.distribution_count,
             );
+            if let Distribution::Custom(shares) = *entry_fee.distribution {
+                budokan::libs::validations::assert_valid_custom_distribution_shares(
+                    shares, *entry_fee.distribution_count,
+                );
+            }
         }
 
         fn _assert_game_fee_met(
@@ -1605,10 +1595,6 @@ pub mod Budokan {
                 available_share -= entry_fee.refund_share;
             }
 
-            let share = calculator::calculate_share_with_dust(
-                entry_fee.distribution, position, total_positions, available_share,
-            );
-
             // Get recipient for this position
             let recipient_address = if position <= leaderboard_size {
                 let winner_token_id: felt252 = *leaderboard.at(position - 1);
@@ -1618,7 +1604,33 @@ pub mod Budokan {
                 self._get_owner(game_token_address, creator_token_id.into())
             };
 
-            let prize_amount = self._calculate_payout(share.into(), total_pool);
+            // Compute the wei payout. For Custom we fold both scalings —
+            // `raw → bp of total pool → wei of total pool` — into a single
+            // u256 division, so the only rounding is the final floor and
+            // precision loss per position is bounded by 1 wei regardless of
+            // token decimals or pool size. Splitting the scalings would lose
+            // up to `total_pool / BASIS_POINTS` wei per position from the
+            // intermediate u16 bp cast (noticeable at 18 decimals across
+            // many positions).
+            //
+            // For Linear/Exp/Uniform the calculator already returns a share
+            // scaled to `available_share`, so a single-step `share × pool /
+            // BASIS_POINTS` is sufficient and the existing dust roll-up on
+            // position 1 preserves full conservation.
+            let prize_amount: u128 = match entry_fee.distribution {
+                Distribution::Custom(_) => {
+                    let raw = self.entry_fee._get_custom_share_at(tournament_id, position);
+                    let numerator: u256 = raw.into() * available_share.into() * total_pool.into();
+                    let denominator: u256 = BASIS_POINTS.into() * BASIS_POINTS.into();
+                    (numerator / denominator).try_into().unwrap()
+                },
+                _ => {
+                    let share = calculator::calculate_share_with_dust(
+                        entry_fee.distribution, position, total_positions, available_share,
+                    );
+                    self._calculate_payout(share.into(), total_pool)
+                },
+            };
 
             // Prevent 0 token claims to save gas
             assert!(

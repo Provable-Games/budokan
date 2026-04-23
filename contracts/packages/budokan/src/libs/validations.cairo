@@ -61,6 +61,59 @@ pub fn assert_valid_entry_fee_distribution_count(
     );
 }
 
+/// Validates a Custom distribution's shares array. Custom shares are ratios
+/// of the prize pool — they must sum to exactly `BASIS_POINTS` (100%), and
+/// the claim path scales them to `available_share` at payout time (mirroring
+/// Linear/Exponential/Uniform semantics). This decouples Custom configuration
+/// from the fee waterfall: the caller specifies "60/30/10% of the prize pool
+/// goes to positions 1/2/3" and the contract applies fees independently.
+///
+/// - the array must be non-empty,
+/// - the array length must equal `distribution_count` (the paid-places count),
+/// - the sum of shares must equal `BASIS_POINTS`.
+pub fn validate_custom_distribution_shares(shares: Span<u16>, distribution_count: u32) -> bool {
+    if shares.len() == 0 {
+        return false;
+    }
+    if shares.len() != distribution_count {
+        return false;
+    }
+    let mut total: u32 = 0;
+    let mut i: u32 = 0;
+    loop {
+        if i >= shares.len() {
+            break;
+        }
+        total += (*shares.at(i)).into();
+        i += 1;
+    }
+    total == BASIS_POINTS.into()
+}
+
+/// Asserts a Custom distribution's shares array is valid. See
+/// `validate_custom_distribution_shares` for the exact-sum rationale.
+pub fn assert_valid_custom_distribution_shares(shares: Span<u16>, distribution_count: u32) {
+    assert!(shares.len() > 0, "Budokan: Custom distribution shares cannot be empty");
+    assert!(
+        shares.len() == distribution_count,
+        "Budokan: Custom distribution shares length must equal distribution_count",
+    );
+    let mut total: u32 = 0;
+    let mut i: u32 = 0;
+    loop {
+        if i >= shares.len() {
+            break;
+        }
+        total += (*shares.at(i)).into();
+        i += 1;
+    }
+    assert!(
+        total == BASIS_POINTS.into(),
+        "Budokan: Custom distribution shares must sum to 10000, got {}",
+        total,
+    );
+}
+
 /// Validates that a position is within valid range (1 to winner_count inclusive)
 pub fn validate_position(position: u32, winner_count: u32) -> bool {
     position > 0 && position <= winner_count
@@ -109,8 +162,8 @@ pub fn assert_prize_exists(token_address: ContractAddress, prize_id: u64) {
 #[cfg(test)]
 mod tests {
     use super::{
-        contains_address, validate_entry_fee_distribution_count, validate_entry_fee_shares,
-        validate_position,
+        contains_address, validate_custom_distribution_shares,
+        validate_entry_fee_distribution_count, validate_entry_fee_shares, validate_position,
     };
 
     #[test]
@@ -206,6 +259,47 @@ mod tests {
         let addresses = array![addr1, addr2, addr3].span();
 
         assert!(!contains_address(addresses, addr4));
+    }
+
+    #[test]
+    fn test_validate_custom_shares_valid() {
+        // Sum = 10000 (100% of prize pool), length matches count
+        assert!(validate_custom_distribution_shares(array![5000, 3000, 2000].span(), 3));
+        assert!(validate_custom_distribution_shares(array![6000, 3000, 1000].span(), 3));
+    }
+
+    #[test]
+    fn test_validate_custom_shares_rejects_under_10000() {
+        // Sum < 10000 would strand part of the prize pool
+        assert!(!validate_custom_distribution_shares(array![6000, 3000].span(), 2));
+        assert!(!validate_custom_distribution_shares(array![5000, 3000, 1000].span(), 3));
+    }
+
+    #[test]
+    fn test_validate_custom_shares_rejects_over_10000() {
+        // Sum > 10000 would over-distribute the prize pool
+        assert!(!validate_custom_distribution_shares(array![6000, 5000].span(), 2));
+        assert!(!validate_custom_distribution_shares(array![5000, 3000, 2001].span(), 3));
+    }
+
+    #[test]
+    fn test_validate_custom_shares_rejects_empty() {
+        assert!(!validate_custom_distribution_shares(array![].span(), 0));
+        assert!(!validate_custom_distribution_shares(array![].span(), 5));
+    }
+
+    #[test]
+    fn test_validate_custom_shares_rejects_length_mismatch() {
+        // 3 shares with count=5
+        assert!(!validate_custom_distribution_shares(array![5000, 3000, 2000].span(), 5));
+        // 3 shares with count=2
+        assert!(!validate_custom_distribution_shares(array![5000, 3000, 2000].span(), 2));
+    }
+
+    #[test]
+    fn test_validate_custom_shares_rejects_all_zero() {
+        // All zeros sum to 0, not 10000
+        assert!(!validate_custom_distribution_shares(array![0, 0, 0].span(), 3));
     }
 
     #[test]

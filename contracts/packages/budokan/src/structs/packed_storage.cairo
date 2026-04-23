@@ -233,46 +233,14 @@ pub fn unpack_registration_schedule(packed: felt252) -> (u64, u32, u32) {
     )
 }
 
-/// Distribution configuration packed into felt252
-/// Packs: dist_type (8 bits) | dist_param (16 bits) | positions (32 bits)
-/// Total: 8 + 16 + 32 = 56 bits fits in felt252 (251 bits)
-/// positions = 0 means use actual leaderboard size (dynamic)
-#[derive(Copy, Drop, Serde)]
-pub struct PackedDistribution {
-    pub dist_type: u8, // 8 bits - distribution type enum value
-    pub dist_param: u16, // 16 bits - weight parameter for Linear/Exponential
-    pub positions: u32 // 32 bits - fixed positions count, 0 = dynamic
-}
-
-pub impl PackedDistributionStorePacking of StorePacking<PackedDistribution, felt252> {
-    fn pack(value: PackedDistribution) -> felt252 {
-        // Layout: dist_type(8) | dist_param(16) | positions(32)
-        let packed: felt252 = value.dist_type.into()
-            + (value.dist_param.into() * TWO_POW_8.into())
-            + (value.positions.into() * TWO_POW_24.into());
-        packed
-    }
-
-    fn unpack(value: felt252) -> PackedDistribution {
-        let value_u128: u128 = value.try_into().unwrap();
-
-        let dist_type: u8 = (value_u128 & MASK_8).try_into().unwrap();
-        let dist_param: u16 = ((value_u128 / TWO_POW_8) & MASK_16).try_into().unwrap();
-        let positions: u32 = ((value_u128 / TWO_POW_24) & MASK_32).try_into().unwrap();
-
-        PackedDistribution { dist_type, dist_param, positions }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
-        PackedDistribution, PackedDistributionStorePacking, TournamentConfig,
-        TournamentConfigStorePacking, unpack_ascending, unpack_created_at, unpack_game_end_delay,
-        unpack_game_must_be_over, unpack_game_schedule, unpack_game_start_delay, unpack_paymaster,
-        unpack_registration_end_delay, unpack_registration_schedule,
-        unpack_registration_start_delay, unpack_settings_id, unpack_soulbound,
-        unpack_submission_duration,
+        TournamentConfig, TournamentConfigStorePacking, unpack_ascending, unpack_created_at,
+        unpack_game_end_delay, unpack_game_must_be_over, unpack_game_schedule,
+        unpack_game_start_delay, unpack_paymaster, unpack_registration_end_delay,
+        unpack_registration_schedule, unpack_registration_start_delay, unpack_settings_id,
+        unpack_soulbound, unpack_submission_duration,
     };
 
     #[test]
@@ -370,49 +338,6 @@ mod tests {
         assert!(unpacked.submission_duration == 0, "zero sub_duration mismatch");
         assert!(unpacked.ascending == false, "zero ascending mismatch");
         assert!(unpacked.game_must_be_over == false, "zero game_must_be_over mismatch");
-    }
-
-    #[test]
-    fn test_packed_distribution_roundtrip() {
-        // Test exponential with weight 15 and no fixed positions
-        let original = PackedDistribution { dist_type: 1, dist_param: 15, positions: 0 };
-
-        let packed = PackedDistributionStorePacking::pack(original);
-        let unpacked = PackedDistributionStorePacking::unpack(packed);
-
-        assert!(unpacked.dist_type == 1, "dist_type should be 1 (exponential)");
-        assert!(unpacked.dist_param == 15, "dist_param should be 15");
-        assert!(unpacked.positions == 0, "positions should be 0");
-    }
-
-    #[test]
-    fn test_packed_distribution_with_positions() {
-        // Test linear with weight 10 and 5 fixed positions
-        let original = PackedDistribution { dist_type: 0, dist_param: 10, positions: 5 };
-
-        let packed = PackedDistributionStorePacking::pack(original);
-        let unpacked = PackedDistributionStorePacking::unpack(packed);
-
-        assert!(unpacked.dist_type == 0, "dist_type should be 0 (linear)");
-        assert!(unpacked.dist_param == 10, "dist_param should be 10");
-        assert!(unpacked.positions == 5, "positions should be 5");
-    }
-
-    #[test]
-    fn test_packed_distribution_max_values() {
-        // Test with maximum values
-        let original = PackedDistribution {
-            dist_type: 255, // max u8
-            dist_param: 65535, // max u16
-            positions: 4294967295 // max u32
-        };
-
-        let packed = PackedDistributionStorePacking::pack(original);
-        let unpacked = PackedDistributionStorePacking::unpack(packed);
-
-        assert!(unpacked.dist_type == 255, "dist_type should be 255");
-        assert!(unpacked.dist_param == 65535, "dist_param should be 65535");
-        assert!(unpacked.positions == 4294967295, "positions should be max u32");
     }
 
     // --- Individual TournamentConfig unpack helper tests ---
