@@ -104,9 +104,9 @@ const snMainnetConfig: ChainConfig = {
   denshokanAddress:
     "0x00263cc540dac11334470a64759e03952ee2f84a290e99ba8cbc391245cd0bf9",
   budokanAddress:
-    "0x0124745dd41f3ad57e451b05a2d4db9bedaad351ac7643e552171aa5b0816c7a",
+    "0x00f4941e73cc38f67f79ae1f7cdae48f28ca5a6c0e013f6136818e777f61c6ee",
   budokanViewerAddress:
-    "0x07eaa10078ef122cf55bbb39de8a999c7269946208e016627f41674b7cfe944f",
+    "0x027c264f4417dfd25d0626bce7304e9b3140ab06afeaf639b2678d2a05f1beb3",
   budokanApiUrl: "https://budokan-api-production.up.railway.app",
   denshokanApiUrl: "https://denshokan-api-production.up.railway.app",
 } as const;
