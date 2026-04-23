@@ -116,6 +116,21 @@ export const bigintToHex = (v: BigNumberish): `0x${string}` =>
 
 // --- Client-specific utilities (not in SDK) ---
 
+/**
+ * Build an array of basis-point shares that sum to exactly 10000, spread as
+ * evenly as possible across `count` positions. Any remainder from integer
+ * division is absorbed by position 1 so the contract's strict-sum invariant
+ * (sum == BASIS_POINTS) is always satisfied.
+ */
+export function buildUniformBasisPointShares(count: number): number[] {
+  if (count <= 0) return [];
+  const base = Math.floor(10000 / count);
+  const shares = Array<number>(count).fill(base);
+  const remainder = 10000 - base * count;
+  if (remainder > 0) shares[0] += remainder;
+  return shares;
+}
+
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }

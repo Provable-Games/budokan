@@ -251,6 +251,28 @@ export const processTournamentData = (
                   Uniform: undefined,
                   Custom: undefined,
                 });
+              } else if (distributionType === "custom") {
+                // The contract enforces sum == 10000 and length ==
+                // distribution_count. Validation at the form boundary
+                // should have already caught violations, but we guard here
+                // too so a malformed payload never reaches the chain.
+                const rawShares =
+                  (formData.entryFees?.customShares ?? []).slice(0, formPayoutCount);
+                const sum = rawShares.reduce((a, b) => a + (b || 0), 0);
+                if (
+                  rawShares.length !== formPayoutCount ||
+                  sum !== 10000
+                ) {
+                  throw new Error(
+                    `Custom distribution shares invalid: length ${rawShares.length}/${formPayoutCount}, sum ${sum}/10000`,
+                  );
+                }
+                distribution = new CairoCustomEnum({
+                  Linear: undefined,
+                  Exponential: undefined,
+                  Uniform: undefined,
+                  Custom: rawShares,
+                });
               } else {
                 distribution = new CairoCustomEnum({
                   Linear: undefined,
@@ -331,6 +353,24 @@ export const processPrizes = (
             Exponential: undefined,
             Uniform: {},
             Custom: undefined,
+          })
+        );
+      } else if (prize.distribution === "custom") {
+        const expectedLen = prize.distributionCount ?? 0;
+        const rawShares = (prize.customShares ?? []).slice(0, expectedLen);
+        const sum = rawShares.reduce((a: number, b: number) => a + (b || 0), 0);
+        if (rawShares.length !== expectedLen || sum !== 10000) {
+          throw new Error(
+            `Custom distribution shares invalid on prize: length ${rawShares.length}/${expectedLen}, sum ${sum}/10000`,
+          );
+        }
+        distribution = new CairoOption(
+          CairoOptionVariant.Some,
+          new CairoCustomEnum({
+            Linear: undefined,
+            Exponential: undefined,
+            Uniform: undefined,
+            Custom: rawShares,
           })
         );
       } else {
