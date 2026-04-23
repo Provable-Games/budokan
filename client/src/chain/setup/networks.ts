@@ -77,9 +77,9 @@ const snSepoliaConfig: ChainConfig = {
   denshokanAddress:
     "0x0004e6e5bbf18424dfb825f1dbb65e10473b4603a1ec7b9ab02c143d877114f9",
   budokanAddress:
-    "0x0105573bf9184f0a3da78dda70a87055e6aafc7b3fb6e331732a0d25675b7be5",
+    "0x0169083e63f3caff2c15f83eb238b1f4ab8f74903c0e6b5d433b448972c578d4",
   budokanViewerAddress:
-    "0x0414fe2f48db1e3598a83f017d17b4d06cec180b160141fea9244054267c1ff1",
+    "0x02cc4473948170cf42c2f3abc6391fd4401650375ee8e4661b7b6966cda4f15e",
   budokanApiUrl: "https://budokan-api-sepolia.up.railway.app",
   denshokanApiUrl: "https://denshokan-api-sepolia.up.railway.app",
 };
