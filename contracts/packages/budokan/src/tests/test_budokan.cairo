@@ -3875,6 +3875,593 @@ fn test_claim_entry_fee_exponential_distribution_five_players() {
     stop_cheat_block_timestamp(contracts.minigame.contract_address);
 }
 
+// ==================== Custom Distribution Tests ====================
+
+#[test]
+fn test_create_tournament_with_custom_distribution_roundtrip() {
+    let owner = OWNER;
+    let contracts = setup();
+
+    start_cheat_caller_address(contracts.budokan.contract_address, owner);
+
+    // 60% / 30% / 10% split across three positions
+    let shares = array![6000_u16, 3000_u16, 1000_u16].span();
+    let entry_fee = EntryFee {
+        token_address: contracts.erc20.contract_address,
+        amount: 100,
+        tournament_creator_share: 0,
+        game_creator_share: 0,
+        refund_share: 0,
+        distribution: Distribution::Custom(shares),
+        distribution_count: 3,
+    };
+
+    let tournament = contracts
+        .budokan
+        .create_tournament(
+            owner,
+            test_metadata(),
+            test_schedule(),
+            test_game_config(contracts.minigame.contract_address),
+            Option::Some(entry_fee),
+            Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
+        );
+
+    // Round-trip: reading the tournament must yield the same Custom shares
+    let fetched = contracts.budokan.tournament(tournament.id);
+    let fee = fetched.entry_fee.unwrap();
+    match fee.distribution {
+        Distribution::Custom(read_shares) => {
+            assert!(read_shares.len() == 3, "Custom shares length mismatch");
+            assert!(*read_shares.at(0) == 6000, "Share[0] mismatch");
+            assert!(*read_shares.at(1) == 3000, "Share[1] mismatch");
+            assert!(*read_shares.at(2) == 1000, "Share[2] mismatch");
+        },
+        _ => { panic!("Expected Distribution::Custom after roundtrip"); },
+    }
+    assert!(fee.distribution_count == 3, "distribution_count should equal shares.len()");
+
+    stop_cheat_caller_address(contracts.budokan.contract_address);
+}
+
+#[test]
+fn test_claim_entry_fee_custom_distribution_three_players() {
+    let owner = OWNER;
+    let contracts = setup();
+
+    start_cheat_caller_address(contracts.budokan.contract_address, owner);
+
+    let one_token: u128 = 1_000_000_000_000_000_000;
+    let entry_amount: u128 = 100 * one_token;
+    let total_pool: u256 = 300 * one_token.into();
+
+    // 60% / 30% / 10% across three positions
+    let shares = array![6000_u16, 3000_u16, 1000_u16].span();
+    let entry_fee = EntryFee {
+        token_address: contracts.erc20.contract_address,
+        amount: entry_amount,
+        tournament_creator_share: 0,
+        game_creator_share: 0,
+        refund_share: 0,
+        distribution: Distribution::Custom(shares),
+        distribution_count: 3,
+    };
+
+    let tournament = contracts
+        .budokan
+        .create_tournament(
+            owner,
+            test_metadata(),
+            test_schedule(),
+            test_game_config(contracts.minigame.contract_address),
+            Option::Some(entry_fee),
+            Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
+        );
+
+    contracts.erc20.mint(owner, total_pool);
+    start_cheat_caller_address(contracts.erc20.contract_address, owner);
+    contracts.erc20.approve(contracts.budokan.contract_address, total_pool);
+    stop_cheat_caller_address(contracts.erc20.contract_address);
+
+    start_cheat_caller_address(contracts.budokan.contract_address, owner);
+
+    let time = TEST_REGISTRATION_START_DELAY().into();
+    start_cheat_block_timestamp(contracts.budokan.contract_address, time);
+    start_cheat_block_timestamp(contracts.minigame.contract_address, time);
+
+    let (p1, _) = contracts
+        .budokan
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 2, 0);
+    let (p2, _) = contracts
+        .budokan
+        .enter_tournament(tournament.id, 'player2', owner, Option::None, 3, 0);
+    let (p3, _) = contracts
+        .budokan
+        .enter_tournament(tournament.id, 'player3', owner, Option::None, 4, 0);
+
+    let game_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
+    start_cheat_block_timestamp(contracts.budokan.contract_address, game_time);
+    start_cheat_block_timestamp(contracts.minigame.contract_address, game_time);
+
+    contracts.minigame.end_game(p1.into(), 3000);
+    contracts.budokan.submit_score(tournament.id, p1, 1);
+    contracts.minigame.end_game(p2.into(), 2000);
+    contracts.budokan.submit_score(tournament.id, p2, 2);
+    contracts.minigame.end_game(p3.into(), 1000);
+    contracts.budokan.submit_score(tournament.id, p3, 3);
+
+    let finalized_time = (TEST_GAME_START_DELAY()
+        + TEST_GAME_END_DELAY()
+        + MIN_SUBMISSION_PERIOD
+        + 1)
+        .into();
+    start_cheat_block_timestamp(contracts.budokan.contract_address, finalized_time);
+
+    let initial_balance = contracts.erc20.balance_of(owner);
+
+    contracts
+        .budokan
+        .claim_reward(tournament.id, RewardType::EntryFee(EntryFeeRewardType::Position(1)));
+    let after_p1 = contracts.erc20.balance_of(owner);
+    let prize_p1 = after_p1 - initial_balance;
+
+    contracts
+        .budokan
+        .claim_reward(tournament.id, RewardType::EntryFee(EntryFeeRewardType::Position(2)));
+    let after_p2 = contracts.erc20.balance_of(owner);
+    let prize_p2 = after_p2 - after_p1;
+
+    contracts
+        .budokan
+        .claim_reward(tournament.id, RewardType::EntryFee(EntryFeeRewardType::Position(3)));
+    let after_p3 = contracts.erc20.balance_of(owner);
+    let prize_p3 = after_p3 - after_p2;
+
+    let expected_pool: u256 = 300 * one_token.into();
+    let expected_p1: u256 = (expected_pool * 6000) / 10000;
+    let expected_p2: u256 = (expected_pool * 3000) / 10000;
+    let expected_p3: u256 = (expected_pool * 1000) / 10000;
+
+    // Dust from integer division flows to position 1 via calculate_share_with_dust,
+    // so the exact shares should be returned without slack.
+    assert!(prize_p1 == expected_p1, "Position 1 should receive 60%");
+    assert!(prize_p2 == expected_p2, "Position 2 should receive 30%");
+    assert!(prize_p3 == expected_p3, "Position 3 should receive 10%");
+    assert!(prize_p1 + prize_p2 + prize_p3 == expected_pool, "Pool fully distributed");
+
+    stop_cheat_caller_address(contracts.budokan.contract_address);
+    stop_cheat_block_timestamp(contracts.budokan.contract_address);
+    stop_cheat_block_timestamp(contracts.minigame.contract_address);
+}
+
+#[test]
+fn test_create_tournament_custom_distribution_multi_slot_roundtrip() {
+    let owner = OWNER;
+    let contracts = setup();
+
+    start_cheat_caller_address(contracts.budokan.contract_address, owner);
+
+    // Build a 20-share distribution (crosses one packed-storage slot boundary of 15).
+    // Shares must sum to exactly 10000 with no other fees (strict-sum invariant).
+    let mut input: Array<u16> = ArrayTrait::new();
+    input.append(3200); // Bumped from 2000 to make total = 10000
+    input.append(1500);
+    input.append(1000);
+    input.append(800);
+    input.append(600);
+    input.append(500);
+    input.append(400);
+    input.append(350);
+    input.append(300);
+    input.append(250);
+    input.append(200);
+    input.append(180);
+    input.append(160);
+    input.append(140);
+    input.append(120);
+    input.append(100);
+    input.append(80);
+    input.append(60);
+    input.append(40);
+    input.append(20);
+
+    let entry_fee = EntryFee {
+        token_address: contracts.erc20.contract_address,
+        amount: 100,
+        tournament_creator_share: 0,
+        game_creator_share: 0,
+        refund_share: 0,
+        distribution: Distribution::Custom(input.span()),
+        distribution_count: 20,
+    };
+
+    let tournament = contracts
+        .budokan
+        .create_tournament(
+            owner,
+            test_metadata(),
+            test_schedule(),
+            test_game_config(contracts.minigame.contract_address),
+            Option::Some(entry_fee),
+            Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
+        );
+
+    // Roundtrip must preserve all 20 shares across the 2 packed slots
+    let fetched = contracts.budokan.tournament(tournament.id);
+    let fee = fetched.entry_fee.unwrap();
+    match fee.distribution {
+        Distribution::Custom(read) => {
+            assert!(read.len() == 20, "length");
+            let mut i: u32 = 0;
+            while i < 20 {
+                assert!(*read.at(i) == *input.at(i), "share roundtrip mismatch");
+                i += 1;
+            }
+        },
+        _ => { panic!("Expected Distribution::Custom"); },
+    }
+
+    stop_cheat_caller_address(contracts.budokan.contract_address);
+}
+
+#[test]
+#[should_panic(
+    expected: "Budokan: Custom distribution shares length must equal distribution_count",
+)]
+fn test_create_tournament_custom_distribution_length_mismatch() {
+    let owner = OWNER;
+    let contracts = setup();
+
+    start_cheat_caller_address(contracts.budokan.contract_address, owner);
+
+    let entry_fee = EntryFee {
+        token_address: contracts.erc20.contract_address,
+        amount: 100,
+        tournament_creator_share: 0,
+        game_creator_share: 0,
+        refund_share: 0,
+        distribution: Distribution::Custom(array![6000_u16, 4000_u16].span()),
+        // 3 positions but only 2 shares supplied
+        distribution_count: 3,
+    };
+
+    contracts
+        .budokan
+        .create_tournament(
+            owner,
+            test_metadata(),
+            test_schedule(),
+            test_game_config(contracts.minigame.contract_address),
+            Option::Some(entry_fee),
+            Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
+        );
+}
+
+#[test]
+#[should_panic(expected: "Budokan: Custom distribution shares must sum to 10000")]
+fn test_create_tournament_custom_distribution_sum_over() {
+    // Custom shares sum to 11000 > 10000 → rejected.
+    let owner = OWNER;
+    let contracts = setup();
+
+    start_cheat_caller_address(contracts.budokan.contract_address, owner);
+
+    let entry_fee = EntryFee {
+        token_address: contracts.erc20.contract_address,
+        amount: 100,
+        tournament_creator_share: 0,
+        game_creator_share: 0,
+        refund_share: 0,
+        distribution: Distribution::Custom(array![6000_u16, 5000_u16].span()),
+        distribution_count: 2,
+    };
+
+    contracts
+        .budokan
+        .create_tournament(
+            owner,
+            test_metadata(),
+            test_schedule(),
+            test_game_config(contracts.minigame.contract_address),
+            Option::Some(entry_fee),
+            Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
+        );
+}
+
+#[test]
+#[should_panic(expected: "Budokan: Custom distribution shares must sum to 10000")]
+fn test_create_tournament_custom_distribution_sum_under() {
+    // Custom shares sum to 9000 < 10000 → rejected (part of prize pool
+    // would be stranded).
+    let owner = OWNER;
+    let contracts = setup();
+
+    start_cheat_caller_address(contracts.budokan.contract_address, owner);
+
+    let entry_fee = EntryFee {
+        token_address: contracts.erc20.contract_address,
+        amount: 100,
+        tournament_creator_share: 0,
+        game_creator_share: 0,
+        refund_share: 0,
+        distribution: Distribution::Custom(array![6000_u16, 3000_u16].span()),
+        distribution_count: 2,
+    };
+
+    contracts
+        .budokan
+        .create_tournament(
+            owner,
+            test_metadata(),
+            test_schedule(),
+            test_game_config(contracts.minigame.contract_address),
+            Option::Some(entry_fee),
+            Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
+        );
+}
+
+/// Regression test locking in wei-level precision for Custom claim payouts
+/// at 18 decimals. Uses "messy" shares (3334/3333/3333) with a non-zero
+/// creator fee — this configuration stranded ~3×10^16 wei (0.03 tokens at
+/// 18 decimals) per 300-token pool under the earlier two-step scaling. The
+/// single-step u256 claim math collapses both scalings into one floor, so
+/// the pool is conserved to within 1 wei per position.
+#[test]
+fn test_claim_entry_fee_custom_distribution_precision_18_decimals() {
+    let owner = OWNER;
+    let contracts = setup();
+
+    start_cheat_caller_address(contracts.budokan.contract_address, owner);
+
+    let one_token: u128 = 1_000_000_000_000_000_000;
+    let entry_amount: u128 = 100 * one_token;
+
+    // Messy thirds that don't divide evenly — the case that previously
+    // stranded dust.
+    let entry_fee = EntryFee {
+        token_address: contracts.erc20.contract_address,
+        amount: entry_amount,
+        tournament_creator_share: 500,
+        game_creator_share: 0,
+        refund_share: 0,
+        distribution: Distribution::Custom(array![3334_u16, 3333_u16, 3333_u16].span()),
+        distribution_count: 3,
+    };
+
+    let tournament = contracts
+        .budokan
+        .create_tournament(
+            owner,
+            test_metadata(),
+            test_schedule(),
+            test_game_config(contracts.minigame.contract_address),
+            Option::Some(entry_fee),
+            Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
+        );
+
+    let total_pool: u256 = 300 * one_token.into();
+    contracts.erc20.mint(owner, total_pool);
+    start_cheat_caller_address(contracts.erc20.contract_address, owner);
+    contracts.erc20.approve(contracts.budokan.contract_address, total_pool);
+    stop_cheat_caller_address(contracts.erc20.contract_address);
+
+    start_cheat_caller_address(contracts.budokan.contract_address, owner);
+
+    let time = TEST_REGISTRATION_START_DELAY().into();
+    start_cheat_block_timestamp(contracts.budokan.contract_address, time);
+    start_cheat_block_timestamp(contracts.minigame.contract_address, time);
+
+    let (p1, _) = contracts
+        .budokan
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 2, 0);
+    let (p2, _) = contracts
+        .budokan
+        .enter_tournament(tournament.id, 'player2', owner, Option::None, 3, 0);
+    let (p3, _) = contracts
+        .budokan
+        .enter_tournament(tournament.id, 'player3', owner, Option::None, 4, 0);
+
+    let game_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
+    start_cheat_block_timestamp(contracts.budokan.contract_address, game_time);
+    start_cheat_block_timestamp(contracts.minigame.contract_address, game_time);
+
+    contracts.minigame.end_game(p1.into(), 3000);
+    contracts.budokan.submit_score(tournament.id, p1, 1);
+    contracts.minigame.end_game(p2.into(), 2000);
+    contracts.budokan.submit_score(tournament.id, p2, 2);
+    contracts.minigame.end_game(p3.into(), 1000);
+    contracts.budokan.submit_score(tournament.id, p3, 3);
+
+    let finalized_time = (TEST_GAME_START_DELAY()
+        + TEST_GAME_END_DELAY()
+        + MIN_SUBMISSION_PERIOD
+        + 1)
+        .into();
+    start_cheat_block_timestamp(contracts.budokan.contract_address, finalized_time);
+
+    let initial_balance = contracts.erc20.balance_of(owner);
+
+    contracts
+        .budokan
+        .claim_reward(tournament.id, RewardType::EntryFee(EntryFeeRewardType::TournamentCreator));
+    contracts
+        .budokan
+        .claim_reward(tournament.id, RewardType::EntryFee(EntryFeeRewardType::Position(1)));
+    contracts
+        .budokan
+        .claim_reward(tournament.id, RewardType::EntryFee(EntryFeeRewardType::Position(2)));
+    contracts
+        .budokan
+        .claim_reward(tournament.id, RewardType::EntryFee(EntryFeeRewardType::Position(3)));
+
+    let final_balance = contracts.erc20.balance_of(owner);
+    let total_distributed = final_balance - initial_balance;
+
+    // Conservation: total_distributed should equal total_pool within at most
+    // N wei (one per position's final floor). Under the old two-step math
+    // this gap was ~3e16 wei (0.03 tokens at 18 decimals).
+    let dust: u256 = total_pool - total_distributed;
+    assert!(dust <= 3, "Custom payout should conserve pool to within N wei");
+
+    stop_cheat_caller_address(contracts.budokan.contract_address);
+    stop_cheat_block_timestamp(contracts.budokan.contract_address);
+    stop_cheat_block_timestamp(contracts.minigame.contract_address);
+}
+
+/// Claim path verification with Custom distribution + non-zero fees. Custom
+/// shares are ratios of the prize pool (post-fees), scaled to the actual
+/// pool at claim time. Exercises the ratio-scaling semantics end-to-end.
+#[test]
+fn test_claim_entry_fee_custom_distribution_with_creator_fee() {
+    let owner = OWNER;
+    let contracts = setup();
+
+    start_cheat_caller_address(contracts.budokan.contract_address, owner);
+
+    let one_token: u128 = 1_000_000_000_000_000_000;
+    let entry_amount: u128 = 100 * one_token;
+
+    // Tournament creator takes 5%, Custom splits the rest 60/30/10.
+    let entry_fee = EntryFee {
+        token_address: contracts.erc20.contract_address,
+        amount: entry_amount,
+        tournament_creator_share: 500,
+        game_creator_share: 0,
+        refund_share: 0,
+        distribution: Distribution::Custom(array![6000_u16, 3000_u16, 1000_u16].span()),
+        distribution_count: 3,
+    };
+
+    let tournament = contracts
+        .budokan
+        .create_tournament(
+            owner,
+            test_metadata(),
+            test_schedule(),
+            test_game_config(contracts.minigame.contract_address),
+            Option::Some(entry_fee),
+            Option::None,
+            test_leaderboard_config(),
+            1,
+            0,
+        );
+
+    let total_pool: u256 = 300 * one_token.into();
+    contracts.erc20.mint(owner, total_pool);
+    start_cheat_caller_address(contracts.erc20.contract_address, owner);
+    contracts.erc20.approve(contracts.budokan.contract_address, total_pool);
+    stop_cheat_caller_address(contracts.erc20.contract_address);
+
+    start_cheat_caller_address(contracts.budokan.contract_address, owner);
+
+    let time = TEST_REGISTRATION_START_DELAY().into();
+    start_cheat_block_timestamp(contracts.budokan.contract_address, time);
+    start_cheat_block_timestamp(contracts.minigame.contract_address, time);
+
+    let (p1, _) = contracts
+        .budokan
+        .enter_tournament(tournament.id, 'player1', owner, Option::None, 2, 0);
+    let (p2, _) = contracts
+        .budokan
+        .enter_tournament(tournament.id, 'player2', owner, Option::None, 3, 0);
+    let (p3, _) = contracts
+        .budokan
+        .enter_tournament(tournament.id, 'player3', owner, Option::None, 4, 0);
+
+    let game_time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
+    start_cheat_block_timestamp(contracts.budokan.contract_address, game_time);
+    start_cheat_block_timestamp(contracts.minigame.contract_address, game_time);
+
+    contracts.minigame.end_game(p1.into(), 3000);
+    contracts.budokan.submit_score(tournament.id, p1, 1);
+    contracts.minigame.end_game(p2.into(), 2000);
+    contracts.budokan.submit_score(tournament.id, p2, 2);
+    contracts.minigame.end_game(p3.into(), 1000);
+    contracts.budokan.submit_score(tournament.id, p3, 3);
+
+    let finalized_time = (TEST_GAME_START_DELAY()
+        + TEST_GAME_END_DELAY()
+        + MIN_SUBMISSION_PERIOD
+        + 1)
+        .into();
+    start_cheat_block_timestamp(contracts.budokan.contract_address, finalized_time);
+
+    let initial_balance = contracts.erc20.balance_of(owner);
+
+    // Creator claims first — 5% of 300 tokens = 15 tokens
+    contracts
+        .budokan
+        .claim_reward(tournament.id, RewardType::EntryFee(EntryFeeRewardType::TournamentCreator));
+    let after_creator = contracts.erc20.balance_of(owner);
+    let creator_payout = after_creator - initial_balance;
+
+    // Positions claim — shares of prize pool (285 tokens = 95% of 300)
+    contracts
+        .budokan
+        .claim_reward(tournament.id, RewardType::EntryFee(EntryFeeRewardType::Position(1)));
+    let after_p1 = contracts.erc20.balance_of(owner);
+    let prize_p1 = after_p1 - after_creator;
+
+    contracts
+        .budokan
+        .claim_reward(tournament.id, RewardType::EntryFee(EntryFeeRewardType::Position(2)));
+    let after_p2 = contracts.erc20.balance_of(owner);
+    let prize_p2 = after_p2 - after_p1;
+
+    contracts
+        .budokan
+        .claim_reward(tournament.id, RewardType::EntryFee(EntryFeeRewardType::Position(3)));
+    let after_p3 = contracts.erc20.balance_of(owner);
+    let prize_p3 = after_p3 - after_p2;
+
+    // Creator = 500 bp of 300 = 15 tokens
+    let expected_creator: u256 = (total_pool * 500) / 10000;
+    // Prize pool (after creator) = 9500 bp of 300 = 285 tokens
+    // Positions get 60/30/10% of prize pool: 171 / 85.5 / 28.5 tokens
+    // Ratio scaling: effective_bp = raw * 9500 / 10000
+    //   P1 effective = 6000 * 9500 / 10000 = 5700 → 5700 * 300 / 10000 = 171
+    //   P2 effective = 3000 * 9500 / 10000 = 2850 → 85.5  (rounds with integer decimals in token
+    //   units)
+    //   P3 effective = 1000 * 9500 / 10000 = 950  → 28.5
+    let expected_p1: u256 = (5700 * total_pool) / 10000;
+    let expected_p2: u256 = (2850 * total_pool) / 10000;
+    let expected_p3: u256 = (950 * total_pool) / 10000;
+
+    assert!(creator_payout == expected_creator, "Creator should receive 5% of pool");
+    assert!(prize_p1 == expected_p1, "P1 should receive 60% of prize pool (scaled)");
+    assert!(prize_p2 == expected_p2, "P2 should receive 30% of prize pool (scaled)");
+    assert!(prize_p3 == expected_p3, "P3 should receive 10% of prize pool (scaled)");
+    // Full conservation: creator + all positions == total_pool
+    assert!(
+        creator_payout + prize_p1 + prize_p2 + prize_p3 == total_pool, "Pool fully distributed",
+    );
+
+    stop_cheat_caller_address(contracts.budokan.contract_address);
+    stop_cheat_block_timestamp(contracts.budokan.contract_address);
+    stop_cheat_block_timestamp(contracts.minigame.contract_address);
+}
+
 // ==================== Registration Has Submitted Tests ====================
 
 #[test]
