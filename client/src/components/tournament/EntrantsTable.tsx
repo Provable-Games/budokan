@@ -100,9 +100,11 @@ const EntrantsTable = ({
     !!extensionConfig?.address &&
     entryCount > 0;
 
-  // Live leaderboard. `enabled` stays on so the WS mint subscription is active
-  // before the first entry — otherwise the very first entrant could never
-  // trigger a liveMints refetch.
+  // Live leaderboard — server-paginated by score. The SDK handles efficient
+  // updates: WS score/game_over events patch in place; mint events trigger a
+  // debounced refetch. `enabled` stays on so the WS mint subscription is
+  // active before the first entry — otherwise the very first entrant could
+  // never trigger a liveMints refetch.
   const {
     entries: pageEntries,
     total: leaderboardTotal,
@@ -119,39 +121,112 @@ const EntrantsTable = ({
     liveGameOver: isStarted,
   });
 
-  const totalEntries = leaderboardTotal || entryCount;
+  // Registrations: instant source for ban/submission status, and used to
+  // surface pending entries during the window between budokan seeing the
+  // registration and denshokan indexing the corresponding mint.
+  const { registrations: registrantsResult, refetch: refetchRegistrations } =
+    useRegistrations(tournamentId?.toString(), { limit: 1000 });
+  const registrants = registrantsResult?.data ?? null;
+
+  // Normalize a raw token id to a canonical lowercase 0x-prefixed hex string.
+  // Avoids Number() — token ids are felt252-sized and would lose precision.
+  const toHexTokenId = (raw: unknown): string => {
+    if (raw == null) return "0x0";
+    const s = String(raw);
+    if (s.startsWith("0x") || s.startsWith("0X")) return s.toLowerCase();
+    try {
+      return "0x" + BigInt(s).toString(16);
+    } catch {
+      return s.toLowerCase();
+    }
+  };
+
+  const regByHexId = useMemo(() => {
+    const map = new Map<string, any>();
+    for (const r of (registrants as any[]) ?? []) {
+      map.set(toHexTokenId(r.gameTokenId), r);
+    }
+    return map;
+  }, [registrants]);
+
+  // Total trusts whichever source has more rows — registrations land
+  // instantly, so during indexer lag they may exceed the leaderboard count.
+  const registrantsCount = registrants?.length ?? 0;
+  const totalEntries = Math.max(
+    leaderboardTotal ?? 0,
+    registrantsCount,
+    entryCount,
+  );
   const totalPages = Math.max(1, Math.ceil(totalEntries / PAGE_SIZE));
   const hasNextPage = currentPage < totalPages;
   const hasPreviousPage = currentPage > 1;
   const nextPage = () => setCurrentPage((p) => Math.min(p + 1, totalPages));
   const previousPage = () => setCurrentPage((p) => Math.max(p - 1, 1));
 
-  // Registrations for ban/submission status
-  const { registrations: registrantsResult, refetch: refetchRegistrations } =
-    useRegistrations(tournamentId?.toString(), { limit: 1000 });
-  const registrants = registrantsResult?.data ?? null;
-
+  // Build the displayed rows for the current page. The leaderboard provides
+  // the score-ranked spine; on the last page we supplement with registrations
+  // budokan knows about but denshokan hasn't indexed yet (so a brand-new
+  // entry isn't invisible while waiting for indexer catch-up). Older
+  // unindexed entries — those that should be on earlier leaderboard pages —
+  // aren't recoverable without fetching all leaderboard pages, but in
+  // practice unindexed entries are always the most recent ones.
   const gameTokens = useMemo(() => {
-    if (!pageEntries.length) return [];
-    const regMap = new Map(
-      ((registrants as any[]) ?? []).map((r: any) => {
-        const raw = r.gameTokenId?.toString();
-        const hex = raw?.startsWith("0x")
-          ? raw
-          : "0x" + BigInt(raw ?? 0).toString(16);
-        return [hex, r];
-      }),
-    );
-    return pageEntries.map((entry) => {
-      const reg = regMap.get(entry.tokenId);
+    const baseRows = pageEntries.map((entry) => {
+      const reg = regByHexId.get(toHexTokenId(entry.tokenId));
       return {
         ...entry,
         playerName: entry.playerName || reg?.playerName || "",
         isBanned: !!reg?.isBanned,
         hasSubmitted: !!reg?.hasSubmitted,
+        entryNumber: Number(reg?.entryNumber ?? 0),
       };
     });
-  }, [pageEntries, registrants]);
+
+    const isLastPage = currentPage >= totalPages;
+    const unindexedCount = Math.max(
+      0,
+      registrantsCount - (leaderboardTotal ?? 0),
+    );
+    if (!isLastPage || unindexedCount === 0) return baseRows;
+
+    // Pick the most-recent registrations not on the current leaderboard page,
+    // capped at the count of unindexed rows. Restore entry-number order so
+    // they slot in at the bottom in the order they were created.
+    const presentTokenIds = new Set(
+      baseRows.map((r) => toHexTokenId(r.tokenId)),
+    );
+    const supplemental = ((registrants as any[]) ?? [])
+      .filter(
+        (reg) => !presentTokenIds.has(toHexTokenId(reg.gameTokenId)),
+      )
+      .sort(
+        (a, b) => Number(b.entryNumber ?? 0) - Number(a.entryNumber ?? 0),
+      )
+      .slice(0, unindexedCount)
+      .reverse()
+      .map((reg) => ({
+        tokenId: toHexTokenId(reg.gameTokenId),
+        score: 0,
+        playerName: reg.playerName ?? "",
+        owner: reg.playerAddress ?? "0x0",
+        gameOver: false,
+        rank: 0,
+        mintedAt: new Date().toISOString(),
+        entryNumber: Number(reg.entryNumber ?? 0),
+        isBanned: !!reg.isBanned,
+        hasSubmitted: !!reg.hasSubmitted,
+      }));
+
+    return [...baseRows, ...supplemental];
+  }, [
+    pageEntries,
+    regByHexId,
+    registrants,
+    registrantsCount,
+    leaderboardTotal,
+    currentPage,
+    totalPages,
+  ]);
 
   const ownerAddresses = useMemo(
     () => gameTokens.map((g: any) => g?.owner ?? "0x0"),
@@ -159,17 +234,31 @@ const EntrantsTable = ({
   );
   const { usernames } = useGetUsernames(ownerAddresses);
 
-  // Stable refs to refetchers — the WS effect and polling interval below
-  // depend only on `lastMessage` / mount, so refetcher reference churn between
-  // renders can't clear pending timers before they fire.
+  // Track which page `pageEntries` actually corresponds to. Between clicking
+  // a new page and the fetch resolving, `useLiveLeaderboard` keeps the
+  // previous page's rows in `pageEntries`. We can't gate on `tokensLoading`
+  // here — when `currentPage` changes, the fetch effect runs *after* commit,
+  // so for the first render the loading flag is still false even though the
+  // displayed rows belong to the previous page.
+  const [loadedPage, setLoadedPage] = useState<number | null>(null);
+  useEffect(() => {
+    if (!tokensLoading) setLoadedPage(currentPage);
+  }, [tokensLoading, currentPage]);
+  const isPageStale = loadedPage !== currentPage;
+  const displayRows = isPageStale ? [] : gameTokens;
+
+  // Stable refs to refetchers — the WS effect below depends only on
+  // `lastMessage`, so refetcher reference churn between renders can't clear
+  // pending timers before they fire.
   const refetchTokensRef = useRef(refetchTokens);
   const refetchRegistrationsRef = useRef(refetchRegistrations);
   refetchTokensRef.current = refetchTokens;
   refetchRegistrationsRef.current = refetchRegistrations;
 
   // Refetch on budokan WS registration events. Registrations refetch
-  // immediately (budokan data is ready). Token refetch is staggered — the
-  // denshokan indexer needs time to index the mint, and lag is variable.
+  // immediately (budokan data is ready) and that drives the pre-start view
+  // directly. Token refetch is staggered — the denshokan indexer needs time
+  // to index the mint, and lag is variable.
   useEffect(() => {
     if (lastMessage?.channel !== "registrations") return;
     refetchRegistrationsRef.current();
@@ -178,18 +267,6 @@ const EntrantsTable = ({
     );
     return () => timers.forEach(clearTimeout);
   }, [lastMessage]);
-
-  // Polling fallback — keeps the table fresh even if the WS event is dropped
-  // (Railway disconnect, browser throttling, proxy buffering, etc.). Pauses
-  // while the tab is hidden so we don't burn requests in the background.
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      if (document.visibilityState !== "visible") return;
-      refetchTokensRef.current();
-      refetchRegistrationsRef.current();
-    }, 10_000);
-    return () => window.clearInterval(id);
-  }, []);
 
   const gameAddress = tournamentModel?.gameAddress;
 
@@ -257,7 +334,7 @@ const EntrantsTable = ({
         </div>
 
         {/* Rows */}
-        {gameTokens.length === 0 ? (
+        {totalEntries === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 gap-1">
             <span className="text-sm text-brand-muted/60 font-semibold">
               No entrants yet
@@ -268,12 +345,31 @@ const EntrantsTable = ({
           </div>
         ) : (
           Array.from({ length: PAGE_SIZE }).map((_, i) => {
-            const game = gameTokens[i];
+            const game = displayRows[i];
             const pos0 = (currentPage - 1) * PAGE_SIZE + i;
             const prize = prizesByPosition.get(pos0 + 1);
 
             if (!game) {
-              // Empty placeholder row (to keep rows even on last page)
+              // Two placeholder modes:
+              //  - Page transition (isPageStale): pulsing skeleton bars to
+              //    signal a loading state.
+              //  - Last-page tail (e.g. page 3 has 2 entries, slots 3–10
+              //    are empty): static dashes at low opacity.
+              if (isPageStale) {
+                return (
+                  <div
+                    key={`skeleton-${i}`}
+                    className="grid grid-cols-[44px_1fr_auto_auto] items-center gap-2 px-2 py-1.5 animate-pulse"
+                  >
+                    <span className="text-xs text-brand-muted/40 font-brand">
+                      {positionLabel(pos0)}
+                    </span>
+                    <div className="h-3 w-24 max-w-full rounded bg-brand-muted/20" />
+                    <div className="h-3 w-10 rounded bg-brand-muted/20 ml-auto" />
+                    <div className="h-3 w-12 rounded bg-brand-muted/15 ml-auto" />
+                  </div>
+                );
+              }
               return (
                 <div
                   key={`empty-${i}`}
@@ -407,8 +503,8 @@ const EntrantsTable = ({
             currentPage={currentPage}
             nextPage={nextPage}
             previousPage={previousPage}
-            hasNextPage={hasNextPage}
-            hasPreviousPage={hasPreviousPage}
+            hasNextPage={hasNextPage && !isPageStale}
+            hasPreviousPage={hasPreviousPage && !isPageStale}
           />
         </div>
       )}

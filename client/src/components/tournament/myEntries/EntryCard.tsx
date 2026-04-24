@@ -19,6 +19,9 @@ interface EntryCardProps {
   isStarted: boolean;
   isEnded: boolean;
   prizesByPosition?: Map<number, PositionPrizeDisplay>;
+  /** Used when `game.playerName` is missing (e.g. brand-new entry not yet
+   *  indexed by denshokan). Typically the controller username or address. */
+  fallbackName?: string;
 }
 
 const formatUSDCompact = (value: number) => {
@@ -38,6 +41,7 @@ const EntryCard = ({
   isStarted,
   isEnded,
   prizesByPosition,
+  fallbackName,
 }: EntryCardProps) => {
   const { getGameName } = useUIStore();
   const gameOver = !!game?.gameOver;
@@ -114,7 +118,7 @@ const EntryCard = ({
       </div>
 
       <span className="text-xs text-neutral truncate max-w-full">
-        {game.playerName ?? "Unnamed"}
+        {game.playerName || fallbackName || "Unnamed"}
       </span>
 
       {isStarted && (
