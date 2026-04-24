@@ -1,6 +1,6 @@
 import { REFRESH, TROPHY } from "@/components/Icons";
 import { useRegistrations } from "@provable-games/budokan-sdk/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAccount } from "@starknet-react/core";
 import { BigNumberish } from "starknet";
 import { ChevronDown, SlidersHorizontal } from "lucide-react";
@@ -96,17 +96,38 @@ const MyEntries = ({
     }
   }, [address, myEntriesCount, totalEntryCount]);
 
+  // Stable refs to refetchers — the WS effect and polling interval below
+  // depend only on `lastMessage` / mount, so refetcher reference churn between
+  // renders can't clear pending timers before they fire.
+  const refetchRef = useRef(refetch);
+  const refetchRegistrationsRef = useRef(refetchRegistrations);
+  refetchRef.current = refetch;
+  refetchRegistrationsRef.current = refetchRegistrations;
+
   // Refetch on budokan WS registration events. Registrations refetch
   // immediately (budokan data is ready). Token refetch is staggered — the
   // denshokan indexer needs time to index the mint, and lag is variable.
   useEffect(() => {
     if (lastMessage?.channel !== "registrations") return;
-    refetchRegistrations();
+    refetchRegistrationsRef.current();
     const timers = [1000, 3000, 7000].map((ms) =>
-      setTimeout(() => refetch(), ms),
+      setTimeout(() => refetchRef.current(), ms),
     );
     return () => timers.forEach(clearTimeout);
-  }, [lastMessage, refetch, refetchRegistrations]);
+  }, [lastMessage]);
+
+  // Polling fallback — keeps "My Entries" fresh even if the WS event is dropped
+  // (Railway disconnect, browser throttling, proxy buffering, etc.). Pauses
+  // while the tab is hidden so we don't burn requests in the background.
+  useEffect(() => {
+    if (!address) return;
+    const id = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      refetchRef.current();
+      refetchRegistrationsRef.current();
+    }, 10_000);
+    return () => window.clearInterval(id);
+  }, [address]);
 
   useEffect(() => {
     if (banRefreshTrigger && banRefreshTrigger > 0) {

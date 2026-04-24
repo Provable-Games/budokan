@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { BigNumberish } from "starknet";
 import { useLiveLeaderboard } from "@provable-games/denshokan-sdk/react";
 import { useRegistrations } from "@provable-games/budokan-sdk/react";
@@ -159,17 +159,37 @@ const EntrantsTable = ({
   );
   const { usernames } = useGetUsernames(ownerAddresses);
 
+  // Stable refs to refetchers — the WS effect and polling interval below
+  // depend only on `lastMessage` / mount, so refetcher reference churn between
+  // renders can't clear pending timers before they fire.
+  const refetchTokensRef = useRef(refetchTokens);
+  const refetchRegistrationsRef = useRef(refetchRegistrations);
+  refetchTokensRef.current = refetchTokens;
+  refetchRegistrationsRef.current = refetchRegistrations;
+
   // Refetch on budokan WS registration events. Registrations refetch
   // immediately (budokan data is ready). Token refetch is staggered — the
   // denshokan indexer needs time to index the mint, and lag is variable.
   useEffect(() => {
     if (lastMessage?.channel !== "registrations") return;
-    refetchRegistrations();
+    refetchRegistrationsRef.current();
     const timers = [1000, 3000, 7000].map((ms) =>
-      setTimeout(() => refetchTokens(), ms),
+      setTimeout(() => refetchTokensRef.current(), ms),
     );
     return () => timers.forEach(clearTimeout);
-  }, [lastMessage, refetchTokens, refetchRegistrations]);
+  }, [lastMessage]);
+
+  // Polling fallback — keeps the table fresh even if the WS event is dropped
+  // (Railway disconnect, browser throttling, proxy buffering, etc.). Pauses
+  // while the tab is hidden so we don't burn requests in the background.
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      refetchTokensRef.current();
+      refetchRegistrationsRef.current();
+    }, 10_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   const gameAddress = tournamentModel?.gameAddress;
 

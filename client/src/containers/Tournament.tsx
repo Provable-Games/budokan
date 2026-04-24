@@ -240,6 +240,22 @@ const Tournament = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastMessage]);
 
+  // Polling fallback — keeps tournament metadata (entryCount, etc.) current
+  // even if the WS event is dropped. Children (EntrantsTable, MyEntries) react
+  // to the propagated entryCount and have their own polling for token data.
+  const refetchTournamentRef = useRef(refetchTournament);
+  const refetchAggregationsRef = useRef(refetchAggregations);
+  refetchTournamentRef.current = refetchTournament;
+  refetchAggregationsRef.current = refetchAggregations;
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      refetchTournamentRef.current();
+      refetchAggregationsRef.current();
+    }, 10_000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
   useEffect(() => {
     if (subscribedPrizeCount > 0) refetchAggregations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
