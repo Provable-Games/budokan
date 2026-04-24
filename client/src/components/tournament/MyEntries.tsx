@@ -21,7 +21,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { PositionPrizeDisplay } from "@/components/tournament-detail/EntrantsTable";
+import type { PositionPrizeDisplay } from "@/components/tournament/EntrantsTable";
 
 type SortBy = "score" | "newest" | "oldest" | "entry";
 type FilterBy = "all" | "active" | "done" | "banned";
@@ -96,12 +96,16 @@ const MyEntries = ({
     }
   }, [address, myEntriesCount, totalEntryCount]);
 
+  // Refetch on budokan WS registration events. Registrations refetch
+  // immediately (budokan data is ready). Token refetch is staggered — the
+  // denshokan indexer needs time to index the mint, and lag is variable.
   useEffect(() => {
-    if (lastMessage?.channel === "registrations") {
-      refetchRegistrations();
-      const timer = setTimeout(() => refetch(), 3000);
-      return () => clearTimeout(timer);
-    }
+    if (lastMessage?.channel !== "registrations") return;
+    refetchRegistrations();
+    const timers = [1000, 3000, 7000].map((ms) =>
+      setTimeout(() => refetch(), ms),
+    );
+    return () => timers.forEach(clearTimeout);
   }, [lastMessage, refetch, refetchRegistrations]);
 
   useEffect(() => {

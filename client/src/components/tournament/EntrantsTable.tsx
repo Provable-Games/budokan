@@ -100,7 +100,9 @@ const EntrantsTable = ({
     !!extensionConfig?.address &&
     entryCount > 0;
 
-  // Live leaderboard
+  // Live leaderboard. `enabled` stays on so the WS mint subscription is active
+  // before the first entry — otherwise the very first entrant could never
+  // trigger a liveMints refetch.
   const {
     entries: pageEntries,
     total: leaderboardTotal,
@@ -112,7 +114,7 @@ const EntrantsTable = ({
     sort: { field: "score", direction: "desc" },
     limit: PAGE_SIZE,
     offset: (currentPage - 1) * PAGE_SIZE,
-    enabled: entryCount > 0,
+    enabled: !!tournamentId,
     liveScores: isStarted,
     liveGameOver: isStarted,
   });
@@ -125,15 +127,8 @@ const EntrantsTable = ({
   const previousPage = () => setCurrentPage((p) => Math.max(p - 1, 1));
 
   // Registrations for ban/submission status
-  const pageTokenIds = useMemo(
-    () => pageEntries.map((e) => e.tokenId),
-    [pageEntries],
-  );
   const { registrations: registrantsResult, refetch: refetchRegistrations } =
-    useRegistrations(
-      pageTokenIds.length > 0 ? tournamentId?.toString() : undefined,
-      { limit: 1000 },
-    );
+    useRegistrations(tournamentId?.toString(), { limit: 1000 });
   const registrants = registrantsResult?.data ?? null;
 
   const gameTokens = useMemo(() => {
@@ -164,12 +159,16 @@ const EntrantsTable = ({
   );
   const { usernames } = useGetUsernames(ownerAddresses);
 
+  // Refetch on budokan WS registration events. Registrations refetch
+  // immediately (budokan data is ready). Token refetch is staggered — the
+  // denshokan indexer needs time to index the mint, and lag is variable.
   useEffect(() => {
-    if (lastMessage?.channel === "registrations") {
-      refetchRegistrations();
-      const timer = setTimeout(() => refetchTokens(), 3000);
-      return () => clearTimeout(timer);
-    }
+    if (lastMessage?.channel !== "registrations") return;
+    refetchRegistrations();
+    const timers = [1000, 3000, 7000].map((ms) =>
+      setTimeout(() => refetchTokens(), ms),
+    );
+    return () => timers.forEach(clearTimeout);
   }, [lastMessage, refetchTokens, refetchRegistrations]);
 
   const gameAddress = tournamentModel?.gameAddress;
