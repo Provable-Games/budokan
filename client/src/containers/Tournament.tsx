@@ -4,13 +4,13 @@ import { useProvider } from "@starknet-react/core";
 import { addAddressPadding } from "starknet";
 
 import TournamentTimeline from "@/components/TournamentTimeline";
-import TournamentDetailHeader from "@/components/tournament-detail/TournamentDetailHeader";
-import TournamentDetailInfo from "@/components/tournament-detail/TournamentDetailInfo";
-import TournamentDescription from "@/components/tournament-detail/TournamentDescription";
+import TournamentDetailHeader from "@/components/tournament/TournamentDetailHeader";
+import TournamentDetailInfo from "@/components/tournament/TournamentDetailInfo";
+import TournamentDescription from "@/components/tournament/TournamentDescription";
 import EntrantsTable, {
   type PositionPrizeDisplay,
-} from "@/components/tournament-detail/EntrantsTable";
-import PrizeBreakdownDialog from "@/components/tournament-detail/PrizeBreakdownDialog";
+} from "@/components/tournament/EntrantsTable";
+import PrizeBreakdownDialog from "@/components/tournament/PrizeBreakdownDialog";
 import MyEntries from "@/components/tournament/MyEntries";
 
 import { EnterTournamentDialog } from "@/components/dialogs/EnterTournament";

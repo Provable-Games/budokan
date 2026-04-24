@@ -8,10 +8,10 @@
 
 import { useState } from "react";
 import TournamentTimeline from "@/components/TournamentTimeline";
-import TournamentDetailHeader from "@/components/tournament-detail/TournamentDetailHeader";
-import TournamentDetailInfo from "@/components/tournament-detail/TournamentDetailInfo";
-import TournamentDescription from "@/components/tournament-detail/TournamentDescription";
-import type { PositionPrizeDisplay } from "@/components/tournament-detail/EntrantsTable";
+import TournamentDetailHeader from "@/components/tournament/TournamentDetailHeader";
+import TournamentDetailInfo from "@/components/tournament/TournamentDetailInfo";
+import TournamentDescription from "@/components/tournament/TournamentDescription";
+import type { PositionPrizeDisplay } from "@/components/tournament/EntrantsTable";
 import type { Tournament } from "@provable-games/budokan-sdk";
 
 import { USER, REFRESH, VERIFIED, TROPHY } from "@/components/Icons";

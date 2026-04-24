@@ -7,7 +7,7 @@ import useUIStore from "@/hooks/useUIStore";
 import { cn, formatScore, getOrdinalSuffix, padAddress } from "@/lib/utils";
 import { GameTokenData } from "@/lib/types";
 import type { Tournament } from "@provable-games/budokan-sdk";
-import type { PositionPrizeDisplay } from "@/components/tournament-detail/EntrantsTable";
+import type { PositionPrizeDisplay } from "@/components/tournament/EntrantsTable";
 
 interface EntryCardProps {
   gameAddress: string;
