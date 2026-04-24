@@ -6,7 +6,11 @@ import {
   FormItem,
 } from "@/components/ui/form";
 import React from "react";
-import { calculateDistribution, indexAddress } from "@/lib/utils";
+import {
+  buildUniformBasisPointShares,
+  calculateDistribution,
+  indexAddress,
+} from "@/lib/utils";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
 import { getTokenLogoUrl } from "@/lib/tokensMeta";
 import { FeeDistributionVisual } from "@/components/createTournament/FeeDistributionVisual";
@@ -51,6 +55,9 @@ const EntryFees = ({ form }: StepProps) => {
   const distributionWeight = form.watch("entryFees.distributionWeight") ?? 1;
   const distributionType =
     form.watch("entryFees.distributionType") ?? "exponential";
+  const customShares = form.watch("entryFees.customShares") ?? [];
+  const prizePoolPayoutCount =
+    form.watch("entryFees.prizePoolPayoutCount") ?? 10;
 
   const { prices, isLoading: pricesLoading } = useEkuboPrices({
     tokens: [form.watch("entryFees.token")?.address ?? ""],
@@ -72,20 +79,49 @@ const EntryFees = ({ form }: StepProps) => {
   const prizePoolValue =
     ((form.watch("entryFees.value") ?? 0) * prizePoolPercentage) / 100;
 
+  // Auto-reshape customShares when the paid-places count changes while the
+  // user is on Custom — length must always equal prizePoolPayoutCount. We
+  // preserve existing values where we can and fill the tail with 0s; users
+  // can then either tweak manually or hit "Reset to equal".
   useEffect(() => {
-    const prizePoolPayoutCount =
-      form.watch("entryFees.prizePoolPayoutCount") ?? 10;
-    const distributions = calculateDistribution(
-      prizePoolPayoutCount,
-      distributionWeight,
-      creatorFee,
-      gameFee,
-      refundShare,
-      distributionType,
-    );
+    if (distributionType !== "custom") return;
+    if (customShares.length === prizePoolPayoutCount) return;
+    if (customShares.length === 0) {
+      form.setValue(
+        "entryFees.customShares",
+        buildUniformBasisPointShares(prizePoolPayoutCount),
+      );
+      return;
+    }
+    const next = Array<number>(prizePoolPayoutCount).fill(0);
+    for (let i = 0; i < Math.min(customShares.length, prizePoolPayoutCount); i++) {
+      next[i] = customShares[i] ?? 0;
+    }
+    form.setValue("entryFees.customShares", next);
+  }, [distributionType, prizePoolPayoutCount, customShares.length]);
+
+  useEffect(() => {
+    let percentages: number[];
+    if (distributionType === "custom") {
+      // Custom shares are already basis points of the prize pool; render them
+      // directly as percentages (bp / 100). Pad to paid-places count in case
+      // the reshape effect above hasn't run yet.
+      percentages = Array.from({ length: prizePoolPayoutCount }, (_, i) =>
+        (customShares[i] ?? 0) / 100,
+      );
+    } else {
+      percentages = calculateDistribution(
+        prizePoolPayoutCount,
+        distributionWeight,
+        creatorFee,
+        gameFee,
+        refundShare,
+        distributionType,
+      );
+    }
     form.setValue(
       "entryFees.prizeDistribution",
-      distributions.map((percentage, index) => ({
+      percentages.map((percentage, index) => ({
         position: index + 1,
         percentage,
       })),
@@ -96,7 +132,10 @@ const EntryFees = ({ form }: StepProps) => {
     refundShare,
     distributionWeight,
     distributionType,
-    form.watch("entryFees.prizePoolPayoutCount"),
+    prizePoolPayoutCount,
+    // Serialise the shares array so useEffect runs on any element change
+    // without needing a stable ref.
+    customShares.join(","),
   ]);
 
   useEffect(() => {
@@ -114,6 +153,14 @@ const EntryFees = ({ form }: StepProps) => {
 
   // Track if a token has ever been selected to prevent flickering when switching tokens
   const [tokenEverSelected, setTokenEverSelected] = React.useState(false);
+
+  // Owned here so the prize distribution visual can react to the toggle as
+  // well. When the prize pool is off (by toggle) OR computed-zero (fees
+  // consume 100%), we hide the Prize Distribution block entirely — there's
+  // nothing meaningful to visualise.
+  const [prizePoolEnabled, setPrizePoolEnabled] = React.useState(true);
+  const showPrizeDistribution =
+    prizePoolEnabled && prizePoolPercentage > 0;
 
   React.useEffect(() => {
     if (hasTokenSelected && !tokenEverSelected) {
@@ -233,8 +280,10 @@ const EntryFees = ({ form }: StepProps) => {
                 chainId,
                 form.watch("entryFees.token")?.address ?? "",
               )}
+              prizePoolEnabled={prizePoolEnabled}
+              onPrizePoolEnabledChange={setPrizePoolEnabled}
             />
-            {prizePoolPercentage > 0 && (
+            {showPrizeDistribution && (
               <>
                 <div className="w-full h-0.5 bg-brand/25" />
                 <PrizeDistributionVisual
@@ -251,6 +300,49 @@ const EntryFees = ({ form }: StepProps) => {
                   distributionType={distributionType}
                   onDistributionTypeChange={(type) => {
                     form.setValue("entryFees.distributionType", type);
+                    // Seed custom shares on first switch so the user sees a
+                    // valid (summing-to-100) starting distribution instead of
+                    // an empty grid.
+                    if (type === "custom") {
+                      const existing =
+                        form.getValues("entryFees.customShares") ?? [];
+                      if (
+                        existing.length !== prizePoolPayoutCount ||
+                        existing.reduce((a, b) => a + (b || 0), 0) !== 10000
+                      ) {
+                        form.setValue(
+                          "entryFees.customShares",
+                          buildUniformBasisPointShares(prizePoolPayoutCount),
+                        );
+                      }
+                    }
+                  }}
+                  customShares={customShares}
+                  onCustomShareChange={(index, basisPoints) => {
+                    const next = [...customShares];
+                    while (next.length < prizePoolPayoutCount) next.push(0);
+                    next[index] = basisPoints;
+                    form.setValue("entryFees.customShares", next);
+                  }}
+                  onCustomSharesReplace={(shares) => {
+                    // Pad/trim to paid-places count so bulk imports that
+                    // don't cover every slot still yield a valid-length
+                    // array (the missing tail is 0s).
+                    const next = Array<number>(prizePoolPayoutCount).fill(0);
+                    for (
+                      let i = 0;
+                      i < Math.min(shares.length, prizePoolPayoutCount);
+                      i++
+                    ) {
+                      next[i] = shares[i] ?? 0;
+                    }
+                    form.setValue("entryFees.customShares", next);
+                  }}
+                  onResetCustomShares={() => {
+                    form.setValue(
+                      "entryFees.customShares",
+                      buildUniformBasisPointShares(prizePoolPayoutCount),
+                    );
                   }}
                   disabled={!hasTokenSelected || !entryFeeAmountExists}
                   amount={prizePoolAmount}

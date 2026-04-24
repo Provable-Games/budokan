@@ -251,6 +251,28 @@ export const processTournamentData = (
                   Uniform: undefined,
                   Custom: undefined,
                 });
+              } else if (distributionType === "custom") {
+                // The contract enforces sum == 10000 and length ==
+                // distribution_count. Validation at the form boundary
+                // should have already caught violations, but we guard here
+                // too so a malformed payload never reaches the chain.
+                const rawShares =
+                  (formData.entryFees?.customShares ?? []).slice(0, formPayoutCount);
+                const sum = rawShares.reduce((a, b) => a + (b || 0), 0);
+                if (
+                  rawShares.length !== formPayoutCount ||
+                  sum !== 10000
+                ) {
+                  throw new Error(
+                    `Custom distribution shares invalid: length ${rawShares.length}/${formPayoutCount}, sum ${sum}/10000`,
+                  );
+                }
+                distribution = new CairoCustomEnum({
+                  Linear: undefined,
+                  Exponential: undefined,
+                  Uniform: undefined,
+                  Custom: rawShares,
+                });
               } else {
                 distribution = new CairoCustomEnum({
                   Linear: undefined,
@@ -331,6 +353,24 @@ export const processPrizes = (
             Exponential: undefined,
             Uniform: {},
             Custom: undefined,
+          })
+        );
+      } else if (prize.distribution === "custom") {
+        const expectedLen = prize.distributionCount ?? 0;
+        const rawShares = (prize.customShares ?? []).slice(0, expectedLen);
+        const sum = rawShares.reduce((a: number, b: number) => a + (b || 0), 0);
+        if (rawShares.length !== expectedLen || sum !== 10000) {
+          throw new Error(
+            `Custom distribution shares invalid on prize: length ${rawShares.length}/${expectedLen}, sum ${sum}/10000`,
+          );
+        }
+        distribution = new CairoOption(
+          CairoOptionVariant.Some,
+          new CairoCustomEnum({
+            Linear: undefined,
+            Exponential: undefined,
+            Uniform: undefined,
+            Custom: rawShares,
           })
         );
       } else {
@@ -1181,7 +1221,29 @@ export const expandDistributedPrizes = (
 
       let distributionPercentages: number[];
       if (distType === "custom") {
-        distributionPercentages = calculateDistribution(distCount, 1, 0, 0, 0, "uniform");
+        // SDK flat format carries the raw basis-point shares on the prize
+        // record itself (JSON-serialised from the Cairo Span<u16>). The
+        // canonical field name in @provable-games/budokan-sdk is
+        // `distributionShares`; we also accept legacy / snake_case variants
+        // for robustness across SDK versions. Convert bp → percentage
+        // (bp / 100) when available; only fall back to a uniform split if
+        // the shares array is missing or length-mismatched.
+        const rawShares: unknown =
+          prize.distributionShares ??
+          prize.distribution_shares ??
+          prize.customShares ??
+          prize.custom_shares ??
+          prize.distributionCustom ??
+          prize.distribution_custom ??
+          [];
+        const sharesArr = Array.isArray(rawShares)
+          ? rawShares.map((v) => Number(v)).filter((v) => Number.isFinite(v))
+          : [];
+        if (sharesArr.length === distCount) {
+          distributionPercentages = sharesArr.map((bp) => bp / 100);
+        } else {
+          distributionPercentages = calculateDistribution(distCount, 1, 0, 0, 0, "uniform");
+        }
       } else {
         distributionPercentages = calculateDistribution(
           distCount,

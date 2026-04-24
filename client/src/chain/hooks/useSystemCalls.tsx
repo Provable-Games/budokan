@@ -27,6 +27,7 @@ import {
   checkExtensionValidEntry as sdkCheckExtensionValidEntry,
   getExtensionEntriesLeft as sdkGetExtensionEntriesLeft,
   checkExtensionShouldBan as sdkCheckExtensionShouldBan,
+  getExtensionBannable as sdkGetExtensionBannable,
   getUserTroveIds as sdkGetUserTroveIds,
   getTroveDebt as sdkGetTroveDebt,
 } from "@provable-games/metagame-sdk/rpc";
@@ -1167,29 +1168,22 @@ export const useSystemCalls = () => {
     qualification: string[]
   ): Promise<boolean> => {
     if (!provider) return false;
-    return sdkCheckExtensionValidEntry(provider, extensionAddress, tournamentId, playerAddress, qualification);
+    return sdkCheckExtensionValidEntry(
+      provider,
+      extensionAddress,
+      tournamentAddress,
+      tournamentId,
+      playerAddress,
+      qualification,
+    );
   };
 
   const checkBannable = async (
     extensionAddress: string,
     contextId: BigNumberish
   ): Promise<boolean> => {
-    try {
-      if (!provider) return false;
-
-      const result = await provider.callContract({
-        contractAddress: extensionAddress,
-        entrypoint: "bannable",
-        calldata: [contextId.toString()],
-      });
-
-      // Result is a boolean (0 = false, 1 = true)
-      return result[0] === "0x1" || BigInt(result[0]) === 1n;
-    } catch (error) {
-      console.error("Error checking bannable:", error);
-      // If the function doesn't exist, assume it doesn't require registration
-      return false;
-    }
+    if (!provider) return false;
+    return sdkGetExtensionBannable(provider, extensionAddress, tournamentAddress, contextId);
   };
 
   const getExtensionEntriesLeft = async (
@@ -1200,7 +1194,14 @@ export const useSystemCalls = () => {
   ): Promise<number | null> => {
     if (!provider) return null;
     try {
-      return sdkGetExtensionEntriesLeft(provider, extensionAddress, tournamentId, playerAddress, qualification);
+      return sdkGetExtensionEntriesLeft(
+        provider,
+        extensionAddress,
+        tournamentAddress,
+        tournamentId,
+        playerAddress,
+        qualification,
+      );
     } catch (error) {
       console.error("Error getting extension entries_left:", error);
       return null;
@@ -1215,7 +1216,15 @@ export const useSystemCalls = () => {
     qualification: string[]
   ): Promise<boolean> => {
     if (!provider) return false;
-    return sdkCheckExtensionShouldBan(provider, extensionAddress, tournamentId, gameTokenId, playerAddress, qualification);
+    return sdkCheckExtensionShouldBan(
+      provider,
+      extensionAddress,
+      tournamentAddress,
+      tournamentId,
+      gameTokenId,
+      playerAddress,
+      qualification,
+    );
   };
 
   const getUserTroveIds = async (

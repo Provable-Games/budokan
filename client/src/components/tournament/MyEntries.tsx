@@ -1,6 +1,6 @@
 import { REFRESH, TROPHY } from "@/components/Icons";
 import { useRegistrations } from "@provable-games/budokan-sdk/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAccount } from "@starknet-react/core";
 import { BigNumberish } from "starknet";
 import { ChevronDown, SlidersHorizontal } from "lucide-react";
@@ -11,7 +11,14 @@ import {
   usePlayerBestRank,
 } from "@provable-games/denshokan-sdk/react";
 import { useChainConfig } from "@/context/chain";
-import { cn, getOrdinalSuffix, padAddress } from "@/lib/utils";
+import { useGetUsernames } from "@/hooks/useController";
+import {
+  cn,
+  displayAddress,
+  getOrdinalSuffix,
+  indexAddress,
+  padAddress,
+} from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,7 +28,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { PositionPrizeDisplay } from "@/components/tournament-detail/EntrantsTable";
+import type { PositionPrizeDisplay } from "@/components/tournament/EntrantsTable";
 
 type SortBy = "score" | "newest" | "oldest" | "entry";
 type FilterBy = "all" | "active" | "done" | "banned";
@@ -71,8 +78,7 @@ const MyEntries = ({
     liveMints: true,
   });
 
-  const gameTokens = useMemo(() => ownedEntries, [ownedEntries]);
-  const myEntriesCount = gameTokens.length;
+  const gameTokens = ownedEntries;
 
   const { registrations: myEntriesResult, refetch: refetchRegistrations } =
     useRegistrations(tournamentId?.toString(), {
@@ -80,14 +86,29 @@ const MyEntries = ({
       limit: 1000,
     });
   const myEntries = myEntriesResult?.data ?? null;
+  const myEntriesCount = myEntries?.length ?? 0;
 
-  const processedEntries = useMemo(() => {
-    if (!myEntries || myEntries.length === 0) return [];
-    return myEntries.map((entry: any) => ({
-      ...entry,
-      gameTokenId: Number(entry.gameTokenId ?? entry.game_token_id),
-    }));
-  }, [myEntries]);
+  // Normalize a raw token id (decimal or hex string, BigNumberish) to a
+  // canonical lowercase 0x-prefixed hex string. Avoids Number() — token ids
+  // are felt252-sized and would lose precision.
+  const toHexTokenId = (raw: unknown): string => {
+    if (raw == null) return "0x0";
+    const s = String(raw);
+    if (s.startsWith("0x") || s.startsWith("0X")) return s.toLowerCase();
+    try {
+      return "0x" + BigInt(s).toString(16);
+    } catch {
+      return s.toLowerCase();
+    }
+  };
+
+  // Stable refs to refetchers — the WS effect below depends only on
+  // `lastMessage`, so refetcher reference churn between renders can't clear
+  // pending timers before they fire.
+  const refetchRef = useRef(refetch);
+  const refetchRegistrationsRef = useRef(refetchRegistrations);
+  refetchRef.current = refetch;
+  refetchRegistrationsRef.current = refetchRegistrations;
 
   useEffect(() => {
     if (address) {
@@ -96,13 +117,17 @@ const MyEntries = ({
     }
   }, [address, myEntriesCount, totalEntryCount]);
 
+  // Refetch on budokan WS registration events. Registrations refetch
+  // immediately (budokan data is ready). Token refetch is staggered — the
+  // denshokan indexer needs time to index the mint, and lag is variable.
   useEffect(() => {
-    if (lastMessage?.channel === "registrations") {
-      refetchRegistrations();
-      const timer = setTimeout(() => refetch(), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [lastMessage, refetch, refetchRegistrations]);
+    if (lastMessage?.channel !== "registrations") return;
+    refetchRegistrationsRef.current();
+    const timers = [1000, 3000, 7000].map((ms) =>
+      setTimeout(() => refetchRef.current(), ms),
+    );
+    return () => timers.forEach(clearTimeout);
+  }, [lastMessage]);
 
   useEffect(() => {
     if (banRefreshTrigger && banRefreshTrigger > 0) {
@@ -117,6 +142,15 @@ const MyEntries = ({
   };
 
   const hasEntries = !!address && myEntriesCount > 0;
+
+  // Fallback display name for entries that haven't been indexed by denshokan
+  // yet (i.e. a brand-new entry). Use the connected wallet's controller
+  // username when available, otherwise a truncated address.
+  const ownerLookup = useMemo(() => (address ? [address] : []), [address]);
+  const { usernames } = useGetUsernames(ownerLookup);
+  const fallbackName = address
+    ? usernames?.get(indexAddress(address)) || displayAddress(address)
+    : undefined;
 
   // Player's best rank across their entries in this tournament
   const { data: bestRank } = usePlayerBestRank(
@@ -138,19 +172,31 @@ const MyEntries = ({
   }, [isStarted]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const visibleEntries = useMemo(() => {
-    if (!gameTokens.length) return [];
+    // Source of truth: registrations (budokan) — these land instantly when
+    // the entry transaction confirms. Enrich with leaderboard (denshokan)
+    // data when available; new entries that haven't been indexed by
+    // denshokan yet still render with score=0.
+    if (!myEntries || myEntries.length === 0) return [];
 
-    const regByTokenId = new Map<number, any>(
-      processedEntries.map((r) => [r.gameTokenId, r]),
-    );
+    const tokensByHexId = new Map<string, (typeof gameTokens)[number]>();
+    for (const t of gameTokens) tokensByHexId.set(toHexTokenId(t.tokenId), t);
 
-    const enriched = gameTokens.map((game) => {
-      const reg = regByTokenId.get(Number(game.tokenId));
+    const enriched = (myEntries as any[]).map((reg) => {
+      const hexId = toHexTokenId(reg.gameTokenId ?? reg.game_token_id);
+      const game = tokensByHexId.get(hexId) ?? {
+        tokenId: hexId,
+        score: 0,
+        playerName: null,
+        owner: reg.playerAddress ?? "0x0",
+        gameOver: false,
+        rank: 0,
+        mintedAt: new Date().toISOString(),
+      };
       return {
         game,
         registration: reg,
-        isBanned: !!reg?.isBanned,
-        entryNumber: Number(reg?.entryNumber ?? 0),
+        isBanned: !!reg.isBanned,
+        entryNumber: Number(reg.entryNumber ?? 0),
       };
     });
 
@@ -171,7 +217,7 @@ const MyEntries = ({
     });
 
     return sorted;
-  }, [gameTokens, processedEntries, filterBy, sortBy]);
+  }, [gameTokens, myEntries, filterBy, sortBy]);
 
   const SORT_LABELS: Record<SortBy, string> = {
     score: "Score",
@@ -393,6 +439,7 @@ const MyEntries = ({
               isStarted={isStarted}
               isEnded={isEnded}
               prizesByPosition={prizesByPosition}
+              fallbackName={fallbackName}
             />
           ))}
         </div>

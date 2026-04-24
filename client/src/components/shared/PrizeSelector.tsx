@@ -3,10 +3,16 @@ import { Button } from "@/components/ui/button";
 import { PrizeInput } from "@/components/createTournament/inputs/PrizeInput";
 import { PrizeDistributionVisual } from "@/components/createTournament/PrizeDistributionVisual";
 import { FormToken } from "@/lib/types";
-import { calculateDistribution, indexAddress } from "@/lib/utils";
+import {
+  buildUniformBasisPointShares,
+  calculateDistribution,
+  indexAddress,
+} from "@/lib/utils";
 import { getTokenLogoUrl } from "@/lib/tokensMeta";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
 import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
+
+type DistributionKind = "exponential" | "linear" | "uniform" | "custom";
 
 interface NewPrize {
   token: FormToken;
@@ -24,10 +30,13 @@ export interface PrizeSelectorData {
   // ERC20 specific
   amount?: number;
   value?: number;
-  distribution?: "exponential" | "linear" | "uniform";
+  distribution?: DistributionKind;
   distribution_weight?: number;
   distribution_count?: number;
   distributions?: { position: number; percentage: number }[];
+  // Only populated when distribution === "custom". Basis-point shares per
+  // position, sum == 10000, length == distribution_count.
+  custom_shares?: number[];
 
   // ERC721 specific
   tokenId?: number;
@@ -69,13 +78,15 @@ export function PrizeSelector({
     tokenType: "ERC20", // Default to ERC20
   });
   const [distributionWeight, setDistributionWeight] = useState(1);
-  const [distributionType, setDistributionType] = useState<
-    "exponential" | "linear" | "uniform"
-  >("exponential");
+  const [distributionType, setDistributionType] =
+    useState<DistributionKind>("exponential");
   const [leaderboardSize, setLeaderboardSize] = useState(10);
   const [prizeDistributions, setPrizeDistributions] = useState<
     { position: number; percentage: number }[]
   >([]);
+  // Basis-point shares for Custom distribution. Reshaped whenever the paid-
+  // places count or distribution type changes so length stays in sync.
+  const [customShares, setCustomShares] = useState<number[]>([]);
   const [hasInsufficientBalance, setHasInsufficientBalance] = useState(false);
   const [tokenDecimals, setTokenDecimals] = useState<Record<string, number>>(
     {}
@@ -114,12 +125,25 @@ export function PrizeSelector({
     );
   }, [prizeDistributions]);
 
+  const customSumBp = useMemo(
+    () =>
+      customShares
+        .slice(0, leaderboardSize)
+        .reduce((sum, bp) => sum + (bp || 0), 0),
+    [customShares, leaderboardSize],
+  );
+  const customIsValid =
+    distributionType === "custom" &&
+    customShares.length === leaderboardSize &&
+    customSumBp === 10000;
+
   const isValidPrize = () => {
     if (!newPrize.token?.address) return false;
 
     if (newPrize.tokenType === "ERC20") {
       const isPercentageValid =
         Math.abs(totalDistributionPercentage - 100) < 0.01;
+      if (distributionType === "custom" && !customIsValid) return false;
       return !!newPrize.amount && isPercentageValid;
     }
 
@@ -130,25 +154,54 @@ export function PrizeSelector({
     return false;
   };
 
+  // Reshape customShares when paid-places count changes under Custom mode.
+  // Initialize with a uniform split on the first switch so the user starts
+  // from a valid (summing-to-100) state.
+  useEffect(() => {
+    if (distributionType !== "custom") return;
+    if (customShares.length === leaderboardSize) return;
+    if (customShares.length === 0) {
+      setCustomShares(buildUniformBasisPointShares(leaderboardSize));
+      return;
+    }
+    const next = Array<number>(leaderboardSize).fill(0);
+    for (let i = 0; i < Math.min(customShares.length, leaderboardSize); i++) {
+      next[i] = customShares[i] ?? 0;
+    }
+    setCustomShares(next);
+  }, [distributionType, leaderboardSize, customShares.length]);
+
   // Calculate distributions when params change
   useEffect(() => {
-    if (isERC20) {
-      const distributions = calculateDistribution(
+    if (!isERC20) return;
+    let percentages: number[];
+    if (distributionType === "custom") {
+      percentages = Array.from({ length: leaderboardSize }, (_, i) =>
+        (customShares[i] ?? 0) / 100,
+      );
+    } else {
+      percentages = calculateDistribution(
         leaderboardSize,
         distributionWeight,
         0,
         0,
         0,
-        distributionType
-      );
-      setPrizeDistributions(
-        distributions.map((percentage, index) => ({
-          position: index + 1,
-          percentage,
-        }))
+        distributionType,
       );
     }
-  }, [leaderboardSize, distributionWeight, distributionType, isERC20]);
+    setPrizeDistributions(
+      percentages.map((percentage, index) => ({
+        position: index + 1,
+        percentage,
+      })),
+    );
+  }, [
+    leaderboardSize,
+    distributionWeight,
+    distributionType,
+    isERC20,
+    customShares.join(","),
+  ]);
 
   // Update amount based on USD value when price is available
   useEffect(() => {
@@ -230,6 +283,8 @@ export function PrizeSelector({
         distribution_weight: distributionWeight,
         distribution_count: leaderboardSize,
         distributions: prizeDistributions,
+        custom_shares:
+          distributionType === "custom" ? customShares.slice(0, leaderboardSize) : undefined,
       });
     } else if (newPrize.tokenType === "ERC721") {
       onAddPrize({
@@ -253,6 +308,8 @@ export function PrizeSelector({
     });
     setSelectedToken(undefined);
     setTokenEverSelected(false);
+    setCustomShares([]);
+    setDistributionType("exponential");
     // Notify parent that token was cleared
     onTokenSelect?.(undefined, "");
   };
@@ -329,7 +386,40 @@ export function PrizeSelector({
             onWeightChange={setDistributionWeight}
             onLeaderboardSizeChange={setLeaderboardSize}
             distributionType={distributionType}
-            onDistributionTypeChange={setDistributionType}
+            onDistributionTypeChange={(type) => {
+              setDistributionType(type);
+              if (type === "custom") {
+                if (
+                  customShares.length !== leaderboardSize ||
+                  customShares.reduce((a, b) => a + (b || 0), 0) !== 10000
+                ) {
+                  setCustomShares(buildUniformBasisPointShares(leaderboardSize));
+                }
+              }
+            }}
+            customShares={customShares}
+            onCustomShareChange={(index, basisPoints) => {
+              setCustomShares((prev) => {
+                const next = [...prev];
+                while (next.length < leaderboardSize) next.push(0);
+                next[index] = basisPoints;
+                return next;
+              });
+            }}
+            onCustomSharesReplace={(shares) => {
+              const next = Array<number>(leaderboardSize).fill(0);
+              for (
+                let i = 0;
+                i < Math.min(shares.length, leaderboardSize);
+                i++
+              ) {
+                next[i] = shares[i] ?? 0;
+              }
+              setCustomShares(next);
+            }}
+            onResetCustomShares={() => {
+              setCustomShares(buildUniformBasisPointShares(leaderboardSize));
+            }}
             disabled={false}
             amount={newPrize.amount ?? 0}
             tokenSymbol={newPrize.token.symbol}

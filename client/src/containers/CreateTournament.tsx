@@ -99,8 +99,14 @@ const formSchema = z.object({
           })
         )
         .optional(),
-      distributionType: z.enum(["linear", "exponential", "uniform"]).optional(),
+      distributionType: z
+        .enum(["linear", "exponential", "uniform", "custom"])
+        .optional(),
       distributionWeight: z.number().min(0).max(50).optional(), // Weight for linear/exponential distributions (scaled by 10 for contract)
+      // Custom distribution: per-position basis-point shares. When
+      // distributionType === "custom", length must equal prizePoolPayoutCount
+      // and sum must be exactly 10000 (validated on submit, not schema).
+      customShares: z.array(z.number().int().min(0).max(10000)).optional(),
     })
     .optional(),
 
@@ -113,9 +119,12 @@ const formSchema = z.object({
         amount: z.number(),
         position: z.number(),
         tokenDecimals: z.number().optional(),
-        distribution: z.enum(["exponential", "linear", "uniform"]).optional(),
+        distribution: z
+          .enum(["exponential", "linear", "uniform", "custom"])
+          .optional(),
         distributionWeight: z.number().optional(),
         distributionCount: z.number().optional(),
+        customShares: z.array(z.number().int().min(0).max(10000)).optional(),
       }),
       z.object({
         type: z.literal("ERC721"),
@@ -369,11 +378,41 @@ const CreateTournament = () => {
       fees: {
         complete:
           getValue("enableEntryFees") === false ||
-          !!(
-            getValue("entryFees.token") &&
-            getValue("entryFees.amount") &&
-            getValue("entryFees.amount") > 0
-          ),
+          (() => {
+            if (
+              !getValue("entryFees.token") ||
+              !getValue("entryFees.amount") ||
+              !(getValue("entryFees.amount") > 0)
+            ) {
+              return false;
+            }
+            // When custom distribution is selected, shares must sum to 10000
+            // and length must match the paid-places count — otherwise the
+            // contract will reject the entry fee on create_tournament.
+            if (getValue("entryFees.distributionType") === "custom") {
+              const prizePoolPayoutCount =
+                Number(getValue("entryFees.prizePoolPayoutCount") ?? 0);
+              const customShares: number[] =
+                getValue("entryFees.customShares") ?? [];
+              // If there's no prize pool (fees + refund consume 100%), skip
+              // validation — formatting.ts forces distribution_count=0 below
+              // and the custom payload is never sent to the contract.
+              const creatorBps =
+                (Number(getValue("entryFees.creatorFeePercentage") ?? 0)) *
+                100;
+              const gameBps =
+                (Number(getValue("entryFees.gameFeePercentage") ?? 0)) * 100;
+              const refundBps =
+                (Number(getValue("entryFees.refundSharePercentage") ?? 0)) *
+                100;
+              const hasPrizePool = 10000 - creatorBps - gameBps - refundBps > 0;
+              if (!hasPrizePool) return true;
+              if (customShares.length !== prizePoolPayoutCount) return false;
+              const sum = customShares.reduce((a, b) => a + (b || 0), 0);
+              if (sum !== 10000) return false;
+            }
+            return true;
+          })(),
         enabled: true,
       },
       prizes: {

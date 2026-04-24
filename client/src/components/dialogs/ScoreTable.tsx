@@ -21,7 +21,7 @@ import { Ban, ExternalLink } from "lucide-react";
 import { useRegistrations } from "@provable-games/budokan-sdk/react";
 import { useChainConfig } from "@/context/chain";
 import { cn, getOrdinalSuffix } from "@/lib/utils";
-import type { PositionPrizeDisplay } from "@/components/tournament-detail/EntrantsTable";
+import type { PositionPrizeDisplay } from "@/components/tournament/EntrantsTable";
 
 interface ScoreTableDialogProps {
   open: boolean;

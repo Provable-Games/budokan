@@ -693,10 +693,12 @@ export function EnterTournamentDialog({
             }
           }
 
+          const contextOwner = selectedChainConfig?.budokanAddress ?? "";
           const [validEntry, entriesLeft] = await Promise.all([
             sdkCheckValidEntry(
               provider,
               extensionAddress,
+              contextOwner,
               tournamentModel?.id,
               address,
               qualification,
@@ -704,6 +706,7 @@ export function EnterTournamentDialog({
             sdkGetEntriesLeft(
               provider,
               extensionAddress,
+              contextOwner,
               tournamentModel?.id,
               address,
               qualification,
@@ -946,6 +949,7 @@ export function EnterTournamentDialog({
   } = useExtensionQualification(
     provider,
     extensionConfig?.address,
+    selectedChainConfig?.budokanAddress,
     tournamentModel?.id.toString(),
     address,
     tournamentValidatorQualificationInputs,

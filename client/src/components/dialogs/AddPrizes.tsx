@@ -37,9 +37,10 @@ type BonusPrize =
       amount: number;
       position: number;
       tokenDecimals?: number;
-      distribution?: "exponential" | "linear" | "uniform";
+      distribution?: "exponential" | "linear" | "uniform" | "custom";
       distributionWeight?: number;
       distributionCount?: number;
+      customShares?: number[];
     }
   | {
       type: "ERC721";
@@ -58,9 +59,12 @@ const addPrizesSchema = z.object({
         amount: z.number(),
         position: z.number(),
         tokenDecimals: z.number().optional(),
-        distribution: z.enum(["exponential", "linear", "uniform"]).optional(),
+        distribution: z
+          .enum(["exponential", "linear", "uniform", "custom"])
+          .optional(),
         distributionWeight: z.number().optional(),
         distributionCount: z.number().optional(),
+        customShares: z.array(z.number().int().min(0).max(10000)).optional(),
       }),
       z.object({
         type: z.literal("ERC721"),
@@ -253,6 +257,27 @@ export function AddPrizesDialog({
                 Exponential: undefined,
                 Uniform: {},
                 Custom: undefined,
+              })
+            );
+          } else if (prize.distribution === "custom") {
+            const expectedLen = prize.distributionCount ?? 0;
+            const rawShares = (prize.customShares ?? []).slice(0, expectedLen);
+            const sum = rawShares.reduce(
+              (a: number, b: number) => a + (b || 0),
+              0,
+            );
+            if (rawShares.length !== expectedLen || sum !== 10000) {
+              throw new Error(
+                `Custom distribution shares invalid: length ${rawShares.length}/${expectedLen}, sum ${sum}/10000`,
+              );
+            }
+            distribution = new CairoOption(
+              CairoOptionVariant.Some,
+              new CairoCustomEnum({
+                Linear: undefined,
+                Exponential: undefined,
+                Uniform: undefined,
+                Custom: rawShares,
               })
             );
           } else {

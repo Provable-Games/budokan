@@ -25,9 +25,11 @@ type Prize =
       amount: number;
       position: number;
       tokenDecimals?: number;
-      distribution?: "exponential" | "linear" | "uniform";
+      distribution?: "exponential" | "linear" | "uniform" | "custom";
       distributionWeight?: number;
       distributionCount?: number;
+      // Basis-point shares when distribution === "custom"; sum == 10000.
+      customShares?: number[];
     }
   | {
       type: "ERC721";
@@ -102,6 +104,7 @@ export function PrizeManager({
         distribution: prizeData.distribution,
         distributionWeight: prizeData.distribution_weight,
         distributionCount: prizeData.distribution_count,
+        customShares: prizeData.custom_shares,
       };
 
       onPrizesChange([...prizes, newPrize]);

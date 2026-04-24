@@ -116,6 +116,142 @@ export const bigintToHex = (v: BigNumberish): `0x${string}` =>
 
 // --- Client-specific utilities (not in SDK) ---
 
+/**
+ * Build an array of basis-point shares that sum to exactly 10000, spread as
+ * evenly as possible across `count` positions. Any remainder from integer
+ * division is absorbed by position 1 so the contract's strict-sum invariant
+ * (sum == BASIS_POINTS) is always satisfied.
+ */
+export function buildUniformBasisPointShares(count: number): number[] {
+  if (count <= 0) return [];
+  const base = Math.floor(10000 / count);
+  const shares = Array<number>(count).fill(base);
+  const remainder = 10000 - base * count;
+  if (remainder > 0) shares[0] += remainder;
+  return shares;
+}
+
+/**
+ * Parse a bulk custom-distribution paste into a length-`count` basis-point
+ * array. Accepts two formats, auto-detected:
+ *
+ *   1. Positional list — percentages in order, separated by commas, newlines,
+ *      semicolons, tabs, or arbitrary whitespace:
+ *        "40, 20, 15, 10, 5, 5, 3, 2"
+ *      Extra trailing values raise a warning; missing trailing values leave
+ *      the corresponding positions at 0.
+ *
+ *   2. Position:percentage pairs — any token containing `:` switches the
+ *      parser into pair mode for the whole input:
+ *        "1:40, 2:20, 3:15"
+ *      Positions not covered by a pair remain at 0.
+ *
+ * Percentages are rounded to the nearest basis point (2-decimal precision).
+ * Values outside [0, 100], non-numeric tokens, and out-of-range positions
+ * accumulate into `errors`; the share for that slot is left at 0.
+ *
+ * This does NOT enforce the strict sum == 10000 contract invariant — the
+ * caller decides whether to auto-balance, warn, or refuse.
+ */
+export function parseCustomSharesBulkInput(
+  input: string,
+  count: number,
+): { shares: number[]; errors: string[]; warnings: string[] } {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const shares = Array<number>(count).fill(0);
+
+  const trimmed = input.trim();
+  if (!trimmed) {
+    errors.push("Paste is empty.");
+    return { shares, errors, warnings };
+  }
+  if (count <= 0) {
+    errors.push("No positions to fill — set a paid-places count first.");
+    return { shares, errors, warnings };
+  }
+
+  const tokens = trimmed
+    .split(/[,\n\r;\t]+/)
+    .map((t) => t.trim())
+    .filter(Boolean);
+
+  const hasPairs = tokens.some((t) => t.includes(":"));
+
+  if (hasPairs) {
+    for (const token of tokens) {
+      const [posRaw, pctRaw] = token.split(":").map((s) => s.trim());
+      const pos = Number(posRaw);
+      const pct = Number(pctRaw);
+      if (!Number.isInteger(pos) || pos < 1 || pos > count) {
+        errors.push(`Invalid position "${posRaw}" (must be 1..${count}).`);
+        continue;
+      }
+      if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+        errors.push(
+          `Invalid percentage "${pctRaw}" for position ${pos} (must be 0..100).`,
+        );
+        continue;
+      }
+      shares[pos - 1] = Math.round(pct * 100);
+    }
+  } else {
+    if (tokens.length > count) {
+      warnings.push(
+        `Got ${tokens.length} values for ${count} positions — trailing ${
+          tokens.length - count
+        } value(s) ignored.`,
+      );
+    } else if (tokens.length < count) {
+      warnings.push(
+        `Got ${tokens.length} values for ${count} positions — remaining positions set to 0.`,
+      );
+    }
+    for (let i = 0; i < Math.min(tokens.length, count); i++) {
+      const pct = Number(tokens[i]);
+      if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+        errors.push(
+          `Invalid percentage "${tokens[i]}" at position ${i + 1} (must be 0..100).`,
+        );
+        continue;
+      }
+      shares[i] = Math.round(pct * 100);
+    }
+  }
+
+  return { shares, errors, warnings };
+}
+
+/**
+ * Adjust a basis-point share array so its elements sum to exactly 10000.
+ * The residual (10000 − current_sum) is applied to the first non-zero slot
+ * (or position 1 if all slots are zero). Returns null if adjusting would
+ * take any slot negative or above 10000 — callers should fall back to a
+ * uniform reset in that case.
+ *
+ * This mirrors the dust roll-up convention in `buildUniformBasisPointShares`
+ * and the Cairo `calculate_share_with_dust` helper: rounding residuals land
+ * on position 1 so the sum invariant holds without perturbing the tail.
+ */
+export function autoBalanceBasisPointShares(
+  shares: number[],
+): number[] | null {
+  if (shares.length === 0) return null;
+  const sum = shares.reduce((a, b) => a + (b || 0), 0);
+  const residual = 10000 - sum;
+  if (residual === 0) return [...shares];
+  // Find the first non-zero slot to absorb the residual, preferring slot 0
+  // when everything is zero (or when slot 0 is non-zero).
+  const target =
+    shares[0] > 0 ? 0 : shares.findIndex((v) => v > 0);
+  const absorbIndex = target === -1 ? 0 : target;
+  const next = shares[absorbIndex] + residual;
+  if (next < 0 || next > 10000) return null;
+  const out = [...shares];
+  out[absorbIndex] = next;
+  return out;
+}
+
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }

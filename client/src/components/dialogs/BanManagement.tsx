@@ -116,6 +116,7 @@ export const BanManagementDialog = ({
     const threshold = BigInt(config[assetCount + 1] || "0");
     const valuePerEntry = BigInt(config[assetCount + 2] || "0");
     const maxEntriesFromConfig = Number(config[assetCount + 3] || "0");
+    const bannable = BigInt(config[assetCount + 4] ?? "0") !== 0n;
 
     // Format CASH to USD (18 decimals, 1:1 parity)
     const divisor = 10n ** 18n;
@@ -138,6 +139,7 @@ export const BanManagementDialog = ({
       threshold,
       valuePerEntry,
       maxEntries: maxEntriesFromConfig,
+      bannable,
       thresholdUSD: formatCashToUSD(threshold),
       valuePerEntryUSD: formatCashToUSD(valuePerEntry),
       isWildcard: assetCount === 0,
@@ -157,7 +159,7 @@ export const BanManagementDialog = ({
             threshold: opusTrovesValidatorConfig.threshold,
             valuePerEntry: opusTrovesValidatorConfig.valuePerEntry,
             maxEntries: opusTrovesValidatorConfig.maxEntries,
-            bannable: false,
+            bannable: opusTrovesValidatorConfig.bannable,
           }
         : undefined,
       isOpusTrovesValidatorExtension && open,

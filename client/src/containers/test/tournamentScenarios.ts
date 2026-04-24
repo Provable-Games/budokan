@@ -6,8 +6,8 @@
  * any live SDK endpoint.
  */
 
-import type { PositionPrizeDisplay } from "@/components/tournament-detail/EntrantsTable";
-import type { TournamentStatus } from "@/components/tournament-detail/TournamentDetailHeader";
+import type { PositionPrizeDisplay } from "@/components/tournament/EntrantsTable";
+import type { TournamentStatus } from "@/components/tournament/TournamentDetailHeader";
 
 const NOW = Math.floor(Date.now() / 1000);
 const HOUR = 3600;
