@@ -531,25 +531,31 @@ const EntryRequirements = ({
               </p>
               <div className="flex flex-col gap-1 text-xs">
                 {/* Asset requirement */}
-                <div className="flex flex-wrap items-start gap-2">
+                <div className="flex flex-row flex-wrap items-center gap-2">
                   <span className="text-brand-muted whitespace-nowrap">
-                    Collateral Assets:
+                    Collateral:
                   </span>
-                  {opusTrovesValidatorConfig.isWildcard ? (
-                    <span className="font-medium">Any (wildcard)</span>
+                  {opusTrovesValidatorConfig.isWildcard ||
+                  opusTrovesValidatorConfig.assets.length === 0 ? (
+                    <span className="font-medium">Any trove</span>
                   ) : (
-                    <div className="flex flex-wrap gap-1">
-                      {opusTrovesValidatorConfig.assets.map(
-                        (asset: any, idx: number) => (
-                          <span
-                            key={idx}
-                            className="font-medium bg-brand/10 px-2 py-0.5 rounded"
-                          >
-                            {asset.symbol}
-                          </span>
-                        )
-                      )}
-                    </div>
+                    opusTrovesValidatorConfig.assets.map(
+                      (asset: any, idx: number) => (
+                        <span
+                          key={idx}
+                          className="flex flex-row items-center gap-1 font-medium bg-brand/10 px-2 py-0.5 rounded"
+                        >
+                          {asset.logo_url && (
+                            <img
+                              src={asset.logo_url}
+                              alt={asset.symbol}
+                              className="w-3.5 h-3.5"
+                            />
+                          )}
+                          {asset.symbol}
+                        </span>
+                      )
+                    )
                   )}
                 </div>
 

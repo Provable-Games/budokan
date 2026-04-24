@@ -639,13 +639,25 @@ export function EnterTournamentDialog({
       return null;
     const parsed = parseOpusTrovesValidatorConfig(extensionConfig.config);
     if (!parsed) return null;
+    // Resolve configured collateral asset addresses to token metadata so we
+    // can show their symbols/logos. Empty list = wildcard (any trove counts).
+    const assets = parsed.assetAddresses
+      .map((addr) =>
+        getTokenByAddress(addr, selectedChainConfig?.chainId ?? ""),
+      )
+      .filter((t): t is NonNullable<typeof t> => t !== undefined);
     return {
       ...parsed,
+      assets,
       thresholdUSD: formatCashToUSD(parsed.threshold),
       valuePerEntryUSD: formatCashToUSD(parsed.valuePerEntry),
       isWildcard: parsed.assetCount === 0,
     };
-  }, [isOpusTrovesValidatorExtension, extensionConfig?.config]);
+  }, [
+    isOpusTrovesValidatorExtension,
+    extensionConfig?.config,
+    selectedChainConfig?.chainId,
+  ]);
 
   // Get tournament data for validator extensions
   const validatorTournaments = useMemo(() => {
@@ -1371,9 +1383,7 @@ export function EnterTournamentDialog({
                                     : "Unknown"}
                       </div>
                     </div>
-                  ) : (
-                    "Entry validated by extension contract"
-                  )
+                  ) : null
                 ) : null}
               </span>
               {requirementVariant === "token" ? (
@@ -1630,14 +1640,42 @@ export function EnterTournamentDialog({
                     </div>
                   ) : isOpusTrovesValidatorExtension &&
                     opusTrovesValidatorConfig ? (
-                    // Opus Troves validator
-                    <div className="flex flex-col gap-2 px-4">
-                      <div className="flex flex-col gap-3 border border-brand-muted rounded-md p-3">
+                    // Opus Troves validator — render inline, no inner card
+                    <div className="flex flex-col gap-3 px-4">
                         <div className="flex flex-row items-center gap-2">
                           <span className="w-6">
                             <OPUS />
                           </span>
                           <span className="font-medium">Opus Troves</span>
+                        </div>
+                        <div className="flex flex-row flex-wrap items-center gap-2 text-sm">
+                          <span className="text-brand-muted">
+                            Collateral:
+                          </span>
+                          {opusTrovesValidatorConfig.isWildcard ||
+                          opusTrovesValidatorConfig.assets.length === 0 ? (
+                            <span className="font-medium">
+                              Any trove
+                            </span>
+                          ) : (
+                            opusTrovesValidatorConfig.assets.map(
+                              (asset, idx) => (
+                                <span
+                                  key={idx}
+                                  className="flex flex-row items-center gap-1 font-medium bg-brand/10 px-2 py-0.5 rounded"
+                                >
+                                  {asset.logo_url && (
+                                    <img
+                                      src={asset.logo_url}
+                                      alt={asset.symbol}
+                                      className="w-3.5 h-3.5"
+                                    />
+                                  )}
+                                  {asset.symbol}
+                                </span>
+                              ),
+                            )
+                          )}
                         </div>
                         {loadingTroveDebt ? (
                           <div className="flex flex-row items-center gap-2">
@@ -1788,16 +1826,11 @@ export function EnterTournamentDialog({
                             </span>
                           </div>
                         )}
-                      </div>
-                      <span className="text-xs text-muted-foreground">
-                        Note: Final validation will be performed by the
-                        extension contract on-chain
-                      </span>
                     </div>
                   ) : (
-                    // Generic extension
+                    // Generic extension — render inline, no inner card
                     <div className="flex flex-col gap-2 px-4">
-                      <div className="flex flex-row items-center justify-between border border-brand-muted rounded-md p-2">
+                      <div className="flex flex-row items-center justify-between">
                         <div className="flex flex-col gap-1">
                           <span className="font-mono text-xs">
                             {displayAddress(extensionConfig?.address ?? "")}
