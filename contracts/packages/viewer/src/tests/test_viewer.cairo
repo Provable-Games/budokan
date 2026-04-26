@@ -322,12 +322,12 @@ fn test_tournament_registrations() {
 
     // Enter tournament with PLAYER1
     start_cheat_caller_address(contracts.budokan.contract_address, PLAYER1);
-    contracts.budokan.enter_tournament(tid, 'Player1', PLAYER1, Option::None, 0, 0);
+    contracts.budokan.enter_tournament(tid, Option::Some('Player1'), PLAYER1, Option::None, 0, 0);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     // Enter tournament with PLAYER2
     start_cheat_caller_address(contracts.budokan.contract_address, PLAYER2);
-    contracts.budokan.enter_tournament(tid, 'Player2', PLAYER2, Option::None, 1, 0);
+    contracts.budokan.enter_tournament(tid, Option::Some('Player2'), PLAYER2, Option::None, 1, 0);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     // Query registrations
@@ -383,13 +383,13 @@ fn test_leaderboard_with_submissions() {
     start_cheat_caller_address(contracts.budokan.contract_address, PLAYER1);
     let (token_id_1, _) = contracts
         .budokan
-        .enter_tournament(tid, 'Player1', PLAYER1, Option::None, 0, 0);
+        .enter_tournament(tid, Option::Some('Player1'), PLAYER1, Option::None, 0, 0);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     start_cheat_caller_address(contracts.budokan.contract_address, PLAYER2);
     let (token_id_2, _) = contracts
         .budokan
-        .enter_tournament(tid, 'Player2', PLAYER2, Option::None, 1, 0);
+        .enter_tournament(tid, Option::Some('Player2'), PLAYER2, Option::None, 1, 0);
     stop_cheat_caller_address(contracts.budokan.contract_address);
 
     // Set scores via minigame mock

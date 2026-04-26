@@ -29,7 +29,6 @@ import {
   indexAddress,
   bigintToHex,
   displayAddress,
-  stringToFelt,
   formatPrizeAmount,
   formatUsdValue,
   identifyExtensionType,
@@ -41,11 +40,16 @@ import {
   buildWinMap,
   resolveTournamentQualifications,
 } from "@/lib/utils";
-import { addAddressPadding } from "starknet";
+import {
+  addAddressPadding,
+  BigNumberish,
+  CairoOption,
+  CairoOptionVariant,
+} from "starknet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useConnectToSelectedChain } from "@/chain/hooks/useChain";
-import { useGetUsernames, isControllerAccount } from "@/hooks/useController";
+import { isControllerAccount } from "@/hooks/useController";
 import { lookupUsernames } from "@cartridge/controller";
 import {
   CHECK,
@@ -173,7 +177,6 @@ export function EnterTournamentDialog({
   const { connect } = useConnectToSelectedChain();
   const { connector } = useConnect();
   const { approveAndEnterTournament } = useSystemCalls();
-  const [playerName, setPlayerName] = useState("");
   const [controllerUsername, setControllerUsername] = useState("");
   const [playerAddress, setPlayerAddress] = useState<string | undefined>(
     undefined,
@@ -202,7 +205,6 @@ export function EnterTournamentDialog({
   const [selectedPaymentToken, setSelectedPaymentToken] = useState<
     string | null
   >(null);
-  const [isEditingPlayerName, setIsEditingPlayerName] = useState(false);
   const [numEntries, setNumEntries] = useState(1);
 
   const chainId = selectedChainConfig?.chainId ?? "";
@@ -218,19 +220,13 @@ export function EnterTournamentDialog({
       if (!address) return;
 
       let targetAddress: string;
-      let finalPlayerName: string;
 
       if (isController) {
-        // Controller wallet: use connected address and player name
-        if (!playerName.trim()) return;
         targetAddress = address;
-        finalPlayerName = playerName.trim();
       } else {
         // Non-controller wallet: must have controller username and looked-up address
         if (!controllerUsername.trim() || !playerAddress) return;
         targetAddress = playerAddress;
-        // Use player name if provided, otherwise use controller username
-        finalPlayerName = playerName.trim() || controllerUsername.trim();
       }
 
       // Build the on-chain qualification proof from the selected proof
@@ -279,7 +275,7 @@ export function EnterTournamentDialog({
         tournamentModel?.id,
         tournamentModel?.name,
         tournamentModel,
-        stringToFelt(finalPlayerName),
+        new CairoOption<BigNumberish>(CairoOptionVariant.None),
         addAddressPadding(targetAddress),
         qualificationProof,
         // gameCount
@@ -294,7 +290,6 @@ export function EnterTournamentDialog({
       );
 
       setBatchProgress(null);
-      setPlayerName("");
       setControllerUsername("");
       setPlayerAddress(undefined);
       setNumEntries(1);
@@ -307,25 +302,14 @@ export function EnterTournamentDialog({
     }
   };
 
-  const ownerAddresses = useMemo(() => {
-    return [address ?? "0x0"];
-  }, [address]);
-
-  const { usernames } = useGetUsernames(ownerAddresses);
-
-  const accountUsername = usernames?.get(indexAddress(address ?? ""));
-
   useEffect(() => {
     if (!open) {
-      setPlayerName("");
       setControllerUsername("");
       setPlayerAddress(undefined);
-    } else if (isController && accountUsername && address) {
-      // Controller wallet connected - auto-fill player name and set address
-      setPlayerName(accountUsername);
+    } else if (isController && address) {
       setPlayerAddress(address);
     }
-  }, [open, accountUsername, address, isController]);
+  }, [open, address, isController]);
 
   // Look up controller address from controller username (only for non-controller wallets)
   useEffect(() => {
@@ -489,7 +473,6 @@ export function EnterTournamentDialog({
     if (!open) {
       setIsEntering(false);
       setSelectedPaymentToken(null);
-      setIsEditingPlayerName(false);
       setNumEntries(1);
       setBatchProgress(null);
     }
@@ -1923,94 +1906,68 @@ export function EnterTournamentDialog({
               )}
             </div>
           )}
-          {isController ? (
-            // Controller wallet - player name is set via bottom left edit
-            // Just show a reminder if no name is set
-            !playerName && (
-              <div className="text-sm text-brand-muted text-center py-2">
-                Set your player name below to continue
-              </div>
-            )
-          ) : (
-            // Non-controller wallet - controller username (required) + player name (optional)
-            <>
-              <div className="flex flex-col gap-2 p-3 border border-brand/25 rounded-lg bg-neutral/5">
-                <div className="flex flex-row items-center justify-between">
-                  <Label
-                    htmlFor="controllerUsername"
-                    className="text-sm font-medium text-brand-muted"
-                  >
-                    Controller Username
-                  </Label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      window.open("https://play.cartridge.gg", "_blank");
-                    }}
-                    className="text-brand hover:text-brand-muted text-sm underline underline-offset-2 transition-colors"
-                  >
-                    Create Account →
-                  </button>
-                </div>
-                <div className="flex flex-col gap-4">
-                  <Input
-                    id="controllerUsername"
-                    placeholder="Enter controller username"
-                    value={controllerUsername}
-                    onChange={(e) => setControllerUsername(e.target.value)}
-                    className="w-full"
-                  />
-                  {controllerUsername.trim() && (
-                    <div className="flex flex-row items-center gap-2 justify-center">
-                      {isLookingUpUsername ? (
-                        <>
-                          <LoadingSpinner />
-                          <span className="text-brand-muted text-sm">
-                            Looking up controller...
-                          </span>
-                        </>
-                      ) : playerAddress ? (
-                        <>
-                          <span className="w-5 text-success">
-                            <CHECK />
-                          </span>
-                          <span className="text-success text-sm">
-                            Controller found: {displayAddress(playerAddress)}
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="w-5 text-warning">
-                            <X />
-                          </span>
-                          <span className="text-warning text-sm">
-                            Controller username not found
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-                <div className="text-warning text-sm">
-                  Note: The game will be assigned to this controller username.
-                </div>
-              </div>
-              <div className="flex flex-col gap-2 p-3 border border-brand/25 rounded-lg bg-neutral/5">
+          {!isController && (
+            <div className="flex flex-col gap-2 p-3 border border-brand/25 rounded-lg bg-neutral/5">
+              <div className="flex flex-row items-center justify-between">
                 <Label
-                  htmlFor="playerName"
+                  htmlFor="controllerUsername"
                   className="text-sm font-medium text-brand-muted"
                 >
-                  Player Name (Optional)
+                  Controller Username
                 </Label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.open("https://play.cartridge.gg", "_blank");
+                  }}
+                  className="text-brand hover:text-brand-muted text-sm underline underline-offset-2 transition-colors"
+                >
+                  Create Account →
+                </button>
+              </div>
+              <div className="flex flex-col gap-4">
                 <Input
-                  id="playerName"
-                  placeholder="Enter display name (defaults to controller username)"
-                  value={playerName}
-                  onChange={(e) => setPlayerName(e.target.value)}
+                  id="controllerUsername"
+                  placeholder="Enter controller username"
+                  value={controllerUsername}
+                  onChange={(e) => setControllerUsername(e.target.value)}
                   className="w-full"
                 />
+                {controllerUsername.trim() && (
+                  <div className="flex flex-row items-center gap-2 justify-center">
+                    {isLookingUpUsername ? (
+                      <>
+                        <LoadingSpinner />
+                        <span className="text-brand-muted text-sm">
+                          Looking up controller...
+                        </span>
+                      </>
+                    ) : playerAddress ? (
+                      <>
+                        <span className="w-5 text-success">
+                          <CHECK />
+                        </span>
+                        <span className="text-success text-sm">
+                          Controller found: {displayAddress(playerAddress)}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="w-5 text-warning">
+                          <X />
+                        </span>
+                        <span className="text-warning text-sm">
+                          Controller username not found
+                        </span>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
-            </>
+              <div className="text-warning text-sm">
+                Note: The game will be assigned to this controller username.
+              </div>
+            </div>
           )}
         </div>
         {/* Entry count selector for multi-entry extensions */}
@@ -2048,54 +2005,7 @@ export function EnterTournamentDialog({
             </div>
           )}
 
-        <div className="flex justify-between items-center gap-2 mt-6">
-          {/* Player name edit in bottom left */}
-          <div className="flex items-center gap-2">
-            {isController &&
-              address &&
-              (isEditingPlayerName ? (
-                <div className="flex items-center gap-2">
-                  <span className="w-4 h-4 text-brand-muted">
-                    <USER />
-                  </span>
-                  <Input
-                    value={playerName}
-                    onChange={(e) => setPlayerName(e.target.value)}
-                    placeholder="Player name"
-                    className="w-32 h-8 text-sm"
-                    autoFocus
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === "Escape") {
-                        setIsEditingPlayerName(false);
-                      }
-                    }}
-                    onBlur={() => setIsEditingPlayerName(false)}
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsEditingPlayerName(false)}
-                    className="h-8 px-3"
-                  >
-                    Done
-                  </Button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setIsEditingPlayerName(true)}
-                  className="flex items-center gap-1.5 text-sm text-brand-muted hover:text-brand transition-colors"
-                >
-                  <span className="w-4 h-4">
-                    <USER />
-                  </span>
-                  <span className="truncate max-w-[120px]">
-                    {playerName || "Set name"}
-                  </span>
-                </button>
-              ))}
-          </div>
-
-          {/* Action buttons on right */}
+        <div className="flex justify-end items-center gap-2 mt-6">
           <div className="flex gap-2">
             <DialogClose asChild>
               <Button variant="outline">Cancel</Button>
@@ -2105,7 +2015,6 @@ export function EnterTournamentDialog({
                 disabled={
                   !canPay ||
                   !meetsEntryRequirements ||
-                  (isController && playerName.length === 0) ||
                   (!isController &&
                     (controllerUsername.length === 0 ||
                       !playerAddress ||
