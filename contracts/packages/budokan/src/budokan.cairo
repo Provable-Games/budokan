@@ -375,7 +375,7 @@ pub mod Budokan {
         fn enter_tournament(
             ref self: ContractState,
             tournament_id: u64,
-            player_name: felt252,
+            player_name: Option<felt252>,
             player_address: ContractAddress,
             qualification: Option<QualificationProof>,
             salt: u16,
@@ -458,7 +458,7 @@ pub mod Budokan {
             let game_token_id: felt252 = self
                 ._mint_game(
                     tournament.game_config.game_address,
-                    Option::Some(player_name),
+                    player_name,
                     Option::Some(tournament.game_config.settings_id),
                     Option::Some(game_start),
                     Option::Some(game_end),

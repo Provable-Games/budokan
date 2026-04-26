@@ -101,6 +101,20 @@ const BUDOKAN_ABI = [
     ]
   },
   {
+    "type": "enum",
+    "name": "core::option::Option::<core::felt252>",
+    "variants": [
+      {
+        "name": "Some",
+        "type": "core::felt252"
+      },
+      {
+        "name": "None",
+        "type": "()"
+      }
+    ]
+  },
+  {
     "type": "struct",
     "name": "game_components_interfaces::structs::metagame::GameContext",
     "members": [
@@ -838,7 +852,7 @@ const BUDOKAN_ABI = [
           },
           {
             "name": "player_name",
-            "type": "core::felt252"
+            "type": "core::option::Option::<core::felt252>"
           },
           {
             "name": "player_address",
