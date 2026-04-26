@@ -147,28 +147,6 @@ export const registrations = pgTable(
 );
 
 // ---------------------------------------------------------------------------
-// leaderboards
-// Domain key: (tournament_id, position)
-// Surrogate id for Apibara cursor invalidation
-// ---------------------------------------------------------------------------
-export const leaderboards = pgTable(
-  "leaderboards",
-  {
-    id: serial("id").notNull(),
-    tournamentId: bigint("tournament_id", { mode: "bigint" }).notNull(),
-    position: integer("position").notNull(),
-    tokenId: text("token_id").notNull(),
-  },
-  (table) => ({
-    pk: primaryKey({ columns: [table.tournamentId, table.position] }),
-    tournamentIdIdx: index("leaderboards_tournament_id_idx").on(
-      table.tournamentId,
-    ),
-    idIdx: unique("leaderboards_id_unique").on(table.id),
-  }),
-);
-
-// ---------------------------------------------------------------------------
 // prizes
 // ---------------------------------------------------------------------------
 export const prizes = pgTable(

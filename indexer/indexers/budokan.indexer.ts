@@ -12,7 +12,6 @@ import type { ApibaraRuntimeConfig } from "apibara/types";
 import {
   tournaments,
   registrations,
-  leaderboards,
   prizes,
   rewardClaims,
   qualificationEntries,
@@ -23,7 +22,7 @@ import {
   getEventSelectors,
   decodeTournamentCreated,
   decodeTournamentRegistration,
-  decodeLeaderboardUpdated,
+  decodeTournamentEntryStateChanged,
   decodePrizeAdded,
   decodeRewardClaimed,
   decodeQualificationEntriesUpdated,
@@ -38,7 +37,7 @@ const RAW_SELECTORS = getEventSelectors();
 const SELECTORS = {
   TournamentCreated: BigInt(RAW_SELECTORS.TournamentCreated),
   TournamentRegistration: BigInt(RAW_SELECTORS.TournamentRegistration),
-  LeaderboardUpdated: BigInt(RAW_SELECTORS.LeaderboardUpdated),
+  TournamentEntryStateChanged: BigInt(RAW_SELECTORS.TournamentEntryStateChanged),
   PrizeAdded: BigInt(RAW_SELECTORS.PrizeAdded),
   RewardClaimed: BigInt(RAW_SELECTORS.RewardClaimed),
   QualificationEntriesUpdated: BigInt(RAW_SELECTORS.QualificationEntriesUpdated),
@@ -71,7 +70,6 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
     schema: {
       tournaments,
       registrations,
-      leaderboards,
       prizes,
       rewardClaims,
       qualificationEntries,
@@ -92,7 +90,6 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
         idColumn: {
           tournaments: "tournament_id",
           registrations: "id",
-          leaderboards: "id",
           prizes: "prize_id",
           reward_claims: "id",
           qualification_entries: "id",
@@ -117,7 +114,7 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
         },
         {
           address: contractAddress,
-          keys: [RAW_SELECTORS.LeaderboardUpdated],
+          keys: [RAW_SELECTORS.TournamentEntryStateChanged],
           includeTransaction: true,
         },
         {
@@ -165,9 +162,6 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
       const qualificationEntryRows: (typeof qualificationEntries.$inferInsert)[] = [];
       const eventLogRows: (typeof tournamentEvents.$inferInsert)[] = [];
 
-      // Leaderboard updates need special handling (delete+insert per tournament)
-      const leaderboardUpdates = new Map<bigint, bigint[]>();
-
       // Track affected tournament IDs for idempotent counter recomputation
       const affectedTournamentIds = new Set<bigint>();
 
@@ -197,13 +191,10 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
             );
             logger.info(`  Decoded tournament ${decoded.tournamentId}: name="${decoded.name}", game=${decoded.gameAddress}`);
 
-            const sched = decoded.schedule as Record<string, number>;
-            const gc = decoded.gameConfig as Record<string, unknown>;
             const ef = decoded.entryFee as Record<string, unknown> | null;
             const er = decoded.entryRequirement as
               | Record<string, unknown>
               | null;
-            const lb = decoded.leaderboardConfig as Record<string, unknown>;
 
             // Entry fee fields (optional — all null when no entry fee)
             const efDist = (ef?.distribution ?? null) as
@@ -225,17 +216,17 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
               name: decoded.name,
               description: decoded.description,
 
-              scheduleRegStartDelay: Number(sched.registration_start_delay ?? 0),
-              scheduleRegEndDelay: Number(sched.registration_end_delay ?? 0),
-              scheduleGameStartDelay: Number(sched.game_start_delay ?? 0),
-              scheduleGameEndDelay: Number(sched.game_end_delay ?? 0),
-              scheduleSubmissionDuration: Number(sched.submission_duration ?? 0),
+              scheduleRegStartDelay: decoded.registrationStartDelay,
+              scheduleRegEndDelay: decoded.registrationEndDelay,
+              scheduleGameStartDelay: decoded.gameStartDelay,
+              scheduleGameEndDelay: decoded.gameEndDelay,
+              scheduleSubmissionDuration: decoded.submissionDuration,
 
-              gameConfigSettingsId: Number(gc.settings_id ?? 0),
-              gameConfigSoulbound: Boolean(gc.soulbound),
-              gameConfigPaymaster: Boolean(gc.paymaster),
-              gameConfigClientUrl: (gc.client_url as string | null) ?? null,
-              gameConfigRenderer: (gc.renderer as string | null) ?? null,
+              gameConfigSettingsId: decoded.settingsId,
+              gameConfigSoulbound: decoded.soulbound,
+              gameConfigPaymaster: decoded.paymaster,
+              gameConfigClientUrl: decoded.clientUrl,
+              gameConfigRenderer: decoded.renderer,
 
               entryFeeTokenAddress: (ef?.token_address as string | null) ?? null,
               entryFeeAmount: (ef?.amount as string | null) ?? null,
@@ -274,8 +265,8 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
                   ? ((erType?.config as unknown[]) ?? null)
                   : null,
 
-              leaderboardAscending: Boolean(lb.ascending),
-              leaderboardGameMustBeOver: Boolean(lb.game_must_be_over),
+              leaderboardAscending: decoded.ascending,
+              leaderboardGameMustBeOver: decoded.gameMustBeOver,
 
               createdAtBlock: blockNumber,
               txHash,
@@ -302,7 +293,7 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
         }
 
         // -----------------------------------------------------------------
-        // TournamentRegistration
+        // TournamentRegistration (initial registration only)
         // -----------------------------------------------------------------
         else if (selectorBigInt === SELECTORS.TournamentRegistration) {
           try {
@@ -314,11 +305,10 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
             registrationRows.push({
               tournamentId: decoded.tournamentId,
               gameTokenId: decoded.gameTokenId.toString(),
-              gameAddress: decoded.gameAddress,
               playerAddress: decoded.playerAddress,
               entryNumber: decoded.entryNumber,
-              hasSubmitted: decoded.hasSubmitted,
-              isBanned: decoded.isBanned,
+              hasSubmitted: false,
+              isBanned: false,
             });
 
             eventLogRows.push({
@@ -332,16 +322,7 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
             });
 
             affectedTournamentIds.add(decoded.tournamentId);
-
-            // Track as new registration only if not a ban/submission update
-            if (!decoded.isBanned && !decoded.hasSubmitted) {
-              newRegistrations++;
-            }
-
-            // Track submission updates for stats
-            if (decoded.hasSubmitted) {
-              newSubmissions++;
-            }
+            newRegistrations++;
           } catch (err) {
             logger.warn(
               `Failed to decode TournamentRegistration at block ${blockNumber}: ${err}`,
@@ -350,30 +331,45 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
         }
 
         // -----------------------------------------------------------------
-        // LeaderboardUpdated
+        // TournamentEntryStateChanged (ban / submit — flags only)
         // -----------------------------------------------------------------
-        else if (selectorBigInt === SELECTORS.LeaderboardUpdated) {
+        else if (selectorBigInt === SELECTORS.TournamentEntryStateChanged) {
           try {
-            const decoded = decodeLeaderboardUpdated(
+            const decoded = decodeTournamentEntryStateChanged(
               event.keys as string[],
               event.data as string[],
             );
 
-            // Store the latest leaderboard state per tournament
-            // (multiple updates in one block should use the last one)
-            leaderboardUpdates.set(decoded.tournamentId, decoded.tokenIds);
+            // Push as a registration row. The upsert SET clause only touches
+            // hasSubmitted/isBanned (entryNumber + playerAddress are populated
+            // once on the initial INSERT from TournamentRegistration).
+            registrationRows.push({
+              tournamentId: decoded.tournamentId,
+              gameTokenId: decoded.gameTokenId.toString(),
+              playerAddress: null,
+              entryNumber: null,
+              hasSubmitted: decoded.hasSubmitted,
+              isBanned: decoded.isBanned,
+            });
 
             eventLogRows.push({
-              eventType: "LeaderboardUpdated",
+              eventType: "TournamentEntryStateChanged",
               tournamentId: decoded.tournamentId,
+              playerAddress: null,
               data: JSON.parse(stringifyWithBigInt(decoded)),
               blockNumber,
               txHash: txHash!,
               eventIndex: eventIdx!,
             });
+
+            affectedTournamentIds.add(decoded.tournamentId);
+
+            if (decoded.hasSubmitted) {
+              newSubmissions++;
+            }
           } catch (err) {
             logger.warn(
-              `Failed to decode LeaderboardUpdated at block ${blockNumber}: ${err}`,
+              `Failed to decode TournamentEntryStateChanged at block ${blockNumber}: ${err}`,
             );
           }
         }
@@ -505,7 +501,11 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
       }
 
       if (registrationRows.length > 0) {
-        // Upsert registrations to handle updates (ban, submission)
+        // Upsert registrations. The SET clause only touches the flag bits —
+        // playerAddress and entryNumber are populated once on the initial
+        // INSERT (from TournamentRegistration). Subsequent flag-change events
+        // (TournamentEntryStateChanged) carry no playerAddress / entryNumber
+        // and must not overwrite the originals.
         for (const row of registrationRows) {
           await db
             .insert(registrations)
@@ -516,9 +516,6 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
                 registrations.gameTokenId,
               ],
               set: {
-                gameAddress: row.gameAddress,
-                playerAddress: row.playerAddress,
-                entryNumber: row.entryNumber,
                 hasSubmitted: row.hasSubmitted,
                 isBanned: row.isBanned,
               },
@@ -526,31 +523,6 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
         }
         logger.info(
           `  Upserted ${registrationRows.length} registration(s)`,
-        );
-      }
-
-      // Leaderboard updates: replace entire leaderboard per tournament (atomic)
-      for (const [tournamentId, tokenIds] of leaderboardUpdates) {
-        await db.transaction(async (tx) => {
-          // Delete existing leaderboard rows for this tournament
-          await tx
-            .delete(leaderboards)
-            .where(sql`${leaderboards.tournamentId} = ${tournamentId}`);
-
-          // Insert new leaderboard rows
-          if (tokenIds.length > 0) {
-            const leaderboardRows: (typeof leaderboards.$inferInsert)[] =
-              tokenIds.map((tokenId, index) => ({
-                tournamentId,
-                position: index + 1,
-                tokenId: tokenId.toString(),
-              }));
-
-            await tx.insert(leaderboards).values(leaderboardRows);
-          }
-        });
-        logger.info(
-          `  Rebuilt leaderboard for tournament ${tournamentId} (${tokenIds.length} entries)`,
         );
       }
 

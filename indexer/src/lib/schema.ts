@@ -15,12 +15,14 @@
  * Tables:
  * 1. tournaments - Tournament definitions from TournamentCreated events
  * 2. registrations - Player registrations from TournamentRegistration events
- * 3. leaderboards - Ordered rankings from LeaderboardUpdated events
- * 4. prizes - Sponsored prizes from PrizeAdded events
- * 5. reward_claims - Reward claim records from RewardClaimed events
- * 6. qualification_entries - Entry requirement tracking from QualificationEntriesUpdated events
- * 7. platform_stats - Aggregated platform-wide statistics
- * 8. tournament_events - Raw event audit log for replay/debugging
+ * 3. prizes - Sponsored prizes from PrizeAdded events
+ * 4. reward_claims - Reward claim records from RewardClaimed events
+ * 5. qualification_entries - Entry requirement tracking from QualificationEntriesUpdated events
+ * 6. platform_stats - Aggregated platform-wide statistics
+ * 7. tournament_events - Raw event audit log for replay/debugging
+ *
+ * Live leaderboard data is sourced from the denshokan SDK
+ * (`useLiveLeaderboard`) — there is no leaderboard table here.
  */
 
 import {
@@ -134,6 +136,8 @@ export const tournaments = pgTable(
 // registrations
 // Domain key: (tournament_id, game_token_id)
 // Surrogate id for Apibara cursor invalidation
+// game_address is intentionally not denormalized here — JOIN against
+// `tournaments.game_address` when needed.
 // ---------------------------------------------------------------------------
 export const registrations = pgTable(
   "registrations",
@@ -141,7 +145,6 @@ export const registrations = pgTable(
     id: serial("id").notNull(),
     tournamentId: bigint("tournament_id", { mode: "bigint" }).notNull(),
     gameTokenId: text("game_token_id").notNull(),
-    gameAddress: text("game_address"),
     playerAddress: text("player_address"),
     entryNumber: integer("entry_number"),
     hasSubmitted: boolean("has_submitted").default(false),
@@ -156,28 +159,6 @@ export const registrations = pgTable(
       table.playerAddress,
     ),
     idIdx: unique("registrations_id_unique").on(table.id),
-  }),
-);
-
-// ---------------------------------------------------------------------------
-// leaderboards
-// Domain key: (tournament_id, position)
-// Surrogate id for Apibara cursor invalidation
-// ---------------------------------------------------------------------------
-export const leaderboards = pgTable(
-  "leaderboards",
-  {
-    id: serial("id").notNull(),
-    tournamentId: bigint("tournament_id", { mode: "bigint" }).notNull(),
-    position: integer("position").notNull(),
-    tokenId: text("token_id").notNull(),
-  },
-  (table) => ({
-    pk: primaryKey({ columns: [table.tournamentId, table.position] }),
-    tournamentIdIdx: index("leaderboards_tournament_id_idx").on(
-      table.tournamentId,
-    ),
-    idIdx: unique("leaderboards_id_unique").on(table.id),
   }),
 );
 

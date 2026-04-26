@@ -4,7 +4,6 @@ import { db } from "../db/client.js";
 import {
   tournaments,
   registrations,
-  leaderboards,
   prizes,
   rewardClaims,
   qualificationEntries,
@@ -164,7 +163,7 @@ app.get("/:id", async (c) => {
       return c.json({ error: "Invalid tournament ID" }, 400);
     }
 
-    const [tournamentRows, registrationCount, prizeCount, leaderboardRows, prizeAggMap, paidPlacesMap] =
+    const [tournamentRows, registrationCount, prizeCount, prizeAggMap, paidPlacesMap] =
       await Promise.all([
         db
           .select()
@@ -179,12 +178,6 @@ app.get("/:id", async (c) => {
           .select({ count: sql<number>`count(*)::int` })
           .from(prizes)
           .where(eq(prizes.tournamentId, tournamentId)),
-        db
-          .select()
-          .from(leaderboards)
-          .where(eq(leaderboards.tournamentId, tournamentId))
-          .orderBy(asc(leaderboards.position))
-          .limit(50),
         fetchPrizeAggregation([tournamentId]),
         fetchPaidPlaces([tournamentId]),
       ]);
@@ -222,52 +215,12 @@ app.get("/:id", async (c) => {
         ...serializeTournament(tournamentRows[0]),
         registrationCount: registrationCount[0]?.count ?? 0,
         prizeCount: prizeCount[0]?.count ?? 0,
-        leaderboard: leaderboardRows.map(serializeLeaderboardEntry),
         prizeAggregation: prizeAggMap.get(tid) ?? [],
         paidPlaces,
       },
     });
   } catch (err) {
     console.error("[tournaments] detail error:", err);
-    return c.json({ error: "Internal server error" }, 500);
-  }
-});
-
-// ─── GET /:id/leaderboard ── Leaderboard for tournament ────────────────────
-app.get("/:id/leaderboard", async (c) => {
-  try {
-    const tournamentId = parseTournamentId(c.req.param("id"));
-    if (tournamentId === null) {
-      return c.json({ error: "Invalid tournament ID" }, 400);
-    }
-
-    const limit = parseLimit(c.req.query("limit"), 50, 100);
-    const offset = parseOffset(c.req.query("offset"));
-
-    const [rows, countResult] = await Promise.all([
-      db
-        .select()
-        .from(leaderboards)
-        .where(eq(leaderboards.tournamentId, tournamentId))
-        .orderBy(asc(leaderboards.position))
-        .limit(limit)
-        .offset(offset),
-      db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(leaderboards)
-        .where(eq(leaderboards.tournamentId, tournamentId)),
-    ]);
-
-    return c.json({
-      data: rows.map(serializeLeaderboardEntry),
-      pagination: {
-        total: countResult[0]?.count ?? 0,
-        limit,
-        offset,
-      },
-    });
-  } catch (err) {
-    console.error("[tournaments] leaderboard error:", err);
     return c.json({ error: "Internal server error" }, 500);
   }
 });
@@ -798,19 +751,10 @@ function buildEntryRequirementType(
   return { type };
 }
 
-function serializeLeaderboardEntry(entry: typeof leaderboards.$inferSelect) {
-  return {
-    tournamentId: entry.tournamentId.toString(),
-    tokenId: entry.tokenId.toString(),
-    position: entry.position,
-  };
-}
-
 function serializeRegistration(r: typeof registrations.$inferSelect) {
   return {
     tournamentId: r.tournamentId.toString(),
     gameTokenId: r.gameTokenId.toString(),
-    gameAddress: r.gameAddress,
     playerAddress: r.playerAddress,
     entryNumber: r.entryNumber,
     hasSubmitted: r.hasSubmitted,
