@@ -100,10 +100,17 @@ export const useEntityUpdates = () => {
   };
 
   const waitForSubmitScores = async (tournamentId: BigNumberish) => {
+    // Listens for `TournamentEntryStateChanged { has_submitted: true }`
+    // (delivered on the `registrations` channel by the
+    // notify_registration_update trigger). The dedicated `leaderboards`
+    // channel was removed alongside the `LeaderboardUpdated` event.
     await waitForWsEvent(
       client,
-      ["leaderboards"],
-      (msg) => msg.channel === "leaderboards",
+      ["registrations"],
+      (msg) => {
+        if (msg.channel !== "registrations") return false;
+        return (msg.data as any)?.has_submitted === true;
+      },
       [tournamentId.toString()],
     );
   };

@@ -84,7 +84,6 @@ pub mod BudokanRewards {
         tournament_creator_token_id: Map<u64, felt252>,
         entry_fee_position_claimed: Map<(u64, u32), bool>,
         prize_position: Map<u64, u32>,
-        token_to_entry: Map<(u64, felt252), u32>,
     }
 
     // Events use #[flat] for component variants so on-chain selectors match
@@ -436,10 +435,12 @@ pub mod BudokanRewards {
                         (share, recipient)
                     },
                     EntryFeeRewardType::Refund(token_id) => {
-                        let entry_id = self.token_to_entry.entry((tournament_id, token_id)).read();
-                        let registration = self.registration._get_entry(tournament_id, entry_id);
+                        // After the token-keyed registration refactor, the
+                        // token_id -> tournament_id reverse index lives on
+                        // the registration component itself.
+                        let context_id = self.registration._get_token_context(token_id);
                         assert!(
-                            registration.context_id == tournament_id,
+                            context_id == tournament_id,
                             "Budokan: token_id is not registered for tournament {}",
                             tournament_id,
                         );

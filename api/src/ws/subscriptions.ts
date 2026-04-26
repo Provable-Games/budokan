@@ -8,7 +8,6 @@ import { pool } from "../db/client.js";
 const CHANNEL_MAP: Record<string, string> = {
   tournaments: "tournament_updates",
   registrations: "registration_updates",
-  leaderboards: "leaderboard_updates",
   prizes: "prize_updates",
   rewards: "reward_claim_updates",
   metrics: "metrics_updates",

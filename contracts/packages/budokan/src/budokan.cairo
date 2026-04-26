@@ -2,7 +2,10 @@
 
 #[starknet::contract]
 pub mod Budokan {
-    use budokan::events;
+    use budokan::events::{
+        PrizeAdded, QualificationEntriesUpdated, RewardClaimed, TournamentCreated,
+        TournamentEntryStateChanged, TournamentRegistration,
+    };
     use budokan::libs::schedule::{
         ScheduleAssertionsImpl, ScheduleAssertionsTrait, ScheduleImpl, ScheduleTrait,
     };
@@ -157,10 +160,6 @@ pub mod Budokan {
         entry_fee_position_claimed: Map<(u64, u32), bool>,
         // Prize position mapping: prize_id -> position (for Single prizes)
         prize_position: Map<u64, u32>,
-        // Map (context_id, game_token_id) → entry_id for reverse lookups
-        token_to_entry: Map<(u64, felt252), u32>,
-        // Map game_token_id → context_id (tournament_id) for global token lookups
-        token_context_id: Map<felt252, u64>,
         // Class hash of the BudokanRewards library class. `add_prize` and
         // `claim_reward` dispatch into it via library_call to keep this
         // contract under the 81,920-felt bytecode limit. Owner-set via
@@ -193,12 +192,12 @@ pub mod Budokan {
         PrizeEvent: PrizeComponent::Event,
         #[flat]
         ReentrancyGuardEvent: ReentrancyGuardComponent::Event,
-        TournamentCreated: events::TournamentCreated,
-        TournamentRegistration: events::TournamentRegistration,
-        LeaderboardUpdated: events::LeaderboardUpdated,
-        PrizeAdded: events::PrizeAdded,
-        RewardClaimed: events::RewardClaimed,
-        QualificationEntriesUpdated: events::QualificationEntriesUpdated,
+        TournamentCreated: TournamentCreated,
+        TournamentRegistration: TournamentRegistration,
+        TournamentEntryStateChanged: TournamentEntryStateChanged,
+        PrizeAdded: PrizeAdded,
+        RewardClaimed: RewardClaimed,
+        QualificationEntriesUpdated: QualificationEntriesUpdated,
     }
 
     #[constructor]
@@ -249,15 +248,14 @@ pub mod Budokan {
     #[abi(embed_v0)]
     impl GameContextImpl of IMetagameContext<ContractState> {
         fn has_context(self: @ContractState, token_id: felt252) -> bool {
-            let tournament_id = self.token_context_id.entry(token_id).read();
-            tournament_id != 0
+            self.registration._get_token_context(token_id) != 0
         }
     }
 
     #[abi(embed_v0)]
     impl GameContextDetailsImpl of IMetagameContextDetails<ContractState> {
         fn context_details(self: @ContractState, token_id: felt252) -> GameContextDetails {
-            let tournament_id = self.token_context_id.entry(token_id).read();
+            let tournament_id = self.registration._get_token_context(token_id);
             let context = array![
                 GameContext {
                     name: 'Tournament ID', value: u128_to_ascii_felt(tournament_id.into()),
@@ -394,7 +392,7 @@ pub mod Budokan {
         fn enter_tournament(
             ref self: ContractState,
             tournament_id: u64,
-            player_name: felt252,
+            player_name: Option<felt252>,
             player_address: ContractAddress,
             qualification: Option<QualificationProof>,
             salt: u16,
@@ -477,7 +475,7 @@ pub mod Budokan {
             let game_token_id: felt252 = self
                 ._mint_game(
                     tournament.game_config.game_address,
-                    Option::Some(player_name),
+                    player_name,
                     Option::Some(tournament.game_config.settings_id),
                     Option::Some(game_start),
                     Option::Some(game_end),
@@ -580,18 +578,17 @@ pub mod Budokan {
                 contract_address: extension_address,
             };
 
-            // Look up entry_id from game_token_id
-            let entry_id = self.token_to_entry.entry((tournament_id, game_token_id)).read();
-            let registration = self.registration._get_entry(tournament_id, entry_id);
-
-            // Verify this registration belongs to this tournament
+            // Verify this token is registered for this tournament
             assert!(
-                registration.context_id == tournament_id,
+                self.registration._get_token_context(game_token_id) == tournament_id,
                 "Budokan: Game ID not registered for this tournament",
             );
 
             // Assert game ID is not already banned
-            assert!(!registration.is_banned, "Budokan: Game ID is already banned");
+            assert!(
+                !self.registration._is_token_banned(game_token_id),
+                "Budokan: Game ID is already banned",
+            );
 
             // Get the current owner of this game token
             let current_owner = game_dispatcher.owner_of(game_token_id.into());
@@ -615,19 +612,15 @@ pub mod Budokan {
                 .remove_entry(tournament_id, game_token_id, current_owner, proof);
 
             // Update registration to mark as banned using component
-            self.registration.ban_entry(tournament_id, entry_id);
+            self.registration.ban_token(game_token_id);
 
-            // Emit native event (reuse current_owner — same value, saves one external call)
+            // Emit flag-change event. Only the keys + flag bits are emitted —
+            // entry_number / game_address / player_address are all derivable
+            // from the matching TournamentRegistration event.
             self
                 .emit(
-                    events::TournamentRegistration {
-                        tournament_id,
-                        game_token_id,
-                        game_address: game_address,
-                        player_address: current_owner,
-                        entry_number: registration.entry_id,
-                        has_submitted: false,
-                        is_banned: true,
+                    TournamentEntryStateChanged {
+                        tournament_id, game_token_id, has_submitted: false, is_banned: true,
                     },
                 );
 
@@ -646,10 +639,6 @@ pub mod Budokan {
             let packed = self.tournament_config.entry(tournament_id).read();
             let config = TournamentConfigStorePacking::unpack(packed);
             let game_address = self.tournament_game_address.entry(tournament_id).read();
-
-            // look up entry_id from token_id
-            let entry_id = self.token_to_entry.entry((tournament_id, token_id)).read();
-            let registration = self.registration._get_entry(tournament_id, entry_id);
 
             // get score for token id
             let submitted_score = self.get_score_for_token_id(game_address, token_id);
@@ -670,10 +659,7 @@ pub mod Budokan {
                 game_end_delay: config.game_end_delay,
                 submission_duration: config.submission_duration,
             };
-            self
-                ._validate_score_submission(
-                    tournament_id, schedule, config.created_at, @registration,
-                );
+            self._validate_score_submission(tournament_id, schedule, config.created_at, token_id);
 
             // Submit score using leaderboard component (config is stored in leaderboard)
             let result = ILeaderboard::submit_score(
@@ -683,17 +669,10 @@ pub mod Budokan {
             // Handle result
             match result {
                 LeaderboardResult::Success => {
-                    // mark score as submitted
-                    self._mark_score_submitted(tournament_id, token_id, game_address);
-
-                    // Emit native event
-                    let leaderboard = self._get_leaderboard(tournament_id);
-                    self
-                        .emit(
-                            events::LeaderboardUpdated {
-                                tournament_id, token_ids: leaderboard.span(),
-                            },
-                        );
+                    // mark score as submitted (emits TournamentEntryStateChanged with
+                    // has_submitted=true, which is the canonical post-submit signal
+                    // for indexers and the client).
+                    self._mark_score_submitted(tournament_id, token_id);
                 },
                 LeaderboardResult::InvalidPosition => { panic!("Budokan: Invalid position"); },
                 LeaderboardResult::DuplicateEntry => {
@@ -767,31 +746,20 @@ pub mod Budokan {
         ) {
             self.registration.set_entry(registration);
 
-            // Store reverse mappings for token_id → entry_id and token_id → context_id
-            self
-                .token_to_entry
-                .entry((*registration.context_id, *registration.game_token_id))
-                .write(*registration.entry_id);
-            self
-                .token_context_id
-                .entry(*registration.game_token_id)
-                .write(*registration.context_id);
-
-            // Emit native event - get player address from token ownership
+            // Emit native event - get player address from token ownership.
+            // game_address is derivable from tournament_id (TournamentCreated);
+            // has_submitted/is_banned are always false at register time.
             let game_token_address = IMinigameDispatcher { contract_address: game_address }
                 .token_address();
             let player_address = IERC721Dispatcher { contract_address: game_token_address }
                 .owner_of((*registration.game_token_id).into());
             self
                 .emit(
-                    events::TournamentRegistration {
+                    TournamentRegistration {
                         tournament_id: *registration.context_id,
                         game_token_id: *registration.game_token_id,
-                        game_address,
                         player_address,
                         entry_number: *registration.entry_id,
-                        has_submitted: *registration.has_submitted,
-                        is_banned: *registration.is_banned,
                     },
                 );
         }
@@ -856,7 +824,9 @@ pub mod Budokan {
             let created_at = get_block_timestamp();
             let created_by = get_caller_address();
 
-            // Store packed tournament config (replaces both TournamentMeta and Schedule storage)
+            // Pack tournament config (replaces both TournamentMeta and Schedule storage).
+            // The same packed felt252 is reused in the TournamentCreated event so
+            // indexers can decode every flag/delay from a single field.
             let config = TournamentConfig {
                 created_at,
                 settings_id: game_config.settings_id,
@@ -870,10 +840,8 @@ pub mod Budokan {
                 ascending: leaderboard_config.ascending,
                 game_must_be_over: leaderboard_config.game_must_be_over,
             };
-            self
-                .tournament_config
-                .entry(tournament_id)
-                .write(TournamentConfigStorePacking::pack(config));
+            let packed_config = TournamentConfigStorePacking::pack(config);
+            self.tournament_config.entry(tournament_id).write(packed_config);
 
             // Store creator_token_id separately (felt252, too large for packed storage)
             self.tournament_creator_token_id.entry(tournament_id).write(creator_token_id);
@@ -947,21 +915,23 @@ pub mod Budokan {
                     game_config.game_address,
                 );
 
-            // Emit native event
+            // Emit native event. `config` is the packed felt252 covering
+            // schedule + flags + created_at; indexers unpack via the same
+            // bit layout used for storage. `client_url` and `renderer` are
+            // emitted separately because they aren't packable.
             self
                 .emit(
-                    events::TournamentCreated {
+                    TournamentCreated {
                         tournament_id,
                         game_address: game_config.game_address,
-                        created_at,
                         created_by,
                         creator_token_id,
                         metadata,
-                        schedule,
-                        game_config,
+                        config: packed_config,
+                        client_url: game_config.client_url,
+                        renderer: game_config.renderer,
                         entry_fee,
                         entry_requirement,
-                        leaderboard_config,
                     },
                 );
 
@@ -1160,50 +1130,47 @@ pub mod Budokan {
             tournament_id: u64,
             schedule: Schedule,
             created_at: u64,
-            registration: @Registration,
+            token_id: felt252,
         ) {
             let game_end: u64 = created_at
                 + schedule.game_start_delay.into()
                 + schedule.game_end_delay.into();
             assert!(get_block_timestamp() >= game_end, "Budokan: Not in submission period");
 
+            let context_id = self.registration._get_token_context(token_id);
+            let has_submitted = self.registration._is_token_submitted(token_id);
+            let is_banned = self.registration._is_token_banned(token_id);
+
             // Allow re-submission if the entry was evicted from the leaderboard
-            if *registration.has_submitted {
+            if has_submitted {
                 let stored_pos = LeaderboardStore::get_token_position(
-                    self.leaderboard, tournament_id, *registration.game_token_id,
+                    self.leaderboard, tournament_id, token_id,
                 );
                 assert!(stored_pos == 0, "Registration: Score already submitted");
-                assert!(!*registration.is_banned, "Registration: Game ID is banned");
+                assert!(!is_banned, "Registration: Game ID is banned");
             } else {
-                self.registration.assert_valid_for_submission(registration, tournament_id);
+                assert!(
+                    context_id == tournament_id, "Registration: Token not registered for context",
+                );
+                assert!(!is_banned, "Registration: Game ID is banned");
             }
         }
 
-        fn _mark_score_submitted(
-            ref self: ContractState,
-            tournament_id: u64,
-            token_id: felt252,
-            game_address: ContractAddress,
-        ) {
-            let entry_id = self.token_to_entry.entry((tournament_id, token_id)).read();
-            self.registration.mark_entry_submitted(tournament_id, entry_id);
+        fn _mark_score_submitted(ref self: ContractState, tournament_id: u64, token_id: felt252) {
+            self.registration.mark_token_submitted(token_id);
 
-            // Emit native event with has_submitted=true
-            let registration = self.registration._get_entry(tournament_id, entry_id);
-            let game_token_address = IMinigameDispatcher { contract_address: game_address }
-                .token_address();
-            let player_address = IERC721Dispatcher { contract_address: game_token_address }
-                .owner_of(token_id.into());
+            // Emit flag-change event. Only the keys + flag bits are emitted —
+            // entry_number / game_address / player_address are all derivable
+            // from the matching TournamentRegistration event. `is_banned`
+            // is `false` here by construction — `_validate_score_submission`
+            // already asserted it.
             self
                 .emit(
-                    events::TournamentRegistration {
+                    TournamentEntryStateChanged {
                         tournament_id,
                         game_token_id: token_id,
-                        game_address,
-                        player_address,
-                        entry_number: registration.entry_id,
-                        has_submitted: registration.has_submitted,
-                        is_banned: registration.is_banned,
+                        has_submitted: true,
+                        is_banned: false,
                     },
                 );
         }
@@ -1243,7 +1210,7 @@ pub mod Budokan {
                             ._get_qualification_entries(tournament_id, qualifier);
                         self
                             .emit(
-                                events::QualificationEntriesUpdated {
+                                QualificationEntriesUpdated {
                                     tournament_id,
                                     qualification_proof: qualifier,
                                     entry_count: qualification_entries.entry_count,
