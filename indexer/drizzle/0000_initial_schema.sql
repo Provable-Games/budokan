@@ -1,5 +1,13 @@
 -- ---------------------------------------------------------------------------
--- Budokan Indexer — Complete Database Schema
+-- Budokan Indexer — Complete Database Schema (fresh init)
+--
+-- This is the canonical schema for new deployments. The prior migration
+-- chain (0000 initial schema → 0001 flatten tournament JSONB → 0002 prize
+-- distribution shares → 0003 drop registrations.game_address → 0004 drop
+-- leaderboards table) was collapsed into this single migration once the
+-- changes in budokan #223 made an existing-data migration unnecessary —
+-- the new contract is incompatible with the old one anyway and requires
+-- a fresh deploy + fresh DB.
 --
 -- Tables optimized for:
 -- - Efficient indexer writes (batch inserts per block)
@@ -11,6 +19,8 @@
 -- - SERIAL `id` columns on composite-PK tables serve as the Apibara drizzle storage
 --   plugin's idColumn for cursor-based invalidation during chain reorgs.
 -- - event_index discriminates multiple events within a single transaction (multicall safety)
+-- - Live leaderboard data is sourced from denshokan-sdk's `useLiveLeaderboard`;
+--   there is intentionally no `leaderboards` table here.
 -- ---------------------------------------------------------------------------
 
 
@@ -26,11 +36,43 @@ CREATE TABLE IF NOT EXISTS tournaments (
   creator_token_id TEXT,
   name TEXT,
   description TEXT,
-  schedule JSONB,
-  game_config JSONB,
-  entry_fee JSONB,
-  entry_requirement JSONB,
-  leaderboard_config JSONB,
+
+  -- Flattened from Cairo `Schedule` (all u32 delays in seconds)
+  schedule_registration_start_delay INTEGER NOT NULL DEFAULT 0,
+  schedule_registration_end_delay   INTEGER NOT NULL DEFAULT 0,
+  schedule_game_start_delay         INTEGER NOT NULL DEFAULT 0,
+  schedule_game_end_delay           INTEGER NOT NULL DEFAULT 0,
+  schedule_submission_duration      INTEGER NOT NULL DEFAULT 0,
+
+  -- Flattened from Cairo `GameConfig` (game_address dedup'd into the column above)
+  game_config_settings_id  INTEGER NOT NULL DEFAULT 0,
+  game_config_soulbound    BOOLEAN NOT NULL DEFAULT FALSE,
+  game_config_paymaster    BOOLEAN NOT NULL DEFAULT FALSE,
+  game_config_client_url   TEXT,
+  game_config_renderer     TEXT,
+
+  -- Flattened from Cairo `Option<EntryFee>` — all NULL when entry fee absent
+  entry_fee_token_address              TEXT,
+  entry_fee_amount                     TEXT,
+  entry_fee_tournament_creator_share   INTEGER,
+  entry_fee_game_creator_share         INTEGER,
+  entry_fee_refund_share               INTEGER,
+  entry_fee_distribution_type          TEXT,
+  entry_fee_distribution_weight        INTEGER,
+  entry_fee_distribution_shares        JSONB,
+  entry_fee_distribution_count         INTEGER,
+
+  -- Flattened from Cairo `Option<EntryRequirement>` — all NULL when absent
+  entry_requirement_entry_limit         INTEGER,
+  entry_requirement_type                TEXT,
+  entry_requirement_token_address       TEXT,
+  entry_requirement_extension_address   TEXT,
+  entry_requirement_extension_config    JSONB,
+
+  -- Flattened from Cairo `LeaderboardConfig`
+  leaderboard_ascending          BOOLEAN NOT NULL DEFAULT FALSE,
+  leaderboard_game_must_be_over  BOOLEAN NOT NULL DEFAULT FALSE,
+
   entry_count INTEGER DEFAULT 0,
   prize_count INTEGER DEFAULT 0,
   submission_count INTEGER DEFAULT 0,
@@ -40,12 +82,16 @@ CREATE TABLE IF NOT EXISTS tournaments (
 
 CREATE INDEX IF NOT EXISTS tournaments_game_address_idx ON tournaments (game_address);
 CREATE INDEX IF NOT EXISTS tournaments_created_by_idx ON tournaments (created_by);
+CREATE INDEX IF NOT EXISTS tournaments_entry_requirement_extension_address_idx
+  ON tournaments (entry_requirement_extension_address);
 
+-- Registrations: domain key (tournament_id, game_token_id).
+-- game_address is intentionally not denormalized here — JOIN against
+-- tournaments.game_address when needed.
 CREATE TABLE IF NOT EXISTS registrations (
   id SERIAL NOT NULL,
   tournament_id BIGINT NOT NULL,
   game_token_id TEXT NOT NULL,
-  game_address TEXT,
   player_address TEXT,
   entry_number INTEGER,
   has_submitted BOOLEAN DEFAULT FALSE,
@@ -57,17 +103,6 @@ CREATE INDEX IF NOT EXISTS registrations_tournament_id_idx ON registrations (tou
 CREATE INDEX IF NOT EXISTS registrations_player_address_idx ON registrations (player_address);
 CREATE UNIQUE INDEX IF NOT EXISTS registrations_id_unique ON registrations (id);
 
-CREATE TABLE IF NOT EXISTS leaderboards (
-  id SERIAL NOT NULL,
-  tournament_id BIGINT NOT NULL,
-  position INTEGER NOT NULL,
-  token_id TEXT NOT NULL,
-  PRIMARY KEY (tournament_id, position)
-);
-
-CREATE INDEX IF NOT EXISTS leaderboards_tournament_id_idx ON leaderboards (tournament_id);
-CREATE UNIQUE INDEX IF NOT EXISTS leaderboards_id_unique ON leaderboards (id);
-
 CREATE TABLE IF NOT EXISTS prizes (
   prize_id BIGINT PRIMARY KEY,
   tournament_id BIGINT NOT NULL,
@@ -78,6 +113,8 @@ CREATE TABLE IF NOT EXISTS prizes (
   token_id TEXT,
   distribution_type TEXT,
   distribution_weight INTEGER,
+  -- Custom-distribution prizes only: u16 basis-point shares array summing to 10000.
+  distribution_shares JSONB,
   distribution_count INTEGER,
   sponsor_address TEXT,
   created_at_block BIGINT,
@@ -142,8 +179,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS tournament_events_id_unique ON tournament_even
 --
 -- Downstream WebSocket servers (or any pg LISTEN client) subscribe to:
 --   tournament_updates       - new tournaments created
---   registration_updates     - player registrations, bans, submissions
---   leaderboard_updates      - leaderboard changes
+--   registration_updates     - registrations + ban/submit state changes
 --   prize_updates            - new prizes added
 --   reward_claim_updates     - reward claims
 -- =========================================================================
@@ -177,6 +213,10 @@ CREATE TRIGGER trg_tournament_created
   EXECUTE FUNCTION notify_tournament_created();
 
 -- registration_updates
+-- Fired on both INSERT (TournamentRegistration) and UPDATE
+-- (TournamentEntryStateChanged → has_submitted / is_banned flips).
+-- The client's `waitForSubmitScores` filters this stream for
+-- `has_submitted === true`.
 CREATE OR REPLACE FUNCTION notify_registration_update()
 RETURNS trigger AS $$
 DECLARE
@@ -185,7 +225,6 @@ BEGIN
   payload := jsonb_build_object(
     'tournament_id',   NEW.tournament_id,
     'game_token_id',   NEW.game_token_id,
-    'game_address',    NEW.game_address,
     'player_address',  NEW.player_address,
     'entry_number',    NEW.entry_number,
     'has_submitted',   NEW.has_submitted,
@@ -207,28 +246,6 @@ CREATE TRIGGER trg_registration_update
   AFTER UPDATE ON registrations
   FOR EACH ROW
   EXECUTE FUNCTION notify_registration_update();
-
--- leaderboard_updates
-CREATE OR REPLACE FUNCTION notify_leaderboard_update()
-RETURNS trigger AS $$
-DECLARE
-  payload jsonb;
-BEGIN
-  payload := jsonb_build_object(
-    'tournament_id', NEW.tournament_id,
-    'position',      NEW.position,
-    'token_id',      NEW.token_id
-  );
-  PERFORM pg_notify('leaderboard_updates', payload::text);
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-DROP TRIGGER IF EXISTS trg_leaderboard_insert ON leaderboards;
-CREATE TRIGGER trg_leaderboard_insert
-  AFTER INSERT ON leaderboards
-  FOR EACH ROW
-  EXECUTE FUNCTION notify_leaderboard_update();
 
 -- prize_updates
 CREATE OR REPLACE FUNCTION notify_prize_added()
