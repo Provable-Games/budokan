@@ -36,6 +36,22 @@ pub struct TournamentRegistration {
     pub is_banned: bool,
 }
 
+/// Emitted when a registered entry's flags change (submit / ban).
+/// `entry_number` is intentionally omitted — it was set at register time
+/// (see `TournamentRegistration`) and is not cheaply derivable from a
+/// token_id after the registration component's reverse-index redesign.
+#[derive(Drop, starknet::Event)]
+pub struct TournamentEntryStateChanged {
+    #[key]
+    pub tournament_id: u64,
+    #[key]
+    pub game_token_id: felt252,
+    pub game_address: ContractAddress,
+    pub player_address: ContractAddress,
+    pub has_submitted: bool,
+    pub is_banned: bool,
+}
+
 #[derive(Drop, starknet::Event)]
 pub struct LeaderboardUpdated {
     #[key]

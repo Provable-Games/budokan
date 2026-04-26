@@ -39,6 +39,7 @@ import { hash } from "starknet";
 export interface EventSelectors {
   TournamentCreated: `0x${string}`;
   TournamentRegistration: `0x${string}`;
+  TournamentEntryStateChanged: `0x${string}`;
   LeaderboardUpdated: `0x${string}`;
   PrizeAdded: `0x${string}`;
   RewardClaimed: `0x${string}`;
@@ -58,6 +59,9 @@ export function getEventSelectors(): EventSelectors {
     ) as `0x${string}`,
     TournamentRegistration: hash.getSelectorFromName(
       "TournamentRegistration",
+    ) as `0x${string}`,
+    TournamentEntryStateChanged: hash.getSelectorFromName(
+      "TournamentEntryStateChanged",
     ) as `0x${string}`,
     LeaderboardUpdated: hash.getSelectorFromName(
       "LeaderboardUpdated",
@@ -207,6 +211,15 @@ export interface DecodedTournamentRegistration {
   gameAddress: string;
   playerAddress: string;
   entryNumber: number;
+  hasSubmitted: boolean;
+  isBanned: boolean;
+}
+
+export interface DecodedTournamentEntryStateChanged {
+  tournamentId: bigint;
+  gameTokenId: bigint;
+  gameAddress: string;
+  playerAddress: string;
   hasSubmitted: boolean;
   isBanned: boolean;
 }
@@ -870,6 +883,30 @@ export function decodeTournamentRegistration(
     entryNumber: Number(BigInt(data[2])),
     hasSubmitted: decodeBool(data[3]),
     isBanned: decodeBool(data[4]),
+  };
+}
+
+/**
+ * Decode a TournamentEntryStateChanged event.
+ *
+ * Layout:
+ *   keys:  [selector, tournament_id, game_token_id]
+ *   data:  [game_address, player_address, has_submitted, is_banned]
+ *
+ * Note: `entry_number` is intentionally absent — it is set at register time
+ * (TournamentRegistration) and never changes for a given entry.
+ */
+export function decodeTournamentEntryStateChanged(
+  keys: readonly string[],
+  data: readonly string[],
+): DecodedTournamentEntryStateChanged {
+  return {
+    tournamentId: BigInt(keys[1]),
+    gameTokenId: BigInt(keys[2]),
+    gameAddress: feltToHex(data[0]),
+    playerAddress: feltToHex(data[1]),
+    hasSubmitted: decodeBool(data[2]),
+    isBanned: decodeBool(data[3]),
   };
 }
 

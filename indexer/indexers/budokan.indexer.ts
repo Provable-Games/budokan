@@ -23,6 +23,7 @@ import {
   getEventSelectors,
   decodeTournamentCreated,
   decodeTournamentRegistration,
+  decodeTournamentEntryStateChanged,
   decodeLeaderboardUpdated,
   decodePrizeAdded,
   decodeRewardClaimed,
@@ -38,6 +39,7 @@ const RAW_SELECTORS = getEventSelectors();
 const SELECTORS = {
   TournamentCreated: BigInt(RAW_SELECTORS.TournamentCreated),
   TournamentRegistration: BigInt(RAW_SELECTORS.TournamentRegistration),
+  TournamentEntryStateChanged: BigInt(RAW_SELECTORS.TournamentEntryStateChanged),
   LeaderboardUpdated: BigInt(RAW_SELECTORS.LeaderboardUpdated),
   PrizeAdded: BigInt(RAW_SELECTORS.PrizeAdded),
   RewardClaimed: BigInt(RAW_SELECTORS.RewardClaimed),
@@ -113,6 +115,11 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
         {
           address: contractAddress,
           keys: [RAW_SELECTORS.TournamentRegistration],
+          includeTransaction: true,
+        },
+        {
+          address: contractAddress,
+          keys: [RAW_SELECTORS.TournamentEntryStateChanged],
           includeTransaction: true,
         },
         {
@@ -302,7 +309,7 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
         }
 
         // -----------------------------------------------------------------
-        // TournamentRegistration
+        // TournamentRegistration (initial registration only)
         // -----------------------------------------------------------------
         else if (selectorBigInt === SELECTORS.TournamentRegistration) {
           try {
@@ -332,19 +339,54 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
             });
 
             affectedTournamentIds.add(decoded.tournamentId);
+            newRegistrations++;
+          } catch (err) {
+            logger.warn(
+              `Failed to decode TournamentRegistration at block ${blockNumber}: ${err}`,
+            );
+          }
+        }
 
-            // Track as new registration only if not a ban/submission update
-            if (!decoded.isBanned && !decoded.hasSubmitted) {
-              newRegistrations++;
-            }
+        // -----------------------------------------------------------------
+        // TournamentEntryStateChanged (ban / submit — flags only, no entry_number)
+        // -----------------------------------------------------------------
+        else if (selectorBigInt === SELECTORS.TournamentEntryStateChanged) {
+          try {
+            const decoded = decodeTournamentEntryStateChanged(
+              event.keys as string[],
+              event.data as string[],
+            );
 
-            // Track submission updates for stats
+            // Push as a registration row. `entryNumber` is omitted from the
+            // upsert SET clause, so this only updates flags on existing rows.
+            registrationRows.push({
+              tournamentId: decoded.tournamentId,
+              gameTokenId: decoded.gameTokenId.toString(),
+              gameAddress: decoded.gameAddress,
+              playerAddress: decoded.playerAddress,
+              entryNumber: null,
+              hasSubmitted: decoded.hasSubmitted,
+              isBanned: decoded.isBanned,
+            });
+
+            eventLogRows.push({
+              eventType: "TournamentEntryStateChanged",
+              tournamentId: decoded.tournamentId,
+              playerAddress: decoded.playerAddress,
+              data: JSON.parse(stringifyWithBigInt(decoded)),
+              blockNumber,
+              txHash: txHash!,
+              eventIndex: eventIdx!,
+            });
+
+            affectedTournamentIds.add(decoded.tournamentId);
+
             if (decoded.hasSubmitted) {
               newSubmissions++;
             }
           } catch (err) {
             logger.warn(
-              `Failed to decode TournamentRegistration at block ${blockNumber}: ${err}`,
+              `Failed to decode TournamentEntryStateChanged at block ${blockNumber}: ${err}`,
             );
           }
         }
@@ -505,7 +547,11 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
       }
 
       if (registrationRows.length > 0) {
-        // Upsert registrations to handle updates (ban, submission)
+        // Upsert registrations. `entryNumber` is intentionally absent from the
+        // SET clause: it is populated only by the initial INSERT (from the
+        // TournamentRegistration event). Subsequent flag-change events
+        // (TournamentEntryStateChanged) carry no entry_number and must not
+        // overwrite the original.
         for (const row of registrationRows) {
           await db
             .insert(registrations)
@@ -518,7 +564,6 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
               set: {
                 gameAddress: row.gameAddress,
                 playerAddress: row.playerAddress,
-                entryNumber: row.entryNumber,
                 hasSubmitted: row.hasSubmitted,
                 isBanned: row.isBanned,
               },

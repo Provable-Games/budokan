@@ -165,10 +165,6 @@ pub mod Budokan {
         entry_fee_position_claimed: Map<(u64, u32), bool>,
         // Prize position mapping: prize_id -> position (for Single prizes)
         prize_position: Map<u64, u32>,
-        // Map (context_id, game_token_id) → entry_id for reverse lookups
-        token_to_entry: Map<(u64, felt252), u32>,
-        // Map game_token_id → context_id (tournament_id) for global token lookups
-        token_context_id: Map<felt252, u64>,
     }
 
     #[event]
@@ -198,6 +194,7 @@ pub mod Budokan {
         ReentrancyGuardEvent: ReentrancyGuardComponent::Event,
         TournamentCreated: events::TournamentCreated,
         TournamentRegistration: events::TournamentRegistration,
+        TournamentEntryStateChanged: events::TournamentEntryStateChanged,
         LeaderboardUpdated: events::LeaderboardUpdated,
         PrizeAdded: events::PrizeAdded,
         RewardClaimed: events::RewardClaimed,
@@ -230,15 +227,14 @@ pub mod Budokan {
     #[abi(embed_v0)]
     impl GameContextImpl of IMetagameContext<ContractState> {
         fn has_context(self: @ContractState, token_id: felt252) -> bool {
-            let tournament_id = self.token_context_id.entry(token_id).read();
-            tournament_id != 0
+            self.registration._get_token_context(token_id) != 0
         }
     }
 
     #[abi(embed_v0)]
     impl GameContextDetailsImpl of IMetagameContextDetails<ContractState> {
         fn context_details(self: @ContractState, token_id: felt252) -> GameContextDetails {
-            let tournament_id = self.token_context_id.entry(token_id).read();
+            let tournament_id = self.registration._get_token_context(token_id);
             let context = array![
                 GameContext {
                     name: 'Tournament ID', value: u128_to_ascii_felt(tournament_id.into()),
@@ -561,18 +557,17 @@ pub mod Budokan {
                 contract_address: extension_address,
             };
 
-            // Look up entry_id from game_token_id
-            let entry_id = self.token_to_entry.entry((tournament_id, game_token_id)).read();
-            let registration = self.registration._get_entry(tournament_id, entry_id);
-
-            // Verify this registration belongs to this tournament
+            // Verify this token is registered for this tournament
             assert!(
-                registration.context_id == tournament_id,
+                self.registration._get_token_context(game_token_id) == tournament_id,
                 "Budokan: Game ID not registered for this tournament",
             );
 
             // Assert game ID is not already banned
-            assert!(!registration.is_banned, "Budokan: Game ID is already banned");
+            assert!(
+                !self.registration._is_token_banned(game_token_id),
+                "Budokan: Game ID is already banned",
+            );
 
             // Get the current owner of this game token
             let current_owner = game_dispatcher.owner_of(game_token_id.into());
@@ -596,19 +591,19 @@ pub mod Budokan {
                 .remove_entry(tournament_id, game_token_id, current_owner, proof);
 
             // Update registration to mark as banned using component
-            self.registration.ban_entry(tournament_id, entry_id);
+            self.registration.ban_token(game_token_id);
 
-            // Emit native event
+            // Emit flag-change event. `entry_number` is omitted intentionally —
+            // it was set in TournamentRegistration at register time.
             let player_address = IERC721Dispatcher { contract_address: game_token_address }
                 .owner_of(game_token_id.into());
             self
                 .emit(
-                    events::TournamentRegistration {
+                    events::TournamentEntryStateChanged {
                         tournament_id,
                         game_token_id,
-                        game_address: game_address,
+                        game_address,
                         player_address,
-                        entry_number: registration.entry_id,
                         has_submitted: false,
                         is_banned: true,
                     },
@@ -630,10 +625,6 @@ pub mod Budokan {
             let config = TournamentConfigStorePacking::unpack(packed);
             let game_address = self.tournament_game_address.entry(tournament_id).read();
 
-            // look up entry_id from token_id
-            let entry_id = self.token_to_entry.entry((tournament_id, token_id)).read();
-            let registration = self.registration._get_entry(tournament_id, entry_id);
-
             // get score for token id
             let submitted_score = self.get_score_for_token_id(game_address, token_id);
 
@@ -653,10 +644,7 @@ pub mod Budokan {
                 game_end_delay: config.game_end_delay,
                 submission_duration: config.submission_duration,
             };
-            self
-                ._validate_score_submission(
-                    tournament_id, schedule, config.created_at, @registration,
-                );
+            self._validate_score_submission(tournament_id, schedule, config.created_at, token_id);
 
             // Submit score using leaderboard component (config is stored in leaderboard)
             let result = ILeaderboard::submit_score(
@@ -817,16 +805,6 @@ pub mod Budokan {
             ref self: ContractState, game_address: ContractAddress, registration: @Registration,
         ) {
             self.registration.set_entry(registration);
-
-            // Store reverse mappings for token_id → entry_id and token_id → context_id
-            self
-                .token_to_entry
-                .entry((*registration.context_id, *registration.game_token_id))
-                .write(*registration.entry_id);
-            self
-                .token_context_id
-                .entry(*registration.game_token_id)
-                .write(*registration.context_id);
 
             // Emit native event - get player address from token ownership
             let game_token_address = IMinigameDispatcher { contract_address: game_address }
@@ -1526,10 +1504,8 @@ pub mod Budokan {
                     },
                     EntryFeeRewardType::Refund(token_id) => {
                         // Verify the token_id is registered for this tournament
-                        let entry_id = self.token_to_entry.entry((tournament_id, token_id)).read();
-                        let registration = self.registration._get_entry(tournament_id, entry_id);
                         assert!(
-                            registration.context_id == tournament_id,
+                            self.registration._get_token_context(token_id) == tournament_id,
                             "Budokan: token_id is not registered for tournament {}",
                             tournament_id,
                         );
@@ -1835,22 +1811,29 @@ pub mod Budokan {
             tournament_id: u64,
             schedule: Schedule,
             created_at: u64,
-            registration: @Registration,
+            token_id: felt252,
         ) {
             let game_end: u64 = created_at
                 + schedule.game_start_delay.into()
                 + schedule.game_end_delay.into();
             assert!(get_block_timestamp() >= game_end, "Budokan: Not in submission period");
 
+            let context_id = self.registration._get_token_context(token_id);
+            let has_submitted = self.registration._is_token_submitted(token_id);
+            let is_banned = self.registration._is_token_banned(token_id);
+
             // Allow re-submission if the entry was evicted from the leaderboard
-            if *registration.has_submitted {
+            if has_submitted {
                 let stored_pos = LeaderboardStore::get_token_position(
-                    self.leaderboard, tournament_id, *registration.game_token_id,
+                    self.leaderboard, tournament_id, token_id,
                 );
                 assert!(stored_pos == 0, "Registration: Score already submitted");
-                assert!(!*registration.is_banned, "Registration: Game ID is banned");
+                assert!(!is_banned, "Registration: Game ID is banned");
             } else {
-                self.registration.assert_valid_for_submission(registration, tournament_id);
+                assert!(
+                    context_id == tournament_id, "Registration: Token not registered for context",
+                );
+                assert!(!is_banned, "Registration: Game ID is banned");
             }
         }
 
@@ -1860,25 +1843,24 @@ pub mod Budokan {
             token_id: felt252,
             game_address: ContractAddress,
         ) {
-            let entry_id = self.token_to_entry.entry((tournament_id, token_id)).read();
-            self.registration.mark_entry_submitted(tournament_id, entry_id);
+            self.registration.mark_token_submitted(token_id);
 
-            // Emit native event with has_submitted=true
-            let registration = self.registration._get_entry(tournament_id, entry_id);
+            // Emit flag-change event. `entry_number` is omitted (set at register
+            // time). `is_banned` is `false` here by construction —
+            // `_validate_score_submission` already asserted it.
             let game_token_address = IMinigameDispatcher { contract_address: game_address }
                 .token_address();
             let player_address = IERC721Dispatcher { contract_address: game_token_address }
                 .owner_of(token_id.into());
             self
                 .emit(
-                    events::TournamentRegistration {
+                    events::TournamentEntryStateChanged {
                         tournament_id,
                         game_token_id: token_id,
                         game_address,
                         player_address,
-                        entry_number: registration.entry_id,
-                        has_submitted: registration.has_submitted,
-                        is_banned: registration.is_banned,
+                        has_submitted: true,
+                        is_banned: false,
                     },
                 );
         }

@@ -3245,12 +3245,12 @@ fn test_get_registration_banned_not_banned() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, time);
 
     // Enter tournament
-    let (_entry_token_id, entry_id) = contracts
+    let (entry_token_id, _entry_id) = contracts
         .budokan
         .enter_tournament(tournament.id, 'test_player', owner, Option::None, 1, 0);
 
     // Get registration banned status
-    let is_banned = contracts.registration.is_entry_banned(tournament.id, entry_id);
+    let is_banned = contracts.registration.is_token_banned(entry_token_id);
     assert!(!is_banned, "Should not be banned initially");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -4804,10 +4804,10 @@ fn test_ban_game_ids_during_registration() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, reg_time);
 
     let qualification = QualificationProof::Extension(extension_config.config);
-    let (game_id_1, entry_id_1) = contracts
+    let (game_id_1, _entry_id_1) = contracts
         .budokan
         .enter_tournament(tournament.id, 'player1', owner, Option::Some(qualification), 2, 0);
-    let (_game_id_2, entry_id_2) = contracts
+    let (game_id_2, _entry_id_2) = contracts
         .budokan
         .enter_tournament(tournament.id, 'player2', owner, Option::Some(qualification), 3, 0);
 
@@ -4821,19 +4821,19 @@ fn test_ban_game_ids_during_registration() {
     stop_cheat_caller_address(contracts.denshokan.contract_address);
 
     // Verify registrations exist and are not banned initially
-    let is_banned_1 = contracts.registration.is_entry_banned(tournament.id, entry_id_1);
+    let is_banned_1 = contracts.registration.is_token_banned(game_id_1);
     assert!(!is_banned_1, "Registration should not be banned initially");
 
     // Ban game_id_1 - should be banned because owner doesn't have qualifying token
     contracts.budokan.ban_entry(tournament.id, game_id_1, array![].span());
 
     // Verify game_id_1 is now banned (owned by invalid_player)
-    let is_banned_1_after = contracts.registration.is_entry_banned(tournament.id, entry_id_1);
+    let is_banned_1_after = contracts.registration.is_token_banned(game_id_1);
     assert!(is_banned_1_after, "Game ID 1 should be banned - owner doesn't have qualifying token");
 
     // Verify game_id_2 is NOT banned (still owned by valid_player, and we didn't call ban_entry on
     // it)
-    let is_banned_2 = contracts.registration.is_entry_banned(tournament.id, entry_id_2);
+    let is_banned_2 = contracts.registration.is_token_banned(game_id_2);
     assert!(!is_banned_2, "Game ID 2 should not be banned - owner has qualifying token");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -4966,7 +4966,7 @@ fn test_anyone_can_ban() {
     contracts.budokan.ban_entry(tournament.id, game_id, array![].span());
 
     // Verify game ID is now banned
-    let is_banned = contracts.registration.is_entry_banned(tournament.id, entry_id);
+    let is_banned = contracts.registration.is_token_banned(game_id);
     assert!(is_banned, "Registration should be banned");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -5103,7 +5103,7 @@ fn test_can_ban_during_staging_phase() {
     contracts.budokan.ban_entry(tournament.id, game_id, array![].span());
 
     // Verify game ID is now banned
-    let is_banned = contracts.registration.is_entry_banned(tournament.id, entry_id);
+    let is_banned = contracts.registration.is_token_banned(game_id);
     assert!(is_banned, "Registration should be banned during staging phase");
 
     stop_cheat_caller_address(contracts.budokan.contract_address);
@@ -5199,13 +5199,13 @@ fn test_ban_multiple_game_ids() {
     start_cheat_block_timestamp(contracts.minigame.contract_address, reg_time);
 
     let qualification = QualificationProof::Extension(extension_config.config);
-    let (game_id_1, entry_id_1) = contracts
+    let (game_id_1, _entry_id_1) = contracts
         .budokan
         .enter_tournament(tournament.id, 'player1', owner, Option::Some(qualification), 2, 0);
-    let (_game_id_2, entry_id_2) = contracts
+    let (game_id_2, _entry_id_2) = contracts
         .budokan
         .enter_tournament(tournament.id, 'player2', owner, Option::Some(qualification), 3, 0);
-    let (game_id_3, entry_id_3) = contracts
+    let (game_id_3, _entry_id_3) = contracts
         .budokan
         .enter_tournament(tournament.id, 'player3', owner, Option::Some(qualification), 4, 0);
 
@@ -5225,9 +5225,9 @@ fn test_ban_multiple_game_ids() {
     contracts.budokan.ban_entry(tournament.id, game_id_3, array![].span());
 
     // Verify correct IDs are banned
-    let is_banned_1 = contracts.registration.is_entry_banned(tournament.id, entry_id_1);
-    let is_banned_2 = contracts.registration.is_entry_banned(tournament.id, entry_id_2);
-    let is_banned_3 = contracts.registration.is_entry_banned(tournament.id, entry_id_3);
+    let is_banned_1 = contracts.registration.is_token_banned(game_id_1);
+    let is_banned_2 = contracts.registration.is_token_banned(game_id_2);
+    let is_banned_3 = contracts.registration.is_token_banned(game_id_3);
 
     assert!(is_banned_1, "Registration 1 should be banned - owner doesn't have qualifying token");
     assert!(!is_banned_2, "Registration 2 should not be banned");
@@ -5291,7 +5291,7 @@ fn test_cannot_ban_already_banned_game_id() {
     contracts.budokan.ban_entry(tournament.id, game_id, array![].span());
 
     // Verify game ID is banned
-    let is_banned = contracts.registration.is_entry_banned(tournament.id, entry_id);
+    let is_banned = contracts.registration.is_token_banned(game_id);
     assert!(is_banned, "Game ID should be banned");
 
     // Attempt to ban the same game ID again - should panic
