@@ -17,6 +17,11 @@
 
 #[starknet::contract]
 pub mod BudokanRewards {
+    // Reuse the canonical event structs and packed-storage layout from the
+    // main Budokan crate. Variant names (PrizeAdded, RewardClaimed) MUST match
+    // the main contract's `enum Event` so the on-chain selectors are identical
+    // — see the storage-mirror invariant note above.
+    use budokan::events::{PrizeAdded, RewardClaimed};
     use budokan::libs::schedule::{ScheduleAssertionsImpl, ScheduleAssertionsTrait};
     use budokan::structs::packed_storage::{
         TournamentConfig, TournamentConfigStorePacking, unpack_game_schedule,
@@ -27,7 +32,6 @@ pub mod BudokanRewards {
     };
     use budokan_interfaces::rewards::IBudokanRewards;
     use core::num::traits::Zero;
-    use crate::events;
     use game_components_embeddable_game_standard::minigame::interface::{
         IMinigameDispatcher, IMinigameDispatcherTrait,
     };
@@ -99,8 +103,8 @@ pub mod BudokanRewards {
         EntryFeeEvent: EntryFeeComponent::Event,
         #[flat]
         PrizeEvent: PrizeComponent::Event,
-        PrizeAdded: events::PrizeAdded,
-        RewardClaimed: events::RewardClaimed,
+        PrizeAdded: PrizeAdded,
+        RewardClaimed: RewardClaimed,
     }
 
     // Reconstruct a Schedule from the packed config — the canonical
@@ -214,7 +218,7 @@ pub mod BudokanRewards {
             let payout_position = self.prize_position.entry(prize.id).read();
             self
                 .emit(
-                    events::PrizeAdded {
+                    PrizeAdded {
                         tournament_id: prize.context_id,
                         prize_id: prize.id,
                         payout_position,
@@ -259,7 +263,7 @@ pub mod BudokanRewards {
                 },
             }
 
-            self.emit(events::RewardClaimed { tournament_id, reward_type, claimed: true });
+            self.emit(RewardClaimed { tournament_id, reward_type, claimed: true });
         }
 
         fn _assert_entry_fee_reward_not_claimed(
