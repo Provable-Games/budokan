@@ -2,7 +2,10 @@
 
 #[starknet::contract]
 pub mod Budokan {
-    use budokan::events;
+    use budokan::events::{
+        LeaderboardUpdated, PrizeAdded, QualificationEntriesUpdated, RewardClaimed,
+        TournamentCreated, TournamentEntryStateChanged, TournamentRegistration,
+    };
     use budokan::libs::schedule::{
         ScheduleAssertionsImpl, ScheduleAssertionsTrait, ScheduleImpl, ScheduleTrait,
     };
@@ -192,13 +195,13 @@ pub mod Budokan {
         PrizeEvent: PrizeComponent::Event,
         #[flat]
         ReentrancyGuardEvent: ReentrancyGuardComponent::Event,
-        TournamentCreated: events::TournamentCreated,
-        TournamentRegistration: events::TournamentRegistration,
-        TournamentEntryStateChanged: events::TournamentEntryStateChanged,
-        LeaderboardUpdated: events::LeaderboardUpdated,
-        PrizeAdded: events::PrizeAdded,
-        RewardClaimed: events::RewardClaimed,
-        QualificationEntriesUpdated: events::QualificationEntriesUpdated,
+        TournamentCreated: TournamentCreated,
+        TournamentRegistration: TournamentRegistration,
+        TournamentEntryStateChanged: TournamentEntryStateChanged,
+        LeaderboardUpdated: LeaderboardUpdated,
+        PrizeAdded: PrizeAdded,
+        RewardClaimed: RewardClaimed,
+        QualificationEntriesUpdated: QualificationEntriesUpdated,
     }
 
     #[constructor]
@@ -598,7 +601,7 @@ pub mod Budokan {
             // from the matching TournamentRegistration event.
             self
                 .emit(
-                    events::TournamentEntryStateChanged {
+                    TournamentEntryStateChanged {
                         tournament_id, game_token_id, has_submitted: false, is_banned: true,
                     },
                 );
@@ -653,12 +656,7 @@ pub mod Budokan {
 
                     // Emit native event
                     let leaderboard = self._get_leaderboard(tournament_id);
-                    self
-                        .emit(
-                            events::LeaderboardUpdated {
-                                tournament_id, token_ids: leaderboard.span(),
-                            },
-                        );
+                    self.emit(LeaderboardUpdated { tournament_id, token_ids: leaderboard.span() });
                 },
                 LeaderboardResult::InvalidPosition => { panic!("Budokan: Invalid position"); },
                 LeaderboardResult::DuplicateEntry => {
@@ -809,7 +807,7 @@ pub mod Budokan {
                 .owner_of((*registration.game_token_id).into());
             self
                 .emit(
-                    events::TournamentRegistration {
+                    TournamentRegistration {
                         tournament_id: *registration.context_id,
                         game_token_id: *registration.game_token_id,
                         player_address,
@@ -957,7 +955,9 @@ pub mod Budokan {
             let created_at = get_block_timestamp();
             let created_by = get_caller_address();
 
-            // Store packed tournament config (replaces both TournamentMeta and Schedule storage)
+            // Pack tournament config (replaces both TournamentMeta and Schedule storage).
+            // The same packed felt252 is reused in the TournamentCreated event so
+            // indexers can decode every flag/delay from a single field.
             let config = TournamentConfig {
                 created_at,
                 settings_id: game_config.settings_id,
@@ -971,10 +971,8 @@ pub mod Budokan {
                 ascending: leaderboard_config.ascending,
                 game_must_be_over: leaderboard_config.game_must_be_over,
             };
-            self
-                .tournament_config
-                .entry(tournament_id)
-                .write(TournamentConfigStorePacking::pack(config));
+            let packed_config = TournamentConfigStorePacking::pack(config);
+            self.tournament_config.entry(tournament_id).write(packed_config);
 
             // Store creator_token_id separately (felt252, too large for packed storage)
             self.tournament_creator_token_id.entry(tournament_id).write(creator_token_id);
@@ -1048,21 +1046,23 @@ pub mod Budokan {
                     game_config.game_address,
                 );
 
-            // Emit native event
+            // Emit native event. `config` is the packed felt252 covering
+            // schedule + flags + created_at; indexers unpack via the same
+            // bit layout used for storage. `client_url` and `renderer` are
+            // emitted separately because they aren't packable.
             self
                 .emit(
-                    events::TournamentCreated {
+                    TournamentCreated {
                         tournament_id,
                         game_address: game_config.game_address,
-                        created_at,
                         created_by,
                         creator_token_id,
                         metadata,
-                        schedule,
-                        game_config,
+                        config: packed_config,
+                        client_url: game_config.client_url,
+                        renderer: game_config.renderer,
                         entry_fee,
                         entry_requirement,
-                        leaderboard_config,
                     },
                 );
 
@@ -1077,7 +1077,7 @@ pub mod Budokan {
             let payout_position = self.prize_position.entry(prize.id).read();
             self
                 .emit(
-                    events::PrizeAdded {
+                    PrizeAdded {
                         tournament_id: prize.context_id,
                         prize_id: prize.id,
                         payout_position,
@@ -1122,7 +1122,7 @@ pub mod Budokan {
             }
 
             // Emit native event
-            self.emit(events::RewardClaimed { tournament_id, reward_type, claimed: true });
+            self.emit(RewardClaimed { tournament_id, reward_type, claimed: true });
         }
 
         fn _is_position_claim_made(
@@ -1840,7 +1840,7 @@ pub mod Budokan {
             // already asserted it.
             self
                 .emit(
-                    events::TournamentEntryStateChanged {
+                    TournamentEntryStateChanged {
                         tournament_id,
                         game_token_id: token_id,
                         has_submitted: true,
@@ -1884,7 +1884,7 @@ pub mod Budokan {
                             ._get_qualification_entries(tournament_id, qualifier);
                         self
                             .emit(
-                                events::QualificationEntriesUpdated {
+                                QualificationEntriesUpdated {
                                     tournament_id,
                                     qualification_proof: qualifier,
                                     entry_count: qualification_entries.entry_count,

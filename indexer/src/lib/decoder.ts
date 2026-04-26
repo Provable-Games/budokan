@@ -125,6 +125,63 @@ export function decodeShortString(felt: string): string {
 }
 
 /**
+ * Unpack the packed `TournamentConfig` felt252 emitted in `TournamentCreated`.
+ * Layout (mirrors `contracts/packages/budokan/src/structs/packed_storage.cairo`):
+ *
+ * Low u128 (94 bits):
+ *   [0]      paymaster                   (1 bit)
+ *   [1]      soulbound                   (1 bit)
+ *   [2..33]  settings_id                 (32 bits)
+ *   [34..68] created_at                  (35 bits)
+ *   [69..93] registration_start_delay    (25 bits)
+ *
+ * High u128 (102 bits):
+ *   [0..24]  registration_end_delay      (25 bits)
+ *   [25..49] game_start_delay            (25 bits)
+ *   [50..74] game_end_delay              (25 bits)
+ *   [75..99] submission_duration         (25 bits)
+ *   [100]    ascending                   (1 bit)
+ *   [101]    game_must_be_over           (1 bit)
+ */
+export function unpackTournamentConfig(packedHex: string): {
+  createdAt: bigint;
+  settingsId: number;
+  soulbound: boolean;
+  paymaster: boolean;
+  registrationStartDelay: number;
+  registrationEndDelay: number;
+  gameStartDelay: number;
+  gameEndDelay: number;
+  submissionDuration: number;
+  ascending: boolean;
+  gameMustBeOver: boolean;
+} {
+  const TWO_POW_128 = 1n << 128n;
+  const MASK_1 = 1n;
+  const MASK_25 = (1n << 25n) - 1n;
+  const MASK_32 = (1n << 32n) - 1n;
+  const MASK_35 = (1n << 35n) - 1n;
+
+  const packed = hexToBigInt(packedHex);
+  const low = packed % TWO_POW_128;
+  const high = packed / TWO_POW_128;
+
+  return {
+    paymaster: (low & MASK_1) !== 0n,
+    soulbound: ((low >> 1n) & MASK_1) !== 0n,
+    settingsId: Number((low >> 2n) & MASK_32),
+    createdAt: (low >> 34n) & MASK_35,
+    registrationStartDelay: Number((low >> 69n) & MASK_25),
+    registrationEndDelay: Number(high & MASK_25),
+    gameStartDelay: Number((high >> 25n) & MASK_25),
+    gameEndDelay: Number((high >> 50n) & MASK_25),
+    submissionDuration: Number((high >> 75n) & MASK_25),
+    ascending: ((high >> 100n) & MASK_1) !== 0n,
+    gameMustBeOver: ((high >> 101n) & MASK_1) !== 0n,
+  };
+}
+
+/**
  * Decode ByteArray from felt252 array.
  *
  * Cairo ByteArray Serde format:
@@ -186,23 +243,33 @@ export function stringifyWithBigInt(obj: unknown): string {
 export interface DecodedTournamentCreated {
   tournamentId: bigint;
   gameAddress: string;
-  createdAt: bigint;
   createdBy: string;
   creatorTokenId: string;
   /** Decoded tournament name (felt252 short string) */
   name: string;
   /** Decoded tournament description (ByteArray) */
   description: string;
-  /** Raw data elements for schedule (complex Serde) */
-  schedule: Record<string, unknown>;
-  /** Raw data elements for game config (complex Serde) */
-  gameConfig: Record<string, unknown>;
+  /** Raw packed config felt252 (kept for traceability + event log) */
+  configRaw: string;
+  /** Unpacked schedule + flag bits from `configRaw`. */
+  createdAt: bigint;
+  settingsId: number;
+  soulbound: boolean;
+  paymaster: boolean;
+  registrationStartDelay: number;
+  registrationEndDelay: number;
+  gameStartDelay: number;
+  gameEndDelay: number;
+  submissionDuration: number;
+  ascending: boolean;
+  gameMustBeOver: boolean;
+  /** From GameConfig — not packable */
+  clientUrl: string | null;
+  renderer: string | null;
   /** Raw data elements for entry fee (complex Serde, Option) */
   entryFee: Record<string, unknown> | null;
   /** Raw data elements for entry requirement (complex Serde, Option) */
   entryRequirement: Record<string, unknown> | null;
-  /** Leaderboard configuration */
-  leaderboardConfig: Record<string, unknown>;
 }
 
 export interface DecodedTournamentRegistration {
@@ -789,13 +856,17 @@ function decodeQualificationProof(
  *
  * Layout:
  *   keys:  [selector, tournament_id, game_address]
- *   data:  [created_at, created_by, creator_token_id(felt252),
+ *   data:  [created_by, creator_token_id(felt252),
  *           ...serde(Metadata { name: felt252, description: ByteArray }),
- *           ...serde(Schedule),
- *           ...serde(GameConfig),
+ *           config(felt252),
+ *           ...serde(Option<ByteArray> client_url),
+ *           ...serde(Option<ContractAddress> renderer),
  *           ...serde(Option<EntryFee>),
- *           ...serde(Option<EntryRequirement>),
- *           ...serde(LeaderboardConfig)]
+ *           ...serde(Option<EntryRequirement>)]
+ *
+ * `config` packs created_at + settings_id + soulbound + paymaster + all
+ * five schedule delays + ascending + game_must_be_over. See
+ * `unpackTournamentConfig` for the bit layout.
  */
 export function decodeTournamentCreated(
   keys: readonly string[],
@@ -805,10 +876,6 @@ export function decodeTournamentCreated(
   const gameAddress = feltToHex(keys[2]);
 
   let idx = 0;
-
-  // created_at: u64
-  const createdAt = hexToBigInt(data[idx]);
-  idx++;
 
   // created_by: ContractAddress
   const createdBy = feltToHex(data[idx]);
@@ -824,13 +891,18 @@ export function decodeTournamentCreated(
   const description = decodeByteArray(data, idx);
   idx += description.consumed;
 
-  // Schedule
-  const schedule = decodeSchedule(data, idx);
-  idx += schedule.consumed;
+  // Packed config (felt252)
+  const configRaw = data[idx];
+  idx++;
+  const config = unpackTournamentConfig(configRaw);
 
-  // GameConfig
-  const gameConfig = decodeGameConfig(data, idx);
-  idx += gameConfig.consumed;
+  // Option<ByteArray> client_url
+  const clientUrl = decodeOptionByteArray(data, idx);
+  idx += clientUrl.consumed;
+
+  // Option<ContractAddress> renderer
+  const renderer = decodeOptionAddress(data, idx);
+  idx += renderer.consumed;
 
   // Option<EntryFee>
   const entryFee = decodeOptionEntryFee(data, idx);
@@ -838,24 +910,20 @@ export function decodeTournamentCreated(
 
   // Option<EntryRequirement>
   const entryRequirement = decodeOptionEntryRequirement(data, idx);
-  idx += entryRequirement.consumed;
-
-  // LeaderboardConfig
-  const leaderboardConfig = decodeLeaderboardConfig(data, idx);
 
   return {
     tournamentId,
     gameAddress,
-    createdAt,
     createdBy,
     creatorTokenId,
     name,
     description: description.value,
-    schedule: schedule.value,
-    gameConfig: gameConfig.value,
+    configRaw,
+    ...config,
+    clientUrl: clientUrl.value,
+    renderer: renderer.value,
     entryFee: entryFee.value,
     entryRequirement: entryRequirement.value,
-    leaderboardConfig: leaderboardConfig.value,
   };
 }
 

@@ -204,13 +204,10 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
             );
             logger.info(`  Decoded tournament ${decoded.tournamentId}: name="${decoded.name}", game=${decoded.gameAddress}`);
 
-            const sched = decoded.schedule as Record<string, number>;
-            const gc = decoded.gameConfig as Record<string, unknown>;
             const ef = decoded.entryFee as Record<string, unknown> | null;
             const er = decoded.entryRequirement as
               | Record<string, unknown>
               | null;
-            const lb = decoded.leaderboardConfig as Record<string, unknown>;
 
             // Entry fee fields (optional — all null when no entry fee)
             const efDist = (ef?.distribution ?? null) as
@@ -232,17 +229,17 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
               name: decoded.name,
               description: decoded.description,
 
-              scheduleRegStartDelay: Number(sched.registration_start_delay ?? 0),
-              scheduleRegEndDelay: Number(sched.registration_end_delay ?? 0),
-              scheduleGameStartDelay: Number(sched.game_start_delay ?? 0),
-              scheduleGameEndDelay: Number(sched.game_end_delay ?? 0),
-              scheduleSubmissionDuration: Number(sched.submission_duration ?? 0),
+              scheduleRegStartDelay: decoded.registrationStartDelay,
+              scheduleRegEndDelay: decoded.registrationEndDelay,
+              scheduleGameStartDelay: decoded.gameStartDelay,
+              scheduleGameEndDelay: decoded.gameEndDelay,
+              scheduleSubmissionDuration: decoded.submissionDuration,
 
-              gameConfigSettingsId: Number(gc.settings_id ?? 0),
-              gameConfigSoulbound: Boolean(gc.soulbound),
-              gameConfigPaymaster: Boolean(gc.paymaster),
-              gameConfigClientUrl: (gc.client_url as string | null) ?? null,
-              gameConfigRenderer: (gc.renderer as string | null) ?? null,
+              gameConfigSettingsId: decoded.settingsId,
+              gameConfigSoulbound: decoded.soulbound,
+              gameConfigPaymaster: decoded.paymaster,
+              gameConfigClientUrl: decoded.clientUrl,
+              gameConfigRenderer: decoded.renderer,
 
               entryFeeTokenAddress: (ef?.token_address as string | null) ?? null,
               entryFeeAmount: (ef?.amount as string | null) ?? null,
@@ -281,8 +278,8 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
                   ? ((erType?.config as unknown[]) ?? null)
                   : null,
 
-              leaderboardAscending: Boolean(lb.ascending),
-              leaderboardGameMustBeOver: Boolean(lb.game_must_be_over),
+              leaderboardAscending: decoded.ascending,
+              leaderboardGameMustBeOver: decoded.gameMustBeOver,
 
               createdAtBlock: blockNumber,
               txHash,

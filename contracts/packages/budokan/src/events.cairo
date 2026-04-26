@@ -1,26 +1,33 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 use budokan_interfaces::budokan::{
-    EntryFee, EntryRequirement, GameConfig, LeaderboardConfig, Metadata, QualificationProof,
-    RewardType, Schedule, TokenTypeData,
+    EntryFee, EntryRequirement, Metadata, QualificationProof, RewardType, TokenTypeData,
 };
 use starknet::ContractAddress;
 
+/// `config` is the packed `TournamentConfig` felt252 (see
+/// `structs/packed_storage.cairo` for the bit layout). It encodes
+/// `created_at`, `settings_id`, `soulbound`, `paymaster`, all five
+/// schedule delays, `ascending`, and `game_must_be_over`. Indexers should
+/// unpack via the same layout.
+///
+/// `client_url` and `renderer` from `GameConfig` are kept separate
+/// because they are variable-length / Option types not in the packed
+/// felt. `metadata` is kept separate (contains a ByteArray description).
 #[derive(Drop, starknet::Event)]
 pub struct TournamentCreated {
     #[key]
     pub tournament_id: u64,
     #[key]
     pub game_address: ContractAddress,
-    pub created_at: u64,
     pub created_by: ContractAddress,
     pub creator_token_id: felt252,
     pub metadata: Metadata,
-    pub schedule: Schedule,
-    pub game_config: GameConfig,
+    pub config: felt252,
+    pub client_url: Option<ByteArray>,
+    pub renderer: Option<ContractAddress>,
     pub entry_fee: Option<EntryFee>,
     pub entry_requirement: Option<EntryRequirement>,
-    pub leaderboard_config: LeaderboardConfig,
 }
 
 /// Emitted once at register time. `game_address` is omitted — derivable
