@@ -22,6 +22,13 @@
       "when": 1745360000000,
       "tag": "0002_prize_distribution_shares",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1777236773678,
+      "tag": "0003_drop_registrations_game_address",
+      "breakpoints": true
     }
   ]
 }

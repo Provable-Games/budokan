@@ -321,11 +321,10 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
             registrationRows.push({
               tournamentId: decoded.tournamentId,
               gameTokenId: decoded.gameTokenId.toString(),
-              gameAddress: decoded.gameAddress,
               playerAddress: decoded.playerAddress,
               entryNumber: decoded.entryNumber,
-              hasSubmitted: decoded.hasSubmitted,
-              isBanned: decoded.isBanned,
+              hasSubmitted: false,
+              isBanned: false,
             });
 
             eventLogRows.push({
@@ -348,7 +347,7 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
         }
 
         // -----------------------------------------------------------------
-        // TournamentEntryStateChanged (ban / submit — flags only, no entry_number)
+        // TournamentEntryStateChanged (ban / submit — flags only)
         // -----------------------------------------------------------------
         else if (selectorBigInt === SELECTORS.TournamentEntryStateChanged) {
           try {
@@ -357,13 +356,13 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
               event.data as string[],
             );
 
-            // Push as a registration row. `entryNumber` is omitted from the
-            // upsert SET clause, so this only updates flags on existing rows.
+            // Push as a registration row. The upsert SET clause only touches
+            // hasSubmitted/isBanned (entryNumber + playerAddress are populated
+            // once on the initial INSERT from TournamentRegistration).
             registrationRows.push({
               tournamentId: decoded.tournamentId,
               gameTokenId: decoded.gameTokenId.toString(),
-              gameAddress: decoded.gameAddress,
-              playerAddress: decoded.playerAddress,
+              playerAddress: null,
               entryNumber: null,
               hasSubmitted: decoded.hasSubmitted,
               isBanned: decoded.isBanned,
@@ -372,7 +371,7 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
             eventLogRows.push({
               eventType: "TournamentEntryStateChanged",
               tournamentId: decoded.tournamentId,
-              playerAddress: decoded.playerAddress,
+              playerAddress: null,
               data: JSON.parse(stringifyWithBigInt(decoded)),
               blockNumber,
               txHash: txHash!,
@@ -547,11 +546,11 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
       }
 
       if (registrationRows.length > 0) {
-        // Upsert registrations. `entryNumber` is intentionally absent from the
-        // SET clause: it is populated only by the initial INSERT (from the
-        // TournamentRegistration event). Subsequent flag-change events
-        // (TournamentEntryStateChanged) carry no entry_number and must not
-        // overwrite the original.
+        // Upsert registrations. The SET clause only touches the flag bits —
+        // playerAddress and entryNumber are populated once on the initial
+        // INSERT (from TournamentRegistration). Subsequent flag-change events
+        // (TournamentEntryStateChanged) carry no playerAddress / entryNumber
+        // and must not overwrite the originals.
         for (const row of registrationRows) {
           await db
             .insert(registrations)
@@ -562,8 +561,6 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
                 registrations.gameTokenId,
               ],
               set: {
-                gameAddress: row.gameAddress,
-                playerAddress: row.playerAddress,
                 hasSubmitted: row.hasSubmitted,
                 isBanned: row.isBanned,
               },

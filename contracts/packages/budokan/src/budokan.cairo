@@ -593,19 +593,13 @@ pub mod Budokan {
             // Update registration to mark as banned using component
             self.registration.ban_token(game_token_id);
 
-            // Emit flag-change event. `entry_number` is omitted intentionally —
-            // it was set in TournamentRegistration at register time.
-            let player_address = IERC721Dispatcher { contract_address: game_token_address }
-                .owner_of(game_token_id.into());
+            // Emit flag-change event. Only the keys + flag bits are emitted —
+            // entry_number / game_address / player_address are all derivable
+            // from the matching TournamentRegistration event.
             self
                 .emit(
                     events::TournamentEntryStateChanged {
-                        tournament_id,
-                        game_token_id,
-                        game_address,
-                        player_address,
-                        has_submitted: false,
-                        is_banned: true,
+                        tournament_id, game_token_id, has_submitted: false, is_banned: true,
                     },
                 );
 
@@ -655,7 +649,7 @@ pub mod Budokan {
             match result {
                 LeaderboardResult::Success => {
                     // mark score as submitted
-                    self._mark_score_submitted(tournament_id, token_id, game_address);
+                    self._mark_score_submitted(tournament_id, token_id);
 
                     // Emit native event
                     let leaderboard = self._get_leaderboard(tournament_id);
@@ -806,7 +800,9 @@ pub mod Budokan {
         ) {
             self.registration.set_entry(registration);
 
-            // Emit native event - get player address from token ownership
+            // Emit native event - get player address from token ownership.
+            // game_address is derivable from tournament_id (TournamentCreated);
+            // has_submitted/is_banned are always false at register time.
             let game_token_address = IMinigameDispatcher { contract_address: game_address }
                 .token_address();
             let player_address = IERC721Dispatcher { contract_address: game_token_address }
@@ -816,11 +812,8 @@ pub mod Budokan {
                     events::TournamentRegistration {
                         tournament_id: *registration.context_id,
                         game_token_id: *registration.game_token_id,
-                        game_address,
                         player_address,
                         entry_number: *registration.entry_id,
-                        has_submitted: *registration.has_submitted,
-                        is_banned: *registration.is_banned,
                     },
                 );
         }
@@ -1837,28 +1830,19 @@ pub mod Budokan {
             }
         }
 
-        fn _mark_score_submitted(
-            ref self: ContractState,
-            tournament_id: u64,
-            token_id: felt252,
-            game_address: ContractAddress,
-        ) {
+        fn _mark_score_submitted(ref self: ContractState, tournament_id: u64, token_id: felt252) {
             self.registration.mark_token_submitted(token_id);
 
-            // Emit flag-change event. `entry_number` is omitted (set at register
-            // time). `is_banned` is `false` here by construction —
-            // `_validate_score_submission` already asserted it.
-            let game_token_address = IMinigameDispatcher { contract_address: game_address }
-                .token_address();
-            let player_address = IERC721Dispatcher { contract_address: game_token_address }
-                .owner_of(token_id.into());
+            // Emit flag-change event. Only the keys + flag bits are emitted —
+            // entry_number / game_address / player_address are all derivable
+            // from the matching TournamentRegistration event. `is_banned`
+            // is `false` here by construction — `_validate_score_submission`
+            // already asserted it.
             self
                 .emit(
                     events::TournamentEntryStateChanged {
                         tournament_id,
                         game_token_id: token_id,
-                        game_address,
-                        player_address,
                         has_submitted: true,
                         is_banned: false,
                     },

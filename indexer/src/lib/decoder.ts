@@ -208,18 +208,13 @@ export interface DecodedTournamentCreated {
 export interface DecodedTournamentRegistration {
   tournamentId: bigint;
   gameTokenId: bigint;
-  gameAddress: string;
   playerAddress: string;
   entryNumber: number;
-  hasSubmitted: boolean;
-  isBanned: boolean;
 }
 
 export interface DecodedTournamentEntryStateChanged {
   tournamentId: bigint;
   gameTokenId: bigint;
-  gameAddress: string;
-  playerAddress: string;
   hasSubmitted: boolean;
   isBanned: boolean;
 }
@@ -869,7 +864,11 @@ export function decodeTournamentCreated(
  *
  * Layout:
  *   keys:  [selector, tournament_id, game_token_id]
- *   data:  [game_address, player_address, entry_number, has_submitted, is_banned]
+ *   data:  [player_address, entry_number]
+ *
+ * Note: `game_address` is intentionally absent — derivable via
+ * `tournaments.game_address` for the same tournament_id. `has_submitted` /
+ * `is_banned` are absent — always `false` at register time.
  */
 export function decodeTournamentRegistration(
   keys: readonly string[],
@@ -878,11 +877,8 @@ export function decodeTournamentRegistration(
   return {
     tournamentId: BigInt(keys[1]),
     gameTokenId: BigInt(keys[2]),
-    gameAddress: feltToHex(data[0]),
-    playerAddress: feltToHex(data[1]),
-    entryNumber: Number(BigInt(data[2])),
-    hasSubmitted: decodeBool(data[3]),
-    isBanned: decodeBool(data[4]),
+    playerAddress: feltToHex(data[0]),
+    entryNumber: Number(BigInt(data[1])),
   };
 }
 
@@ -891,10 +887,10 @@ export function decodeTournamentRegistration(
  *
  * Layout:
  *   keys:  [selector, tournament_id, game_token_id]
- *   data:  [game_address, player_address, has_submitted, is_banned]
+ *   data:  [has_submitted, is_banned]
  *
- * Note: `entry_number` is intentionally absent — it is set at register time
- * (TournamentRegistration) and never changes for a given entry.
+ * Note: `entry_number` / `game_address` / `player_address` are intentionally
+ * absent — all derivable from the matching TournamentRegistration row.
  */
 export function decodeTournamentEntryStateChanged(
   keys: readonly string[],
@@ -903,10 +899,8 @@ export function decodeTournamentEntryStateChanged(
   return {
     tournamentId: BigInt(keys[1]),
     gameTokenId: BigInt(keys[2]),
-    gameAddress: feltToHex(data[0]),
-    playerAddress: feltToHex(data[1]),
-    hasSubmitted: decodeBool(data[2]),
-    isBanned: decodeBool(data[3]),
+    hasSubmitted: decodeBool(data[0]),
+    isBanned: decodeBool(data[1]),
   };
 }
 

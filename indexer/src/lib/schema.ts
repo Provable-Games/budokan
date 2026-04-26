@@ -134,6 +134,8 @@ export const tournaments = pgTable(
 // registrations
 // Domain key: (tournament_id, game_token_id)
 // Surrogate id for Apibara cursor invalidation
+// game_address is intentionally not denormalized here — JOIN against
+// `tournaments.game_address` when needed.
 // ---------------------------------------------------------------------------
 export const registrations = pgTable(
   "registrations",
@@ -141,7 +143,6 @@ export const registrations = pgTable(
     id: serial("id").notNull(),
     tournamentId: bigint("tournament_id", { mode: "bigint" }).notNull(),
     gameTokenId: text("game_token_id").notNull(),
-    gameAddress: text("game_address"),
     playerAddress: text("player_address"),
     entryNumber: integer("entry_number"),
     hasSubmitted: boolean("has_submitted").default(false),
