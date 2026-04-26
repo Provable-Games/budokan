@@ -22,12 +22,15 @@
  * The struct's own #[key] fields follow at keys[1+].
  *
  * Events indexed:
- * - TournamentCreated: keys=[selector, tournament_id, game_address], data=[created_at, created_by, creator_token_id(felt252), ...complex serde data, ...serde(LeaderboardConfig)]
- * - TournamentRegistration: keys=[selector, tournament_id, game_token_id], data=[game_address, player_address, entry_number, has_submitted, is_banned]
- * - LeaderboardUpdated: keys=[selector, tournament_id], data=[...serde(Span<u64>)]
+ * - TournamentCreated: keys=[selector, tournament_id, game_address], data=[created_by, creator_token_id, ...Metadata, config(felt252), ...Option<ByteArray> client_url, ...Option<ContractAddress> renderer, ...Option<EntryFee>, ...Option<EntryRequirement>]
+ * - TournamentRegistration: keys=[selector, tournament_id, game_token_id], data=[player_address, entry_number]
+ * - TournamentEntryStateChanged: keys=[selector, tournament_id, game_token_id], data=[has_submitted, is_banned]
  * - PrizeAdded: keys=[selector, tournament_id, prize_id], data=[payout_position, token_address, ...serde(TokenTypeData), sponsor_address]
  * - RewardClaimed: keys=[selector, tournament_id], data=[...serde(RewardType), claimed]
  * - QualificationEntriesUpdated: keys=[selector, tournament_id], data=[...serde(QualificationProof), entry_count]
+ *
+ * Live leaderboard data is sourced from denshokan-sdk; no LeaderboardUpdated
+ * event or `leaderboards` table is maintained on the budokan side.
  */
 
 import { hash } from "starknet";
@@ -40,7 +43,6 @@ export interface EventSelectors {
   TournamentCreated: `0x${string}`;
   TournamentRegistration: `0x${string}`;
   TournamentEntryStateChanged: `0x${string}`;
-  LeaderboardUpdated: `0x${string}`;
   PrizeAdded: `0x${string}`;
   RewardClaimed: `0x${string}`;
   QualificationEntriesUpdated: `0x${string}`;
@@ -62,9 +64,6 @@ export function getEventSelectors(): EventSelectors {
     ) as `0x${string}`,
     TournamentEntryStateChanged: hash.getSelectorFromName(
       "TournamentEntryStateChanged",
-    ) as `0x${string}`,
-    LeaderboardUpdated: hash.getSelectorFromName(
-      "LeaderboardUpdated",
     ) as `0x${string}`,
     PrizeAdded: hash.getSelectorFromName("PrizeAdded") as `0x${string}`,
     RewardClaimed: hash.getSelectorFromName("RewardClaimed") as `0x${string}`,
@@ -284,11 +283,6 @@ export interface DecodedTournamentEntryStateChanged {
   gameTokenId: bigint;
   hasSubmitted: boolean;
   isBanned: boolean;
-}
-
-export interface DecodedLeaderboardUpdated {
-  tournamentId: bigint;
-  tokenIds: bigint[];
 }
 
 export interface DecodedPrizeAdded {
@@ -970,30 +964,6 @@ export function decodeTournamentEntryStateChanged(
     hasSubmitted: decodeBool(data[0]),
     isBanned: decodeBool(data[1]),
   };
-}
-
-/**
- * Decode a LeaderboardUpdated event.
- *
- * Layout:
- *   keys:  [selector, tournament_id]
- *   data:  [span_length, ...token_ids(u64)]
- *
- * Span<u64> is serialized as [length, ...elements].
- */
-export function decodeLeaderboardUpdated(
-  keys: readonly string[],
-  data: readonly string[],
-): DecodedLeaderboardUpdated {
-  const tournamentId = BigInt(keys[1]);
-  const spanLength = Number(BigInt(data[0]));
-  const tokenIds: bigint[] = [];
-
-  for (let i = 0; i < spanLength; i++) {
-    tokenIds.push(BigInt(data[1 + i]));
-  }
-
-  return { tournamentId, tokenIds };
 }
 
 /**

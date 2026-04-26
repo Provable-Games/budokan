@@ -3,8 +3,8 @@
 #[starknet::contract]
 pub mod Budokan {
     use budokan::events::{
-        LeaderboardUpdated, PrizeAdded, QualificationEntriesUpdated, RewardClaimed,
-        TournamentCreated, TournamentEntryStateChanged, TournamentRegistration,
+        PrizeAdded, QualificationEntriesUpdated, RewardClaimed, TournamentCreated,
+        TournamentEntryStateChanged, TournamentRegistration,
     };
     use budokan::libs::schedule::{
         ScheduleAssertionsImpl, ScheduleAssertionsTrait, ScheduleImpl, ScheduleTrait,
@@ -198,7 +198,6 @@ pub mod Budokan {
         TournamentCreated: TournamentCreated,
         TournamentRegistration: TournamentRegistration,
         TournamentEntryStateChanged: TournamentEntryStateChanged,
-        LeaderboardUpdated: LeaderboardUpdated,
         PrizeAdded: PrizeAdded,
         RewardClaimed: RewardClaimed,
         QualificationEntriesUpdated: QualificationEntriesUpdated,
@@ -651,12 +650,10 @@ pub mod Budokan {
             // Handle result
             match result {
                 LeaderboardResult::Success => {
-                    // mark score as submitted
+                    // mark score as submitted (emits TournamentEntryStateChanged with
+                    // has_submitted=true, which is the canonical post-submit signal
+                    // for indexers and the client).
                     self._mark_score_submitted(tournament_id, token_id);
-
-                    // Emit native event
-                    let leaderboard = self._get_leaderboard(tournament_id);
-                    self.emit(LeaderboardUpdated { tournament_id, token_ids: leaderboard.span() });
                 },
                 LeaderboardResult::InvalidPosition => { panic!("Budokan: Invalid position"); },
                 LeaderboardResult::DuplicateEntry => {

@@ -12,7 +12,6 @@ import type { ApibaraRuntimeConfig } from "apibara/types";
 import {
   tournaments,
   registrations,
-  leaderboards,
   prizes,
   rewardClaims,
   qualificationEntries,
@@ -24,7 +23,6 @@ import {
   decodeTournamentCreated,
   decodeTournamentRegistration,
   decodeTournamentEntryStateChanged,
-  decodeLeaderboardUpdated,
   decodePrizeAdded,
   decodeRewardClaimed,
   decodeQualificationEntriesUpdated,
@@ -40,7 +38,6 @@ const SELECTORS = {
   TournamentCreated: BigInt(RAW_SELECTORS.TournamentCreated),
   TournamentRegistration: BigInt(RAW_SELECTORS.TournamentRegistration),
   TournamentEntryStateChanged: BigInt(RAW_SELECTORS.TournamentEntryStateChanged),
-  LeaderboardUpdated: BigInt(RAW_SELECTORS.LeaderboardUpdated),
   PrizeAdded: BigInt(RAW_SELECTORS.PrizeAdded),
   RewardClaimed: BigInt(RAW_SELECTORS.RewardClaimed),
   QualificationEntriesUpdated: BigInt(RAW_SELECTORS.QualificationEntriesUpdated),
@@ -73,7 +70,6 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
     schema: {
       tournaments,
       registrations,
-      leaderboards,
       prizes,
       rewardClaims,
       qualificationEntries,
@@ -94,7 +90,6 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
         idColumn: {
           tournaments: "tournament_id",
           registrations: "id",
-          leaderboards: "id",
           prizes: "prize_id",
           reward_claims: "id",
           qualification_entries: "id",
@@ -120,11 +115,6 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
         {
           address: contractAddress,
           keys: [RAW_SELECTORS.TournamentEntryStateChanged],
-          includeTransaction: true,
-        },
-        {
-          address: contractAddress,
-          keys: [RAW_SELECTORS.LeaderboardUpdated],
           includeTransaction: true,
         },
         {
@@ -171,9 +161,6 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
       const rewardClaimRows: (typeof rewardClaims.$inferInsert)[] = [];
       const qualificationEntryRows: (typeof qualificationEntries.$inferInsert)[] = [];
       const eventLogRows: (typeof tournamentEvents.$inferInsert)[] = [];
-
-      // Leaderboard updates need special handling (delete+insert per tournament)
-      const leaderboardUpdates = new Map<bigint, bigint[]>();
 
       // Track affected tournament IDs for idempotent counter recomputation
       const affectedTournamentIds = new Set<bigint>();
@@ -388,35 +375,6 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
         }
 
         // -----------------------------------------------------------------
-        // LeaderboardUpdated
-        // -----------------------------------------------------------------
-        else if (selectorBigInt === SELECTORS.LeaderboardUpdated) {
-          try {
-            const decoded = decodeLeaderboardUpdated(
-              event.keys as string[],
-              event.data as string[],
-            );
-
-            // Store the latest leaderboard state per tournament
-            // (multiple updates in one block should use the last one)
-            leaderboardUpdates.set(decoded.tournamentId, decoded.tokenIds);
-
-            eventLogRows.push({
-              eventType: "LeaderboardUpdated",
-              tournamentId: decoded.tournamentId,
-              data: JSON.parse(stringifyWithBigInt(decoded)),
-              blockNumber,
-              txHash: txHash!,
-              eventIndex: eventIdx!,
-            });
-          } catch (err) {
-            logger.warn(
-              `Failed to decode LeaderboardUpdated at block ${blockNumber}: ${err}`,
-            );
-          }
-        }
-
-        // -----------------------------------------------------------------
         // PrizeAdded
         // -----------------------------------------------------------------
         else if (selectorBigInt === SELECTORS.PrizeAdded) {
@@ -565,31 +523,6 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
         }
         logger.info(
           `  Upserted ${registrationRows.length} registration(s)`,
-        );
-      }
-
-      // Leaderboard updates: replace entire leaderboard per tournament (atomic)
-      for (const [tournamentId, tokenIds] of leaderboardUpdates) {
-        await db.transaction(async (tx) => {
-          // Delete existing leaderboard rows for this tournament
-          await tx
-            .delete(leaderboards)
-            .where(sql`${leaderboards.tournamentId} = ${tournamentId}`);
-
-          // Insert new leaderboard rows
-          if (tokenIds.length > 0) {
-            const leaderboardRows: (typeof leaderboards.$inferInsert)[] =
-              tokenIds.map((tokenId, index) => ({
-                tournamentId,
-                position: index + 1,
-                tokenId: tokenId.toString(),
-              }));
-
-            await tx.insert(leaderboards).values(leaderboardRows);
-          }
-        });
-        logger.info(
-          `  Rebuilt leaderboard for tournament ${tournamentId} (${tokenIds.length} entries)`,
         );
       }
 

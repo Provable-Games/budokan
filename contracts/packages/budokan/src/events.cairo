@@ -63,13 +63,6 @@ pub struct TournamentEntryStateChanged {
 }
 
 #[derive(Drop, starknet::Event)]
-pub struct LeaderboardUpdated {
-    #[key]
-    pub tournament_id: u64,
-    pub token_ids: Span<felt252>,
-}
-
-#[derive(Drop, starknet::Event)]
 pub struct PrizeAdded {
     #[key]
     pub tournament_id: u64,

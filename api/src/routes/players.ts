@@ -110,8 +110,8 @@ app.get("/:address/stats", async (c) => {
       return c.json({ error: "Invalid player address" }, 400);
     }
 
-    // Aggregate stats from registrations and prize claims
-    const [tournamentStats, submissionStats, prizeStats] = await Promise.all([
+    // Aggregate stats from registrations
+    const [tournamentStats, submissionStats] = await Promise.all([
       // Total tournaments entered
       db
         .select({ count: sql<number>`count(*)::int` })
@@ -124,24 +124,18 @@ app.get("/:address/stats", async (c) => {
         .where(
           sql`${registrations.playerAddress} = ${address} AND ${registrations.hasSubmitted} = true`
         ),
-      // Total prizes won (prizes linked to tournaments where player placed)
-      db.execute(sql`
-        SELECT count(*)::int AS count
-        FROM prizes p
-        INNER JOIN leaderboards lb ON lb.tournament_id = p.tournament_id
-        INNER JOIN registrations r ON r.tournament_id = lb.tournament_id
-          AND r.game_token_id = lb.token_id
-        WHERE r.player_address = ${address}
-          AND lb.position <= p.payout_position
-      `),
     ]);
 
+    // `totalPrizesWon` was previously computed via a JOIN against the
+    // `leaderboards` table; that table no longer exists. Live leaderboard
+    // data is sourced from denshokan-sdk on the client. If a server-side
+    // prizes-won metric is needed in the future, derive it on demand from
+    // the on-chain leaderboard via the SDK's RPC fallback.
     return c.json({
       data: {
         player: address,
         totalTournamentsEntered: tournamentStats[0]?.count ?? 0,
         totalSubmissions: submissionStats[0]?.count ?? 0,
-        totalPrizesWon: (prizeStats.rows as Array<{ count: number }>)[0]?.count ?? 0,
       },
     });
   } catch (err) {
