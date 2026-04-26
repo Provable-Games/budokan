@@ -9,6 +9,7 @@ edition.workspace = true
 sierra = true
 casm = true
 build-external-contracts = [
+    "budokan_rewards::budokan_rewards::BudokanRewards",
     "game_components_test_common::mocks::minigame_mock::minigame_mock",
     "game_components_test_common::mocks::metagame_mock::metagame_mock",
     "game_components_test_common::examples::full_token_contract::FullTokenContract",
@@ -37,6 +38,7 @@ budokan_interfaces = { path = "../interfaces" }
 [dev-dependencies]
 cairo_test = "2.16.1"
 snforge_std.workspace = true
+budokan_rewards = { path = "../rewards" }
 
 [features]
 default = []

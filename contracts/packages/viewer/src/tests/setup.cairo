@@ -1,3 +1,6 @@
+use budokan::budokan::Budokan::{
+    IBudokanRewardsAdminDispatcher, IBudokanRewardsAdminDispatcherTrait,
+};
 use budokan_interfaces::budokan::IBudokanDispatcher;
 use budokan_interfaces::viewer::IBudokanViewerDispatcher;
 use core::serde::Serde;
@@ -10,7 +13,10 @@ use game_components_test_common::mocks::minigame_mock::{
     IMinigameMockDispatcher, IMinigameMockDispatcherTrait, IMinigameMockInitDispatcher,
     IMinigameMockInitDispatcherTrait,
 };
-use snforge_std::{ContractClassTrait, DeclareResultTrait, declare};
+use snforge_std::{
+    ContractClassTrait, DeclareResultTrait, declare, start_cheat_caller_address,
+    stop_cheat_caller_address,
+};
 use starknet::ContractAddress;
 
 // ================================================================================================
@@ -113,6 +119,16 @@ fn deploy_budokan(denshokan_address: ContractAddress) -> ContractAddress {
 
     let contract_class = declare("Budokan").expect('declare budokan failed').contract_class();
     let (contract_address, _) = contract_class.deploy(@calldata).expect('deploy budokan failed');
+
+    // Register BudokanRewards library class so add_prize / claim_reward dispatch works.
+    let rewards_class = declare("BudokanRewards")
+        .expect('declare rewards failed')
+        .contract_class();
+    let admin = IBudokanRewardsAdminDispatcher { contract_address };
+    start_cheat_caller_address(contract_address, OWNER);
+    admin.set_rewards_class_hash(*rewards_class.class_hash);
+    stop_cheat_caller_address(contract_address);
+
     contract_address
 }
 

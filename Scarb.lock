@@ -53,6 +53,7 @@ name = "budokan"
 version = "0.0.1"
 dependencies = [
  "budokan_interfaces",
+ "budokan_rewards",
  "game_components_embeddable_game_standard",
  "game_components_interfaces",
  "game_components_metagame",
@@ -77,11 +78,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "budokan_rewards"
+version = "0.0.1"
+dependencies = [
+ "budokan",
+ "budokan_interfaces",
+ "game_components_embeddable_game_standard",
+ "game_components_interfaces",
+ "game_components_metagame",
+ "game_components_utilities",
+ "openzeppelin_interfaces",
+]
+
+[[package]]
 name = "budokan_viewer"
 version = "0.0.1"
 dependencies = [
  "budokan",
  "budokan_interfaces",
+ "budokan_rewards",
  "game_components_embeddable_game_standard",
  "game_components_interfaces",
  "game_components_test_common",

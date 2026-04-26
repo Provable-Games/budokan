@@ -7,18 +7,17 @@ pub mod Budokan {
         ScheduleAssertionsImpl, ScheduleAssertionsTrait, ScheduleImpl, ScheduleTrait,
     };
     use budokan::structs::budokan::{
-        AdditionalShare, Distribution, EntryFee, EntryFeeClaimType, EntryFeeRewardType,
-        EntryRequirement, EntryRequirementType, GameConfig, LeaderboardConfig, Metadata, PrizeData,
-        PrizeType, QualificationEntries, QualificationProof, Registration, RewardType,
+        AdditionalShare, Distribution, EntryFee, EntryRequirement, EntryRequirementType, GameConfig,
+        LeaderboardConfig, Metadata, PrizeData, QualificationProof, Registration, RewardType,
         TokenTypeData, Tournament as TournamentModel,
     };
-    use budokan::structs::constants::GAME_CREATOR_TOKEN_ID;
     use budokan::structs::packed_storage::{
-        TournamentConfig, TournamentConfigStorePacking, unpack_created_at, unpack_game_schedule,
+        TournamentConfig, TournamentConfigStorePacking, unpack_created_at,
         unpack_game_start_delay, unpack_registration_end_delay, unpack_registration_start_delay,
     };
     use budokan::structs::schedule::{Phase, Schedule};
     use budokan_interfaces::budokan::IBudokan;
+    use budokan_interfaces::rewards::{IBudokanRewardsLibraryDispatcher, IBudokanRewardsDispatcherTrait};
     use core::num::traits::Zero;
     use game_components_embeddable_game_standard::metagame::extensions::context::context::ContextComponent;
     use game_components_embeddable_game_standard::metagame::extensions::context::interface::{
@@ -43,10 +42,6 @@ pub mod Budokan {
         EntryFee as ComponentEntryFee, EntryFeeConfig, EntryFeeDeposit,
     };
     use game_components_interfaces::leaderboard::{ILeaderboard, LeaderboardResult};
-    use game_components_interfaces::prize::{Prize as PrizeInput, PrizeConfig};
-    use game_components_interfaces::registry::{
-        IMinigameRegistryDispatcher, IMinigameRegistryDispatcherTrait,
-    };
     use game_components_metagame::entry_fee::entry_fee_component::EntryFeeComponent;
     use game_components_metagame::entry_fee::entry_fee_component::EntryFeeComponent::EntryFeeInternalTrait;
     use game_components_metagame::entry_requirement::entry_requirement_component::EntryRequirementComponent;
@@ -55,11 +50,8 @@ pub mod Budokan {
     use game_components_metagame::leaderboard::leaderboard_component::LeaderboardComponent::LeaderboardInternalTrait;
     use game_components_metagame::leaderboard::store::Store as LeaderboardStore;
     use game_components_metagame::prize::prize_component::PrizeComponent;
-    use game_components_metagame::prize::prize_component::PrizeComponent::PrizeInternalTrait;
     use game_components_metagame::registration::registration_component::RegistrationComponent;
     use game_components_metagame::registration::registration_component::RegistrationComponent::RegistrationInternalTrait;
-    use game_components_utilities::distribution::calculator;
-    use game_components_utilities::distribution::structs::BASIS_POINTS;
     use game_components_utilities::utils::encoding::u128_to_ascii_felt;
     use metagame_extensions_interfaces::entry_requirement_extension::{
         IEntryRequirementExtensionDispatcher, IEntryRequirementExtensionDispatcherTrait,
@@ -169,6 +161,11 @@ pub mod Budokan {
         token_to_entry: Map<(u64, felt252), u32>,
         // Map game_token_id → context_id (tournament_id) for global token lookups
         token_context_id: Map<felt252, u64>,
+        // Class hash of the BudokanRewards library class. `add_prize` and
+        // `claim_reward` dispatch into it via library_call to keep this
+        // contract under the 81,920-felt bytecode limit. Owner-set via
+        // `set_rewards_class_hash`.
+        rewards_class_hash: ClassHash,
     }
 
     #[event]
@@ -224,6 +221,28 @@ pub mod Budokan {
         fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
             self.ownable.assert_only_owner();
             self.upgradeable.upgrade(new_class_hash);
+        }
+    }
+
+    /// Owner-only configuration for the BudokanRewards library class hash.
+    /// Must be set after deploy / upgrade before `add_prize` or `claim_reward`
+    /// can be invoked. Allows independent upgrades of the rewards class.
+    #[starknet::interface]
+    pub trait IBudokanRewardsAdmin<TState> {
+        fn set_rewards_class_hash(ref self: TState, new_class_hash: ClassHash);
+        fn rewards_class_hash(self: @TState) -> ClassHash;
+    }
+
+    #[abi(embed_v0)]
+    impl BudokanRewardsAdminImpl of IBudokanRewardsAdmin<ContractState> {
+        fn set_rewards_class_hash(ref self: ContractState, new_class_hash: ClassHash) {
+            self.ownable.assert_only_owner();
+            assert!(!new_class_hash.is_zero(), "Budokan: rewards class hash cannot be zero");
+            self.rewards_class_hash.write(new_class_hash);
+        }
+
+        fn rewards_class_hash(self: @ContractState) -> ClassHash {
+            self.rewards_class_hash.read()
         }
     }
 
@@ -598,16 +617,14 @@ pub mod Budokan {
             // Update registration to mark as banned using component
             self.registration.ban_entry(tournament_id, entry_id);
 
-            // Emit native event
-            let player_address = IERC721Dispatcher { contract_address: game_token_address }
-                .owner_of(game_token_id.into());
+            // Emit native event (reuse current_owner — same value, saves one external call)
             self
                 .emit(
                     events::TournamentRegistration {
                         tournament_id,
                         game_token_id,
                         game_address: game_address,
-                        player_address,
+                        player_address: current_owner,
                         entry_number: registration.entry_id,
                         has_submitted: false,
                         is_banned: true,
@@ -699,37 +716,8 @@ pub mod Budokan {
 
         fn claim_reward(ref self: ContractState, tournament_id: u64, reward_type: RewardType) {
             self.reentrancy_guard.start();
-
-            let tournament = self._get_tournament(tournament_id);
-
-            // assert tournament exists
-            self._assert_tournament_exists(tournament_id);
-
-            tournament
-                .schedule
-                .assert_tournament_is_finalized(tournament.created_at, get_block_timestamp());
-
-            match reward_type {
-                RewardType::Prize(prize_type) => {
-                    self._assert_prize_not_claimed(tournament_id, prize_type);
-                },
-                RewardType::EntryFee(entry_fee_type) => {
-                    self._assert_entry_fee_reward_not_claimed(tournament_id, entry_fee_type);
-                },
-            }
-
-            // CEI: mark claimed BEFORE external calls
-            self._set_reward_claim(tournament_id, reward_type);
-
-            match reward_type {
-                RewardType::Prize(prize_type) => {
-                    self._claim_prize(tournament_id, tournament, prize_type);
-                },
-                RewardType::EntryFee(entry_fee_type) => {
-                    self._claim_entry_fee_reward(tournament_id, tournament, entry_fee_type);
-                },
-            }
-
+            IBudokanRewardsLibraryDispatcher { class_hash: self._rewards_class_hash() }
+                .claim_reward(tournament_id, reward_type);
             self.reentrancy_guard.end();
         }
 
@@ -741,50 +729,11 @@ pub mod Budokan {
             position: Option<u32>,
         ) -> PrizeData {
             self.reentrancy_guard.start();
-
-            // assert tournament exists
-            self._assert_tournament_exists(tournament_id);
-
-            // Read packed config (1 SLOAD) and extract only game schedule fields
-            let packed = self.tournament_config.entry(tournament_id).read();
-            let (created_at, game_start_delay, game_end_delay) = unpack_game_schedule(packed);
-            let game_end: u64 = created_at + game_start_delay.into() + game_end_delay.into();
-            assert!(game_end > get_block_timestamp(), "Budokan: Tournament has ended");
-
-            // Validate that position and distribution are mutually exclusive
-            if position.is_some() {
-                match @token_type {
-                    TokenTypeData::erc20(erc20_data) => {
-                        assert!(
-                            erc20_data.distribution.is_none(),
-                            "Budokan: Cannot set position for distributed prize (position and distribution are mutually exclusive)",
-                        );
-                    },
-                    TokenTypeData::erc721(_) => { // ERC721 prizes don't have distribution
-                    },
-                }
+            let prize_data = IBudokanRewardsLibraryDispatcher {
+                class_hash: self._rewards_class_hash(),
             }
-
-            // Add prize (deposits tokens, increments count, stores prize with packed payout config)
-            let prize_id = self
-                .prize
-                .add_prize(
-                    tournament_id, PrizeInput::Config(PrizeConfig { token_address, token_type }),
-                );
-
-            // Store position mapping for Single prizes
-            if let Option::Some(pos) = position {
-                self.prize_position.entry(prize_id).write(pos);
-            }
-
-            // Emit event
-            self._emit_prize_added(self.prize._get_prize(prize_id));
-
-            // Return prize
-            let prize_data = self.prize._get_prize(prize_id);
-
+                .add_prize(tournament_id, token_address, token_type, position);
             self.reentrancy_guard.end();
-
             prize_data
         }
     }
@@ -847,113 +796,34 @@ pub mod Budokan {
                 );
         }
 
-        // Tournament operations - reading from packed storage
-        #[inline(always)]
+        // Tournament operations - reading from packed storage.
+        // Not inlined: the body is large (~120 lines) and called from 4 sites
+        // (`tournament`, `enter_tournament`, `claim_reward`, `_create_tournament`).
+        // Forcing inline here duplicates the reconstruction logic into every caller,
+        // pushing the contract over the 81,920-felt limit.
         fn _get_tournament(self: @ContractState, tournament_id: u64) -> TournamentModel {
-            // Read packed config felt252 and unpack
             let config = TournamentConfigStorePacking::unpack(
                 self.tournament_config.entry(tournament_id).read(),
             );
-
-            // Read other fields
             let created_by = self.tournament_created_by.entry(tournament_id).read();
             let game_address = self.tournament_game_address.entry(tournament_id).read();
             let metadata = self.tournament_metadata.entry(tournament_id).read();
             let client_url_raw = self.tournament_client_url.entry(tournament_id).read();
             let renderer_address = self.tournament_renderer_address.entry(tournament_id).read();
 
-            // Reconstruct Schedule from packed config
-            let schedule = Schedule {
-                registration_start_delay: config.registration_start_delay,
-                registration_end_delay: config.registration_end_delay,
-                game_start_delay: config.game_start_delay,
-                game_end_delay: config.game_end_delay,
-                submission_duration: config.submission_duration,
-            };
-
-            // Reconstruct GameConfig
-            let client_url = if client_url_raw.len() == 0 {
-                Option::None
-            } else {
-                Option::Some(client_url_raw)
-            };
-
-            let renderer = if renderer_address.is_zero() {
-                Option::None
-            } else {
-                Option::Some(renderer_address)
-            };
-
-            let game_config = GameConfig {
-                game_address,
-                settings_id: config.settings_id,
-                soulbound: config.soulbound,
-                paymaster: config.paymaster,
-                client_url,
-                renderer,
-            };
-
-            // Get stored entry_fee from component (includes distribution)
-            let stored_entry_fee = self.entry_fee._get_entry_fee(tournament_id);
-
-            // Reconstruct Budokan's EntryFee view from the component's config.
-            // The component persists everything including distribution; Budokan
-            // only projects the tournament_creator_share back out of the first
-            // additional_share.
-            let entry_fee: Option<EntryFee> = match stored_entry_fee {
-                Option::Some(entry_fee_config) => {
-                    let tournament_creator_share: u16 = if entry_fee_config
-                        .additional_shares
-                        .len() > 0 {
-                        (*entry_fee_config.additional_shares.at(0)).share_bps
-                    } else {
-                        0
-                    };
-                    let game_creator_share: u16 = match entry_fee_config.game_creator_share {
-                        Option::Some(share) => share,
-                        Option::None => 0,
-                    };
-                    let refund_share: u16 = match entry_fee_config.refund_share {
-                        Option::Some(share) => share,
-                        Option::None => 0,
-                    };
-                    // `_get_entry_fee` returns Custom with an empty shares span —
-                    // full-array reconstruction is O(N/15) storage reads and only
-                    // needed for UI views. Callers that need the shares call the
-                    // dedicated `tournament_distribution_shares(id)` view below.
-                    // Linear(0) default is never consulted for payout math since
-                    // claim paths gate on entry_fee existence.
-                    let distribution = match entry_fee_config.distribution {
-                        Option::Some(d) => d,
-                        Option::None => Distribution::Linear(0),
-                    };
-                    Option::Some(
-                        EntryFee {
-                            token_address: entry_fee_config.token_address,
-                            amount: entry_fee_config.amount,
-                            tournament_creator_share,
-                            game_creator_share,
-                            refund_share,
-                            distribution,
-                            distribution_count: entry_fee_config.distribution_count,
-                        },
-                    )
-                },
-                Option::None => Option::None,
-            };
-
-            // Get entry_requirement from component
+            let schedule = budokan::libs::reconstruct::schedule_from_config(@config);
+            let game_config = budokan::libs::reconstruct::game_config_from_storage(
+                @config, game_address, client_url_raw, renderer_address,
+            );
+            let entry_fee = budokan::libs::reconstruct::entry_fee_view_from_stored(
+                self.entry_fee._get_entry_fee(tournament_id),
+            );
             let entry_requirement = self.entry_requirement._get_entry_requirement(tournament_id);
-
-            // Read creator_token_id from separate storage (too large for packed storage)
             let creator_token_id = self.tournament_creator_token_id.entry(tournament_id).read();
+            let leaderboard_config = budokan::libs::reconstruct::leaderboard_config_from_config(
+                @config,
+            );
 
-            // Reconstruct LeaderboardConfig from packed storage
-            let leaderboard_config = LeaderboardConfig {
-                ascending: config.ascending, game_must_be_over: config.game_must_be_over,
-            };
-
-            // Return reconstructed tournament model
             TournamentModel {
                 id: tournament_id,
                 created_at: config.created_at,
@@ -1099,79 +969,18 @@ pub mod Budokan {
             self._get_tournament(tournament_id)
         }
 
-        // Prize operations
+        // Read the rewards library class hash, asserting it has been configured.
         #[inline(always)]
-        fn _emit_prize_added(ref self: ContractState, prize: PrizeData) {
-            // Read position from storage (0 means distributed prize)
-            let payout_position = self.prize_position.entry(prize.id).read();
-            self
-                .emit(
-                    events::PrizeAdded {
-                        tournament_id: prize.context_id,
-                        prize_id: prize.id,
-                        payout_position,
-                        token_address: prize.token_address,
-                        token_type: prize.token_type,
-                        sponsor_address: prize.sponsor_address,
-                    },
-                );
-        }
-
-        fn _set_reward_claim(ref self: ContractState, tournament_id: u64, reward_type: RewardType) {
-            // Set the claim state based on reward type
-            match reward_type {
-                RewardType::Prize(prize_type) => {
-                    self.prize.set_prize_claimed(tournament_id, prize_type);
-                },
-                RewardType::EntryFee(entry_fee_type) => {
-                    match entry_fee_type {
-                        EntryFeeRewardType::Position(position) => {
-                            self
-                                .entry_fee_position_claimed
-                                .entry((tournament_id, position))
-                                .write(true);
-                        },
-                        EntryFeeRewardType::TournamentCreator => {
-                            self
-                                .entry_fee
-                                .set_claimed(tournament_id, EntryFeeClaimType::AdditionalShare(0));
-                        },
-                        EntryFeeRewardType::GameCreator => {
-                            self
-                                .entry_fee
-                                .set_claimed(tournament_id, EntryFeeClaimType::GameCreator);
-                        },
-                        EntryFeeRewardType::Refund(token_id) => {
-                            self
-                                .entry_fee
-                                .set_claimed(tournament_id, EntryFeeClaimType::Refund(token_id));
-                        },
-                    }
-                },
-            }
-
-            // Emit native event
-            self.emit(events::RewardClaimed { tournament_id, reward_type, claimed: true });
-        }
-
-        fn _is_position_claim_made(
-            self: @ContractState, tournament_id: u64, position: u32,
-        ) -> bool {
-            self.entry_fee_position_claimed.entry((tournament_id, position)).read()
+        fn _rewards_class_hash(self: @ContractState) -> ClassHash {
+            let class_hash = self.rewards_class_hash.read();
+            assert!(!class_hash.is_zero(), "Budokan: rewards class hash not set");
+            class_hash
         }
 
         // Entry count operations
         #[inline(always)]
         fn _increment_entry_count(ref self: ContractState, tournament_id: u64) -> u32 {
             self.registration.increment_entry_count(tournament_id)
-        }
-
-        // Qualification operations
-        #[inline(always)]
-        fn _get_qualification_entries(
-            self: @ContractState, tournament_id: u64, proof: QualificationProof,
-        ) -> QualificationEntries {
-            self.entry_requirement._get_qualification_entries(tournament_id, proof)
         }
 
         //
@@ -1184,30 +993,6 @@ pub mod Budokan {
         ) -> u64 {
             let game_dispatcher = IMinigameTokenDataDispatcher { contract_address };
             game_dispatcher.score(token_id)
-        }
-
-        #[inline(always)]
-        fn _get_owner(
-            self: @ContractState, contract_address: ContractAddress, token_id: u256,
-        ) -> ContractAddress {
-            IERC721Dispatcher { contract_address }.owner_of(token_id)
-        }
-
-        fn _is_top_score(
-            self: @ContractState,
-            game_address: ContractAddress,
-            leaderboard: Span<felt252>,
-            score: u64,
-        ) -> bool {
-            let num_scores = leaderboard.len();
-
-            if num_scores == 0 {
-                return true;
-            }
-
-            let last_place_id: felt252 = *leaderboard.at(num_scores - 1);
-            let last_place_score = self.get_score_for_token_id(game_address, last_place_id);
-            score >= last_place_score
         }
 
         //
@@ -1292,67 +1077,6 @@ pub mod Budokan {
             );
         }
 
-        #[inline(always)]
-        fn _assert_prize_exists(self: @ContractState, token: ContractAddress, id: u64) {
-            budokan::libs::validations::assert_prize_exists(token, id);
-        }
-
-        #[inline(always)]
-        fn _assert_prize_not_claimed(
-            self: @ContractState, tournament_id: u64, prize_type: PrizeType,
-        ) {
-            self.prize.assert_prize_not_claimed(tournament_id, prize_type);
-        }
-
-        #[inline(always)]
-        fn _assert_entry_fee_reward_not_claimed(
-            self: @ContractState, tournament_id: u64, entry_fee_type: EntryFeeRewardType,
-        ) {
-            match entry_fee_type {
-                EntryFeeRewardType::Position(position) => {
-                    assert!(
-                        !self._is_position_claim_made(tournament_id, position),
-                        "Budokan: Position {} entry fee already claimed",
-                        position,
-                    );
-                },
-                EntryFeeRewardType::TournamentCreator => {
-                    assert!(
-                        !self
-                            .entry_fee
-                            .is_claimed(tournament_id, EntryFeeClaimType::AdditionalShare(0)),
-                        "Budokan: Tournament creator share already claimed",
-                    );
-                },
-                EntryFeeRewardType::GameCreator => {
-                    assert!(
-                        !self.entry_fee.is_claimed(tournament_id, EntryFeeClaimType::GameCreator),
-                        "Budokan: Game creator share already claimed",
-                    );
-                },
-                EntryFeeRewardType::Refund(token_id) => {
-                    assert!(
-                        !self
-                            .entry_fee
-                            .is_claimed(tournament_id, EntryFeeClaimType::Refund(token_id)),
-                        "Budokan: Refund share already claimed for token {}",
-                        token_id,
-                    );
-                },
-            }
-        }
-
-        #[inline(always)]
-        fn _assert_payout_is_top_score(
-            self: @ContractState, payout_position: u8, winner_token_ids: Span<felt252>,
-        ) {
-            assert!(
-                payout_position.into() <= winner_token_ids.len(),
-                "Budokan: Prize payout position {} is not a top score",
-                payout_position,
-            );
-        }
-
         fn _assert_gated_type_validates(
             self: @ContractState, entry_requirement: EntryRequirement, schedule: Schedule,
         ) {
@@ -1384,11 +1108,6 @@ pub mod Budokan {
                 "Budokan: Tournament {} does not exist",
                 tournament_id,
             );
-        }
-
-        #[inline(always)]
-        fn _assert_position_is_valid(self: @ContractState, position: u32, winner_count: u32) {
-            budokan::libs::validations::assert_position_is_valid(position, winner_count);
         }
 
         //
@@ -1433,400 +1152,6 @@ pub mod Budokan {
                     salt,
                     metadata,
                 )
-        }
-
-        #[inline(always)]
-        fn _calculate_payout(ref self: ContractState, bp: u128, total_value: u128) -> u128 {
-            (bp * total_value) / BASIS_POINTS.into()
-        }
-
-        #[inline(always)]
-        fn _get_game_creator_address(
-            self: @ContractState, game_address: ContractAddress,
-        ) -> ContractAddress {
-            // Game creator is the owner of token ID 0
-            let game_dispatcher = IERC721Dispatcher { contract_address: game_address };
-            game_dispatcher.owner_of(0)
-        }
-
-        /// Claim entry fee reward based on entry fee reward type
-        fn _claim_entry_fee_reward(
-            ref self: ContractState,
-            tournament_id: u64,
-            tournament: TournamentModel,
-            entry_fee_type: EntryFeeRewardType,
-        ) {
-            // Extract game config address before consuming tournament
-            let game_config_address = tournament.game_config.game_address;
-            let creator_token_id = tournament.creator_token_id;
-
-            if let Option::Some(entry_fee) = tournament.entry_fee {
-                let total_entries = self.registration._get_entry_count(tournament_id);
-                let total_pool = total_entries.into() * entry_fee.amount;
-
-                let game_dispatcher = IMinigameDispatcher { contract_address: game_config_address };
-                let game_token_address = game_dispatcher.token_address();
-
-                // Calculate share and recipient based on entry fee type
-                let (share, recipient_address): (u16, ContractAddress) = match entry_fee_type {
-                    EntryFeeRewardType::Position(position) => {
-                        // Handle position-based distribution claim
-                        self
-                            ._claim_entry_fee_position(
-                                tournament_id,
-                                entry_fee,
-                                position,
-                                game_token_address,
-                                creator_token_id,
-                            );
-                        return;
-                    },
-                    EntryFeeRewardType::TournamentCreator => {
-                        // Get tournament creator share from additional shares at index 0
-                        let stored = match self.entry_fee._get_entry_fee(tournament_id) {
-                            Option::Some(config) => config,
-                            Option::None => panic!("Budokan: no entry fee"),
-                        };
-                        assert!(
-                            stored.additional_shares.len() > 0,
-                            "Budokan: tournament {} does not have a tournament creator share",
-                            tournament_id,
-                        );
-                        let additional_share = *stored.additional_shares.at(0);
-                        (additional_share.share_bps, additional_share.recipient)
-                    },
-                    EntryFeeRewardType::GameCreator => {
-                        let share = entry_fee.game_creator_share;
-                        assert!(
-                            share > 0,
-                            "Budokan: tournament {} does not have a game creator share",
-                            tournament_id,
-                        );
-
-                        // Check if the game token has a minigame registry
-                        let game_token_dispatcher = IMinigameTokenDispatcher {
-                            contract_address: game_token_address,
-                        };
-                        let minigame_registry_address = game_token_dispatcher
-                            .game_registry_address();
-                        let minigame_registry = IMinigameRegistryDispatcher {
-                            contract_address: minigame_registry_address,
-                        };
-                        // If it has a registry, get the owner of the game creator token
-                        let recipient = if !minigame_registry_address.is_zero() {
-                            let game_id = minigame_registry
-                                .game_id_from_address(game_config_address);
-                            self._get_owner(minigame_registry_address, game_id.into())
-                        } else {
-                            // Otherwise, the game creator is the owner of token ID 0
-                            self._get_owner(game_token_address, GAME_CREATOR_TOKEN_ID.into())
-                        };
-
-                        (share, recipient)
-                    },
-                    EntryFeeRewardType::Refund(token_id) => {
-                        // Verify the token_id is registered for this tournament
-                        let entry_id = self.token_to_entry.entry((tournament_id, token_id)).read();
-                        let registration = self.registration._get_entry(tournament_id, entry_id);
-                        assert!(
-                            registration.context_id == tournament_id,
-                            "Budokan: token_id is not registered for tournament {}",
-                            tournament_id,
-                        );
-
-                        let refund_share = entry_fee.refund_share;
-                        assert!(
-                            refund_share > 0,
-                            "Budokan: tournament {} does not have a refund share",
-                            tournament_id,
-                        );
-                        // Each participant gets the refund share divided by total entries
-                        let share_u32: u32 = refund_share.into() / total_entries;
-                        let share: u16 = share_u32
-                            .try_into()
-                            .expect('refund share calculation error');
-
-                        // Refund goes to the owner of the token_id
-                        let recipient = self._get_owner(game_token_address, token_id.into());
-
-                        (share, recipient)
-                    },
-                };
-
-                let prize_amount = self._calculate_payout(share.into(), total_pool);
-
-                // Prevent 0 token claims to save gas
-                assert!(
-                    prize_amount > 0,
-                    "Budokan: Entry fee reward has 0 tokens to claim for tournament {}",
-                    tournament_id,
-                );
-
-                self.entry_fee.payout(entry_fee.token_address, recipient_address, prize_amount);
-            } else {
-                panic!("Budokan: tournament {} has no entry fees", tournament_id);
-            }
-        }
-
-        /// Claim position-based entry fee distribution
-        fn _claim_entry_fee_position(
-            ref self: ContractState,
-            tournament_id: u64,
-            entry_fee: EntryFee,
-            position: u32,
-            game_token_address: ContractAddress,
-            creator_token_id: felt252,
-        ) {
-            let total_entries = self.registration._get_entry_count(tournament_id);
-            let total_pool = total_entries.into() * entry_fee.amount;
-
-            // Get actual leaderboard size (number of players who submitted scores)
-            let leaderboard = self._get_leaderboard(tournament_id);
-            let leaderboard_size: u32 = leaderboard.len();
-
-            // Validate position is at least 1
-            assert!(position > 0, "Budokan: Position must be greater than zero");
-
-            // Use fixed distribution_count if set, otherwise use actual leaderboard size
-            let total_positions: u32 = if entry_fee.distribution_count > 0 {
-                entry_fee.distribution_count
-            } else {
-                leaderboard_size
-            };
-
-            // Calculate available share for position distribution (in basis points)
-            let mut available_share: u16 = BASIS_POINTS;
-            if entry_fee.tournament_creator_share > 0 {
-                available_share -= entry_fee.tournament_creator_share;
-            }
-            if entry_fee.game_creator_share > 0 {
-                available_share -= entry_fee.game_creator_share;
-            }
-            if entry_fee.refund_share > 0 {
-                available_share -= entry_fee.refund_share;
-            }
-
-            // Get recipient for this position
-            let recipient_address = if position <= leaderboard_size {
-                let winner_token_id: felt252 = *leaderboard.at(position - 1);
-                self._get_owner(game_token_address, winner_token_id.into())
-            } else {
-                // No entry at this position, default to tournament creator
-                self._get_owner(game_token_address, creator_token_id.into())
-            };
-
-            // Compute the wei payout. For Custom we fold both scalings —
-            // `raw → bp of total pool → wei of total pool` — into a single
-            // u256 division, so the only rounding is the final floor and
-            // precision loss per position is bounded by 1 wei regardless of
-            // token decimals or pool size. Splitting the scalings would lose
-            // up to `total_pool / BASIS_POINTS` wei per position from the
-            // intermediate u16 bp cast (noticeable at 18 decimals across
-            // many positions).
-            //
-            // For Linear/Exp/Uniform the calculator already returns a share
-            // scaled to `available_share`, so a single-step `share × pool /
-            // BASIS_POINTS` is sufficient and the existing dust roll-up on
-            // position 1 preserves full conservation.
-            let prize_amount: u128 = match entry_fee.distribution {
-                Distribution::Custom(_) => {
-                    let raw = self.entry_fee._get_custom_share_at(tournament_id, position);
-                    let numerator: u256 = raw.into() * available_share.into() * total_pool.into();
-                    let denominator: u256 = BASIS_POINTS.into() * BASIS_POINTS.into();
-                    (numerator / denominator).try_into().unwrap()
-                },
-                _ => {
-                    let share = calculator::calculate_share_with_dust(
-                        entry_fee.distribution, position, total_positions, available_share,
-                    );
-                    self._calculate_payout(share.into(), total_pool)
-                },
-            };
-
-            // Prevent 0 token claims to save gas
-            assert!(
-                prize_amount > 0,
-                "Budokan: Position {} has 0 tokens to claim from entry fees for tournament {}",
-                position,
-                tournament_id,
-            );
-
-            self.entry_fee.payout(entry_fee.token_address, recipient_address, prize_amount);
-        }
-
-        /// Dispatch prize claim based on prize type
-        fn _claim_prize(
-            ref self: ContractState,
-            tournament_id: u64,
-            tournament: TournamentModel,
-            prize_type: PrizeType,
-        ) {
-            match prize_type {
-                PrizeType::Single(prize_id) => {
-                    // Get position from storage (set during add_prize)
-                    let position = self.prize_position.entry(prize_id).read();
-                    assert!(position > 0, "Budokan: Prize position not set");
-                    self._claim_single_prize(tournament_id, tournament, prize_id, position);
-                },
-                PrizeType::Distributed((
-                    prize_id, payout_index,
-                )) => {
-                    self
-                        ._claim_distributed_prize(
-                            tournament_id, tournament, prize_id, payout_index,
-                        );
-                },
-            }
-        }
-
-        /// Claim a non-distributed prize for a given position
-        fn _claim_single_prize(
-            ref self: ContractState,
-            tournament_id: u64,
-            tournament: TournamentModel,
-            prize_id: u64,
-            position: u32,
-        ) {
-            let prize = self.prize._get_prize(prize_id);
-
-            // Validate prize belongs to this tournament
-            assert!(
-                prize.context_id == tournament_id,
-                "Budokan: Prize {} is for tournament {}",
-                prize_id,
-                prize.context_id,
-            );
-
-            // Get leaderboard and validate position is at least 1
-            let leaderboard = self._get_leaderboard(tournament_id);
-            let leaderboard_size: u32 = leaderboard.len();
-            assert!(position > 0, "Budokan: Position must be greater than zero");
-
-            // Handle payout or refund based on leaderboard size
-            if position <= leaderboard_size {
-                // Position exists on leaderboard - pay the winner
-                let game_dispatcher = IMinigameDispatcher {
-                    contract_address: tournament.game_config.game_address,
-                };
-                let game_token_address = game_dispatcher.token_address();
-                let winner_token_id: felt252 = *leaderboard.at(position - 1);
-                let recipient_address = self._get_owner(game_token_address, winner_token_id.into());
-
-                match prize.token_type {
-                    TokenTypeData::erc20(erc20_data) => {
-                        assert!(
-                            erc20_data.distribution.is_none(),
-                            "Budokan: Use SponsoredDistributed for distributed prizes",
-                        );
-                        self
-                            .prize
-                            .payout_erc20(
-                                prize.token_address, erc20_data.amount, recipient_address,
-                            );
-                    },
-                    TokenTypeData::erc721(erc721_data) => {
-                        self
-                            .prize
-                            .payout_erc721(prize.token_address, erc721_data.id, recipient_address);
-                    },
-                };
-            } else {
-                // No entry at this position - refund to sponsor
-                match prize.token_type {
-                    TokenTypeData::erc20(erc20_data) => {
-                        assert!(
-                            erc20_data.distribution.is_none(),
-                            "Budokan: Use SponsoredDistributed for distributed prizes",
-                        );
-                        self.prize.refund_prize_erc20(prize_id, erc20_data.amount);
-                    },
-                    TokenTypeData::erc721(erc721_data) => {
-                        self.prize.refund_prize_erc721(prize_id, erc721_data.id);
-                    },
-                };
-            }
-        }
-
-        /// Claim from a distributed sponsored prize pool
-        fn _claim_distributed_prize(
-            ref self: ContractState,
-            tournament_id: u64,
-            tournament: TournamentModel,
-            prize_id: u64,
-            payout_index: u32,
-        ) {
-            let prize = self.prize._get_prize(prize_id);
-
-            // Validate prize belongs to this tournament
-            assert!(
-                prize.context_id == tournament_id,
-                "Budokan: Prize {} is for tournament {}",
-                prize_id,
-                prize.context_id,
-            );
-
-            // Get ERC20 data with distribution info
-            let erc20_data = match prize.token_type {
-                TokenTypeData::erc20(data) => data,
-                TokenTypeData::erc721(_) => {
-                    panic!("Budokan: ERC721 not supported for distributed prizes")
-                },
-            };
-
-            // Ensure this is a distributed prize
-            assert!(
-                erc20_data.distribution.is_some(),
-                "Budokan: Use Sponsored for non-distributed prizes",
-            );
-
-            // Get leaderboard
-            let leaderboard = self._get_leaderboard(tournament_id);
-            let leaderboard_size: u32 = leaderboard.len();
-
-            // Validate payout_index (must be >= 1)
-            assert!(payout_index > 0, "Budokan: Payout index must be greater than zero");
-
-            // Use fixed distribution_count if set, otherwise use actual leaderboard size
-            let total_positions: u32 = match erc20_data.distribution_count {
-                Option::Some(count) => count,
-                Option::None => leaderboard_size,
-            };
-
-            // Get distribution (already validated as Some above)
-            let distribution = erc20_data.distribution.unwrap();
-
-            // Calculate share for this payout_index (full 100% available for distribution)
-            let share_bps = calculator::calculate_share_with_dust(
-                distribution, payout_index, total_positions, BASIS_POINTS,
-            );
-
-            // Calculate payout amount
-            let payout_amount = (share_bps.into() * erc20_data.amount) / BASIS_POINTS.into();
-
-            // Prevent 0 token claims to save gas
-            assert!(
-                payout_amount > 0,
-                "Budokan: Position {} has 0 tokens to claim for prize {}",
-                payout_index,
-                prize_id,
-            );
-
-            // Handle payout or refund based on leaderboard size
-            if payout_index <= leaderboard_size {
-                // Position exists on leaderboard - pay the winner
-                let game_dispatcher = IMinigameDispatcher {
-                    contract_address: tournament.game_config.game_address,
-                };
-                let game_token_address = game_dispatcher.token_address();
-                let winner_token_id: felt252 = *leaderboard.at(payout_index - 1);
-                let recipient_address = self._get_owner(game_token_address, winner_token_id.into());
-
-                // Transfer calculated amount
-                self.prize.payout_erc20(prize.token_address, payout_amount, recipient_address);
-            } else {
-                // No entry at this position - refund to sponsor
-                self.prize.refund_prize_erc20(prize_id, payout_amount);
-            }
         }
 
         /// Validates tournament-specific rules for score submission

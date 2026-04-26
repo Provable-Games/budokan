@@ -15,6 +15,7 @@ openzeppelin_upgrades.workspace = true
 [dev-dependencies]
 snforge_std.workspace = true
 budokan = { path = "../budokan" }
+budokan_rewards = { path = "../rewards" }
 game_components_embeddable_game_standard.workspace = true
 game_components_test_common.workspace = true
 
@@ -23,6 +24,7 @@ sierra = true
 casm = true
 build-external-contracts = [
     "budokan::budokan::Budokan",
+    "budokan_rewards::budokan_rewards::BudokanRewards",
     "game_components_test_common::mocks::minigame_mock::minigame_mock",
     "game_components_test_common::examples::minigame_registry_contract::MinigameRegistryContract",
     "game_components_test_common::examples::full_token_contract::FullTokenContract",

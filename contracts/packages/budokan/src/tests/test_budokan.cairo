@@ -27,6 +27,9 @@ use budokan::tests::interfaces::{
     IERC721MockDispatcherTrait, IERC721OldMockDispatcher,
 };
 use budokan::tests::setup_denshokan;
+use budokan::budokan::Budokan::{
+    IBudokanRewardsAdminDispatcher, IBudokanRewardsAdminDispatcherTrait,
+};
 use budokan_interfaces::budokan::{IBudokanDispatcher, IBudokanDispatcherTrait};
 use core::option::Option;
 use core::serde::Serde;
@@ -127,6 +130,17 @@ fn deploy_budokan(denshokan_address: ContractAddress) -> ContractAddress {
     denshokan_address.serialize(ref calldata);
 
     let (contract_address, _) = contract_class.deploy(@calldata).expect('deploy budokan failed');
+
+    // Declare BudokanRewards (library class) and register its hash on Budokan.
+    // `add_prize` and `claim_reward` dispatch into this class via library_call.
+    let rewards_class = declare("BudokanRewards")
+        .expect('declare rewards failed')
+        .contract_class();
+    let admin = IBudokanRewardsAdminDispatcher { contract_address };
+    start_cheat_caller_address(contract_address, OWNER);
+    admin.set_rewards_class_hash(*rewards_class.class_hash);
+    stop_cheat_caller_address(contract_address);
+
     contract_address
 }
 
