@@ -1,8 +1,7 @@
 import { useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { ChevronDown } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import DescriptionMarkdown from "./DescriptionMarkdown";
 
 interface TournamentDescriptionProps {
   tournamentName: string;
@@ -22,28 +21,17 @@ const TournamentDescription = ({
     <div className="flex flex-col gap-2">
       {hasDescription ? (
         <div className="relative">
-          <div
-            className="markdown-content prose prose-sm prose-invert max-w-none text-neutral/80 overflow-hidden"
+          <DescriptionMarkdown
+            className="prose prose-sm prose-invert max-w-none text-neutral/80 overflow-hidden"
             style={{
               display: "-webkit-box",
               WebkitLineClamp: 8,
               WebkitBoxOrient: "vertical",
             }}
+            hrClassName="my-3 border-0 h-px bg-brand/20"
           >
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={{
-                hr: () => (
-                  <hr className="my-3 border-0 h-px bg-brand/20" />
-                ),
-                a: ({ node: _node, ...props }) => (
-                  <a {...props} target="_blank" rel="noopener noreferrer" />
-                ),
-              }}
-            >
-              {description}
-            </ReactMarkdown>
-          </div>
+            {description}
+          </DescriptionMarkdown>
           {isLong && (
             <button
               type="button"
@@ -66,21 +54,12 @@ const TournamentDescription = ({
           <div className="flex flex-col gap-4">
             <h3 className="font-brand text-xl text-brand">{tournamentName}</h3>
             <div className="w-full h-0.5 bg-brand/25" />
-            <div className="markdown-content prose prose-sm prose-invert max-w-none">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={{
-                  hr: () => (
-                    <hr className="my-4 border-0 h-px bg-brand/25" />
-                  ),
-                  a: ({ node: _node, ...props }) => (
-                    <a {...props} target="_blank" rel="noopener noreferrer" />
-                  ),
-                }}
-              >
-                {description}
-              </ReactMarkdown>
-            </div>
+            <DescriptionMarkdown
+              className="prose prose-sm prose-invert max-w-none"
+              hrClassName="my-4 border-0 h-px bg-brand/25"
+            >
+              {description}
+            </DescriptionMarkdown>
           </div>
         </DialogContent>
       </Dialog>
