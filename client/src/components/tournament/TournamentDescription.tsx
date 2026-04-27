@@ -36,6 +36,9 @@ const TournamentDescription = ({
                 hr: () => (
                   <hr className="my-3 border-0 h-px bg-brand/20" />
                 ),
+                a: ({ node: _node, ...props }) => (
+                  <a {...props} target="_blank" rel="noopener noreferrer" />
+                ),
               }}
             >
               {description}
@@ -69,6 +72,9 @@ const TournamentDescription = ({
                 components={{
                   hr: () => (
                     <hr className="my-4 border-0 h-px bg-brand/25" />
+                  ),
+                  a: ({ node: _node, ...props }) => (
+                    <a {...props} target="_blank" rel="noopener noreferrer" />
                   ),
                 }}
               >
