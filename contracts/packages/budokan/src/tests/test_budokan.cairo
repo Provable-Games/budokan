@@ -2365,7 +2365,10 @@ fn test_tournament_with_partial_submissions() {
 // Tournament gated tests with entry limits
 //
 
-#[should_panic(expected: "EntryRequirement: No entries left according to extension")]
+// Quota exhaustion is now enforced inside the extension's `valid_entry` (the framework no
+// longer cross-checks `entries_left`), so the surfaced panic is the framework's invalid-entry
+// assertion rather than the previous "No entries left" message.
+#[should_panic(expected: "EntryRequirement: Invalid entry according to extension")]
 #[test]
 fn test_create_tournament_gated_by_multiple_tournaments_with_limited_entry() {
     let contracts = setup();
@@ -5391,7 +5394,10 @@ fn test_cannot_ban_already_banned_game_id() {
 
 // ==================== Extension Gated Tests (Additional) ====================
 
-#[should_panic(expected: "EntryRequirement: No entries left according to extension")]
+// Quota exhaustion is now enforced inside the extension's `valid_entry` (the framework no
+// longer cross-checks `entries_left`), so the surfaced panic is the framework's invalid-entry
+// assertion rather than the previous "No entries left" message.
+#[should_panic(expected: "EntryRequirement: Invalid entry according to extension")]
 #[test]
 fn test_extension_gated_tournament_entry_limit_enforced() {
     let owner = OWNER;

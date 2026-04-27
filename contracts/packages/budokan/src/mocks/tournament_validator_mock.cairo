@@ -111,6 +111,18 @@ pub mod tournament_validator_mock {
             player_address: ContractAddress,
             qualification: Span<felt252>,
         ) -> bool {
+            // Quota check first: a single storage read short-circuits before the
+            // multi-call `validate_entry_internal` (Budokan + ERC721 + leaderboard
+            // lookups) when the player is already over their per-context cap.
+            let entry_limit = self.tournament_entry_limit.read((context_owner, context_id));
+            if entry_limit != 0 {
+                let key = (context_owner, context_id, player_address);
+                let current_entries = self.tournament_entries.read(key);
+                if current_entries >= entry_limit {
+                    return false;
+                }
+            }
+
             self.validate_entry_internal(context_owner, context_id, player_address, qualification)
         }
 
