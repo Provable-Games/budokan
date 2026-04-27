@@ -1,0 +1,28 @@
+[package]
+name = "budokan_rewards"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+
+[[target.starknet-contract]]
+sierra = true
+casm = true
+
+[cairo]
+sierra-replace-ids = true
+
+[dependencies]
+starknet.workspace = true
+openzeppelin_interfaces.workspace = true
+game_components_embeddable_game_standard.workspace = true
+game_components_interfaces.workspace = true
+game_components_metagame.workspace = true
+game_components_utilities.workspace = true
+budokan_interfaces = { path = "../interfaces" }
+# Used for structs::packed_storage helpers and libs::schedule (single source of
+# truth for the packed felt252 layout shared between Budokan and BudokanRewards).
+budokan = { path = "../budokan" }
+
+[features]
+default = []

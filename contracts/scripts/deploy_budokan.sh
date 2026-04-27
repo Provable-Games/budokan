@@ -191,6 +191,64 @@ fi
 print_info "Budokan deployed at: $BUDOKAN_ADDRESS"
 
 # ============================
+# DECLARE BUDOKAN REWARDS
+# ============================
+# BudokanRewards is a library_call class — declared but never deployed as its
+# own contract instance. The class hash is registered on Budokan via
+# `set_rewards_class_hash`, after which `add_prize` and `claim_reward` library_call
+# into it. Storage and events stay in Budokan; only the bytecode lives elsewhere.
+
+print_info "Declaring BudokanRewards library class..."
+
+REWARDS_DECLARE_OUTPUT=$(sncast --profile "$PROFILE" --wait \
+    declare \
+    --contract-name BudokanRewards \
+    --package budokan_rewards 2>&1) || {
+    if echo "$REWARDS_DECLARE_OUTPUT" | grep -qi "already declared"; then
+        print_warning "BudokanRewards already declared"
+        REWARDS_CLASS_HASH=$(echo "$REWARDS_DECLARE_OUTPUT" | grep -oE '0x[0-9a-fA-F]+' | head -1)
+    else
+        print_error "Failed to declare BudokanRewards"
+        echo "$REWARDS_DECLARE_OUTPUT"
+        exit 1
+    fi
+}
+
+if [ -z "${REWARDS_CLASS_HASH:-}" ]; then
+    REWARDS_CLASS_HASH=$(echo "$REWARDS_DECLARE_OUTPUT" | grep -oE 'class_hash: 0x[0-9a-fA-F]+' | grep -oE '0x[0-9a-fA-F]+' || \
+        echo "$REWARDS_DECLARE_OUTPUT" | grep -i "class hash:" | awk '{print $3}')
+fi
+
+if [ -z "${REWARDS_CLASS_HASH:-}" ]; then
+    print_info "Calculating class hash from artifact..."
+    CLASS_HASH_OUTPUT=$(sncast --profile "$PROFILE" utils class-hash --contract-name BudokanRewards --package budokan_rewards 2>&1)
+    REWARDS_CLASS_HASH=$(echo "$CLASS_HASH_OUTPUT" | grep -i "class hash:" | awk '{print $3}')
+    if [ -z "$REWARDS_CLASS_HASH" ]; then
+        REWARDS_CLASS_HASH=$(echo "$CLASS_HASH_OUTPUT" | grep -oE '0x[0-9a-fA-F]+' | head -1)
+    fi
+fi
+
+if [ -z "${REWARDS_CLASS_HASH:-}" ]; then
+    print_error "Could not determine BudokanRewards class hash"
+    exit 1
+fi
+
+print_info "BudokanRewards class hash: $REWARDS_CLASS_HASH"
+
+print_info "Registering BudokanRewards class hash on Budokan..."
+
+sncast --profile "$PROFILE" --wait \
+    invoke \
+    --contract-address "$BUDOKAN_ADDRESS" \
+    --function "set_rewards_class_hash" \
+    --calldata "$REWARDS_CLASS_HASH" >/dev/null || {
+    print_error "Failed to set rewards class hash on Budokan"
+    exit 1
+}
+
+print_info "BudokanRewards registered on Budokan."
+
+# ============================
 # DEPLOY BUDOKAN VIEWER
 # ============================
 

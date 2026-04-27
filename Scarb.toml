@@ -2,6 +2,7 @@
 members = [
     "contracts/packages/interfaces",
     "contracts/packages/budokan",
+    "contracts/packages/rewards",
     "contracts/packages/viewer",
 ]
 
@@ -34,9 +35,6 @@ test = "snforge test"
 [profile.dev.cairo]
 unstable-add-statements-code-locations-debug-info = true
 unstable-add-statements-functions-debug-info = true
-inlining-strategy = "avoid"
-
-[profile.release.cairo]
 inlining-strategy = "avoid"
 
 [profile.dev]
