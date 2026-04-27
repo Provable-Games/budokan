@@ -90,7 +90,7 @@ const Tournament = () => {
   const entryCount = Number(tournamentModel?.entryCount ?? 0);
 
   const { lastMessage } = useSubscription(
-    ["tournaments", "registrations", "leaderboards", "prizes", "rewards"],
+    ["tournaments", "registrations", "prizes", "rewards"],
     id ? [id] : undefined,
   );
 
