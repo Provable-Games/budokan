@@ -3,5 +3,8 @@ builder = "DOCKERFILE"
 dockerfilePath = "./Dockerfile"
 
 [deploy]
-restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 10
+# ALWAYS (not ON_FAILURE) so Railway restarts the indexer even on exit 0.
+# Apibara exits 0 when the DNA gRPC stream is closed cleanly by the server,
+# which is a transient network event for a long-running indexer, not a real
+# "success" terminal state. ON_FAILURE leaves the container stopped on exit 0.
+restartPolicyType = "ALWAYS"
