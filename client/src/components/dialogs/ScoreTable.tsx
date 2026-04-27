@@ -20,7 +20,8 @@ import { REFRESH, VERIFIED } from "@/components/Icons";
 import { Ban, ExternalLink } from "lucide-react";
 import { useRegistrations } from "@provable-games/budokan-sdk/react";
 import { useChainConfig } from "@/context/chain";
-import { cn, getOrdinalSuffix } from "@/lib/utils";
+import { cn, displayAddress, getOrdinalSuffix, indexAddress } from "@/lib/utils";
+import { useGetUsernames } from "@/hooks/useController";
 import type { PositionPrizeDisplay } from "@/components/tournament/EntrantsTable";
 
 interface ScoreTableDialogProps {
@@ -151,6 +152,13 @@ export const ScoreTableDialog = ({
     return map;
   }, [registrants]);
 
+  // Resolve cartridge usernames for the visible page's owners.
+  const ownerAddresses = useMemo(
+    () => pageEntries.map((e: any) => e?.owner ?? "0x0"),
+    [pageEntries],
+  );
+  const { usernames } = useGetUsernames(ownerAddresses);
+
   // Refetch when a ban operation completes
   useEffect(() => {
     if (banRefreshTrigger && banRefreshTrigger > 0 && open) {
@@ -205,9 +213,11 @@ export const ScoreTableDialog = ({
             <TableBody className="overflow-y-auto">
               {pageEntries.length > 0 ? (
                 pageEntries.map((entry: any, index: number) => {
-                  const playerName = entry.playerName || "";
                   const ownerAddress = entry.owner ?? "0x0";
-                  const shortAddress = `${ownerAddress?.slice(0, 6)}...${ownerAddress?.slice(-4)}`;
+                  const shortAddress = displayAddress(ownerAddress);
+                  const username = usernames?.get(indexAddress(ownerAddress));
+                  const displayName = entry.playerName || username || shortAddress;
+                  const showSubAddress = displayName !== shortAddress;
                   const reg = regMap.get(entry.tokenId);
                   const hasSubmitted = !!reg?.hasSubmitted;
                   const isBanned = !!reg?.isBanned;
@@ -223,9 +233,9 @@ export const ScoreTableDialog = ({
                         <div className="flex items-center gap-2">
                           <div className="flex flex-col flex-1 min-w-0">
                             <span className="font-medium truncate">
-                              {playerName || shortAddress}
+                              {displayName}
                             </span>
-                            {playerName && (
+                            {showSubAddress ? (
                               <div className="flex flex-row items-center gap-1 text-xs text-muted-foreground">
                                 <span>{shortAddress}</span>
                                 {blockExplorerUrl && (
@@ -241,18 +251,19 @@ export const ScoreTableDialog = ({
                                   </a>
                                 )}
                               </div>
-                            )}
-                            {!playerName && blockExplorerUrl && (
-                              <a
-                                href={`${blockExplorerUrl}/contract/${ownerAddress}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="text-brand-muted hover:text-brand transition-colors"
-                                aria-label="View on explorer"
-                              >
-                                <ExternalLink className="w-3 h-3" />
-                              </a>
+                            ) : (
+                              blockExplorerUrl && (
+                                <a
+                                  href={`${blockExplorerUrl}/contract/${ownerAddress}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="text-brand-muted hover:text-brand transition-colors"
+                                  aria-label="View on explorer"
+                                >
+                                  <ExternalLink className="w-3 h-3" />
+                                </a>
+                              )
                             )}
                           </div>
                           {isBanned && (

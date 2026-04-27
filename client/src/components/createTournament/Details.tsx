@@ -22,8 +22,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import DescriptionMarkdown from "@/components/tournament/DescriptionMarkdown";
 import { getGameDefaults, getGamesForChain } from "@/assets/games";
 import { EXTERNAL_LINK } from "@/components/Icons";
 import { useChainConfig } from "@/context/chain";
@@ -339,11 +338,9 @@ const Details = ({ form }: StepProps) => {
               Description Preview
             </h3>
             <div className="w-full h-0.5 bg-brand/25" />
-            <div className="markdown-content">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {form.watch("description") || ""}
-              </ReactMarkdown>
-            </div>
+            <DescriptionMarkdown>
+              {form.watch("description") || ""}
+            </DescriptionMarkdown>
           </div>
         </DialogContent>
       </Dialog>
