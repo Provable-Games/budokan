@@ -112,9 +112,7 @@ pub mod tournament_validator_mock {
             qualification: Span<felt252>,
         ) -> bool {
             if !self
-                .validate_entry_internal(
-                    context_owner, context_id, player_address, qualification,
-                ) {
+                .validate_entry_internal(context_owner, context_id, player_address, qualification) {
                 return false;
             }
 
