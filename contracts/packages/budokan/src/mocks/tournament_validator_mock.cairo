@@ -111,7 +111,21 @@ pub mod tournament_validator_mock {
             player_address: ContractAddress,
             qualification: Span<felt252>,
         ) -> bool {
-            self.validate_entry_internal(context_owner, context_id, player_address, qualification)
+            if !self
+                .validate_entry_internal(
+                    context_owner, context_id, player_address, qualification,
+                ) {
+                return false;
+            }
+
+            // Quota: framework no longer cross-checks entries_left, so enforce here.
+            let entry_limit = self.tournament_entry_limit.read((context_owner, context_id));
+            if entry_limit == 0 {
+                return true;
+            }
+            let key = (context_owner, context_id, player_address);
+            let current_entries = self.tournament_entries.read(key);
+            current_entries < entry_limit
         }
 
         fn should_ban(
