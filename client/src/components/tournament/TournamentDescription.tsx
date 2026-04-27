@@ -21,40 +21,38 @@ const TournamentDescription = ({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex flex-row items-center justify-between">
-        <h3 className="font-brand text-base text-brand">Description</h3>
-        {hasDescription && isLong && (
-          <Button
-            variant="outline"
-            size="xs"
-            onClick={() => setDialogOpen(true)}
-            className="text-xs"
-          >
-            Read more
-            <ChevronDown className="w-3 h-3 ml-0.5" />
-          </Button>
-        )}
-      </div>
-
       {hasDescription ? (
-        <div
-          className="markdown-content prose prose-sm prose-invert max-w-none text-neutral/80 overflow-hidden"
-          style={{
-            display: "-webkit-box",
-            WebkitLineClamp: 8,
-            WebkitBoxOrient: "vertical",
-          }}
-        >
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            components={{
-              hr: () => (
-                <hr className="my-3 border-0 h-px bg-brand/20" />
-              ),
+        <div className="relative">
+          <div
+            className="markdown-content prose prose-sm prose-invert max-w-none text-neutral/80 overflow-hidden"
+            style={{
+              display: "-webkit-box",
+              WebkitLineClamp: 8,
+              WebkitBoxOrient: "vertical",
             }}
           >
-            {description}
-          </ReactMarkdown>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                hr: () => (
+                  <hr className="my-3 border-0 h-px bg-brand/20" />
+                ),
+              }}
+            >
+              {description}
+            </ReactMarkdown>
+          </div>
+          {isLong && (
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={() => setDialogOpen(true)}
+              className="absolute bottom-0 right-0 text-xs bg-black shadow-[-12px_0_12px_4px_rgba(0,0,0,0.85)]"
+            >
+              Read more
+              <ChevronDown className="w-3 h-3 ml-0.5" />
+            </Button>
+          )}
         </div>
       ) : (
         <p className="text-sm text-brand-muted/70 italic">
