@@ -3,7 +3,6 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ChevronDown } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 
 interface TournamentDescriptionProps {
   tournamentName: string;
@@ -43,17 +42,14 @@ const TournamentDescription = ({
             </ReactMarkdown>
           </div>
           {isLong && (
-            <div className="absolute bottom-0 right-0 bg-black shadow-[-12px_0_12px_4px_rgba(0,0,0,0.85)]">
-              <Button
-                variant="outline"
-                size="xs"
-                onClick={() => setDialogOpen(true)}
-                className="text-xs"
-              >
-                Read more
-                <ChevronDown className="w-3 h-3 ml-0.5" />
-              </Button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setDialogOpen(true)}
+              className="absolute bottom-0 right-0 inline-flex items-center gap-0.5 rounded-full border border-brand/30 bg-brand/10 px-2 py-0.5 text-xs text-brand transition-colors hover:bg-brand/20"
+            >
+              Read more
+              <ChevronDown className="w-3 h-3" />
+            </button>
           )}
         </div>
       ) : (
