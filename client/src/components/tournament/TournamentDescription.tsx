@@ -43,15 +43,17 @@ const TournamentDescription = ({
             </ReactMarkdown>
           </div>
           {isLong && (
-            <Button
-              variant="outline"
-              size="xs"
-              onClick={() => setDialogOpen(true)}
-              className="absolute bottom-0 right-0 text-xs bg-black shadow-[-12px_0_12px_4px_rgba(0,0,0,0.85)]"
-            >
-              Read more
-              <ChevronDown className="w-3 h-3 ml-0.5" />
-            </Button>
+            <div className="absolute bottom-0 right-0 bg-black shadow-[-12px_0_12px_4px_rgba(0,0,0,0.85)]">
+              <Button
+                variant="outline"
+                size="xs"
+                onClick={() => setDialogOpen(true)}
+                className="text-xs"
+              >
+                Read more
+                <ChevronDown className="w-3 h-3 ml-0.5" />
+              </Button>
+            </div>
           )}
         </div>
       ) : (
