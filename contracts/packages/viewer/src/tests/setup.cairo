@@ -121,9 +121,7 @@ fn deploy_budokan(denshokan_address: ContractAddress) -> ContractAddress {
     let (contract_address, _) = contract_class.deploy(@calldata).expect('deploy budokan failed');
 
     // Register BudokanRewards library class so add_prize / claim_reward dispatch works.
-    let rewards_class = declare("BudokanRewards")
-        .expect('declare rewards failed')
-        .contract_class();
+    let rewards_class = declare("BudokanRewards").expect('declare rewards failed').contract_class();
     let admin = IBudokanRewardsAdminDispatcher { contract_address };
     start_cheat_caller_address(contract_address, OWNER);
     admin.set_rewards_class_hash(*rewards_class.class_hash);

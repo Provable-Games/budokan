@@ -11,8 +11,8 @@
 //! `claim_reward`) so that callers and indexers see identical event/return
 //! semantics regardless of which class the code lives in.
 
-use crate::budokan::{PrizeData, RewardType, TokenTypeData};
 use starknet::ContractAddress;
+use crate::budokan::{PrizeData, RewardType, TokenTypeData};
 
 #[starknet::interface]
 pub trait IBudokanRewards<TState> {

@@ -26,9 +26,7 @@ pub fn schedule_from_config(config: @TournamentConfig) -> Schedule {
 
 #[inline(always)]
 pub fn leaderboard_config_from_config(config: @TournamentConfig) -> LeaderboardConfig {
-    LeaderboardConfig {
-        ascending: *config.ascending, game_must_be_over: *config.game_must_be_over,
-    }
+    LeaderboardConfig { ascending: *config.ascending, game_must_be_over: *config.game_must_be_over }
 }
 
 /// Reconstruct the GameConfig view. Consumes `client_url_raw` (a ByteArray

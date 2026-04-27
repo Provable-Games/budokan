@@ -40,12 +40,12 @@ pub mod BudokanRewards {
     };
     use game_components_interfaces::entry_fee::{AdditionalShare, EntryFeeConfig};
     use game_components_interfaces::prize::{Prize as PrizeInput, PrizeConfig};
-    use game_components_metagame::entry_fee::structs::EntryFeeClaimType;
     use game_components_interfaces::registry::{
         IMinigameRegistryDispatcher, IMinigameRegistryDispatcherTrait,
     };
     use game_components_metagame::entry_fee::entry_fee_component::EntryFeeComponent;
     use game_components_metagame::entry_fee::entry_fee_component::EntryFeeComponent::EntryFeeInternalTrait;
+    use game_components_metagame::entry_fee::structs::EntryFeeClaimType;
     use game_components_metagame::leaderboard::leaderboard_component::LeaderboardComponent;
     use game_components_metagame::leaderboard::store::Store as LeaderboardStore;
     use game_components_metagame::prize::prize_component::PrizeComponent;
@@ -127,9 +127,7 @@ pub mod BudokanRewards {
 
     #[abi(embed_v0)]
     impl BudokanRewardsImpl of IBudokanRewards<ContractState> {
-        fn claim_reward(
-            ref self: ContractState, tournament_id: u64, reward_type: RewardType,
-        ) {
+        fn claim_reward(ref self: ContractState, tournament_id: u64, reward_type: RewardType) {
             self._assert_tournament_exists(tournament_id);
 
             let config = TournamentConfigStorePacking::unpack(
@@ -229,9 +227,7 @@ pub mod BudokanRewards {
                 );
         }
 
-        fn _set_reward_claim(
-            ref self: ContractState, tournament_id: u64, reward_type: RewardType,
-        ) {
+        fn _set_reward_claim(ref self: ContractState, tournament_id: u64, reward_type: RewardType) {
             match reward_type {
                 RewardType::Prize(prize_type) => {
                     self.prize.set_prize_claimed(tournament_id, prize_type);
@@ -377,10 +373,7 @@ pub mod BudokanRewards {
             let entry_fee_view = self._entry_fee_view(self.entry_fee._get_entry_fee(tournament_id));
 
             if let Option::Some(entry_fee) = entry_fee_view {
-                let creator_token_id = self
-                    .tournament_creator_token_id
-                    .entry(tournament_id)
-                    .read();
+                let creator_token_id = self.tournament_creator_token_id.entry(tournament_id).read();
                 let total_entries = self.registration._get_entry_count(tournament_id);
                 let total_pool = total_entries.into() * entry_fee.amount;
 

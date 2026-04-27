@@ -15,12 +15,14 @@ pub mod Budokan {
         TokenTypeData, Tournament as TournamentModel,
     };
     use budokan::structs::packed_storage::{
-        TournamentConfig, TournamentConfigStorePacking, unpack_created_at,
-        unpack_game_start_delay, unpack_registration_end_delay, unpack_registration_start_delay,
+        TournamentConfig, TournamentConfigStorePacking, unpack_created_at, unpack_game_start_delay,
+        unpack_registration_end_delay, unpack_registration_start_delay,
     };
     use budokan::structs::schedule::{Phase, Schedule};
     use budokan_interfaces::budokan::IBudokan;
-    use budokan_interfaces::rewards::{IBudokanRewardsLibraryDispatcher, IBudokanRewardsDispatcherTrait};
+    use budokan_interfaces::rewards::{
+        IBudokanRewardsDispatcherTrait, IBudokanRewardsLibraryDispatcher,
+    };
     use core::num::traits::Zero;
     use game_components_embeddable_game_standard::metagame::extensions::context::context::ContextComponent;
     use game_components_embeddable_game_standard::metagame::extensions::context::interface::{
