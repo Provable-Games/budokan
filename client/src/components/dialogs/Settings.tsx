@@ -31,7 +31,7 @@ export const SettingsDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-black border border-brand p-4 sm:p-6 rounded-lg sm:max-w-xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="bg-black border border-brand p-4 sm:p-6 rounded-lg sm:max-w-xl">
         <DialogTitle className="font-brand text-lg sm:text-xl text-brand">
           Game Settings
         </DialogTitle>
@@ -90,24 +90,26 @@ export const SettingsDialog = ({
             </div>
 
             {entries.length > 0 ? (
-              <div className="flex flex-col border border-brand/10 rounded-md overflow-hidden divide-y divide-brand/10 bg-brand/[0.03]">
-                <div className="grid grid-cols-[1fr_auto] items-center gap-3 px-3 py-1.5 text-[10px] uppercase tracking-wider text-brand-muted/70 bg-brand/5">
+              <div className="flex flex-col border border-brand/10 rounded-md overflow-hidden bg-brand/[0.03]">
+                <div className="grid grid-cols-[1fr_auto] items-center gap-3 px-3 py-1.5 text-[10px] uppercase tracking-wider text-brand-muted/70 bg-brand/5 border-b border-brand/10">
                   <span>Parameter</span>
                   <span className="text-right">Value</span>
                 </div>
-                {entries.map(([key, value]) => (
-                  <div
-                    key={key}
-                    className="grid grid-cols-[1fr_auto] items-center gap-3 px-3 py-2 text-xs"
-                  >
-                    <span className="text-brand-muted capitalize truncate">
-                      {key.replace(/_/g, " ")}
-                    </span>
-                    <span className="font-mono text-neutral text-right break-all">
-                      {String(value)}
-                    </span>
-                  </div>
-                ))}
+                <div className="flex flex-col divide-y divide-brand/10 max-h-72 overflow-y-auto">
+                  {entries.map(([key, value]) => (
+                    <div
+                      key={key}
+                      className="grid grid-cols-[1fr_auto] items-center gap-3 px-3 py-2 text-xs"
+                    >
+                      <span className="text-brand-muted capitalize truncate">
+                        {key.replace(/_/g, " ")}
+                      </span>
+                      <span className="font-mono text-neutral text-right break-all">
+                        {String(value)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             ) : (
               <p className="text-xs text-brand-muted/60 italic py-3">
