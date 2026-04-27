@@ -126,45 +126,94 @@ cd "$CONTRACTS_DIR"
 print_info "Contract artifacts found"
 
 # ============================
+# HELPERS
+# ============================
+# Class hash is fully determined by the local artifact, so we compute it via
+# `sncast utils class-hash` up-front. This avoids the fragile path of grepping
+# a class hash out of `sncast declare`'s output, which interacts badly with
+# `set -o pipefail` (a pipe like `... | head -1` causes upstream grep to exit
+# 141 on SIGPIPE, which under `set -e` silently kills the script). With the
+# hash known in advance the declare step becomes best-effort: success or the
+# "already declared" no-op both fall through cleanly.
+
+# Extract the first 0x-prefixed token following a "class hash" label in
+# sncast output. Single awk pass — no pipe-with-head, no pipefail surprises.
+extract_class_hash() {
+    awk '
+        /[Cc]lass[ _][Hh]ash/ {
+            for (i = 1; i <= NF; i++) {
+                tok = $i
+                gsub(/[",]/, "", tok)
+                if (tok ~ /^0x[0-9a-fA-F]+$/) { print tok; exit }
+            }
+        }
+    '
+}
+
+# Compute the class hash for a contract from its built artifact.
+compute_class_hash() {
+    local contract_name="$1"
+    local package="$2"
+    sncast --profile "$PROFILE" utils class-hash \
+        --contract-name "$contract_name" --package "$package" 2>&1 \
+        | extract_class_hash
+}
+
+# Best-effort `declare`: succeeds on success, succeeds on "already declared",
+# fails (returns 1) on anything else. Output is returned on stdout for the
+# caller to log.
+declare_contract() {
+    local contract_name="$1"
+    local package="$2"
+    local out
+    if out=$(sncast --profile "$PROFILE" --wait declare \
+        --contract-name "$contract_name" --package "$package" 2>&1); then
+        printf '%s\n' "$out"
+        return 0
+    fi
+    printf '%s\n' "$out"
+    if echo "$out" | grep -qi "already declared"; then
+        return 0
+    fi
+    return 1
+}
+
+# Extract the deployed contract address from sncast deploy output.
+# Uses `+` plus an explicit length check because mawk (the default `awk` on
+# Debian/Ubuntu) does not support interval quantifiers like `{40,}`.
+extract_contract_address() {
+    awk '
+        /[Cc]ontract[ _][Aa]ddress/ {
+            for (i = 1; i <= NF; i++) {
+                tok = $i
+                gsub(/[",]/, "", tok)
+                if (tok ~ /^0x[0-9a-fA-F]+$/ && length(tok) >= 42) { print tok; exit }
+            }
+        }
+    '
+}
+
+# ============================
 # DEPLOY BUDOKAN
 # ============================
 
-print_info "Declaring Budokan contract..."
-
-BUDOKAN_DECLARE_OUTPUT=$(sncast --profile "$PROFILE" --wait \
-    declare \
-    --contract-name Budokan \
-    --package budokan 2>&1) || {
-    if echo "$BUDOKAN_DECLARE_OUTPUT" | grep -qi "already declared"; then
-        print_warning "Budokan already declared"
-        BUDOKAN_CLASS_HASH=$(echo "$BUDOKAN_DECLARE_OUTPUT" | grep -oE '0x[0-9a-fA-F]+' | head -1)
-    else
-        print_error "Failed to declare Budokan"
-        echo "$BUDOKAN_DECLARE_OUTPUT"
-        exit 1
-    fi
-}
-
-if [ -z "${BUDOKAN_CLASS_HASH:-}" ]; then
-    BUDOKAN_CLASS_HASH=$(echo "$BUDOKAN_DECLARE_OUTPUT" | grep -oE 'class_hash: 0x[0-9a-fA-F]+' | grep -oE '0x[0-9a-fA-F]+' || \
-        echo "$BUDOKAN_DECLARE_OUTPUT" | grep -i "class hash:" | awk '{print $3}')
-fi
-
-if [ -z "${BUDOKAN_CLASS_HASH:-}" ]; then
-    print_info "Calculating class hash from artifact..."
-    CLASS_HASH_OUTPUT=$(sncast --profile "$PROFILE" utils class-hash --contract-name Budokan --package budokan 2>&1)
-    BUDOKAN_CLASS_HASH=$(echo "$CLASS_HASH_OUTPUT" | grep -i "class hash:" | awk '{print $3}')
-    if [ -z "$BUDOKAN_CLASS_HASH" ]; then
-        BUDOKAN_CLASS_HASH=$(echo "$CLASS_HASH_OUTPUT" | grep -oE '0x[0-9a-fA-F]+' | head -1)
-    fi
-fi
-
-if [ -z "${BUDOKAN_CLASS_HASH:-}" ]; then
-    print_error "Could not determine Budokan class hash"
+print_info "Computing Budokan class hash from artifact..."
+BUDOKAN_CLASS_HASH=$(compute_class_hash Budokan budokan)
+if [ -z "$BUDOKAN_CLASS_HASH" ]; then
+    print_error "Could not compute Budokan class hash from artifact"
     exit 1
 fi
-
 print_info "Budokan class hash: $BUDOKAN_CLASS_HASH"
+
+print_info "Declaring Budokan contract..."
+if ! BUDOKAN_DECLARE_OUTPUT=$(declare_contract Budokan budokan); then
+    print_error "Failed to declare Budokan"
+    echo "$BUDOKAN_DECLARE_OUTPUT"
+    exit 1
+fi
+if echo "$BUDOKAN_DECLARE_OUTPUT" | grep -qi "already declared"; then
+    print_warning "Budokan class already declared, continuing with deployment..."
+fi
 
 print_info "Deploying Budokan contract..."
 
@@ -175,12 +224,7 @@ BUDOKAN_DEPLOY_OUTPUT=$(sncast --profile "$PROFILE" --wait \
     --constructor-calldata "$OWNER_ADDRESS" "$DEFAULT_TOKEN_ADDRESS" \
     2>&1)
 
-BUDOKAN_ADDRESS=$(echo "$BUDOKAN_DEPLOY_OUTPUT" | grep -oE 'contract_address: 0x[0-9a-fA-F]+' | grep -oE '0x[0-9a-fA-F]+' || \
-    echo "$BUDOKAN_DEPLOY_OUTPUT" | grep -i "contract address:" | awk '{print $3}')
-
-if [ -z "$BUDOKAN_ADDRESS" ]; then
-    BUDOKAN_ADDRESS=$(echo "$BUDOKAN_DEPLOY_OUTPUT" | grep -oE '0x[0-9a-fA-F]{64}' | head -1)
-fi
+BUDOKAN_ADDRESS=$(printf '%s\n' "$BUDOKAN_DEPLOY_OUTPUT" | extract_contract_address)
 
 if [ -z "$BUDOKAN_ADDRESS" ]; then
     print_error "Failed to deploy Budokan"
@@ -198,42 +242,23 @@ print_info "Budokan deployed at: $BUDOKAN_ADDRESS"
 # `set_rewards_class_hash`, after which `add_prize` and `claim_reward` library_call
 # into it. Storage and events stay in Budokan; only the bytecode lives elsewhere.
 
-print_info "Declaring BudokanRewards library class..."
-
-REWARDS_DECLARE_OUTPUT=$(sncast --profile "$PROFILE" --wait \
-    declare \
-    --contract-name BudokanRewards \
-    --package budokan_rewards 2>&1) || {
-    if echo "$REWARDS_DECLARE_OUTPUT" | grep -qi "already declared"; then
-        print_warning "BudokanRewards already declared"
-        REWARDS_CLASS_HASH=$(echo "$REWARDS_DECLARE_OUTPUT" | grep -oE '0x[0-9a-fA-F]+' | head -1)
-    else
-        print_error "Failed to declare BudokanRewards"
-        echo "$REWARDS_DECLARE_OUTPUT"
-        exit 1
-    fi
-}
-
-if [ -z "${REWARDS_CLASS_HASH:-}" ]; then
-    REWARDS_CLASS_HASH=$(echo "$REWARDS_DECLARE_OUTPUT" | grep -oE 'class_hash: 0x[0-9a-fA-F]+' | grep -oE '0x[0-9a-fA-F]+' || \
-        echo "$REWARDS_DECLARE_OUTPUT" | grep -i "class hash:" | awk '{print $3}')
-fi
-
-if [ -z "${REWARDS_CLASS_HASH:-}" ]; then
-    print_info "Calculating class hash from artifact..."
-    CLASS_HASH_OUTPUT=$(sncast --profile "$PROFILE" utils class-hash --contract-name BudokanRewards --package budokan_rewards 2>&1)
-    REWARDS_CLASS_HASH=$(echo "$CLASS_HASH_OUTPUT" | grep -i "class hash:" | awk '{print $3}')
-    if [ -z "$REWARDS_CLASS_HASH" ]; then
-        REWARDS_CLASS_HASH=$(echo "$CLASS_HASH_OUTPUT" | grep -oE '0x[0-9a-fA-F]+' | head -1)
-    fi
-fi
-
-if [ -z "${REWARDS_CLASS_HASH:-}" ]; then
-    print_error "Could not determine BudokanRewards class hash"
+print_info "Computing BudokanRewards class hash from artifact..."
+REWARDS_CLASS_HASH=$(compute_class_hash BudokanRewards budokan_rewards)
+if [ -z "$REWARDS_CLASS_HASH" ]; then
+    print_error "Could not compute BudokanRewards class hash from artifact"
     exit 1
 fi
-
 print_info "BudokanRewards class hash: $REWARDS_CLASS_HASH"
+
+print_info "Declaring BudokanRewards library class..."
+if ! REWARDS_DECLARE_OUTPUT=$(declare_contract BudokanRewards budokan_rewards); then
+    print_error "Failed to declare BudokanRewards"
+    echo "$REWARDS_DECLARE_OUTPUT"
+    exit 1
+fi
+if echo "$REWARDS_DECLARE_OUTPUT" | grep -qi "already declared"; then
+    print_warning "BudokanRewards class already declared, continuing..."
+fi
 
 print_info "Registering BudokanRewards class hash on Budokan..."
 
@@ -252,42 +277,23 @@ print_info "BudokanRewards registered on Budokan."
 # DEPLOY BUDOKAN VIEWER
 # ============================
 
-print_info "Declaring BudokanViewer contract..."
-
-VIEWER_DECLARE_OUTPUT=$(sncast --profile "$PROFILE" --wait \
-    declare \
-    --contract-name BudokanViewer \
-    --package budokan_viewer 2>&1) || {
-    if echo "$VIEWER_DECLARE_OUTPUT" | grep -qi "already declared"; then
-        print_warning "BudokanViewer already declared"
-        VIEWER_CLASS_HASH=$(echo "$VIEWER_DECLARE_OUTPUT" | grep -oE '0x[0-9a-fA-F]+' | head -1)
-    else
-        print_error "Failed to declare BudokanViewer"
-        echo "$VIEWER_DECLARE_OUTPUT"
-        exit 1
-    fi
-}
-
-if [ -z "${VIEWER_CLASS_HASH:-}" ]; then
-    VIEWER_CLASS_HASH=$(echo "$VIEWER_DECLARE_OUTPUT" | grep -oE 'class_hash: 0x[0-9a-fA-F]+' | grep -oE '0x[0-9a-fA-F]+' || \
-        echo "$VIEWER_DECLARE_OUTPUT" | grep -i "class hash:" | awk '{print $3}')
-fi
-
-if [ -z "${VIEWER_CLASS_HASH:-}" ]; then
-    print_info "Calculating class hash from artifact..."
-    CLASS_HASH_OUTPUT=$(sncast --profile "$PROFILE" utils class-hash --contract-name BudokanViewer --package budokan_viewer 2>&1)
-    VIEWER_CLASS_HASH=$(echo "$CLASS_HASH_OUTPUT" | grep -i "class hash:" | awk '{print $3}')
-    if [ -z "$VIEWER_CLASS_HASH" ]; then
-        VIEWER_CLASS_HASH=$(echo "$CLASS_HASH_OUTPUT" | grep -oE '0x[0-9a-fA-F]+' | head -1)
-    fi
-fi
-
-if [ -z "${VIEWER_CLASS_HASH:-}" ]; then
-    print_error "Could not determine BudokanViewer class hash"
+print_info "Computing BudokanViewer class hash from artifact..."
+VIEWER_CLASS_HASH=$(compute_class_hash BudokanViewer budokan_viewer)
+if [ -z "$VIEWER_CLASS_HASH" ]; then
+    print_error "Could not compute BudokanViewer class hash from artifact"
     exit 1
 fi
-
 print_info "BudokanViewer class hash: $VIEWER_CLASS_HASH"
+
+print_info "Declaring BudokanViewer contract..."
+if ! VIEWER_DECLARE_OUTPUT=$(declare_contract BudokanViewer budokan_viewer); then
+    print_error "Failed to declare BudokanViewer"
+    echo "$VIEWER_DECLARE_OUTPUT"
+    exit 1
+fi
+if echo "$VIEWER_DECLARE_OUTPUT" | grep -qi "already declared"; then
+    print_warning "BudokanViewer class already declared, continuing with deployment..."
+fi
 
 print_info "Deploying BudokanViewer contract..."
 
@@ -298,12 +304,7 @@ VIEWER_DEPLOY_OUTPUT=$(sncast --profile "$PROFILE" --wait \
     --constructor-calldata "$OWNER_ADDRESS" "$BUDOKAN_ADDRESS" \
     2>&1)
 
-VIEWER_ADDRESS=$(echo "$VIEWER_DEPLOY_OUTPUT" | grep -oE 'contract_address: 0x[0-9a-fA-F]+' | grep -oE '0x[0-9a-fA-F]+' || \
-    echo "$VIEWER_DEPLOY_OUTPUT" | grep -i "contract address:" | awk '{print $3}')
-
-if [ -z "$VIEWER_ADDRESS" ]; then
-    VIEWER_ADDRESS=$(echo "$VIEWER_DEPLOY_OUTPUT" | grep -oE '0x[0-9a-fA-F]{64}' | head -1)
-fi
+VIEWER_ADDRESS=$(printf '%s\n' "$VIEWER_DEPLOY_OUTPUT" | extract_contract_address)
 
 if [ -z "$VIEWER_ADDRESS" ]; then
     print_error "Failed to deploy BudokanViewer"
