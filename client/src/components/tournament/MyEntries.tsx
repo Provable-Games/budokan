@@ -11,12 +11,9 @@ import {
   usePlayerBestRank,
 } from "@provable-games/denshokan-sdk/react";
 import { useChainConfig } from "@/context/chain";
-import { useGetUsernames } from "@/hooks/useController";
 import {
   cn,
-  displayAddress,
   getOrdinalSuffix,
-  indexAddress,
   padAddress,
 } from "@/lib/utils";
 import {
@@ -142,15 +139,6 @@ const MyEntries = ({
   };
 
   const hasEntries = !!address && myEntriesCount > 0;
-
-  // Fallback display name for entries that haven't been indexed by denshokan
-  // yet (i.e. a brand-new entry). Use the connected wallet's controller
-  // username when available, otherwise a truncated address.
-  const ownerLookup = useMemo(() => (address ? [address] : []), [address]);
-  const { usernames } = useGetUsernames(ownerLookup);
-  const fallbackName = address
-    ? usernames?.get(indexAddress(address)) || displayAddress(address)
-    : undefined;
 
   // Player's best rank across their entries in this tournament
   const { data: bestRank } = usePlayerBestRank(
@@ -439,7 +427,6 @@ const MyEntries = ({
               isStarted={isStarted}
               isEnded={isEnded}
               prizesByPosition={prizesByPosition}
-              fallbackName={fallbackName}
             />
           ))}
         </div>
