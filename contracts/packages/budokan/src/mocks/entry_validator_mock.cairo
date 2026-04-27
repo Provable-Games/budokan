@@ -68,19 +68,18 @@ pub mod entry_validator_mock {
             player_address: ContractAddress,
             qualification: Span<felt252>,
         ) -> bool {
-            if !self
-                .validate_entry_internal(context_owner, context_id, player_address, qualification) {
-                return false;
+            // Quota check first: a single storage read short-circuits before the
+            // ERC721 cross-contract dispatch in `validate_entry_internal`.
+            let entry_limit = self.tournament_entry_limit.read((context_owner, context_id));
+            if entry_limit != 0 {
+                let key = (context_owner, context_id, player_address);
+                let current_entries = self.tournament_entries.read(key);
+                if current_entries >= entry_limit {
+                    return false;
+                }
             }
 
-            // Quota: framework no longer cross-checks entries_left, so enforce here.
-            let entry_limit = self.tournament_entry_limit.read((context_owner, context_id));
-            if entry_limit == 0 {
-                return true;
-            }
-            let key = (context_owner, context_id, player_address);
-            let current_entries = self.tournament_entries.read(key);
-            current_entries < entry_limit
+            self.validate_entry_internal(context_owner, context_id, player_address, qualification)
         }
 
         fn should_ban(
