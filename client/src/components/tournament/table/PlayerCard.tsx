@@ -1,6 +1,6 @@
 import { displayAddress, indexAddress } from "@/lib/utils";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { VERIFIED, QUESTION } from "@/components/Icons";
+import { USER, VERIFIED, QUESTION } from "@/components/Icons";
 import { Ban, Eye, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getWatchLink, getReplayLink, getObjectImage } from "@/assets/games";
@@ -49,7 +49,6 @@ const TokenUriImage = ({ tokenId, gameAddress }: { tokenId: string; gameAddress?
 };
 
 export const PlayerDetails = ({
-  playerName,
   username,
   isStarted,
   isEnded,
@@ -58,7 +57,6 @@ export const PlayerDetails = ({
   gameAddress,
   tokenId,
 }: {
-  playerName: string;
   username: string;
   isStarted?: boolean;
   isEnded: boolean;
@@ -70,13 +68,11 @@ export const PlayerDetails = ({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2 px-4">
-        <div className="flex flex-row gap-2">
-          <span className="text-brand-muted">Player Name:</span>
-          <span className="truncate">{playerName}</span>
-        </div>
-        <div className="flex flex-row gap-2">
-          <span className="text-brand-muted">Owner:</span>
-          <span>{username}</span>
+        <div className="flex flex-row items-center gap-2">
+          <span className="w-5 h-5 flex-shrink-0 text-brand-muted">
+            <USER />
+          </span>
+          <span className="truncate">{username}</span>
         </div>
         {isBanned && (
           <div className="flex flex-row gap-2 items-center">
@@ -180,7 +176,6 @@ export const MobilePlayerCard = ({
 
         {selectedPlayer && (
           <PlayerDetails
-            playerName={selectedPlayer.game?.playerName}
             username={username}
             isStarted={isStarted}
             isEnded={isEnded}

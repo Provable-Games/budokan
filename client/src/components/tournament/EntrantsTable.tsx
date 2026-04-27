@@ -464,7 +464,6 @@ const EntrantsTable = ({
                     className="py-4 px-0 text-sm z-50"
                   >
                     <PlayerDetails
-                      playerName={game.playerName ?? "Unknown Player"}
                       username={displayName}
                       isStarted={isStarted}
                       isEnded={isEnded}

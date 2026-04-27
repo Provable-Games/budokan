@@ -19,6 +19,8 @@ import { useState, useMemo } from "react";
 import { LoadingSpinner } from "@/components/ui/spinner";
 import { useChainConfig } from "@/context/chain";
 import { useRegistrations } from "@provable-games/budokan-sdk/react";
+import { useGetUsernames } from "@/hooks/useController";
+import { displayAddress, indexAddress } from "@/lib/utils";
 
 interface SubmitScoresDialogProps {
   open: boolean;
@@ -102,6 +104,13 @@ export function SubmitScoresDialog({
   // Calculate banned count for display
   const bannedCount = (sortedGames?.length || 0) - (nonBannedGames?.length || 0);
 
+  // Resolve cartridge usernames for the displayed entries' owners.
+  const ownerAddresses = useMemo(
+    () => nonBannedGames.map((g: any) => g?.owner ?? "0x0"),
+    [nonBannedGames],
+  );
+  const { usernames } = useGetUsernames(ownerAddresses);
+
   const handleSubmitScores = async () => {
     setIsSubmitting(true);
     setBatchProgress(null);
@@ -162,13 +171,18 @@ export function SubmitScoresDialog({
             Submitting {submittableScores.length} scores
           </span>
           <div className="space-y-2 px-5 py-2 max-h-[300px] overflow-y-auto">
-            {nonBannedGames?.map((game, index) => (
+            {nonBannedGames?.map((game, index) => {
+              const ownerAddress = (game as any)?.owner ?? "0x0";
+              const displayName =
+                usernames?.get(indexAddress(ownerAddress)) ||
+                displayAddress(ownerAddress);
+              return (
               <div className="flex flex-row items-center gap-5" key={index}>
                 <span className="font-brand w-10">
                   {index + 1}
                   {getOrdinalSuffix(index + 1)}
                 </span>
-                <span>{game.playerName}</span>
+                <span>{displayName}</span>
                 <p
                   className="flex-1 h-[2px] bg-repeat-x"
                   style={{
@@ -180,7 +194,8 @@ export function SubmitScoresDialog({
                 ></p>
                 <span className="font-brand">{game.score}</span>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
         <div className="flex justify-end gap-2 mt-6">
