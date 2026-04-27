@@ -71,7 +71,7 @@ app.get("/:address/tournaments", async (c) => {
         registration: {
           tournamentId: row.registration.tournamentId.toString(),
           gameTokenId: row.registration.gameTokenId.toString(),
-          gameAddress: row.registration.gameAddress,
+          gameAddress: row.tournament.gameAddress,
           entryNumber: row.registration.entryNumber,
           hasSubmitted: row.registration.hasSubmitted,
           isBanned: row.registration.isBanned,

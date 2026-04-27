@@ -71,7 +71,8 @@ app.get("/:address/stats", async (c) => {
       return c.json({ error: "Invalid game address" }, 400);
     }
 
-    // Compute stats on the fly from source tables
+    // Compute stats on the fly from source tables.
+    // Registrations no longer carry game_address — JOIN against tournaments.
     const [tournamentCount, registrationCount, prizeCount, playerCount] =
       await Promise.all([
         db
@@ -81,7 +82,11 @@ app.get("/:address/stats", async (c) => {
         db
           .select({ count: sql<number>`count(*)::int` })
           .from(registrations)
-          .where(eq(registrations.gameAddress, gameAddress)),
+          .innerJoin(
+            tournaments,
+            eq(registrations.tournamentId, tournaments.tournamentId),
+          )
+          .where(eq(tournaments.gameAddress, gameAddress)),
         db.execute(sql`
           SELECT count(*)::int AS count
           FROM prizes p
@@ -91,7 +96,11 @@ app.get("/:address/stats", async (c) => {
         db
           .select({ count: sql<number>`count(DISTINCT ${registrations.playerAddress})::int` })
           .from(registrations)
-          .where(eq(registrations.gameAddress, gameAddress)),
+          .innerJoin(
+            tournaments,
+            eq(registrations.tournamentId, tournaments.tournamentId),
+          )
+          .where(eq(tournaments.gameAddress, gameAddress)),
       ]);
 
     return c.json({
