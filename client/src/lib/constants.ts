@@ -27,6 +27,6 @@ export const ADMIN_ADDRESS =
 // Tournament IDs to exclude from display, keyed by chain.
 // Disabled in local dev so all tournaments are visible.
 export const EXCLUDED_TOURNAMENT_IDS: Record<string, number[]> = {
-  SN_MAIN: [],
+  SN_MAIN: [1, 2],
   SN_SEPOLIA: [],
 };
