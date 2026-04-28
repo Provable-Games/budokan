@@ -1194,6 +1194,146 @@ fn test_custom_distributed_prize_50_positions_partial_leaderboard_refunds_to_spo
     stop_cheat_block_timestamp(contracts.minigame.contract_address);
 }
 
+/// Test D: verify per-position exact amounts AND per-position recipient
+/// routing for a 50-position Custom prize. Complements Test A — that test
+/// uses a single owner across all 50 positions, so a hypothetical bug that
+/// scrambled per-position amounts or recipients (while preserving the total)
+/// would slip past it. This test gives every position its own player address
+/// and asserts each player's ERC20 balance increased by exactly the expected
+/// per-position share, closing the "single owner across all positions" gap.
+#[test]
+fn test_custom_distributed_prize_50_positions_per_position_amounts_and_recipients() {
+    let contracts = setup();
+    let owner = OWNER;
+    let sponsor: ContractAddress = 'SPONSOR'.try_into().unwrap();
+    let prize_amount: u128 = 10_000_000;
+
+    start_cheat_caller_address(contracts.budokan.contract_address, owner);
+    let tournament = create_basic_tournament(
+        contracts.budokan, contracts.minigame.contract_address,
+    );
+    stop_cheat_caller_address(contracts.budokan.contract_address);
+
+    contracts.erc20.mint(sponsor, prize_amount.into());
+    start_cheat_caller_address(contracts.erc20.contract_address, sponsor);
+    contracts.erc20.approve(contracts.budokan.contract_address, prize_amount.into());
+    stop_cheat_caller_address(contracts.erc20.contract_address);
+
+    let shares = fifty_position_shares();
+
+    start_cheat_caller_address(contracts.budokan.contract_address, sponsor);
+    let prize = contracts
+        .budokan
+        .add_prize(
+            tournament.id,
+            contracts.erc20.contract_address,
+            TokenTypeData::erc20(
+                ERC20Data {
+                    amount: prize_amount,
+                    distribution: Option::Some(Distribution::Custom(shares)),
+                    distribution_count: Option::Some(50),
+                },
+            ),
+            Option::None,
+        );
+    stop_cheat_caller_address(contracts.budokan.contract_address);
+
+    // Build 50 distinct player addresses (1001..=1050). These are well below
+    // any deployed contract address and well above zero, so no collision risk
+    // with the test's deployed contracts or the OWNER/SPONSOR sentinels.
+    let mut players: Array<ContractAddress> = ArrayTrait::new();
+    let mut i: u32 = 0;
+    loop {
+        if i >= 50 {
+            break;
+        }
+        let addr_felt: felt252 = (1001_u32 + i).into();
+        let addr: ContractAddress = addr_felt.try_into().unwrap();
+        players.append(addr);
+        i += 1;
+    }
+
+    // Enter all 50 players. The caller is OWNER (cheated) but the game token
+    // is minted to player_address — so each token is owned by a distinct
+    // wallet, which is what we need to verify per-position recipient routing.
+    let mut time: u64 = TEST_REGISTRATION_START_DELAY().into();
+    start_cheat_block_timestamp(contracts.budokan.contract_address, time);
+    start_cheat_block_timestamp(contracts.minigame.contract_address, time);
+
+    start_cheat_caller_address(contracts.budokan.contract_address, owner);
+    let mut tokens: Array<felt252> = ArrayTrait::new();
+    let mut j: u32 = 0;
+    loop {
+        if j >= 50 {
+            break;
+        }
+        let player_address = *players.at(j);
+        let salt: u16 = j.try_into().unwrap();
+        let player_name: felt252 = (j + 1).into();
+        let (token_id, _) = contracts
+            .budokan
+            .enter_tournament(
+                tournament.id, Option::Some(player_name), player_address, Option::None, salt, 0,
+            );
+        tokens.append(token_id);
+        j += 1;
+    }
+
+    // Submit scores in strictly decreasing order so player at index k lands at
+    // leaderboard position k+1 (highest score wins position 1).
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY()).into();
+    start_cheat_block_timestamp(contracts.budokan.contract_address, time);
+    start_cheat_block_timestamp(contracts.minigame.contract_address, time);
+
+    let mut k: u32 = 0;
+    loop {
+        if k >= 50 {
+            break;
+        }
+        let token_id = *tokens.at(k);
+        let score: u64 = 100_000 - (k.into() * 10_u64);
+        contracts.minigame.end_game(token_id.into(), score);
+        contracts.budokan.submit_score(tournament.id, token_id, k + 1);
+        k += 1;
+    }
+
+    time = (TEST_GAME_START_DELAY() + TEST_GAME_END_DELAY() + TEST_SUBMISSION_DURATION()).into();
+    start_cheat_block_timestamp(contracts.budokan.contract_address, time);
+    start_cheat_block_timestamp(contracts.minigame.contract_address, time);
+
+    // Per-position claim, balance-checked on the position's specific player
+    // address. With Custom shares summing to exactly 10000, dust = 0, so the
+    // expected amount for each position is `(prize_amount × shares[i]) / 10000`
+    // with no position-1 bonus.
+    let mut p: u32 = 0;
+    loop {
+        if p >= 50 {
+            break;
+        }
+        let position: u32 = p + 1;
+        let recipient = *players.at(p);
+        let expected_share: u16 = *shares.at(p);
+        let expected_amount: u256 = (prize_amount.into() * expected_share.into()) / 10000_u256;
+
+        let before = contracts.erc20.balance_of(recipient);
+        contracts
+            .budokan
+            .claim_reward(
+                tournament.id, RewardType::Prize(PrizeType::Distributed((prize.id, position))),
+            );
+        let after = contracts.erc20.balance_of(recipient);
+        let received = after - before;
+
+        assert!(received == expected_amount, "Position {} payout amount mismatch", position);
+
+        p += 1;
+    }
+
+    stop_cheat_caller_address(contracts.budokan.contract_address);
+    stop_cheat_block_timestamp(contracts.budokan.contract_address);
+    stop_cheat_block_timestamp(contracts.minigame.contract_address);
+}
+
 /// Test C: malformed Custom prize shares are rejected upfront in `add_prize`.
 /// Without this validation a sponsor could escrow a prize whose shares don't
 /// sum to 10000 (or whose length doesn't match `distribution_count`), and the
