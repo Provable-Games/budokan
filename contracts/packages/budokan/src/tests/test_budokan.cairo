@@ -74,7 +74,7 @@ pub struct TestContracts {
 // Setup
 //
 
-fn deploy_erc20_mock() -> ContractAddress {
+pub fn deploy_erc20_mock() -> ContractAddress {
     let contract_class = declare("erc20_mock").expect('declare erc20 failed').contract_class();
     let (contract_address, _) = contract_class.deploy(@array![]).expect('deploy erc20 failed');
     contract_address
