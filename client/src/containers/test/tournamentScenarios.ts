@@ -394,8 +394,31 @@ The final stretch. Floors 80-100 contain the most dangerous creatures in the gam
 *May the odds be ever in your favor.*`,
 
     prizesByPosition: [
-      [1, { usd: 4500, tokenSymbol: "ETH", tokenLogo: ethLogo }],
-      [2, { usd: 2000, tokenSymbol: "ETH", tokenLogo: ethLogo }],
+      [
+        1,
+        {
+          usd: 4500,
+          tokenSymbol: "ETH",
+          tokenLogo: ethLogo,
+          tokens: [
+            { symbol: "ETH", logoUrl: ethLogo },
+            { symbol: "STRK", logoUrl: strkLogo },
+            { symbol: "LORDS", logoUrl: lordsLogo },
+          ],
+        },
+      ],
+      [
+        2,
+        {
+          usd: 2000,
+          tokenSymbol: "ETH",
+          tokenLogo: ethLogo,
+          tokens: [
+            { symbol: "ETH", logoUrl: ethLogo },
+            { symbol: "STRK", logoUrl: strkLogo },
+          ],
+        },
+      ],
       [3, { usd: 1100, tokenSymbol: "STRK", tokenLogo: strkLogo }],
       [4, { usd: 600, tokenSymbol: "STRK", tokenLogo: strkLogo }],
       [5, { usd: 350, tokenSymbol: "LORDS", tokenLogo: lordsLogo }],

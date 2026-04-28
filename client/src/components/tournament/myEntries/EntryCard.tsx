@@ -119,28 +119,65 @@ const EntryCard = ({
         </span>
       )}
 
-      {prizeAtRank && (
-        <div className="flex flex-row items-center gap-1">
-          {prizeAtRank.tokenLogo && (
-            <img
-              src={prizeAtRank.tokenLogo}
-              alt=""
-              className="w-3 h-3 rounded-full"
-            />
-          )}
-          {prizeAtRank.usd != null ? (
-            <span className="font-brand font-bold text-[11px] text-brand">
-              {formatUSDCompact(prizeAtRank.usd)}
-            </span>
-          ) : (
-            <span className="font-brand text-[11px] text-brand-muted">
-              {prizeAtRank.tokenAmountDisplay ??
-                prizeAtRank.tokenSymbol ??
-                "?"}
-            </span>
-          )}
-        </div>
-      )}
+      {prizeAtRank && (() => {
+        const tokens =
+          prizeAtRank.tokens && prizeAtRank.tokens.length > 0
+            ? prizeAtRank.tokens
+            : prizeAtRank.tokenLogo || prizeAtRank.tokenSymbol
+              ? [
+                  {
+                    logoUrl: prizeAtRank.tokenLogo,
+                    symbol: prizeAtRank.tokenSymbol,
+                  },
+                ]
+              : [];
+        const shownTokens = tokens.slice(0, 1);
+        const extraTokens = Math.max(0, tokens.length - shownTokens.length);
+        return (
+          <div className="flex flex-row items-center gap-1">
+            {shownTokens.length > 0 && (
+              <div className="flex flex-row items-center flex-shrink-0">
+                {shownTokens.map((token, i) =>
+                  token.logoUrl ? (
+                    <img
+                      key={`${token.symbol ?? "tok"}-${i}`}
+                      src={token.logoUrl}
+                      alt=""
+                      className="w-3 h-3 rounded-full"
+                    />
+                  ) : (
+                    <div
+                      key={`${token.symbol ?? "tok"}-${i}`}
+                      className="w-3 h-3 rounded-full bg-brand-muted/20 flex items-center justify-center text-[6px] font-bold text-brand"
+                    >
+                      {(token.symbol ?? "?").slice(0, 2)}
+                    </div>
+                  ),
+                )}
+                {extraTokens > 0 && (
+                  <div
+                    className="h-3 px-1 rounded-full bg-neutral/20 flex items-center justify-center text-[7px] font-bold text-neutral"
+                    style={{ marginLeft: -2 }}
+                  >
+                    +{extraTokens}
+                  </div>
+                )}
+              </div>
+            )}
+            {prizeAtRank.usd != null ? (
+              <span className="font-brand font-bold text-[11px] text-brand">
+                {formatUSDCompact(prizeAtRank.usd)}
+              </span>
+            ) : (
+              <span className="font-brand text-[11px] text-brand-muted">
+                {prizeAtRank.tokenAmountDisplay ??
+                  prizeAtRank.tokenSymbol ??
+                  "?"}
+              </span>
+            )}
+          </div>
+        );
+      })()}
 
       <span
         className={cn(

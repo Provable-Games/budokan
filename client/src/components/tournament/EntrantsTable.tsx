@@ -27,12 +27,17 @@ import {
   indexAddress,
   padAddress,
 } from "@/lib/utils";
+import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 
 export interface PositionPrizeDisplay {
   usd: number | null;
   tokenSymbol?: string;
   tokenLogo?: string;
   tokenAmountDisplay?: string;
+  // All unique tokens awarded at this position (deduped by address). When
+  // length > 1, the prize cell renders overlapping icons + "+N" instead of a
+  // single logo, mirroring the prize-pool header treatment.
+  tokens?: Array<{ symbol?: string; logoUrl?: string }>;
 }
 
 interface EntrantsTableProps {
@@ -93,12 +98,40 @@ const EntrantsTable = ({
     requirementVariant === "extension"
       ? { address: reqType?.address, config: reqType?.config }
       : undefined;
+
+  // Ask the validator extension itself whether bans are enabled for this
+  // tournament. The IEntryRequirementExtension `bannable(context_owner,
+  // context_id)` view returns the creator's choice — Budokan is the
+  // context_owner, the tournament id is the context_id. Default false so
+  // tournaments that opted out of bans never flash the button while the call
+  // resolves.
+  const { checkBannable } = useSystemCalls();
+  const [extensionAllowsBans, setExtensionAllowsBans] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    setExtensionAllowsBans(false);
+    if (!extensionConfig?.address || tournamentId == null) return;
+    checkBannable(extensionConfig.address, tournamentId)
+      .then((allowed) => {
+        if (!cancelled) setExtensionAllowsBans(!!allowed);
+      })
+      .catch(() => {
+        // View reverted (e.g. validator predates the bannable() view) — leave
+        // the button hidden. The dialog's per-token should_ban check is the
+        // ultimate gate on whether anything is actually bannable.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [extensionConfig?.address, tournamentId, checkBannable]);
+
   const showBanButton =
     !isStarted &&
     !!entryReq &&
     requirementVariant === "extension" &&
     !!extensionConfig?.address &&
-    entryCount > 0;
+    entryCount > 0 &&
+    extensionAllowsBans;
 
   // Live leaderboard — server-paginated by score. The SDK handles efficient
   // updates: WS score/game_over events patch in place; mint events trigger a
@@ -564,14 +597,46 @@ const PrizeCell = ({
       </span>
     );
   }
+  const tokens =
+    prize.tokens && prize.tokens.length > 0
+      ? prize.tokens
+      : prize.tokenLogo || prize.tokenSymbol
+        ? [{ logoUrl: prize.tokenLogo, symbol: prize.tokenSymbol }]
+        : [];
+  const shownTokens = tokens.slice(0, 2);
+  const extraTokens = Math.max(0, tokens.length - shownTokens.length);
   return (
     <div className="flex flex-row items-center justify-end gap-1 min-w-[60px]">
-      {prize.tokenLogo && (
-        <img
-          src={prize.tokenLogo}
-          alt=""
-          className="w-3.5 h-3.5 rounded-full flex-shrink-0"
-        />
+      {shownTokens.length > 0 && (
+        <div className="flex flex-row items-center flex-shrink-0">
+          {shownTokens.map((token, i) =>
+            token.logoUrl ? (
+              <img
+                key={`${token.symbol ?? "tok"}-${i}`}
+                src={token.logoUrl}
+                alt=""
+                className="w-3.5 h-3.5 rounded-full bg-black/40"
+                style={{ marginLeft: i === 0 ? 0 : -4 }}
+              />
+            ) : (
+              <div
+                key={`${token.symbol ?? "tok"}-${i}`}
+                className="w-3.5 h-3.5 rounded-full bg-brand-muted/20 flex items-center justify-center text-[7px] font-bold text-brand"
+                style={{ marginLeft: i === 0 ? 0 : -4 }}
+              >
+                {(token.symbol ?? "?").slice(0, 2)}
+              </div>
+            ),
+          )}
+          {extraTokens > 0 && (
+            <div
+              className="h-3.5 px-1 rounded-full bg-neutral/20 flex items-center justify-center text-[8px] font-bold text-neutral"
+              style={{ marginLeft: -4 }}
+            >
+              +{extraTokens}
+            </div>
+          )}
+        </div>
       )}
       {prize.usd != null ? (
         <span
