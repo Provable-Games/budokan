@@ -675,6 +675,13 @@ const Tournament = () => {
   // ---- Entrants: prizes per position ----
   const prizesByPosition = useMemo(() => {
     const map = new Map<number, PositionPrizeDisplay>();
+    // Tracks unique tokens per position (keyed by normalized address) so the
+    // prize cell can render overlapping icons + "+N" when multiple distinct
+    // tokens are awarded at the same position.
+    const tokensByPosition = new Map<
+      number,
+      Map<string, { symbol?: string; logoUrl?: string }>
+    >();
     const allPrizes = [
       ...entryFeePrizes,
       ...(expandedSponsoredPrizes as DisplayPrize[]),
@@ -721,6 +728,15 @@ const Tournament = () => {
         tokenAmountDisplay = meta.symbol;
       }
 
+      const tokenMap = tokensByPosition.get(position) ?? new Map();
+      if (!tokenMap.has(normalized)) {
+        tokenMap.set(normalized, {
+          symbol: meta?.symbol,
+          logoUrl: meta?.logo_url,
+        });
+      }
+      tokensByPosition.set(position, tokenMap);
+
       const existing = map.get(position);
       if (!existing) {
         map.set(position, {
@@ -739,6 +755,14 @@ const Tournament = () => {
           tokenLogo: existing.tokenLogo ?? meta?.logo_url,
           tokenAmountDisplay: existing.tokenAmountDisplay,
         });
+      }
+    }
+
+    // Attach the deduped token list to each position entry.
+    for (const [pos, display] of map.entries()) {
+      const tm = tokensByPosition.get(pos);
+      if (tm && tm.size > 0) {
+        display.tokens = Array.from(tm.values());
       }
     }
     return map;
