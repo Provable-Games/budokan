@@ -172,16 +172,31 @@ pub mod BudokanRewards {
             let packed = self.tournament_config.entry(tournament_id).read();
             assert_tournament_not_ended(packed);
 
-            // Validate that position and distribution are mutually exclusive
-            if position.is_some() {
-                match @token_type {
-                    TokenTypeData::erc20(erc20_data) => {
-                        assert!(
-                            erc20_data.distribution.is_none(),
-                            "Budokan: Cannot set position for distributed prize (position and distribution are mutually exclusive)",
+            // Validate ERC20 prize config invariants:
+            // (1) position and distribution are mutually exclusive;
+            // (2) Custom distributions must satisfy the same shares-array
+            //     invariants as entry-fee Custom distribution (length matches
+            //     distribution_count, shares sum to 10000). Without (2), a
+            //     malformed Custom prize would escrow successfully and only
+            //     fail mid-claim with `0 tokens to claim`, leaving funds
+            //     stranded.
+            if let TokenTypeData::erc20(erc20_data) = @token_type {
+                if position.is_some() {
+                    assert!(
+                        erc20_data.distribution.is_none(),
+                        "Budokan: Cannot set position for distributed prize (position and distribution are mutually exclusive)",
+                    );
+                }
+                if let Option::Some(dist) = erc20_data.distribution {
+                    if let Distribution::Custom(shares) = dist {
+                        let count = match erc20_data.distribution_count {
+                            Option::Some(c) => *c,
+                            Option::None => 0,
+                        };
+                        budokan::libs::validations::assert_valid_custom_distribution_shares(
+                            *shares, count,
                         );
-                    },
-                    TokenTypeData::erc721(_) => {},
+                    }
                 }
             }
 
