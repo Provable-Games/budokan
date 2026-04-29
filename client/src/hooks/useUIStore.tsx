@@ -15,6 +15,24 @@ export interface GameData extends GameMetadata {
   disabled?: boolean;
 }
 
+export type EntryFeeFilter = "any" | "free" | "paid";
+export type EntryRequirementFilter = "any" | "open" | "restricted";
+export type RegistrationFilter = "any" | "open" | "fixed";
+
+export interface OverviewFilters {
+  entryFee: EntryFeeFilter;
+  hasPrizes: boolean;
+  entryRequirement: EntryRequirementFilter;
+  registration: RegistrationFilter;
+}
+
+const DEFAULT_FILTERS: OverviewFilters = {
+  entryFee: "any",
+  hasPrizes: false,
+  entryRequirement: "any",
+  registration: "any",
+};
+
 type State = {
   gameFilters: string[];
   setGameFilters: (value: string[]) => void;
@@ -26,6 +44,12 @@ type State = {
   getGameName: (gameAddress: string) => string;
   selectedTab: TabType;
   setSelectedTab: (value: TabType) => void;
+  filters: OverviewFilters;
+  setFilter: <K extends keyof OverviewFilters>(
+    key: K,
+    value: OverviewFilters[K],
+  ) => void;
+  resetFilters: () => void;
 };
 
 const useUIStore = create<State>((set, get) => ({
@@ -37,6 +61,11 @@ const useUIStore = create<State>((set, get) => ({
   setGameDataLoading: (value: boolean) => set({ gameDataLoading: value }),
   selectedTab: "upcoming",
   setSelectedTab: (value: TabType) => set({ selectedTab: value }),
+  filters: DEFAULT_FILTERS,
+  setFilter: (key, value) =>
+    set((state) => ({ filters: { ...state.filters, [key]: value } })),
+  resetFilters: () =>
+    set({ gameFilters: [], filters: { ...DEFAULT_FILTERS } }),
   getGameImage: (gameAddress: string) => {
     const { gameData } = get();
     const game = gameData.find((game) => game.contract_address === gameAddress);

@@ -1,6 +1,5 @@
 import { VERIFIED, EXTERNAL_LINK } from "@/components/Icons";
-import TokenGameIcon from "@/components/icons/TokenGameIcon";
-import { Button } from "@/components/ui/button";
+import GameIcon from "@/components/icons/GameIcon";
 import {
   Tooltip,
   TooltipTrigger,
@@ -8,6 +7,7 @@ import {
 } from "@/components/ui/tooltip";
 import { GameData } from "@/hooks/useUIStore";
 import { useChainConfig } from "@/context/chain";
+import { cn } from "@/lib/utils";
 
 interface GameButtonProps {
   game: GameData;
@@ -24,47 +24,50 @@ export const GameButton = ({
   const isDisabled = !game.existsInMetadata || game.disabled;
   const comingSoon = game.isWhitelisted && !game.existsInMetadata;
   const whitelisted = game.isWhitelisted && game.existsInMetadata;
+  const isActive = gameFilters.includes(game.contract_address);
+
+  const handleClick = () => {
+    if (isDisabled) return;
+    if (isActive) {
+      setGameFilters(
+        gameFilters.filter((f) => f !== game.contract_address),
+      );
+    } else {
+      setGameFilters([...gameFilters, game.contract_address]);
+    }
+  };
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <div className="relative w-full max-w-80">
-          <Button
-            size={"xl"}
-            variant="outline"
-            className={`text-lg px-2 xl:px-4 xl:text-xl 2xl:text-2xl font-brand w-full ${
-              gameFilters.includes(game.contract_address) ? "bg-brand/25" : ""
-            } ${comingSoon ? "opacity-50" : ""}`}
-            onClick={() => {
-              if (gameFilters.includes(game.contract_address)) {
-                // Remove the key if it exists
-                setGameFilters(
-                  gameFilters.filter(
-                    (filter) => filter !== game.contract_address
-                  )
-                );
-              } else {
-                // Add the key if it doesn't exist
-                setGameFilters([...gameFilters, game.contract_address]);
-              }
-            }}
-            disabled={isDisabled}
-          >
-            <TokenGameIcon image={game.image} />
-            <span className="truncate">{game.name}</span>
-          </Button>
+        <button
+          type="button"
+          disabled={isDisabled}
+          onClick={handleClick}
+          className={cn(
+            "group relative inline-flex items-center gap-2.5 h-10 w-full rounded-md border px-2.5 text-left transition-colors",
+            isActive
+              ? "bg-brand/15 border-brand/45 text-brand"
+              : "bg-brand/[0.04] border-brand/15 text-brand-muted hover:text-brand hover:bg-brand/10 hover:border-brand/30",
+            isDisabled && "opacity-50 cursor-not-allowed",
+            comingSoon && "opacity-60",
+          )}
+        >
+          <GameIcon image={game.image} size={5} />
+          <span className="font-medium text-sm truncate flex-1">
+            {game.name}
+          </span>
           {comingSoon && (
-            <div className="absolute top-1 right-2 flex items-center justify-center rounded-md">
-              <span className="text-sm font-brand uppercase">Coming Soon</span>
-            </div>
+            <span className="text-[10px] uppercase tracking-wider text-brand-muted/70 flex-shrink-0">
+              Soon
+            </span>
           )}
           {whitelisted && (
-            <div className="absolute top-1 right-2 flex items-center justify-center rounded-md">
-              <span className="w-6">
-                <VERIFIED />
-              </span>
-            </div>
+            <span className="w-4 h-4 text-brand/70 flex-shrink-0">
+              <VERIFIED />
+            </span>
           )}
-        </div>
+        </button>
       </TooltipTrigger>
       <TooltipContent side="bottom">
         <a

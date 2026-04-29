@@ -24,7 +24,7 @@ export const TournamentTab = ({
       <Button
         variant={selected ? "default" : "outline"}
         className={`
-          [border-image-width:4px_4px_0_4px] 
+          [border-image-width:4px_4px_0_4px]
           rounded-b-none
           px-2
           lg:px-4
