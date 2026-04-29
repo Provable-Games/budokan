@@ -28,7 +28,7 @@ const submissionEndTime = sql`(${tournaments.createdAt} + ${tournaments.schedule
 
 // ─── GET / ── List tournaments ──────────────────────────────────────────────
 // Query params: game_address, creator, phase, sort, include_prizes,
-//               exclude_ids, whitelisted_extensions, limit, offset
+//               exclude_ids, tournament_ids, whitelisted_extensions, limit, offset
 app.get("/", async (c) => {
   try {
     const gameAddress = isValidAddress(c.req.query("game_address"));
@@ -37,6 +37,10 @@ app.get("/", async (c) => {
     const sort = c.req.query("sort") || "created_at";
     const includePrizes = c.req.query("include_prizes") || null;
     const excludeIdsRaw = c.req.query("exclude_ids") || null;
+    // Use `undefined` as the "absent" sentinel rather than `|| null` so that
+    // an explicitly empty `tournament_ids=` is distinguishable from no filter
+    // — empty list means "no results", not "everything".
+    const tournamentIdsRaw = c.req.query("tournament_ids");
     const whitelistedExtensionsRaw = c.req.query("whitelisted_extensions") || null;
     const limit = parseLimit(c.req.query("limit"), 50, 100);
     const offset = parseOffset(c.req.query("offset"));
@@ -44,6 +48,37 @@ app.get("/", async (c) => {
     const conditions: SQL[] = [];
     if (gameAddress) conditions.push(eq(tournaments.gameAddress, gameAddress));
     if (creator) conditions.push(eq(tournaments.createdBy, creator));
+
+    // Restrict to a specific set of tournament IDs. Used by the "My
+    // Tournaments" UX to fetch the small set of tournaments the caller
+    // currently holds tokens for. parseTournamentId handles hex/decimal.
+    if (tournamentIdsRaw !== undefined) {
+      const raw = [
+        ...new Set(
+          tournamentIdsRaw.split(",").map((id) => id.trim()).filter(Boolean),
+        ),
+      ];
+      if (raw.length > 1000) {
+        return c.json({ error: "Too many tournament_ids (max 1000)" }, 400);
+      }
+      const ids: bigint[] = [];
+      for (const id of raw) {
+        const parsed = parseTournamentId(id);
+        if (parsed === null) {
+          return c.json({ error: `Invalid tournament_id: ${id}` }, 400);
+        }
+        ids.push(parsed);
+      }
+      // Empty set after dedup → caller asked for nothing; short-circuit so
+      // we don't accidentally return the full list.
+      if (ids.length === 0) {
+        return c.json({
+          data: [],
+          pagination: { total: 0, limit, offset },
+        });
+      }
+      conditions.push(inArray(tournaments.tournamentId, ids));
+    }
 
     // Exclude specific tournament IDs
     if (excludeIdsRaw) {
