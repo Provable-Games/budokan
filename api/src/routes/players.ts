@@ -37,22 +37,27 @@ app.get("/:address/tournaments", async (c) => {
     // Filter by specific game token IDs.
     // Storage is decimal-encoded (BigInt.toString()), but callers may pass
     // hex (denshokan-sdk returns tokenIds as 0x-prefixed strings). Normalize
-    // every input to its decimal form before comparing.
+    // every input to its decimal form before comparing. Mirrors the validation
+    // used by GET /tournaments/:id/registrations.
     if (gameTokenIdsRaw) {
-      const tokenIds = gameTokenIdsRaw
-        .split(",")
-        .map((id) => id.trim())
-        .filter((id) => id.length > 0)
-        .map((id) => {
-          try {
-            return BigInt(id).toString();
-          } catch {
-            return null;
-          }
-        })
-        .filter((id): id is string => id !== null);
-      if (tokenIds.length > 0) {
-        conditions.push(inArray(registrations.gameTokenId, tokenIds));
+      const raw = [
+        ...new Set(
+          gameTokenIdsRaw.split(",").map((id) => id.trim()).filter(Boolean),
+        ),
+      ];
+      if (raw.length > 1000) {
+        return c.json({ error: "Too many game_token_ids (max 1000)" }, 400);
+      }
+      const ids: string[] = [];
+      for (const id of raw) {
+        try {
+          ids.push(BigInt(id).toString());
+        } catch {
+          return c.json({ error: `Invalid game_token_id: ${id}` }, 400);
+        }
+      }
+      if (ids.length > 0) {
+        conditions.push(inArray(registrations.gameTokenId, ids));
       }
     }
 
