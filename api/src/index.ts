@@ -10,7 +10,6 @@ import { cleanupTimer } from "./middleware/rateLimit.js";
 import { createWSEvents, initWebSocket, shutdownWebSocket } from "./ws/subscriptions.js";
 
 import tournamentRoutes from "./routes/tournaments.js";
-import playerRoutes from "./routes/players.js";
 import gameRoutes from "./routes/games.js";
 import activityRoutes from "./routes/activity.js";
 
@@ -55,7 +54,6 @@ app.get("/health", async (c) => {
 // ─── API routes ──────────────────────────────────────────────────────────────
 
 app.route("/tournaments", tournamentRoutes);
-app.route("/players", playerRoutes);
 app.route("/games", gameRoutes);
 app.route("/activity", activityRoutes);
 

@@ -225,6 +225,12 @@ const EntrantsTable = ({
     // Pick the most-recent registrations not on the current leaderboard page,
     // capped at the count of unindexed rows. Restore entry-number order so
     // they slot in at the bottom in the order they were created.
+    //
+    // Owner is intentionally null for these rows: registration.player_address
+    // is the original registrant, not the current NFT holder, and using it
+    // here misattributes any token that was transferred during the indexer
+    // lag window. The row renders as "Pending…" until denshokan catches up
+    // and the entry moves to baseRows with a real owner. See issue #241.
     const presentTokenIds = new Set(
       baseRows.map((r) => toHexTokenId(r.tokenId)),
     );
@@ -240,14 +246,15 @@ const EntrantsTable = ({
       .map((reg) => ({
         tokenId: toHexTokenId(reg.gameTokenId),
         score: 0,
-        playerName: reg.playerName ?? "",
-        owner: reg.playerAddress ?? "0x0",
+        playerName: "",
+        owner: null,
         gameOver: false,
         rank: 0,
         mintedAt: new Date().toISOString(),
         entryNumber: Number(reg.entryNumber ?? 0),
         isBanned: !!reg.isBanned,
         hasSubmitted: !!reg.hasSubmitted,
+        pending: true,
       }));
 
     return [...baseRows, ...supplemental];
@@ -261,8 +268,13 @@ const EntrantsTable = ({
     totalPages,
   ]);
 
+  // Skip null owners (pending unindexed rows) so we don't fan out a username
+  // lookup for a placeholder address.
   const ownerAddresses = useMemo(
-    () => gameTokens.map((g: any) => g?.owner ?? "0x0"),
+    () =>
+      gameTokens
+        .map((g: any) => g?.owner)
+        .filter((o: unknown): o is string => typeof o === "string"),
     [gameTokens],
   );
   const { usernames } = useGetUsernames(ownerAddresses);
@@ -418,10 +430,14 @@ const EntrantsTable = ({
               );
             }
 
-            const displayName =
-              game.playerName ||
-              usernames?.get(indexAddress(game.owner ?? "0x0")) ||
-              displayAddress(game.owner ?? "");
+            const isPending = !!(game as any).pending;
+            const displayName = isPending
+              ? "Pending…"
+              : game.playerName ||
+                (game.owner
+                  ? (usernames?.get(indexAddress(game.owner)) ??
+                    displayAddress(game.owner))
+                  : "—");
             const isBanned = !!(game as any).isBanned;
             const hasSubmitted = !!(game as any).hasSubmitted;
             const isTopThree = pos0 < 3;
@@ -547,7 +563,7 @@ const EntrantsTable = ({
         onOpenChange={setIsMobileDialogOpen}
         selectedPlayer={selectedPlayer}
         usernames={usernames}
-        ownerAddress={ownerAddresses?.[selectedPlayer?.index ?? 0]}
+        ownerAddress={selectedPlayer?.game?.owner ?? undefined}
         isStarted={isStarted}
         isEnded={isEnded}
         gameAddress={gameAddress}

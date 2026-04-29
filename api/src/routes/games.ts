@@ -73,35 +73,32 @@ app.get("/:address/stats", async (c) => {
 
     // Compute stats on the fly from source tables.
     // Registrations no longer carry game_address — JOIN against tournaments.
-    const [tournamentCount, registrationCount, prizeCount, playerCount] =
-      await Promise.all([
-        db
-          .select({ count: sql<number>`count(*)::int` })
-          .from(tournaments)
-          .where(eq(tournaments.gameAddress, gameAddress)),
-        db
-          .select({ count: sql<number>`count(*)::int` })
-          .from(registrations)
-          .innerJoin(
-            tournaments,
-            eq(registrations.tournamentId, tournaments.tournamentId),
-          )
-          .where(eq(tournaments.gameAddress, gameAddress)),
-        db.execute(sql`
-          SELECT count(*)::int AS count
-          FROM prizes p
-          INNER JOIN tournaments t ON t.tournament_id = p.tournament_id
-          WHERE t.game_address = ${gameAddress}
-        `),
-        db
-          .select({ count: sql<number>`count(DISTINCT ${registrations.playerAddress})::int` })
-          .from(registrations)
-          .innerJoin(
-            tournaments,
-            eq(registrations.tournamentId, tournaments.tournamentId),
-          )
-          .where(eq(tournaments.gameAddress, gameAddress)),
-      ]);
+    //
+    // No uniquePlayers count: it would require counting distinct current
+    // owners across denshokan, which the API doesn't have access to.
+    // registrations.player_address (the original registrant) is the wrong
+    // signal once tokens transfer — see issue #241. The SDK's PlatformStats
+    // type doesn't expose this field anyway.
+    const [tournamentCount, registrationCount, prizeCount] = await Promise.all([
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(tournaments)
+        .where(eq(tournaments.gameAddress, gameAddress)),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(registrations)
+        .innerJoin(
+          tournaments,
+          eq(registrations.tournamentId, tournaments.tournamentId),
+        )
+        .where(eq(tournaments.gameAddress, gameAddress)),
+      db.execute(sql`
+        SELECT count(*)::int AS count
+        FROM prizes p
+        INNER JOIN tournaments t ON t.tournament_id = p.tournament_id
+        WHERE t.game_address = ${gameAddress}
+      `),
+    ]);
 
     return c.json({
       data: {
@@ -109,7 +106,6 @@ app.get("/:address/stats", async (c) => {
         totalTournaments: tournamentCount[0]?.count ?? 0,
         totalRegistrations: registrationCount[0]?.count ?? 0,
         totalPrizes: (prizeCount.rows as Array<{ count: number }>)[0]?.count ?? 0,
-        uniquePlayers: playerCount[0]?.count ?? 0,
       },
     });
   } catch (err) {

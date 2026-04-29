@@ -305,7 +305,6 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
             registrationRows.push({
               tournamentId: decoded.tournamentId,
               gameTokenId: decoded.gameTokenId.toString(),
-              playerAddress: decoded.playerAddress,
               entryNumber: decoded.entryNumber,
               hasSubmitted: false,
               isBanned: false,
@@ -341,12 +340,11 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
             );
 
             // Push as a registration row. The upsert SET clause only touches
-            // hasSubmitted/isBanned (entryNumber + playerAddress are populated
-            // once on the initial INSERT from TournamentRegistration).
+            // hasSubmitted/isBanned (entryNumber is populated once on the
+            // initial INSERT from TournamentRegistration).
             registrationRows.push({
               tournamentId: decoded.tournamentId,
               gameTokenId: decoded.gameTokenId.toString(),
-              playerAddress: null,
               entryNumber: null,
               hasSubmitted: decoded.hasSubmitted,
               isBanned: decoded.isBanned,
@@ -502,10 +500,10 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
 
       if (registrationRows.length > 0) {
         // Upsert registrations. The SET clause only touches the flag bits —
-        // playerAddress and entryNumber are populated once on the initial
-        // INSERT (from TournamentRegistration). Subsequent flag-change events
-        // (TournamentEntryStateChanged) carry no playerAddress / entryNumber
-        // and must not overwrite the originals.
+        // entryNumber is populated once on the initial INSERT (from
+        // TournamentRegistration). Subsequent flag-change events
+        // (TournamentEntryStateChanged) carry no entryNumber and must not
+        // overwrite the original.
         for (const row of registrationRows) {
           await db
             .insert(registrations)

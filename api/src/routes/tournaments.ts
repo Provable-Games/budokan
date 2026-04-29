@@ -261,7 +261,13 @@ app.get("/:id", async (c) => {
 });
 
 // ─── GET /:id/registrations ── Registrations for tournament ────────────────
-// Query params: player_address, game_token_ids, has_submitted, is_banned, limit, offset
+// Query params: game_token_ids, has_submitted, is_banned, limit, offset
+//
+// Note: there is no player_address filter. registrations.player_address is
+// the original registrant — once a token transfers, that address is the wrong
+// signal for "tournaments this user is in." Callers wanting "my registrations"
+// should derive the gameTokenId set from current NFT ownership (denshokan)
+// and pass it via game_token_ids. See issue #241.
 app.get("/:id/registrations", async (c) => {
   try {
     const tournamentId = parseTournamentId(c.req.param("id"));
@@ -269,7 +275,6 @@ app.get("/:id/registrations", async (c) => {
       return c.json({ error: "Invalid tournament ID" }, 400);
     }
 
-    const playerAddress = isValidAddress(c.req.query("player_address"));
     const gameTokenIdsRaw = c.req.query("game_token_ids");
     const hasSubmitted = c.req.query("has_submitted");
     const isBanned = c.req.query("is_banned");
@@ -277,7 +282,6 @@ app.get("/:id/registrations", async (c) => {
     const offset = parseOffset(c.req.query("offset"));
 
     const conditions: SQL[] = [eq(registrations.tournamentId, tournamentId)];
-    if (playerAddress) conditions.push(eq(registrations.playerAddress, playerAddress));
     if (gameTokenIdsRaw) {
       const raw = [...new Set(gameTokenIdsRaw.split(",").map((id) => id.trim()).filter(Boolean))];
       if (raw.length > 1000) {
@@ -790,7 +794,6 @@ function serializeRegistration(r: typeof registrations.$inferSelect) {
   return {
     tournamentId: r.tournamentId.toString(),
     gameTokenId: r.gameTokenId.toString(),
-    playerAddress: r.playerAddress,
     entryNumber: r.entryNumber,
     hasSubmitted: r.hasSubmitted,
     isBanned: r.isBanned,

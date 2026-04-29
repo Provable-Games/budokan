@@ -1,5 +1,5 @@
 import { REFRESH, TROPHY } from "@/components/Icons";
-import { useRegistrations } from "@provable-games/budokan-sdk/react";
+import { useRegistrationsByOwner } from "@provable-games/budokan-sdk/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAccount } from "@starknet-react/core";
 import { BigNumberish } from "starknet";
@@ -77,13 +77,16 @@ const MyEntries = ({
 
   const gameTokens = ownedEntries;
 
+  // Source of truth for "which entries does this user have" is current NFT
+  // ownership from denshokan (`useLiveLeaderboard` above with owner=address).
+  // Registration metadata (ban / submission / entry-number) for the tokens we
+  // currently own comes from `useRegistrationsByOwner`, which resolves the
+  // gameTokenId set internally — staying correct under transfers regardless
+  // of who originally registered. See issue #241.
   const { registrations: myEntriesResult, refetch: refetchRegistrations } =
-    useRegistrations(tournamentId?.toString(), {
-      playerAddress: address,
-      limit: 1000,
-    });
-  const myEntries = myEntriesResult?.data ?? null;
-  const myEntriesCount = myEntries?.length ?? 0;
+    useRegistrationsByOwner(tournamentId?.toString(), address, { limit: 1000 });
+  const myEntriesRegs = myEntriesResult?.data ?? null;
+  const myEntriesCount = gameTokens.length;
 
   // Normalize a raw token id (decimal or hex string, BigNumberish) to a
   // canonical lowercase 0x-prefixed hex string. Avoids Number() — token ids
@@ -160,31 +163,26 @@ const MyEntries = ({
   }, [isStarted]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const visibleEntries = useMemo(() => {
-    // Source of truth: registrations (budokan) — these land instantly when
-    // the entry transaction confirms. Enrich with leaderboard (denshokan)
-    // data when available; new entries that haven't been indexed by
-    // denshokan yet still render with score=0.
-    if (!myEntries || myEntries.length === 0) return [];
+    // Source of truth: tokens this wallet currently owns (denshokan). For
+    // each owned token, look up its registration row by gameTokenId to get
+    // ban/submission/entry-number metadata. A freshly-registered token
+    // appears as soon as denshokan indexes the mint (typically within a few
+    // seconds); previously this used registrations.player_address as source
+    // of truth, which mis-attributed transferred tokens.
+    if (!gameTokens || gameTokens.length === 0) return [];
 
-    const tokensByHexId = new Map<string, (typeof gameTokens)[number]>();
-    for (const t of gameTokens) tokensByHexId.set(toHexTokenId(t.tokenId), t);
+    const regsByHexId = new Map<string, any>();
+    for (const r of (myEntriesRegs as any[]) ?? []) {
+      regsByHexId.set(toHexTokenId(r.gameTokenId ?? r.game_token_id), r);
+    }
 
-    const enriched = (myEntries as any[]).map((reg) => {
-      const hexId = toHexTokenId(reg.gameTokenId ?? reg.game_token_id);
-      const game = tokensByHexId.get(hexId) ?? {
-        tokenId: hexId,
-        score: 0,
-        playerName: null,
-        owner: reg.playerAddress ?? "0x0",
-        gameOver: false,
-        rank: 0,
-        mintedAt: new Date().toISOString(),
-      };
+    const enriched = gameTokens.map((game) => {
+      const reg = regsByHexId.get(toHexTokenId(game.tokenId));
       return {
         game,
         registration: reg,
-        isBanned: !!reg.isBanned,
-        entryNumber: Number(reg.entryNumber ?? 0),
+        isBanned: !!reg?.isBanned,
+        entryNumber: Number(reg?.entryNumber ?? 0),
       };
     });
 
@@ -205,7 +203,7 @@ const MyEntries = ({
     });
 
     return sorted;
-  }, [gameTokens, myEntries, filterBy, sortBy]);
+  }, [gameTokens, myEntriesRegs, filterBy, sortBy]);
 
   const SORT_LABELS: Record<SortBy, string> = {
     score: "Score",
