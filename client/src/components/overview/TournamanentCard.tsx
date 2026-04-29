@@ -1,9 +1,7 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
-import { formatNumber, indexAddress } from "@/lib/utils";
-import TokenGameIcon from "@/components/icons/TokenGameIcon";
+import { cn, formatNumber, indexAddress } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
-import Countdown from "@/components/Countdown";
 import type { Tournament, Prize } from "@provable-games/budokan-sdk";
 import { TokenMetadata } from "@/lib/types";
 import { useChainConfig } from "@/context/chain";
@@ -14,12 +12,75 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import useUIStore from "@/hooks/useUIStore";
-import { Badge } from "@/components/ui/badge";
 import { ChainId } from "@/chain/setup/networks";
 import { TokenPrices } from "@/hooks/useEkuboPrices";
 import { getTokenLogoUrl } from "@/lib/tokensMeta";
 import { useTournamentPrizeValue } from "@/hooks/useTournamentPrizeValue";
-import { Lock } from "lucide-react";
+import { QUESTION } from "@/components/Icons";
+import { Lock, Ticket, Users, Clock, CalendarDays } from "lucide-react";
+
+// Compact countdown — shows the two largest non-zero units, e.g. "6d 3h",
+// "3h 12m", "12m 45s". Falls back to "0s" when the target is reached.
+const CompactCountdown = ({ target }: { target: number }) => {
+  const [remaining, setRemaining] = useState(() =>
+    Math.max(0, target - Math.floor(Date.now() / 1000)),
+  );
+
+  useEffect(() => {
+    const tick = () =>
+      setRemaining(Math.max(0, target - Math.floor(Date.now() / 1000)));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [target]);
+
+  const days = Math.floor(remaining / 86400);
+  const hours = Math.floor((remaining % 86400) / 3600);
+  const minutes = Math.floor((remaining % 3600) / 60);
+  const seconds = remaining % 60;
+
+  let text: string;
+  if (days > 0) text = `${days}d ${hours}h`;
+  else if (hours > 0) text = `${hours}h ${minutes}m`;
+  else if (minutes > 0) text = `${minutes}m ${seconds}s`;
+  else text = `${seconds}s`;
+
+  return <>{text}</>;
+};
+
+type StatusKey =
+  | "upcoming"
+  | "registration"
+  | "live"
+  | "submission"
+  | "ended";
+
+const STATUS_STYLES: Record<
+  StatusKey,
+  { label: string; className: string; pulse?: boolean }
+> = {
+  upcoming: {
+    label: "Upcoming",
+    className: "bg-neutral/10 text-neutral border-neutral/30",
+  },
+  registration: {
+    label: "Registration",
+    className: "bg-brand/10 text-brand border-brand/30",
+  },
+  live: {
+    label: "Live",
+    className: "bg-success/15 text-success border-success/40",
+    pulse: true,
+  },
+  submission: {
+    label: "Submission",
+    className: "bg-warning/10 text-warning border-warning/30",
+  },
+  ended: {
+    label: "Ended",
+    className: "bg-brand-muted/15 text-brand-muted border-brand-muted/30",
+  },
+};
 
 interface TokenTotal {
   tokenAddress: string;
@@ -138,44 +199,29 @@ export const TournamentCard = ({
   const currentDate = new Date();
   const currentTimestamp = Math.floor(currentDate.getTime() / 1000);
 
-  const getTournamentStatus = () => {
-    // Registration phase
+  const statusKey: StatusKey = (() => {
     if (registrationStart && registrationEnd) {
-      if (currentTimestamp < registrationStart) {
-        return { text: "Upcoming", variant: "outline" as const };
-      }
+      if (currentTimestamp < registrationStart) return "upcoming";
       if (
         currentTimestamp >= registrationStart &&
         currentTimestamp < registrationEnd
       ) {
-        return { text: "Registration", variant: "success" as const };
+        return "registration";
       }
     }
-
-    // Game hasn't started yet
-    if (currentTimestamp < gameStart) {
-      return { text: "Upcoming", variant: "outline" as const };
-    }
-
-    // Game is live
-    if (currentTimestamp >= gameStart && currentTimestamp < gameEnd) {
-      return { text: "Live", variant: "success" as const };
-    }
-
-    // Submission phase
+    if (currentTimestamp < gameStart) return "upcoming";
+    if (currentTimestamp >= gameStart && currentTimestamp < gameEnd) return "live";
     if (
       submissionEnd &&
       currentTimestamp >= gameEnd &&
       currentTimestamp < submissionEnd
     ) {
-      return { text: "Submission", variant: "warning" as const };
+      return "submission";
     }
+    return "ended";
+  })();
 
-    // Tournament ended
-    return { text: "Ended", variant: "destructive" as const };
-  };
-
-  const tournamentStatus = getTournamentStatus();
+  const statusStyle = STATUS_STYLES[statusKey];
 
   const gameAddress = tournament.gameAddress;
   const gameName = gameData.find(
@@ -252,12 +298,20 @@ export const TournamentCard = ({
         {/* Zone A — Header Bar */}
         <div className="flex flex-row justify-between items-center gap-2">
           <div className="flex flex-row items-center gap-1.5 min-w-0 flex-1">
-            <Badge
-              variant={tournamentStatus.variant}
-              className="text-[10px] sm:text-xs px-1.5 py-0 sm:py-0.5 rounded-md h-5 flex-shrink-0"
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider flex-shrink-0",
+                statusStyle.className,
+              )}
             >
-              {tournamentStatus.text}
-            </Badge>
+              {statusStyle.pulse && (
+                <span className="relative flex w-1.5 h-1.5">
+                  <span className="absolute inline-flex w-full h-full rounded-full bg-success opacity-60 animate-ping" />
+                  <span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-success" />
+                </span>
+              )}
+              {statusStyle.label}
+            </span>
             {isRestricted && (
               <Lock className="w-3 h-3 text-brand-muted flex-shrink-0" />
             )}
@@ -265,18 +319,29 @@ export const TournamentCard = ({
               {tournament.name ?? (tournament.metadata as any)?.name}
             </p>
           </div>
-          <div className="flex-shrink-0">
-            <Tooltip delayDuration={50}>
-              <TooltipTrigger asChild>
-                <div className="flex items-center justify-center">
-                  <TokenGameIcon image={gameImage} size={"xs"} />
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="top" align="center" sideOffset={-10}>
-                {gameName ? gameName : "Unknown"}
-              </TooltipContent>
-            </Tooltip>
-          </div>
+          <Tooltip delayDuration={50}>
+            <TooltipTrigger asChild>
+              <div className="flex-shrink-0 flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-md overflow-hidden bg-black/40 border border-brand/20 text-brand/40">
+                {gameImage ? (
+                  <img
+                    src={gameImage}
+                    alt={gameName ?? "Game logo"}
+                    width={32}
+                    height={32}
+                    loading="lazy"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span className="w-2/3 h-2/3">
+                    <QUESTION />
+                  </span>
+                )}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="top" align="center" sideOffset={-10}>
+              {gameName ? gameName : "Unknown"}
+            </TooltipContent>
+          </Tooltip>
         </div>
 
         {/* Divider */}
@@ -286,16 +351,16 @@ export const TournamentCard = ({
         <div className="flex flex-col items-center justify-center flex-1 min-h-0 overflow-hidden">
           {totalPrizesValueUSD > 0 ? (
             <>
-              <div className="flex flex-row items-center gap-1">
+              <div className="flex flex-row items-center gap-2">
                 {uniquePrizeTokens.length > 0 && (
                   <div className="flex flex-row items-center">
                     {uniquePrizeTokens.slice(0, 3).map((token, idx) => (
                       <Tooltip key={idx} delayDuration={50}>
                         <TooltipTrigger asChild>
                           <div
-                            className="relative rounded-full border border-background"
+                            className="relative rounded-full"
                             style={{
-                              marginLeft: idx > 0 ? "-4px" : 0,
+                              marginLeft: idx > 0 ? "-8px" : 0,
                               zIndex: 3 - idx,
                             }}
                           >
@@ -303,10 +368,10 @@ export const TournamentCard = ({
                               <img
                                 src={token.logo}
                                 alt={token.symbol}
-                                className="w-4 h-4 sm:w-6 sm:h-6 rounded-full"
+                                className="w-6 h-6 sm:w-7 sm:h-7 rounded-full border-2 border-black bg-black/40"
                               />
                             ) : (
-                              <div className="w-4 h-4 sm:w-6 sm:h-6 rounded-full bg-brand/20 flex items-center justify-center text-[7px] sm:text-[10px]">
+                              <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full border-2 border-black bg-brand-muted/20 flex items-center justify-center text-[10px] font-bold text-brand">
                                 {token.symbol.slice(0, 2)}
                               </div>
                             )}
@@ -319,8 +384,8 @@ export const TournamentCard = ({
                     ))}
                     {uniquePrizeTokens.length > 3 && (
                       <div
-                        className="w-4 h-4 sm:w-6 sm:h-6 rounded-full bg-brand/20 flex items-center justify-center text-[7px] sm:text-[10px] border border-background"
-                        style={{ marginLeft: "-4px", zIndex: 0 }}
+                        className="w-6 h-6 sm:w-7 sm:h-7 rounded-full border-2 border-black bg-neutral/20 flex items-center justify-center text-[10px] font-bold text-neutral"
+                        style={{ marginLeft: "-8px", zIndex: 0 }}
                       >
                         +{uniquePrizeTokens.length - 3}
                       </div>
@@ -328,21 +393,21 @@ export const TournamentCard = ({
                   </div>
                 )}
                 {totalPrizesValueUSD > 0 && (
-                  <span className="font-brand text-lg sm:text-2xl text-brand">
+                  <span className="font-brand font-extrabold text-lg sm:text-2xl text-brand leading-none">
                     ${formatNumber(totalPrizesValueUSD)}
                   </span>
                 )}
               </div>
-              <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-brand-muted">
+              <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-brand-muted leading-none mt-1">
                 Prize Pool
               </span>
             </>
           ) : (
             <>
-              <span className="font-brand text-lg sm:text-2xl text-brand-muted">
+              <span className="font-brand text-lg sm:text-2xl text-brand-muted leading-none">
                 -
               </span>
-              <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-brand-muted">
+              <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-brand-muted leading-none mt-1">
                 Prize Pool
               </span>
             </>
@@ -352,111 +417,137 @@ export const TournamentCard = ({
         {/* Divider */}
         <div className="w-full h-px bg-brand/15 my-0.5 sm:my-1" />
 
-        {/* Zone C — Footer Bar */}
-        <div className="flex flex-row justify-between items-center">
+        {/* Zone C — Footer (no chip frame, just icon + value + micro-label) */}
+        <div className="grid grid-cols-3 gap-1">
           {/* Entry Fee */}
-          <div className="flex flex-col items-center">
-            <span className="text-xs sm:text-sm font-medium">
-              {hasEntryFee ? (
-                entryFeeInfo.type === "usd" ? (
-                  `$${entryFeeInfo.usdAmount}`
-                ) : entryFeeInfo.type === "token" ? (
-                  <span className="flex items-center gap-0.5">
-                    {(() => {
-                      const entryFeeTokenLogo = getTokenLogoUrl(
-                        selectedChainConfig.chainId ?? ChainId.SN_MAIN,
-                        entryFeeToken ?? "",
-                      );
-                      return entryFeeTokenLogo ? (
-                        <Tooltip delayDuration={50}>
-                          <TooltipTrigger asChild>
-                            <img
-                              src={entryFeeTokenLogo}
-                              alt={entryFeeTokenSymbol ?? ""}
-                              className="w-3.5 h-3.5 rounded-full"
-                            />
-                          </TooltipTrigger>
-                          <TooltipContent side="top" align="center">
-                            <p>{entryFeeTokenSymbol}</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      ) : null;
-                    })()}
-                    {entryFeeInfo.tokenAmount}
-                  </span>
-                ) : (
-                  "FREE"
-                )
+          <div className="flex flex-col items-center justify-center">
+            <div className="flex flex-row items-center gap-1 min-w-0">
+              {hasEntryFee && entryFeeInfo.type === "token" ? (
+                (() => {
+                  const entryFeeTokenLogo = getTokenLogoUrl(
+                    selectedChainConfig.chainId ?? ChainId.SN_MAIN,
+                    entryFeeToken ?? "",
+                  );
+                  return entryFeeTokenLogo ? (
+                    <Tooltip delayDuration={50}>
+                      <TooltipTrigger asChild>
+                        <img
+                          src={entryFeeTokenLogo}
+                          alt={entryFeeTokenSymbol ?? ""}
+                          className="w-3.5 h-3.5 rounded-full flex-shrink-0"
+                        />
+                      </TooltipTrigger>
+                      <TooltipContent side="top" align="center">
+                        <p>{entryFeeTokenSymbol}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : (
+                    <Ticket className="w-3.5 h-3.5 text-brand opacity-70 flex-shrink-0" />
+                  );
+                })()
               ) : (
-                <span className="text-success">FREE</span>
+                <Ticket
+                  className={cn(
+                    "w-3.5 h-3.5 flex-shrink-0",
+                    hasEntryFee ? "text-brand opacity-70" : "text-brand-muted opacity-70",
+                  )}
+                />
               )}
-            </span>
-            <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-brand-muted">
+              <span
+                className={cn(
+                  "font-brand font-bold text-xs sm:text-sm truncate",
+                  hasEntryFee ? "text-brand" : "text-brand-muted",
+                )}
+              >
+                {hasEntryFee
+                  ? entryFeeInfo.type === "usd"
+                    ? `$${entryFeeInfo.usdAmount}`
+                    : entryFeeInfo.type === "token"
+                      ? entryFeeInfo.tokenAmount
+                      : "Free"
+                  : "Free"}
+              </span>
+            </div>
+            <span className="text-[9px] uppercase tracking-wider text-brand-muted leading-none mt-0.5">
               Entry
             </span>
           </div>
 
-          {/* Entries Count */}
-          <div className="flex flex-col items-center">
-            <span className="text-xs sm:text-sm font-medium">{entryCount}</span>
-            <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-brand-muted">
-              Entries
+          {/* Players */}
+          <div className="flex flex-col items-center justify-center">
+            <div className="flex flex-row items-center gap-1">
+              <Users className="w-3.5 h-3.5 text-brand opacity-70 flex-shrink-0" />
+              <span className="font-brand font-bold text-xs sm:text-sm text-brand leading-none">
+                {entryCount}
+              </span>
+            </div>
+            <span className="text-[9px] uppercase tracking-wider text-brand-muted leading-none mt-0.5">
+              Players
             </span>
           </div>
 
           {/* Timing */}
-          <div className="flex flex-col items-center">
+          <div className="flex flex-col items-center justify-center">
             {countdownInfo ? (
               <>
-                <div className="sm:hidden">
-                  <Countdown
-                    targetTimestamp={countdownInfo.targetTimestamp}
-                    label={countdownInfo.label}
-                    labelPosition="horizontal"
-                    size="xs"
-                  />
+                <div className="flex flex-row items-center gap-1 min-w-0">
+                  <Clock className="w-3.5 h-3.5 text-brand opacity-70 flex-shrink-0" />
+                  <span className="font-brand font-bold text-xs sm:text-sm text-brand leading-none truncate">
+                    <CompactCountdown
+                      target={countdownInfo.targetTimestamp}
+                    />
+                  </span>
                 </div>
-                <div className="hidden sm:block">
-                  <Countdown
-                    targetTimestamp={countdownInfo.targetTimestamp}
-                    label={countdownInfo.label}
-                    labelPosition="horizontal"
-                    size="sm"
-                  />
-                </div>
-              </>
-            ) : status === "ended" ? (
-              <>
-                <Tooltip delayDuration={50}>
-                  <TooltipTrigger asChild>
-                    <span className="text-xs sm:text-sm font-medium">
-                      {startDate.toLocaleDateString(undefined, {
-                        month: "numeric",
-                        day: "numeric",
-                      })}
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" align="center">
-                    <p>
-                      Started:{" "}
-                      {startDate.toLocaleDateString(undefined, {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })}{" "}
-                      {startDate.toLocaleTimeString(undefined, {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-                <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-brand-muted">
-                  Ended
+                <span className="text-[9px] uppercase tracking-wider text-brand-muted leading-none mt-0.5">
+                  {countdownInfo.label === "Submit"
+                    ? "Submit"
+                    : countdownInfo.label === "Ends"
+                      ? "Ends In"
+                      : "Starts In"}
                 </span>
               </>
+            ) : status === "ended" ? (
+              <Tooltip delayDuration={50}>
+                <TooltipTrigger asChild>
+                  <div className="flex flex-col items-center">
+                    <div className="flex flex-row items-center gap-1">
+                      <CalendarDays className="w-3.5 h-3.5 text-brand-muted opacity-70 flex-shrink-0" />
+                      <span className="font-brand font-bold text-xs sm:text-sm text-brand-muted leading-none">
+                        {startDate.toLocaleDateString(undefined, {
+                          month: "numeric",
+                          day: "numeric",
+                        })}
+                      </span>
+                    </div>
+                    <span className="text-[9px] uppercase tracking-wider text-brand-muted leading-none mt-0.5">
+                      Ended
+                    </span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="center">
+                  <p>
+                    Started:{" "}
+                    {startDate.toLocaleDateString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })}{" "}
+                    {startDate.toLocaleTimeString(undefined, {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </p>
+                </TooltipContent>
+              </Tooltip>
             ) : (
-              <span className="text-xs sm:text-sm text-brand-muted">-</span>
+              <>
+                <span className="font-brand font-bold text-xs sm:text-sm text-brand-muted leading-none">
+                  —
+                </span>
+                <span className="text-[9px] uppercase tracking-wider text-brand-muted leading-none mt-0.5">
+                  Schedule
+                </span>
+              </>
             )}
           </div>
         </div>

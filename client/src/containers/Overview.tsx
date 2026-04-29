@@ -16,7 +16,6 @@ import {
   PopoverTrigger,
   PopoverContent,
 } from "@/components/ui/popover";
-import GameIcon from "@/components/icons/GameIcon";
 import TournamentTabs from "@/components/overview/TournamentTabs";
 import DashboardBanner from "@/components/overview/DashboardBanner";
 import FilterPanel from "@/components/overview/FilterPanel";
@@ -38,6 +37,8 @@ import { EXCLUDED_TOURNAMENT_IDS } from "@/lib/constants";
 import { LoadingSpinner } from "@/components/ui/spinner";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
 import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
+import { useFilterPills } from "@/hooks/useFilterPills";
+import { matchesTournamentFilters } from "@/lib/utils/tournamentFilters";
 
 const TAB_TO_PHASE = {
   upcoming: "scheduled",
@@ -74,11 +75,7 @@ const Overview = () => {
     selectedTab,
     setSelectedTab,
     gameFilters,
-    setGameFilters,
-    gameData,
-    getGameImage,
     filters,
-    setFilter,
   } = useUIStore();
 
   const totalActiveFilters =
@@ -193,47 +190,12 @@ const Overview = () => {
     return rawCurrentTournaments.filter((item: any) => {
       const t = item.tournament;
       if (!t) return false;
-
-      // Entry Fee
-      if (filters.entryFee !== "any") {
-        const hasFee =
-          !!(t.entryFeeToken && t.entryFeeAmount && BigInt(t.entryFeeAmount) > 0n) ||
-          !!(t.entryFee?.tokenAddress && t.entryFee?.amount && BigInt(t.entryFee.amount) > 0n);
-        if (filters.entryFee === "free" && hasFee) return false;
-        if (filters.entryFee === "paid" && !hasFee) return false;
-      }
-
-      // Has Prizes
-      if (filters.hasPrizes) {
-        const aggHasPrizes =
-          !!item.aggregations?.token_totals?.some(
-            (tt: any) => Number(tt.totalAmount ?? 0) > 0 || tt.tokenType !== "erc20",
-          );
-        const distCount = Number(t.entryFee?.distributionCount ?? 0);
-        const entryFeePool =
-          !!(t.entryFee?.amount && BigInt(t.entryFee.amount) > 0n) &&
-          (item.entryCount ?? 0) > 0 &&
-          distCount > 0;
-        if (!aggHasPrizes && !entryFeePool) return false;
-      }
-
-      // Entry Requirement
-      if (filters.entryRequirement !== "any") {
-        const restricted = !!t.entryRequirement || !!t.hasEntryRequirement;
-        if (filters.entryRequirement === "open" && restricted) return false;
-        if (filters.entryRequirement === "restricted" && !restricted) return false;
-      }
-
-      // Registration window
-      if (filters.registration !== "any") {
-        const startDelay = Number(t.schedule?.registrationStartDelay ?? 0);
-        const endDelay = Number(t.schedule?.registrationEndDelay ?? 0);
-        const isOpen = startDelay === 0 && endDelay === 0;
-        if (filters.registration === "open" && !isOpen) return false;
-        if (filters.registration === "fixed" && isOpen) return false;
-      }
-
-      return true;
+      return matchesTournamentFilters(
+        t,
+        item.entryCount ?? 0,
+        item.aggregations?.token_totals,
+        filters,
+      );
     });
   }, [rawCurrentTournaments, filters]);
   const currentSortBy = sortByTab[selectedTab as TournamentTab];
@@ -257,72 +219,7 @@ const Overview = () => {
     }
   }, [gameFilters, clearTournaments, resetPage, selectedTab]);
 
-  const removeGameFilter = (filter: string) => {
-    setGameFilters(gameFilters.filter((f) => f !== filter));
-  };
-
-  const activePills = useMemo(() => {
-    const pills: {
-      key: string;
-      label: string;
-      icon?: React.ReactNode;
-      onRemove: () => void;
-    }[] = [];
-
-    gameFilters.forEach((address) => {
-      const game = gameData.find((g) => g.contract_address === address);
-      pills.push({
-        key: `game:${address}`,
-        label: game?.name ?? "Unknown",
-        icon: <GameIcon image={getGameImage(address)} size={5} />,
-        onRemove: () => removeGameFilter(address),
-      });
-    });
-
-    if (filters.entryFee !== "any") {
-      pills.push({
-        key: "entryFee",
-        label: filters.entryFee === "free" ? "Free Entry" : "Paid Entry",
-        onRemove: () => setFilter("entryFee", "any"),
-      });
-    }
-
-    if (filters.hasPrizes) {
-      pills.push({
-        key: "hasPrizes",
-        label: "Has Prizes",
-        onRemove: () => setFilter("hasPrizes", false),
-      });
-    }
-
-    if (filters.entryRequirement !== "any") {
-      pills.push({
-        key: "entryRequirement",
-        label:
-          filters.entryRequirement === "open" ? "Open Entry" : "Gated",
-        onRemove: () => setFilter("entryRequirement", "any"),
-      });
-    }
-
-    if (filters.registration !== "any") {
-      pills.push({
-        key: "registration",
-        label:
-          filters.registration === "open"
-            ? "Open Window"
-            : "Fixed Window",
-        onRemove: () => setFilter("registration", "any"),
-      });
-    }
-
-    return pills;
-  }, [
-    gameFilters,
-    gameData,
-    getGameImage,
-    filters,
-    setFilter,
-  ]);
+  const activePills = useFilterPills();
 
   // Prevent initial double loading by controlling when to fetch
   const shouldFetch = useMemo(() => {
@@ -738,7 +635,7 @@ const Overview = () => {
           {selectedTab === "my" && (
             <div className="sm:hidden font-brand text-xl">My Tournaments</div>
           )}
-          <div className="flex flex-row gap-2 items-center">
+          <div className="flex flex-row gap-2 items-center mb-2">
             <Popover>
               <PopoverTrigger asChild>
                 <button

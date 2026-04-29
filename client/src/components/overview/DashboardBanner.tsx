@@ -4,7 +4,7 @@ import { useAccount } from "@starknet-react/core";
 import {
   useActivityStats,
   useTournaments,
-  usePlayerTournamentCount,
+  useTournamentsByOwnerCount,
 } from "@provable-games/budokan-sdk/react";
 import type { Tournament } from "@provable-games/budokan-sdk";
 
@@ -208,15 +208,12 @@ const DashboardBanner = ({
       .slice(0, 4);
   }, [featured, featuredTokenAddresses, selectedChainConfig?.chainId]);
 
-  // My status
-  const queryAddress = useMemo(() => {
-    if (!address || address === "0x0") return undefined;
-    return indexAddress(address);
-  }, [address]);
-  const { count: mySubmissionCount } = usePlayerTournamentCount(
-    queryAddress,
-    "submission",
-  );
+  // My status — drives off current NFT ownership now that
+  // usePlayerTournamentCount is gone (see PR #243).
+  const ownerArg = address && address !== "0x0" ? address : undefined;
+  const { count: mySubmissionCount } = useTournamentsByOwnerCount(ownerArg, {
+    phase: "submission",
+  });
 
   const showMyStatus =
     !!address && (myLiveCount > 0 || (mySubmissionCount ?? 0) > 0);
