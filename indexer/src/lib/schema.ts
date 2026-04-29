@@ -145,7 +145,6 @@ export const registrations = pgTable(
     id: serial("id").notNull(),
     tournamentId: bigint("tournament_id", { mode: "bigint" }).notNull(),
     gameTokenId: text("game_token_id").notNull(),
-    playerAddress: text("player_address"),
     entryNumber: integer("entry_number"),
     hasSubmitted: boolean("has_submitted").default(false),
     isBanned: boolean("is_banned").default(false),
@@ -154,9 +153,6 @@ export const registrations = pgTable(
     pk: primaryKey({ columns: [table.tournamentId, table.gameTokenId] }),
     tournamentIdIdx: index("registrations_tournament_id_idx").on(
       table.tournamentId,
-    ),
-    playerAddressIdx: index("registrations_player_address_idx").on(
-      table.playerAddress,
     ),
     idIdx: unique("registrations_id_unique").on(table.id),
   }),

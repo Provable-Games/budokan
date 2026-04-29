@@ -8,6 +8,13 @@
       "when": 1741564800000,
       "tag": "0000_initial_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1777680000000,
+      "tag": "0001_drop_registrations_player_address",
+      "breakpoints": true
     }
   ]
 }

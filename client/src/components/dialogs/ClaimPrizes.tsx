@@ -37,6 +37,7 @@ import {
   useRewardClaims,
   useRegistrations,
 } from "@provable-games/budokan-sdk/react";
+import { useTokens } from "@provable-games/denshokan-sdk/react";
 
 interface ClaimPrizesDialogProps {
   open: boolean;
@@ -98,20 +99,32 @@ export function ClaimPrizesDialog({
     [registrationsResult],
   );
 
-  // Map token_id -> owner address for refund row grouping.
+  // Map token_id -> current owner address for refund row grouping. Refunds
+  // follow the NFT, so we read the live owner from denshokan rather than
+  // registrations.player_address (which is the original registrant and goes
+  // stale on transfer). See issue #241.
+  const budokanAddress = selectedChainConfig?.budokanAddress;
+  const { data: tournamentTokensResult } = useTokens(
+    open && tournamentId && budokanAddress
+      ? {
+          minterAddress: budokanAddress,
+          contextId: Number(tournamentId),
+          limit: 10_000,
+        }
+      : undefined,
+  );
   const tokenOwnerByTokenId = useMemo(() => {
     const map = new Map<string, string>();
-    for (const r of (registrationsResult?.data ?? []) as Registration[]) {
-      if (
-        r.gameTokenId !== undefined &&
-        r.gameTokenId !== null &&
-        r.playerAddress
-      ) {
-        map.set(BigInt(r.gameTokenId).toString(), r.playerAddress);
+    for (const t of tournamentTokensResult?.data ?? []) {
+      if (t?.tokenId == null || !t?.owner) continue;
+      try {
+        map.set(BigInt(t.tokenId).toString(), t.owner);
+      } catch {
+        // Non-numeric tokenId — skip rather than poison the map.
       }
     }
     return map;
-  }, [registrationsResult]);
+  }, [tournamentTokensResult]);
 
   // Resolve Cartridge usernames for the registrants that have a refund claim.
   const refundOwnerAddresses = useMemo(
