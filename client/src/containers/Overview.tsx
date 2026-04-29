@@ -23,13 +23,10 @@ import FilterPanel from "@/components/overview/FilterPanel";
 import {
   useTournaments,
   useTournamentCount,
-  usePlayerTournamentCount,
-  usePlayerTournaments,
   useSubscription,
 } from "@provable-games/budokan-sdk/react";
 import { useTokens } from "@provable-games/denshokan-sdk/react";
 
-import { indexAddress } from "@/lib/utils";
 import { useChainConfig } from "@/context/chain";
 import EmptyResults from "@/components/overview/tournaments/EmptyResults";
 import { TournamentCard } from "@/components/overview/TournamanentCard";
@@ -135,22 +132,38 @@ const Overview = () => {
 
   const { count: endedTournamentsCount } = useTournamentCount("finalized");
 
-  const queryAddress = useMemo(() => {
-    if (!address || address === "0x0") return null;
-    return indexAddress(address);
-  }, [address]);
-
+  // "My Tournaments" sources truth from current NFT ownership (denshokan),
+  // not from indexed registrations.player_address. The contract keys
+  // registrations by token_id only — address attribution becomes stale the
+  // moment a token is transferred. See issue #241.
+  //
+  // Query denshokan for tokens this wallet currently owns that were minted
+  // by the Budokan contract on this chain. Filtering by minterAddress is
+  // exact (per-chain deployment), unspoofable, and keys off the same chain
+  // config the rest of the app uses. Each token's `contextId` is the
+  // tournament id it was minted for.
+  const budokanAddress = selectedChainConfig?.budokanAddress;
   const { data: playerTokensResult } = useTokens(
-    address && address !== "0x0" ? { owner: address, limit: 1000 } : undefined,
-  );
-  const gameTokenIds = useMemo(
-    () => playerTokensResult?.data?.map((t) => t.tokenId) ?? null,
-    [playerTokensResult],
+    address && address !== "0x0" && budokanAddress
+      ? {
+          owner: address,
+          minterAddress: budokanAddress,
+          hasContext: true,
+          limit: 1000,
+        }
+      : undefined,
   );
 
-  const { count: myTournamentsCount } = usePlayerTournamentCount(queryAddress ?? undefined);
+  const myTournamentIds = useMemo(() => {
+    if (!playerTokensResult?.data) return null; // null → still loading
+    const ids = new Set<string>();
+    for (const token of playerTokensResult.data) {
+      if (token.contextId) ids.add(String(token.contextId));
+    }
+    return [...ids];
+  }, [playerTokensResult]);
 
-  const { count: myLiveTournamentsCount } = usePlayerTournamentCount(queryAddress ?? undefined, "live");
+  const myTournamentsCount = myTournamentIds?.length ?? null;
 
   const tournamentCounts = useMemo(() => {
     return {
@@ -350,10 +363,37 @@ const Overview = () => {
     }
   }, [lastMessage, refetchUpcomingTournamentsCount]);
 
+  // Live count among my tournaments — runs whenever we have ids, regardless
+  // of which tab is selected, because the badge on the "my" tab needs it for
+  // auto-tab-selection.
+  const { tournaments: myLiveResult } = useTournaments(
+    myTournamentIds && myTournamentIds.length > 0
+      ? { tournamentIds: myTournamentIds, phase: "live", limit: 1 }
+      : undefined,
+  );
+  const myLiveTournamentsCount =
+    myTournamentIds === null
+      ? null
+      : myTournamentIds.length === 0
+        ? 0
+        : (myLiveResult?.total ?? null);
+
+  // List of my tournaments — same `useTournaments` shape as the other tabs,
+  // just narrowed to the ids derived from current NFT ownership.
   const { tournaments: myTournamentsResult, loading: myTournamentsLoading } =
-    usePlayerTournaments(
-      selectedTab === "my" ? (queryAddress ?? undefined) : undefined,
-      { gameTokenIds: gameTokenIds ?? undefined, limit: 12, offset: currentPage * 12 },
+    useTournaments(
+      selectedTab === "my" &&
+        shouldFetch &&
+        myTournamentIds &&
+        myTournamentIds.length > 0
+        ? {
+            tournamentIds: myTournamentIds,
+            sort: currentSortBy as any,
+            offset: currentPage * 12,
+            limit: 12,
+            includePrizeSummary: "summary",
+          }
+        : undefined,
     );
   const myTournaments = useMemo(() => myTournamentsResult?.data ?? [], [myTournamentsResult]);
 
