@@ -1,5 +1,5 @@
 import { REFRESH, TROPHY } from "@/components/Icons";
-import { useRegistrations } from "@provable-games/budokan-sdk/react";
+import { useRegistrationsByOwner } from "@provable-games/budokan-sdk/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAccount } from "@starknet-react/core";
 import { BigNumberish } from "starknet";
@@ -79,33 +79,12 @@ const MyEntries = ({
 
   // Source of truth for "which entries does this user have" is current NFT
   // ownership from denshokan (`useLiveLeaderboard` above with owner=address).
-  // Registrations contribute only ban / submission / entry-number metadata
-  // for the tokens we already know we own, fetched by gameTokenIds rather
-  // than by playerAddress so transfers in either direction stay correct.
-  // See issue #241.
-  const ownedTokenIds = useMemo(
-    () =>
-      gameTokens
-        .map((t: any) => {
-          const id = t?.tokenId;
-          if (id == null) return null;
-          try {
-            return BigInt(String(id)).toString();
-          } catch {
-            return null;
-          }
-        })
-        .filter((id): id is string => id !== null),
-    [gameTokens],
-  );
-
+  // Registration metadata (ban / submission / entry-number) for the tokens we
+  // currently own comes from `useRegistrationsByOwner`, which resolves the
+  // gameTokenId set internally — staying correct under transfers regardless
+  // of who originally registered. See issue #241.
   const { registrations: myEntriesResult, refetch: refetchRegistrations } =
-    useRegistrations(
-      tournamentId?.toString() && ownedTokenIds.length > 0
-        ? tournamentId.toString()
-        : undefined,
-      { gameTokenIds: ownedTokenIds, limit: 1000 },
-    );
+    useRegistrationsByOwner(tournamentId?.toString(), address, { limit: 1000 });
   const myEntriesRegs = myEntriesResult?.data ?? null;
   const myEntriesCount = gameTokens.length;
 
