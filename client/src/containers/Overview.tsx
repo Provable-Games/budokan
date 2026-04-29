@@ -121,13 +121,17 @@ const Overview = () => {
   // registrations by token_id only — address attribution becomes stale the
   // moment a token is transferred. See issue #241.
   //
-  // Query denshokan for tokens this wallet currently owns whose minting
-  // context is Budokan. Each such token's `contextId` is a tournament id.
+  // Query denshokan for tokens this wallet currently owns that were minted
+  // by the Budokan contract on this chain. Filtering by minterAddress is
+  // exact (per-chain deployment), unspoofable, and keys off the same chain
+  // config the rest of the app uses. Each token's `contextId` is the
+  // tournament id it was minted for.
+  const budokanAddress = selectedChainConfig?.budokanAddress;
   const { data: playerTokensResult } = useTokens(
-    address && address !== "0x0"
+    address && address !== "0x0" && budokanAddress
       ? {
           owner: address,
-          contextName: "Budokan",
+          minterAddress: budokanAddress,
           hasContext: true,
           limit: 1000,
         }
