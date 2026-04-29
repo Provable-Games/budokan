@@ -15,6 +15,13 @@
       "when": 1777680000000,
       "tag": "0001_drop_registrations_player_address",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1777766400000,
+      "tag": "0002_fix_registration_trigger_drop_player_address",
+      "breakpoints": true
     }
   ]
 }
