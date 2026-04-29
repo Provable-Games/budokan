@@ -12,8 +12,10 @@ import {
   Filter,
 } from "lucide-react";
 
-import { useTournaments } from "@provable-games/budokan-sdk/react";
-import { useTokens } from "@provable-games/denshokan-sdk/react";
+import {
+  useTournamentsByOwner,
+  useTournamentsByOwnerCount,
+} from "@provable-games/budokan-sdk/react";
 
 import { useChainConfig } from "@/context/chain";
 import { useGetUsernames } from "@/hooks/useController";
@@ -94,53 +96,29 @@ const Profile = () => {
   // Source of truth: tournaments are derived from currently-owned Budokan
   // NFTs (denshokan), not indexed registrations.player_address. The contract
   // keys registrations by token_id only — address attribution becomes stale
-  // the moment a token is transferred. See PR #242 for the equivalent change
-  // on the Overview "my" tab.
-  const budokanAddress = selectedChainConfig?.budokanAddress;
-  const { data: playerTokensResult, isLoading: tokensLoading } = useTokens(
-    normalizedAddress && budokanAddress
-      ? {
-          owner: normalizedAddress,
-          minterAddress: budokanAddress,
-          hasContext: true,
-          limit: 1000,
-        }
-      : undefined,
+  // the moment a token is transferred. See PR #242 / #243 for the chain of
+  // refactors that moved everything off `registrations.player_address`.
+  const ownerArg = normalizedAddress ?? undefined;
+  const {
+    count: totalEntriesCount,
+    loading: totalEntriesLoading,
+  } = useTournamentsByOwnerCount(ownerArg);
+  const { count: liveCountValue } = useTournamentsByOwnerCount(ownerArg, {
+    phase: "live",
+  });
+  const { count: submissionCountValue } = useTournamentsByOwnerCount(
+    ownerArg,
+    { phase: "submission" },
+  );
+  const { count: finalizedCountValue } = useTournamentsByOwnerCount(
+    ownerArg,
+    { phase: "finalized" },
   );
 
-  const myTournamentIds = useMemo(() => {
-    if (!playerTokensResult?.data) return null; // null → still loading
-    const ids = new Set<string>();
-    for (const token of playerTokensResult.data) {
-      if (token.contextId) ids.add(String(token.contextId));
-    }
-    return [...ids];
-  }, [playerTokensResult]);
-
-  const totalEntries = myTournamentIds?.length ?? 0;
-  const hasTournaments = (myTournamentIds?.length ?? 0) > 0;
-
-  // Per-phase counts. Each is a 1-result query whose `total` field gives the
-  // count without paying for the full list. Skip when there are no ids.
-  const { tournaments: liveResult } = useTournaments(
-    hasTournaments
-      ? { tournamentIds: myTournamentIds!, phase: "live", limit: 1 }
-      : undefined,
-  );
-  const { tournaments: submissionResult } = useTournaments(
-    hasTournaments
-      ? { tournamentIds: myTournamentIds!, phase: "submission", limit: 1 }
-      : undefined,
-  );
-  const { tournaments: finalizedResult } = useTournaments(
-    hasTournaments
-      ? { tournamentIds: myTournamentIds!, phase: "finalized", limit: 1 }
-      : undefined,
-  );
-
-  const liveCount = liveResult?.total ?? 0;
-  const submissionCount = submissionResult?.total ?? 0;
-  const finalizedCount = finalizedResult?.total ?? 0;
+  const totalEntries = totalEntriesCount ?? 0;
+  const liveCount = liveCountValue ?? 0;
+  const submissionCount = submissionCountValue ?? 0;
+  const finalizedCount = finalizedCountValue ?? 0;
 
   // Tournament list — same shape as the Overview "my" tab.
   const [activeTab, setActiveTab] = useState<ProfileTab>("all");
@@ -157,25 +135,21 @@ const Profile = () => {
   const activePills = useFilterPills();
 
   const { tournaments: tournamentsResult, loading: tournamentsLoading } =
-    useTournaments(
-      hasTournaments
-        ? {
-            tournamentIds: myTournamentIds!,
-            phase: phaseFilter,
-            sort: sortBy,
-            gameAddress: gameFilters[0],
-            limit: 24,
-            includePrizeSummary: "summary",
-          }
-        : undefined,
-    );
+    useTournamentsByOwner(ownerArg, {
+      phase: phaseFilter,
+      sort: sortBy,
+      limit: 24,
+      includePrizeSummary: "summary",
+    });
 
   const rawPlayerTournaments = useMemo(
     () => tournamentsResult?.data ?? [],
     [tournamentsResult],
   );
 
-  // Apply client-side filters layered on top of the server-side query
+  // Apply client-side filters layered on top of the server-side query.
+  // useTournamentsByOwner doesn't accept gameAddress, so game filtering also
+  // happens here for Profile (vs. Overview which sends it server-side).
   const playerTournaments = useMemo(
     () =>
       rawPlayerTournaments.filter((t) => {
@@ -189,9 +163,10 @@ const Profile = () => {
           t.entryCount ?? 0,
           aggregationTokenTotals,
           filters,
+          gameFilters,
         );
       }),
-    [rawPlayerTournaments, filters],
+    [rawPlayerTournaments, filters, gameFilters],
   );
 
   // Token data for tournament cards (mirrors Overview's pattern)
@@ -280,7 +255,7 @@ const Profile = () => {
     ? `${selectedChainConfig.blockExplorerUrl}/contract/${normalizedAddress}`
     : null;
 
-  const isLoadingProfile = tokensLoading && myTournamentIds === null;
+  const isLoadingProfile = totalEntriesLoading && totalEntriesCount === null;
 
   return (
     <div className="lg:w-[87.5%] xl:w-5/6 2xl:w-3/4 sm:mx-auto flex flex-col gap-4 h-full overflow-y-auto pb-6 pr-2">

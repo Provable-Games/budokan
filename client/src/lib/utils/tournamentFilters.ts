@@ -1,5 +1,6 @@
 import type { Tournament } from "@provable-games/budokan-sdk";
 import type { OverviewFilters } from "@/hooks/useUIStore";
+import { indexAddress } from "@/lib/utils";
 
 export interface AggregationTokenTotal {
   tokenAddress?: string;
@@ -11,13 +12,28 @@ export interface AggregationTokenTotal {
  * Apply the client-side filter predicate that backs the Overview "Filters"
  * popover. Pulled out of Overview.tsx so the Profile page (and any other
  * tournament list view) can share the same semantics.
+ *
+ * `gameFilters` is optional because Overview routes that one server-side
+ * (via `useTournaments({ gameAddress })`); Profile can't, since
+ * `useTournamentsByOwner` doesn't accept gameAddress, so it passes the
+ * selection through here.
  */
 export function matchesTournamentFilters(
   tournament: Tournament,
   entryCount: number,
   aggregationTokenTotals: AggregationTokenTotal[] | undefined,
   filters: OverviewFilters,
+  gameFilters?: string[],
 ): boolean {
+  // Game (only when filters are provided — Overview filters server-side)
+  if (gameFilters && gameFilters.length > 0) {
+    const tournamentGame = tournament.gameAddress
+      ? indexAddress(tournament.gameAddress)
+      : "";
+    const allowed = new Set(gameFilters.map((g) => indexAddress(g)));
+    if (!allowed.has(tournamentGame)) return false;
+  }
+
   // Entry Fee
   if (filters.entryFee !== "any") {
     const hasFee =
