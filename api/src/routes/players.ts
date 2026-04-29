@@ -34,12 +34,23 @@ app.get("/:address/tournaments", async (c) => {
       applyPhaseCondition(phase, conditions);
     }
 
-    // Filter by specific game token IDs
+    // Filter by specific game token IDs.
+    // Storage is decimal-encoded (BigInt.toString()), but callers may pass
+    // hex (denshokan-sdk returns tokenIds as 0x-prefixed strings). Normalize
+    // every input to its decimal form before comparing.
     if (gameTokenIdsRaw) {
       const tokenIds = gameTokenIdsRaw
         .split(",")
         .map((id) => id.trim())
-        .filter((id) => id.length > 0);
+        .filter((id) => id.length > 0)
+        .map((id) => {
+          try {
+            return BigInt(id).toString();
+          } catch {
+            return null;
+          }
+        })
+        .filter((id): id is string => id !== null);
       if (tokenIds.length > 0) {
         conditions.push(inArray(registrations.gameTokenId, tokenIds));
       }
