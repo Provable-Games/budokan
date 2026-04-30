@@ -326,9 +326,21 @@ export interface DecodedRewardClaimed {
   claimed: boolean;
 }
 
+/**
+ * Discriminator written to `qualification_entries.qualification_kind`. The
+ * QualificationProof Cairo enum has two variants (NFT, Extension) and the
+ * structured columns below carry only the variant-specific payload. NFT
+ * carries a u256 token id; Extension carries a Span<felt252> of opaque
+ * proof bytes (still JSONB because it's a homogeneous variable-length list,
+ * not a discriminated union).
+ */
+export type QualificationKind = "nft" | "extension";
+
 export interface DecodedQualificationEntriesUpdated {
   tournamentId: bigint;
-  qualificationProof: Record<string, unknown>;
+  qualificationKind: QualificationKind;
+  nftTokenId: string | null;
+  extensionConfig: string[] | null;
   entryCount: number;
 }
 
@@ -825,17 +837,29 @@ function decodeRewardType(
   }
 }
 
+interface DecodedQualificationProof {
+  qualificationKind: QualificationKind;
+  nftTokenId: string | null;
+  extensionConfig: string[] | null;
+  consumed: number;
+}
+
 /**
- * Decode QualificationProof enum from data starting at idx.
+ * Decode QualificationProof enum from data starting at idx into structured
+ * fields.
  *
  * QualificationProof =
  *   NFT(NFTQualification { token_id: u256 }) |
  *   Extension(Span<felt252>)
+ *
+ * Throws on an unknown variant rather than silently storing it —
+ * `qualification_kind` is NOT NULL with a CHECK constraint so an unknown
+ * row is safer dropped at decode time than failing the INSERT downstream.
  */
 function decodeQualificationProof(
   data: readonly string[],
   idx: number,
-): { value: Record<string, unknown>; consumed: number } {
+): DecodedQualificationProof {
   const variant = Number(hexToBigInt(data[idx]));
   let consumed = 1;
 
@@ -847,7 +871,12 @@ function decodeQualificationProof(
       const high = hexToBigInt(data[idx + consumed]);
       consumed++;
       const tokenId = ((high << 128n) + low).toString();
-      return { value: { type: "NFT", token_id: tokenId }, consumed };
+      return {
+        qualificationKind: "nft",
+        nftTokenId: tokenId,
+        extensionConfig: null,
+        consumed,
+      };
     }
     case 1: {
       // Extension(Span<felt252>)
@@ -858,10 +887,17 @@ function decodeQualificationProof(
         proofData.push(feltToHex(data[idx + consumed]));
         consumed++;
       }
-      return { value: { type: "Extension", data: proofData }, consumed };
+      return {
+        qualificationKind: "extension",
+        nftTokenId: null,
+        extensionConfig: proofData,
+        consumed,
+      };
     }
     default:
-      return { value: { type: "Unknown", variant }, consumed };
+      throw new Error(
+        `Unknown QualificationProof variant ${variant} at idx ${idx}`,
+      );
   }
 }
 
@@ -1091,7 +1127,7 @@ export function decodeQualificationEntriesUpdated(
 
   let idx = 0;
 
-  // QualificationProof (enum)
+  // QualificationProof (enum) → structured fields
   const qualificationProof = decodeQualificationProof(data, idx);
   idx += qualificationProof.consumed;
 
@@ -1100,7 +1136,9 @@ export function decodeQualificationEntriesUpdated(
 
   return {
     tournamentId,
-    qualificationProof: qualificationProof.value,
+    qualificationKind: qualificationProof.qualificationKind,
+    nftTokenId: qualificationProof.nftTokenId,
+    extensionConfig: qualificationProof.extensionConfig,
     entryCount,
   };
 }
