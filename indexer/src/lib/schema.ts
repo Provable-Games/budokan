@@ -234,13 +234,21 @@ export const rewardClaims = pgTable(
 // Domain key: (tournament_id, tx_hash, event_index)
 //   event_index discriminates multiple updates within one transaction
 // Surrogate id for Apibara cursor invalidation
+//
+// `qualification_kind` discriminates NFT vs Extension. `nft_token_id` is
+// populated only for NFT (u256 token id as decimal string) and
+// `extension_config` only for Extension (Span<felt252> as a JSONB list of
+// hex strings — JSONB stays appropriate here because the payload is a
+// homogeneous variable-length list, not a discriminated union).
 // ---------------------------------------------------------------------------
 export const qualificationEntries = pgTable(
   "qualification_entries",
   {
     id: serial("id").notNull(),
     tournamentId: bigint("tournament_id", { mode: "bigint" }).notNull(),
-    qualificationProof: jsonb("qualification_proof"),
+    qualificationKind: text("qualification_kind").notNull(),
+    nftTokenId: text("nft_token_id"),
+    extensionConfig: jsonb("extension_config"),
     entryCount: integer("entry_count"),
     createdAtBlock: bigint("created_at_block", { mode: "bigint" }),
     txHash: text("tx_hash").notNull(),
@@ -252,6 +260,11 @@ export const qualificationEntries = pgTable(
     }),
     tournamentIdIdx: index("qualification_entries_tournament_id_idx").on(
       table.tournamentId,
+    ),
+    nftLookupIdx: index("qualification_entries_nft_lookup_idx").on(
+      table.tournamentId,
+      table.qualificationKind,
+      table.nftTokenId,
     ),
     idIdx: unique("qualification_entries_id_unique").on(table.id),
   }),

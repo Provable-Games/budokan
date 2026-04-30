@@ -220,7 +220,9 @@ export const qualificationEntries = pgTable(
   {
     id: serial("id").notNull(),
     tournamentId: bigint("tournament_id", { mode: "bigint" }).notNull(),
-    qualificationProof: jsonb("qualification_proof"),
+    qualificationKind: text("qualification_kind").notNull(),
+    nftTokenId: text("nft_token_id"),
+    extensionConfig: jsonb("extension_config"),
     entryCount: integer("entry_count"),
     createdAtBlock: bigint("created_at_block", { mode: "bigint" }),
     txHash: text("tx_hash").notNull(),
@@ -232,6 +234,11 @@ export const qualificationEntries = pgTable(
     }),
     tournamentIdIdx: index("qualification_entries_tournament_id_idx").on(
       table.tournamentId,
+    ),
+    nftLookupIdx: index("qualification_entries_nft_lookup_idx").on(
+      table.tournamentId,
+      table.qualificationKind,
+      table.nftTokenId,
     ),
     idIdx: unique("qualification_entries_id_unique").on(table.id),
   }),

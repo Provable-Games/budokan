@@ -417,7 +417,9 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
 
             qualificationEntryRows.push({
               tournamentId: decoded.tournamentId,
-              qualificationProof: decoded.qualificationProof,
+              qualificationKind: decoded.qualificationKind,
+              nftTokenId: decoded.nftTokenId,
+              extensionConfig: decoded.extensionConfig,
               entryCount: decoded.entryCount,
               createdAtBlock: blockNumber,
               txHash: txHash!,
