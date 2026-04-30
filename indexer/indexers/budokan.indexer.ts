@@ -387,7 +387,11 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
 
             rewardClaimRows.push({
               tournamentId: decoded.tournamentId,
-              rewardType: decoded.rewardType,
+              claimKind: decoded.claimKind,
+              prizeId: decoded.prizeId != null ? BigInt(decoded.prizeId) : null,
+              payoutIndex: decoded.payoutIndex,
+              position: decoded.position,
+              refundTokenId: decoded.refundTokenId,
               claimed: decoded.claimed,
               createdAtBlock: blockNumber,
               txHash: txHash!,
