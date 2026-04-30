@@ -12,12 +12,12 @@ import {
   Prize,
   Tournament,
   EntryFee,
-  RewardClaim,
   Leaderboard,
   QualificationProofEnum,
   ERC20Data,
   ERC721Data,
 } from "@/generated/models.gen";
+import type { RewardClaim } from "@provable-games/budokan-sdk";
 import { PositionPrizes, TokenPrizes } from "@/lib/types";
 import { TokenPrices } from "@/hooks/useEkuboPrices";
 import type { Schedule } from "@/generated/models.gen";
@@ -667,190 +667,75 @@ export const getClaimablePrizes = (
     (prize) => !creatorPrizeTypes.has(prize.type)
   );
 
-  // Helper function to extract reward type info from both SDK and SQL formats
-  const getRewardTypeInfo = (
-    claimedPrize: any
-  ): { type: string; role?: any; position?: any; prizeId?: any; payoutIndex?: any } => {
-    // Check if it's a CairoCustomEnum (SDK format) with activeVariant method
-    if (typeof claimedPrize.reward_type?.activeVariant === "function") {
-      const variant = claimedPrize.reward_type.activeVariant();
+  // Pre-build claimed-set lookups keyed off the SDK 0.2.0 flat fields.
+  // `claimKind` is the discriminator and `prizeId` / `payoutIndex` /
+  // `position` / `refundTokenId` carry the variant-specific payload.
+  // Membership tests below use these sets in O(1) per filter step.
+  const claimedEntryFeePositions = new Set<number>();
+  const claimedRefundTokenIds = new Set<string>();
+  const claimedPrizeSingleIds = new Set<number>();
+  const claimedPrizeDistributedKeys = new Set<string>();
+  let claimedTournamentCreator = false;
+  let claimedGameCreator = false;
 
-      if (variant === "EntryFee") {
-        const entryFeeVariant =
-          claimedPrize.reward_type.variant.EntryFee?.activeVariant?.();
-        return {
-          type: "EntryFee",
-          role: entryFeeVariant,
-          position:
-            entryFeeVariant === "Position"
-              ? claimedPrize.reward_type.variant.EntryFee.variant.Position
-              : null,
-          prizeId:
-            entryFeeVariant === "Refund"
-              ? claimedPrize.reward_type.variant.EntryFee.variant.Refund
-              : undefined,
-        };
-      } else if (variant === "Prize") {
-        const prizeVariant =
-          claimedPrize.reward_type.variant.Prize?.activeVariant?.();
-
-        if (prizeVariant === "Single") {
-          return {
-            type: "Prize",
-            role: "Single",
-            prizeId: claimedPrize.reward_type.variant.Prize.variant.Single,
-          };
-        } else if (prizeVariant === "Distributed") {
-          const distributed = claimedPrize.reward_type.variant.Prize.variant.Distributed;
-          return {
-            type: "Prize",
-            role: "Distributed",
-            prizeId: distributed?.["0"] || distributed?.[0],
-            payoutIndex: distributed?.["1"] || distributed?.[1],
-          };
+  for (const c of claimedRewards) {
+    switch (c.claimKind) {
+      case "entry_fee_position":
+        if (c.position != null) claimedEntryFeePositions.add(Number(c.position));
+        break;
+      case "entry_fee_tournament_creator":
+        claimedTournamentCreator = true;
+        break;
+      case "entry_fee_game_creator":
+        claimedGameCreator = true;
+        break;
+      case "entry_fee_refund":
+        if (c.refundTokenId != null) {
+          // Normalise to a hex string so equality matches `String(prize.id)`
+          // (which the prize side already produces as hex).
+          claimedRefundTokenIds.add(`0x${BigInt(c.refundTokenId).toString(16)}`);
         }
-      }
+        break;
+      case "prize_single":
+        if (c.prizeId != null) claimedPrizeSingleIds.add(Number(c.prizeId));
+        break;
+      case "prize_distributed":
+        if (c.prizeId != null && c.payoutIndex != null) {
+          claimedPrizeDistributedKeys.add(`${Number(c.prizeId)}:${Number(c.payoutIndex)}`);
+        }
+        break;
     }
+  }
 
-    // SQL format - reward_type is a string like "EntryFee" or "Prize"
-    if (typeof claimedPrize.reward_type === "string") {
-      const rewardType = claimedPrize.reward_type.toLowerCase();
-
-      if (rewardType === "entryfee") {
-        // Check the inner enum field
-        const roleVariant = claimedPrize["reward_type.EntryFee"];
-
-        if (roleVariant === "GameCreator") {
-          return { type: "EntryFee", role: "GameCreator", position: null };
-        } else if (roleVariant === "TournamentCreator") {
-          return {
-            type: "EntryFee",
-            role: "TournamentCreator",
-            position: null,
-          };
-        } else if (roleVariant === "Position") {
-          const position = claimedPrize["reward_type.EntryFee.Position"];
-          return {
-            type: "EntryFee",
-            role: "Position",
-            position: Number(position),
-          };
-        } else if (roleVariant === "Refund") {
-          const tokenId = claimedPrize["reward_type.EntryFee.Refund"];
-          return {
-            type: "EntryFee",
-            role: "Refund",
-            position: null,
-            prizeId: Number(tokenId),
-          };
-        }
-      } else if (rewardType === "prize") {
-        const prizeVariant = claimedPrize["reward_type.Prize"];
-
-        if (prizeVariant === "Single") {
-          const prizeId = claimedPrize["reward_type.Prize.Single"];
-          return {
-            type: "Prize",
-            role: "Single",
-            prizeId: Number(prizeId),
-          };
-        } else if (prizeVariant === "Distributed") {
-          const prizeId = claimedPrize["reward_type.Prize.Distributed.0"];
-          const payoutIndex = claimedPrize["reward_type.Prize.Distributed.1"];
-          return {
-            type: "Prize",
-            role: "Distributed",
-            prizeId: Number(prizeId),
-            payoutIndex: Number(payoutIndex),
-          };
-        }
-      }
-    }
-
-    return { type: "null" };
-  };
-
-  const claimedEntryFeePositions = claimedRewards
-    .map((reward) => {
-      const info = getRewardTypeInfo(reward);
-      return info.type === "EntryFee" && info.role === "Position"
-        ? info.position
-        : null;
-    })
-    .filter((pos) => pos !== null);
-
-  // Extract claimed prizes (both single and distributed)
-  const claimedPrizeInfo = claimedRewards
-    .map((reward) => {
-      const info = getRewardTypeInfo(reward);
-      if (info.type === "Prize") {
-        return {
-          prizeId: info.prizeId,
-          payoutIndex: info.payoutIndex,
-          role: info.role,
-        };
-      }
-      return null;
-    })
-    .filter((info) => info !== null);
+  // Match the prize-side's hex/decimal coercion. Sponsored prize ids may
+  // come in as hex strings ("0x1") or numeric values; normalise to Number.
+  const toPrizeIdNum = (id: unknown) =>
+    typeof id === "string" ? parseInt(id, 16) : Number(id);
 
   const allPrizes = [...creatorPrizes, ...prizesFromSubmissions];
 
   const unclaimedPrizes = allPrizes.filter((prize) => {
-    if (prize.type === "entry_fee_game_creator") {
-      return !claimedRewards.some((claimedReward) => {
-        const info = getRewardTypeInfo(claimedReward);
-        return info.type === "EntryFee" && info.role === "GameCreator";
-      });
-    } else if (prize.type === "entry_fee_tournament_creator") {
-      return !claimedRewards.some((claimedReward) => {
-        const info = getRewardTypeInfo(claimedReward);
-        return info.type === "EntryFee" && info.role === "TournamentCreator";
-      });
-    } else if (prize.type === "entry_fee") {
-      return !claimedEntryFeePositions.includes(prize.position ?? 0);
-    } else if (prize.type === "entry_fee_refund") {
-      const tokenIdStr = String(prize.id);
-      return !claimedRewards.some((claimedReward) => {
-        const info = getRewardTypeInfo(claimedReward);
-        return (
-          info.type === "EntryFee" &&
-          info.role === "Refund" &&
-          String(info.prizeId) === tokenIdStr
-        );
-      });
-    } else if (prize.type === "sponsored_distributed") {
-      // For distributed prizes, check if this specific (prize_id, payout_index) combo is claimed
-      const prizeIdNum =
-        typeof prize.id === "string"
-          ? parseInt(prize.id, 16)
-          : Number(prize.id);
-      const position = prize.position ?? 0;
-
-      return !claimedPrizeInfo.some(
-        (info: any) =>
-          info?.prizeId === prizeIdNum &&
-          info?.role === "Distributed" &&
-          info?.payoutIndex === position
-      );
-    } else if (prize.type === "sponsored_single") {
-      // Single sponsored prize
-      const prizeIdNum =
-        typeof prize.id === "string"
-          ? parseInt(prize.id, 16)
-          : Number(prize.id);
-      return !claimedPrizeInfo.some(
-        (info: any) =>
-          info?.prizeId === prizeIdNum &&
-          info?.role === "Single"
-      );
-    } else {
-      // Fallback for any other prize types (legacy support)
-      const prizeIdNum =
-        typeof prize.id === "string"
-          ? parseInt(prize.id, 16)
-          : Number(prize.id);
-      return !claimedPrizeInfo.some((info: any) => info?.prizeId === prizeIdNum);
+    switch (prize.type) {
+      case "entry_fee_game_creator":
+        return !claimedGameCreator;
+      case "entry_fee_tournament_creator":
+        return !claimedTournamentCreator;
+      case "entry_fee":
+        return !claimedEntryFeePositions.has(prize.position ?? 0);
+      case "entry_fee_refund": {
+        const tokenIdHex = `0x${BigInt(String(prize.id)).toString(16)}`;
+        return !claimedRefundTokenIds.has(tokenIdHex);
+      }
+      case "sponsored_distributed": {
+        const key = `${toPrizeIdNum(prize.id)}:${prize.position ?? 0}`;
+        return !claimedPrizeDistributedKeys.has(key);
+      }
+      case "sponsored_single":
+        return !claimedPrizeSingleIds.has(toPrizeIdNum(prize.id));
+      default:
+        // Legacy fallback for unrecognised prize.type values: treat any
+        // single-prize claim with the same prizeId as covering the prize.
+        return !claimedPrizeSingleIds.has(toPrizeIdNum(prize.id));
     }
   });
   const unclaimedPrizeTypes = unclaimedPrizes.map((prize) => {

@@ -9,8 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
 import { useAccount } from "@starknet-react/core";
-import { RewardClaim } from "@/generated/models.gen";
-import type { Registration, Tournament } from "@provable-games/budokan-sdk";
+import type { Registration, RewardClaim, Tournament } from "@provable-games/budokan-sdk";
 import {
   displayAddress,
   formatNumber,
@@ -133,8 +132,7 @@ export function ClaimPrizesDialog({
   );
   const { usernames: refundUsernames } = useGetUsernames(refundOwnerAddresses);
 
-  const claimedRewards: RewardClaim[] = (rewardClaimsData ||
-    []) as unknown as RewardClaim[];
+  const claimedRewards: RewardClaim[] = rewardClaimsData ?? [];
 
   const entryFeeData = (tournamentModel as any)?.entryFee;
   const leaderboardSize =
