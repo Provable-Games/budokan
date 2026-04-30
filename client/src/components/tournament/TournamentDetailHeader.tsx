@@ -277,14 +277,14 @@ const TournamentDetailHeader = ({
                     key={`${token.symbol}-${i}`}
                     src={token.logoUrl}
                     alt={token.symbol}
-                    className="w-5 h-5 rounded-full border-2 border-black bg-black/40"
-                    style={{ marginLeft: i === 0 ? 0 : -6 }}
+                    className="w-7 h-7 md:w-8 md:h-8 rounded-full border-2 border-black bg-black/40"
+                    style={{ marginLeft: i === 0 ? 0 : -10 }}
                   />
                 ) : (
                   <div
                     key={`${token.symbol}-${i}`}
-                    className="w-5 h-5 rounded-full border-2 border-black bg-brand-muted/20 flex items-center justify-center text-[8px] font-bold text-brand"
-                    style={{ marginLeft: i === 0 ? 0 : -6 }}
+                    className="w-7 h-7 md:w-8 md:h-8 rounded-full border-2 border-black bg-brand-muted/20 flex items-center justify-center text-[10px] font-bold text-brand"
+                    style={{ marginLeft: i === 0 ? 0 : -10 }}
                   >
                     {token.symbol.slice(0, 2)}
                   </div>
@@ -292,8 +292,8 @@ const TournamentDetailHeader = ({
               )}
               {extraTokens > 0 && (
                 <div
-                  className="w-5 h-5 rounded-full border-2 border-black bg-neutral/20 flex items-center justify-center text-[9px] font-bold text-neutral"
-                  style={{ marginLeft: -6 }}
+                  className="w-7 h-7 md:w-8 md:h-8 rounded-full border-2 border-black bg-neutral/20 flex items-center justify-center text-[11px] font-bold text-neutral"
+                  style={{ marginLeft: -10 }}
                 >
                   +{extraTokens}
                 </div>

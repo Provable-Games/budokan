@@ -12,7 +12,6 @@ import {
 import { displayAddress } from "@/lib/utils";
 import {
   useControllerUsername,
-  useControllerProfile,
   isControllerAccount,
 } from "@/hooks/useController";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -58,7 +57,6 @@ const Header = () => {
   const { connector } = useConnect();
   const { gameFilters, setGameFilters, gameData } = useUIStore();
   const { disconnect } = useDisconnect();
-  const { openProfile } = useControllerProfile();
   const { username } = useControllerUsername();
   const { switchToMainnet, switchToSepolia } = useSwitchNetwork();
   const navigate = useNavigate();
@@ -100,7 +98,7 @@ const Header = () => {
   }, [disconnect]);
 
   return (
-    <div className="flex flex-col">
+    <header className="glass-pane flex-shrink-0 sticky top-0 z-30">
       <WalletsDialog open={showWallets} onOpenChange={setShowWallets} />
       <TermsOfServiceModal
         open={showTermsOfService}
@@ -109,92 +107,95 @@ const Header = () => {
       />
       <GeoBlockedDialog open={showGeoBlock} onOpenChange={setShowGeoBlock} />
 
-      <div className="flex flex-row items-center justify-between px-5 sm:py-5 sm:px-10 h-[60px] sm:h-[80px]">
-        {/* Hamburger menu for small screens */}
-        {isHomeScreen && (
-          <div className="sm:hidden">
-            <Sheet>
-              <SheetTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="p-0 flex items-center justify-center"
-                >
-                  <span className="flex items-center justify-center w-full h-full">
-                    <SPACE_INVADER_SOLID />
-                  </span>
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="left" className="w-[250px] sm:w-[300px]">
-                <div className="flex flex-col gap-4 py-4">
-                  <div
-                    className="text-3xl font-brand hover:cursor-pointer hover:text-brand-muted transition-colors duration-200"
-                    onClick={() => navigate("/")}
+      <div className="flex flex-row items-center justify-between gap-3 px-4 sm:px-8 xl:px-10 h-[56px] sm:h-[68px]">
+        {/* Left cluster: hamburger (mobile) + logo */}
+        <div className="flex flex-row items-center gap-3 min-w-0">
+          {isHomeScreen && (
+            <div className="sm:hidden">
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="p-0 flex items-center justify-center"
                   >
-                    Games
+                    <span className="flex items-center justify-center w-full h-full">
+                      <SPACE_INVADER_SOLID />
+                    </span>
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="left" className="w-[250px] sm:w-[300px]">
+                  <div className="flex flex-col gap-4 py-4">
+                    <div
+                      className="text-3xl font-brand hover:cursor-pointer hover:text-brand-muted transition-colors duration-200"
+                      onClick={() => navigate("/")}
+                    >
+                      Games
+                    </div>
+
+                    {gameData.map((game) => {
+                      const isDisabled = !game.existsInMetadata;
+
+                      const buttonElement = (
+                        <GameButton
+                          game={game}
+                          gameFilters={gameFilters}
+                          setGameFilters={setGameFilters}
+                        />
+                      );
+
+                      return isDisabled ? (
+                        <div key={game.contract_address}>{buttonElement}</div>
+                      ) : (
+                        <SheetClose asChild key={game.contract_address}>
+                          {buttonElement}
+                        </SheetClose>
+                      );
+                    })}
                   </div>
+                </SheetContent>
+              </Sheet>
+            </div>
+          )}
 
-                  {gameData.map((game) => {
-                    const isDisabled = !game.existsInMetadata;
-
-                    // Create the button element
-                    const buttonElement = (
-                      <GameButton
-                        game={game}
-                        gameFilters={gameFilters}
-                        setGameFilters={setGameFilters}
-                      />
-                    );
-
-                    // Only wrap with SheetClose if the button is not disabled
-                    return isDisabled ? (
-                      <div key={game.contract_address}>{buttonElement}</div>
-                    ) : (
-                      <SheetClose asChild key={game.contract_address}>
-                        {buttonElement}
-                      </SheetClose>
-                    );
-                  })}
-                </div>
-              </SheetContent>
-            </Sheet>
+          <div
+            className="font-brand hover:cursor-pointer hover:text-brand-muted transition-colors duration-200 h-full flex items-center"
+            onClick={() => {
+              navigate("/");
+            }}
+          >
+            <img
+              className="h-7 max-w-28 sm:max-w-none sm:h-9 xl:h-10 hover:opacity-80 transition-opacity duration-200 object-contain"
+              src={logoImage}
+              alt="logo"
+            />
           </div>
-        )}
-
-        <div
-          className="font-brand hover:cursor-pointer hover:text-brand-muted transition-colors duration-200 h-full flex items-center"
-          onClick={() => {
-            navigate("/");
-          }}
-        >
-          <img
-            className="h-8 max-w-32 sm:max-w-none sm:h-10 xl:h-12 hover:opacity-80 transition-opacity duration-200 object-contain"
-            src={logoImage}
-            alt="logo"
-          />
         </div>
 
+        {/* Right cluster: chips + actions */}
         <div className="flex flex-row items-center gap-2">
-          {/* Navigation buttons - only visible on larger screens */}
           <div className="hidden sm:flex sm:flex-row sm:items-center sm:gap-2">
-            <Button
-              variant="outline"
+            <button
               onClick={() => {
                 window.open("https://discord.gg/lootsurvivor", "_blank");
               }}
+              aria-label="Open support Discord"
+              className="inline-flex items-center gap-2 h-9 rounded-md border border-brand/20 bg-brand/5 px-3 text-xs font-semibold uppercase tracking-wider text-brand hover:bg-brand/10 hover:border-brand/40 transition-colors [&_svg]:w-4 [&_svg]:h-4"
             >
-              <span className="flex flex-row items-center gap-2">
-                <DISCORD />
-                Support
-              </span>
-            </Button>
+              <DISCORD />
+              <span>Support</span>
+            </button>
+
             {account && (
               <DropdownMenu>
-                <DropdownMenuTrigger>
-                  <Button variant="outline">
+                <DropdownMenuTrigger asChild>
+                  <button
+                    aria-label="Switch network"
+                    className="inline-flex items-center gap-2 h-9 rounded-md border border-brand/20 bg-brand/5 px-3 text-xs font-semibold uppercase tracking-wider text-brand hover:bg-brand/10 hover:border-brand/40 transition-colors [&_svg]:w-4 [&_svg]:h-4"
+                  >
                     <STARKNET />
-                    {NetworkId[selectedChainConfig.chainId as ChainId]}
-                  </Button>
+                    <span>{NetworkId[selectedChainConfig.chainId as ChainId]}</span>
+                  </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="bg-black border-2 border-brand-muted">
                   <DropdownMenuItem
@@ -220,8 +221,10 @@ const Header = () => {
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
+
             {!isMainnet && !isSepolia && location.pathname !== "/play" && (
               <Button
+                size="sm"
                 onClick={() => {
                   navigate("/play");
                 }}
@@ -232,9 +235,10 @@ const Header = () => {
                 </span>
               </Button>
             )}
+
             {location.pathname !== "/create-tournament" && (
-              // && isAdmin
               <Button
+                size="sm"
                 onClick={() => {
                   if (isGeoBlocked) {
                     setShowGeoBlock(true);
@@ -245,7 +249,8 @@ const Header = () => {
               >
                 <span className="flex flex-row items-center gap-2">
                   <TROPHY_LINE />
-                  Create Tournament
+                  <span className="hidden md:inline">Create Tournament</span>
+                  <span className="md:hidden">Create</span>
                 </span>
               </Button>
             )}
@@ -253,22 +258,18 @@ const Header = () => {
 
           {/* Connect button - visible on all screen sizes */}
           <Button
+            size="sm"
             onClick={() => {
               if (!account) {
                 setShowWallets(true);
+              } else {
+                navigate(`/profile/${account.address}`);
               }
             }}
             className="px-2"
           >
             <span className="flex flex-row items-center gap-2">
-              <span
-                className="flex flex-row items-center gap-2"
-                onClick={() => {
-                  if (account) {
-                    openProfile();
-                  }
-                }}
-              >
+              <span className="flex flex-row items-center gap-2">
                 {account &&
                   (walletIcon ? (
                     <img src={walletIcon} alt="wallet" className="w-4 h-4" />
@@ -292,7 +293,8 @@ const Header = () => {
               {account && (
                 <span
                   className="hidden sm:block hover:bg-brand-muted p-1"
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
                     disconnect();
                   }}
                 >
@@ -303,7 +305,7 @@ const Header = () => {
           </Button>
         </div>
       </div>
-    </div>
+    </header>
   );
 };
 

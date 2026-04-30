@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from "react";
+import { Filter } from "lucide-react";
 import { X, CHEVRON_DOWN } from "@/components/Icons";
 import useUIStore from "@/hooks/useUIStore";
 import { getTokensByAddresses } from "@/lib/tokenUtils";
@@ -10,9 +11,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import GameFilters from "@/components/overview/GameFilters";
-import GameIcon from "@/components/icons/GameIcon";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
 import TournamentTabs from "@/components/overview/TournamentTabs";
+import DashboardBanner from "@/components/overview/DashboardBanner";
+import FilterPanel from "@/components/overview/FilterPanel";
 import {
   useTournaments,
   useTournamentCount,
@@ -32,6 +38,8 @@ import { EXCLUDED_TOURNAMENT_IDS } from "@/lib/constants";
 import { LoadingSpinner } from "@/components/ui/spinner";
 import { useEkuboPrices } from "@/hooks/useEkuboPrices";
 import { useSystemCalls } from "@/chain/hooks/useSystemCalls";
+import { useFilterPills } from "@/hooks/useFilterPills";
+import { matchesTournamentFilters } from "@/lib/utils/tournamentFilters";
 
 const TAB_TO_PHASE = {
   upcoming: "scheduled",
@@ -68,10 +76,15 @@ const Overview = () => {
     selectedTab,
     setSelectedTab,
     gameFilters,
-    setGameFilters,
-    gameData,
-    getGameImage,
+    filters,
   } = useUIStore();
+
+  const totalActiveFilters =
+    gameFilters.length +
+    (filters.entryFee !== "any" ? 1 : 0) +
+    (filters.hasPrizes ? 1 : 0) +
+    (filters.entryRequirement !== "any" ? 1 : 0) +
+    (filters.registration !== "any" ? 1 : 0);
 
   // Use the tournament store with tab-specific data
   const {
@@ -142,9 +155,26 @@ const Overview = () => {
 
   // Get current tab's data
   const currentPage = getCurrentTabPage(selectedTab as TournamentTab);
-  const currentTournaments = getCurrentTabTournaments(
+  const rawCurrentTournaments = getCurrentTabTournaments(
     selectedTab as TournamentTab,
   );
+
+  // Client-side filtering layered on top of API-fetched tournaments. The API
+  // only supports gameAddress server-side, so the rest run here. Counts in the
+  // tab badges and dashboard chips still reflect unfiltered totals — see the
+  // pill-row "X of Y shown" affordance for the filtered subset.
+  const currentTournaments = useMemo(() => {
+    return rawCurrentTournaments.filter((item: any) => {
+      const t = item.tournament;
+      if (!t) return false;
+      return matchesTournamentFilters(
+        t,
+        item.entryCount ?? 0,
+        item.aggregations?.token_totals,
+        filters,
+      );
+    });
+  }, [rawCurrentTournaments, filters]);
   const currentSortBy = sortByTab[selectedTab as TournamentTab];
   const isCurrentTabLoading = isLoadingByTab[selectedTab as TournamentTab];
 
@@ -166,20 +196,17 @@ const Overview = () => {
     }
   }, [gameFilters, clearTournaments, resetPage, selectedTab]);
 
-  const removeGameFilter = (filter: string) => {
-    setGameFilters(gameFilters.filter((f) => f !== filter));
-  };
+  const activePills = useFilterPills();
 
   // Prevent initial double loading by controlling when to fetch
   const shouldFetch = useMemo(() => {
-    // Only fetch if:
-    // 1. We're on the first page (always fetch first page)
-    // 2. OR we're on a subsequent page AND we don't have enough data yet
+    // Pagination is keyed off the raw (unfiltered) loaded set — client-side
+    // filters reduce the visible list, but the API only knows about gameAddress.
     const hasEnoughData =
-      currentTournaments.length >= (currentPage + 1) * 12;
+      rawCurrentTournaments.length >= (currentPage + 1) * 12;
 
     return currentPage === 0 || (currentPage > 0 && !hasEnoughData);
-  }, [currentPage, currentTournaments.length, selectedTab]);
+  }, [currentPage, rawCurrentTournaments.length, selectedTab]);
 
   // Use this to conditionally fetch data
   const isListTab = ["upcoming", "live", "ended"].includes(selectedTab);
@@ -232,11 +259,13 @@ const Overview = () => {
     );
   const myTournaments = useMemo(() => myTournamentsResult?.data ?? [], [myTournamentsResult]);
 
-  // Extract unique token addresses from all accumulated tournaments (not just current page)
+  // Extract unique token addresses from all accumulated tournaments (not just current page).
+  // Use the raw set so prices/decimals stay loaded for items hidden by client filters
+  // (filters can be toggled, the data shouldn't refetch).
   const uniqueTokenAddresses = useMemo(() => {
     const addresses = new Set<string>();
 
-    currentTournaments.forEach((item: any) => {
+    rawCurrentTournaments.forEach((item: any) => {
       // Extract from entry fees (SDK returns entryFee as plain object)
       if (item.tournament?.entryFee?.tokenAddress) {
         addresses.add(item.tournament.entryFee.tokenAddress);
@@ -263,7 +292,7 @@ const Overview = () => {
     });
 
     return Array.from(addresses);
-  }, [currentTournaments]);
+  }, [rawCurrentTournaments]);
 
   // Get token metadata for all unique addresses from static lists
   const tokensArray = useMemo(() => {
@@ -401,9 +430,9 @@ const Overview = () => {
         }
 
         const hasMoreToLoad =
-          tournamentCounts[selectedTab] > currentTournaments.length;
+          tournamentCounts[selectedTab] > rawCurrentTournaments.length;
         const hasFullPage =
-          currentTournaments.length > 0 && currentTournaments.length % 12 === 0;
+          rawCurrentTournaments.length > 0 && rawCurrentTournaments.length % 12 === 0;
         const isNotInitialLoad = currentPage > 0;
 
         if (
@@ -426,8 +455,8 @@ const Overview = () => {
     if (
       loadingRef.current &&
       !isCurrentTabLoading &&
-      tournamentCounts[selectedTab] > currentTournaments.length &&
-      currentTournaments.length > 0 &&
+      tournamentCounts[selectedTab] > rawCurrentTournaments.length &&
+      rawCurrentTournaments.length > 0 &&
       currentPage > 0
     ) {
       observer.observe(loadingRef.current);
@@ -443,7 +472,7 @@ const Overview = () => {
     isCurrentTabLoading,
     tournamentCounts,
     selectedTab,
-    currentTournaments.length,
+    rawCurrentTournaments.length,
     currentPage,
     incrementPage,
   ]);
@@ -455,9 +484,9 @@ const Overview = () => {
         scrollContainerRef.current &&
         currentPage === 0 &&
         !isCurrentTabLoading &&
-        tournamentCounts[selectedTab] > currentTournaments.length &&
-        currentTournaments.length > 0 &&
-        currentTournaments.length % 12 === 0
+        tournamentCounts[selectedTab] > rawCurrentTournaments.length &&
+        rawCurrentTournaments.length > 0 &&
+        rawCurrentTournaments.length % 12 === 0
       ) {
         const { scrollTop, scrollHeight, clientHeight } =
           scrollContainerRef.current;
@@ -483,7 +512,7 @@ const Overview = () => {
     isCurrentTabLoading,
     tournamentCounts,
     selectedTab,
-    currentTournaments.length,
+    rawCurrentTournaments.length,
     incrementPage,
   ]);
 
@@ -546,10 +575,15 @@ const Overview = () => {
   ]);
 
   return (
-    <div className="flex flex-row gap-5 h-full">
-      <GameFilters />
-      <div className="flex flex-col gap-2 sm:gap-0 w-full sm:w-4/5 p-1 sm:p-2">
-        <div className="flex flex-row items-center justify-between w-full border-b-4 border-brand h-[44px] 3xl:h-[52px]">
+    <div className="lg:w-[87.5%] xl:w-5/6 2xl:w-3/4 sm:mx-auto flex flex-row gap-5 h-full">
+      <div className="flex flex-col gap-2 sm:gap-3 w-full p-1 sm:p-2">
+        <DashboardBanner
+          liveCount={liveTournamentsCount ?? 0}
+          upcomingCount={upcomingTournamentsCount ?? 0}
+          endedCount={endedTournamentsCount ?? 0}
+          myLiveCount={myLiveTournamentsCount ?? 0}
+        />
+        <div className="flex flex-row items-center justify-between gap-3 w-full border-b-4 border-brand h-[44px] 3xl:h-[52px]">
           {/* Hide TournamentTabs on mobile when selectedTab is "my" */}
           <div className={selectedTab === "my" ? "hidden sm:block" : "block"}>
             <TournamentTabs
@@ -566,20 +600,44 @@ const Overview = () => {
           {selectedTab === "my" && (
             <div className="sm:hidden font-brand text-xl">My Tournaments</div>
           )}
-          <div className="flex flex-row gap-4 items-center">
-            <span className="hidden 2xl:block">Sort By:</span>
+          <div className="flex flex-row gap-2 items-center mb-2">
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  aria-label="Open filters"
+                  className="inline-flex items-center gap-2 h-9 rounded-md border border-brand/20 bg-brand/5 px-3 text-xs sm:text-sm font-semibold uppercase tracking-wider text-brand hover:bg-brand/10 hover:border-brand/40 transition-colors"
+                >
+                  <Filter className="w-4 h-4" />
+                  <span className="hidden sm:inline">Filters</span>
+                  {totalActiveFilters > 0 && (
+                    <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-brand text-black px-1 text-[10px] font-bold leading-none">
+                      {totalActiveFilters}
+                    </span>
+                  )}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent
+                align="end"
+                className="w-[320px] p-4 max-h-[70vh] overflow-y-auto bg-black border border-brand/40"
+              >
+                <FilterPanel />
+              </PopoverContent>
+            </Popover>
+            <span className="hidden 2xl:block text-[10px] uppercase tracking-wider text-brand-muted">
+              Sort By
+            </span>
             <DropdownMenu>
-              <DropdownMenuTrigger className="bg-black border-2 border-brand-muted px-2 min-w-[100px] h-8">
-                <div className="flex flex-row items-center justify-between capitalize text-sm 2xl:text-base w-full sm:gap-2">
+              <DropdownMenuTrigger className="inline-flex items-center justify-between gap-2 h-9 rounded-md border border-brand/20 bg-brand/5 px-3 min-w-[120px] text-xs sm:text-sm font-semibold uppercase tracking-wider text-brand hover:bg-brand/10 hover:border-brand/40 transition-colors">
+                <span>
                   {
                     SORT_OPTIONS[selectedTab].find(
                       (option) => option.value === currentSortBy,
                     )?.label
                   }
-                  <span className="w-6">
-                    <CHEVRON_DOWN />
-                  </span>
-                </div>
+                </span>
+                <span className="w-4 h-4 text-brand-muted">
+                  <CHEVRON_DOWN />
+                </span>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="bg-black border-2 border-brand-muted">
                 <DropdownMenuLabel className="text-brand">
@@ -605,30 +663,30 @@ const Overview = () => {
           <div
             className={`
             transition-[height] duration-300 ease-in-out
-            ${gameFilters.length > 0 ? "h-[60px] 2xl:h-[72px] sm:py-2" : "h-0"}
+            ${activePills.length > 0 ? "h-[44px] sm:h-[48px] mb-1" : "h-0"}
           `}
           >
-            {gameFilters.length > 0 && (
-              <div className="flex flex-row items-center gap-2 sm:gap-4 px-2 sm:p-4 h-[60px] 2xl:h-[72px] overflow-x-auto w-full">
-                {gameFilters.map((filter) => (
+            {activePills.length > 0 && (
+              <div className="flex flex-row items-center gap-2 px-1 h-[44px] sm:h-[48px] overflow-x-auto w-full">
+                <span className="text-[10px] uppercase tracking-wider text-brand-muted flex-shrink-0 hidden sm:inline">
+                  Filters
+                </span>
+                {activePills.map((pill) => (
                   <div
-                    key={filter}
-                    className="flex flex-row items-center gap-2 sm:gap-4 bg-black border-2 border-brand-muted py-2 px-4 shrink-0"
+                    key={pill.key}
+                    className="inline-flex items-center gap-2 h-8 rounded-md border border-brand/25 bg-brand/10 pl-1.5 pr-2 shrink-0"
                   >
-                    <GameIcon image={getGameImage(filter)} />
-                    <span className="text-lg 2xl:text-2xl font-brand">
-                      {
-                        gameData.find(
-                          (game) => game.contract_address === filter,
-                        )?.name!
-                      }
+                    {pill.icon}
+                    <span className="text-xs sm:text-sm font-semibold tracking-wide text-brand truncate max-w-[160px]">
+                      {pill.label}
                     </span>
-                    <span
-                      className="w-4 h-4 sm:w-6 sm:h-6 text-brand-muted cursor-pointer"
-                      onClick={() => removeGameFilter(filter)}
+                    <button
+                      className="w-4 h-4 text-brand-muted hover:text-brand transition-colors flex-shrink-0"
+                      onClick={pill.onRemove}
+                      aria-label={`Remove ${pill.label} filter`}
                     >
                       <X />
-                    </span>
+                    </button>
                   </div>
                 ))}
               </div>

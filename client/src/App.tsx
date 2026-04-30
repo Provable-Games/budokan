@@ -27,6 +27,7 @@ const Overview = lazy(() => {
 const Tournament = lazy(() => import("@/containers/Tournament"));
 const Play = lazy(() => import("@/containers/Play"));
 const CreateTournament = lazy(() => import("@/containers/CreateTournament"));
+const Profile = lazy(() => import("@/containers/Profile"));
 
 // Test routes are enabled in dev by default and can be opted into for
 // production builds via VITE_ENABLE_TEST_PAGES=true. The conditional lazy
@@ -249,6 +250,14 @@ function App() {
               element={
                 <Suspense fallback={<div>Loading...</div>}>
                   <Play />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/profile/:address"
+              element={
+                <Suspense fallback={<LoadingPage message={`Loading profile...`} />}>
+                  <Profile />
                 </Suspense>
               }
             />
