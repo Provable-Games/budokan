@@ -182,7 +182,11 @@ export const rewardClaims = pgTable(
   {
     id: serial("id").notNull(),
     tournamentId: bigint("tournament_id", { mode: "bigint" }).notNull(),
-    rewardType: jsonb("reward_type"),
+    claimKind: text("claim_kind").notNull(),
+    prizeId: bigint("prize_id", { mode: "bigint" }),
+    payoutIndex: integer("payout_index"),
+    position: integer("position"),
+    refundTokenId: text("refund_token_id"),
     claimed: boolean("claimed").default(false),
     createdAtBlock: bigint("created_at_block", { mode: "bigint" }),
     txHash: text("tx_hash").notNull(),
@@ -194,6 +198,12 @@ export const rewardClaims = pgTable(
     }),
     tournamentIdIdx: index("reward_claims_tournament_id_idx").on(
       table.tournamentId,
+    ),
+    lookupIdx: index("reward_claims_lookup_idx").on(
+      table.tournamentId,
+      table.claimKind,
+      table.prizeId,
+      table.payoutIndex,
     ),
     idIdx: unique("reward_claims_id_unique").on(table.id),
   }),
