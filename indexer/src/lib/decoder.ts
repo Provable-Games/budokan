@@ -302,9 +302,27 @@ export interface DecodedPrizeAdded {
   sponsorAddress: string;
 }
 
+/**
+ * Discriminator string written to `reward_claims.claim_kind`. Picks one of
+ * the six terminal RewardType variants (Prize::Single, Prize::Distributed,
+ * EntryFee::Position / TournamentCreator / GameCreator / Refund). Other
+ * structured fields are populated only when the variant requires them.
+ */
+export type RewardClaimKind =
+  | "prize_single"
+  | "prize_distributed"
+  | "entry_fee_position"
+  | "entry_fee_tournament_creator"
+  | "entry_fee_game_creator"
+  | "entry_fee_refund";
+
 export interface DecodedRewardClaimed {
   tournamentId: bigint;
-  rewardType: Record<string, unknown>;
+  claimKind: RewardClaimKind;
+  prizeId: string | null;
+  payoutIndex: number | null;
+  position: number | null;
+  refundTokenId: string | null;
   claimed: boolean;
 }
 
@@ -681,8 +699,17 @@ function decodeTokenTypeData(
   }
 }
 
+interface DecodedRewardType {
+  claimKind: RewardClaimKind;
+  prizeId: string | null;
+  payoutIndex: number | null;
+  position: number | null;
+  refundTokenId: string | null;
+  consumed: number;
+}
+
 /**
- * Decode RewardType enum from data starting at idx.
+ * Decode RewardType enum from data starting at idx into structured fields.
  *
  * RewardType =
  *   Prize(PrizeType) |
@@ -697,11 +724,15 @@ function decodeTokenTypeData(
  *   TournamentCreator |
  *   GameCreator |
  *   Refund(felt252)
+ *
+ * Throws on an unknown EntryFee variant rather than silently storing it —
+ * `claim_kind` is NOT NULL with a CHECK constraint, so dropping an unknown
+ * row at the indexer is safer than failing the INSERT downstream.
  */
 function decodeRewardType(
   data: readonly string[],
   idx: number,
-): { value: Record<string, unknown>; consumed: number } {
+): DecodedRewardType {
   const variant = Number(hexToBigInt(data[idx]));
   let consumed = 1;
 
@@ -715,89 +746,82 @@ function decodeRewardType(
       const prizeId = hexToBigInt(data[idx + consumed]).toString();
       consumed++;
       return {
-        value: {
-          type: "Prize",
-          prize_type: { type: "Single", prize_id: prizeId },
-        },
+        claimKind: "prize_single",
+        prizeId,
+        payoutIndex: null,
+        position: null,
+        refundTokenId: null,
         consumed,
       };
-    } else {
-      // Distributed((u64, u32))
-      const prizeId = hexToBigInt(data[idx + consumed]).toString();
-      consumed++;
-      const payoutIndex = Number(hexToBigInt(data[idx + consumed]));
+    }
+    // Distributed((u64, u32))
+    const prizeId = hexToBigInt(data[idx + consumed]).toString();
+    consumed++;
+    const payoutIndex = Number(hexToBigInt(data[idx + consumed]));
+    consumed++;
+    return {
+      claimKind: "prize_distributed",
+      prizeId,
+      payoutIndex,
+      position: null,
+      refundTokenId: null,
+      consumed,
+    };
+  }
+
+  // EntryFee(EntryFeeRewardType)
+  const entryFeeVariant = Number(hexToBigInt(data[idx + consumed]));
+  consumed++;
+
+  switch (entryFeeVariant) {
+    case 0: {
+      // Position(u32)
+      const position = Number(hexToBigInt(data[idx + consumed]));
       consumed++;
       return {
-        value: {
-          type: "Prize",
-          prize_type: {
-            type: "Distributed",
-            prize_id: prizeId,
-            payout_index: payoutIndex,
-          },
-        },
+        claimKind: "entry_fee_position",
+        prizeId: null,
+        payoutIndex: null,
+        position,
+        refundTokenId: null,
         consumed,
       };
     }
-  } else {
-    // EntryFee(EntryFeeRewardType)
-    const entryFeeVariant = Number(hexToBigInt(data[idx + consumed]));
-    consumed++;
-
-    switch (entryFeeVariant) {
-      case 0: {
-        // Position(u32)
-        const position = Number(hexToBigInt(data[idx + consumed]));
-        consumed++;
-        return {
-          value: {
-            type: "EntryFee",
-            entry_fee_type: { type: "Position", position },
-          },
-          consumed,
-        };
-      }
-      case 1: {
-        // TournamentCreator
-        return {
-          value: {
-            type: "EntryFee",
-            entry_fee_type: { type: "TournamentCreator" },
-          },
-          consumed,
-        };
-      }
-      case 2: {
-        // GameCreator
-        return {
-          value: {
-            type: "EntryFee",
-            entry_fee_type: { type: "GameCreator" },
-          },
-          consumed,
-        };
-      }
-      case 3: {
-        // Refund(felt252)
-        const tokenId = feltToHex(data[idx + consumed]);
-        consumed++;
-        return {
-          value: {
-            type: "EntryFee",
-            entry_fee_type: { type: "Refund", token_id: tokenId },
-          },
-          consumed,
-        };
-      }
-      default:
-        return {
-          value: {
-            type: "EntryFee",
-            entry_fee_type: { type: "Unknown", variant: entryFeeVariant },
-          },
-          consumed,
-        };
+    case 1:
+      return {
+        claimKind: "entry_fee_tournament_creator",
+        prizeId: null,
+        payoutIndex: null,
+        position: null,
+        refundTokenId: null,
+        consumed,
+      };
+    case 2:
+      return {
+        claimKind: "entry_fee_game_creator",
+        prizeId: null,
+        payoutIndex: null,
+        position: null,
+        refundTokenId: null,
+        consumed,
+      };
+    case 3: {
+      // Refund(felt252)
+      const tokenId = feltToHex(data[idx + consumed]);
+      consumed++;
+      return {
+        claimKind: "entry_fee_refund",
+        prizeId: null,
+        payoutIndex: null,
+        position: null,
+        refundTokenId: tokenId,
+        consumed,
+      };
     }
+    default:
+      throw new Error(
+        `Unknown EntryFeeRewardType variant ${entryFeeVariant} at idx ${idx}`,
+      );
   }
 }
 
@@ -1034,7 +1058,7 @@ export function decodeRewardClaimed(
 
   let idx = 0;
 
-  // RewardType (enum)
+  // RewardType (enum) → structured fields
   const rewardType = decodeRewardType(data, idx);
   idx += rewardType.consumed;
 
@@ -1043,7 +1067,11 @@ export function decodeRewardClaimed(
 
   return {
     tournamentId,
-    rewardType: rewardType.value,
+    claimKind: rewardType.claimKind,
+    prizeId: rewardType.prizeId,
+    payoutIndex: rewardType.payoutIndex,
+    position: rewardType.position,
+    refundTokenId: rewardType.refundTokenId,
     claimed,
   };
 }

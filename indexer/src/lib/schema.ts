@@ -19,7 +19,6 @@
  * 4. reward_claims - Reward claim records from RewardClaimed events
  * 5. qualification_entries - Entry requirement tracking from QualificationEntriesUpdated events
  * 6. platform_stats - Aggregated platform-wide statistics
- * 7. tournament_events - Raw event audit log for replay/debugging
  *
  * Live leaderboard data is sourced from the denshokan SDK
  * (`useLiveLeaderboard`) — there is no leaderboard table here.
@@ -191,13 +190,23 @@ export const prizes = pgTable(
 // Domain key: (tournament_id, tx_hash, event_index)
 //   event_index discriminates multiple claims within one transaction
 // Surrogate id for Apibara cursor invalidation
+//
+// `claim_kind` discriminates between the six terminal RewardType variants
+// (see decoder.ts → RewardClaimKind). The structured columns below are
+// populated only for the variants that carry that field; variants that are
+// pure markers (entry_fee_tournament_creator, entry_fee_game_creator) leave
+// all four nullable columns null.
 // ---------------------------------------------------------------------------
 export const rewardClaims = pgTable(
   "reward_claims",
   {
     id: serial("id").notNull(),
     tournamentId: bigint("tournament_id", { mode: "bigint" }).notNull(),
-    rewardType: jsonb("reward_type"),
+    claimKind: text("claim_kind").notNull(),
+    prizeId: bigint("prize_id", { mode: "bigint" }),
+    payoutIndex: integer("payout_index"),
+    position: integer("position"),
+    refundTokenId: text("refund_token_id"),
     claimed: boolean("claimed").default(false),
     createdAtBlock: bigint("created_at_block", { mode: "bigint" }),
     txHash: text("tx_hash").notNull(),
@@ -209,6 +218,12 @@ export const rewardClaims = pgTable(
     }),
     tournamentIdIdx: index("reward_claims_tournament_id_idx").on(
       table.tournamentId,
+    ),
+    lookupIdx: index("reward_claims_lookup_idx").on(
+      table.tournamentId,
+      table.claimKind,
+      table.prizeId,
+      table.payoutIndex,
     ),
     idIdx: unique("reward_claims_id_unique").on(table.id),
   }),
@@ -253,28 +268,3 @@ export const platformStats = pgTable("platform_stats", {
   totalSubmissions: integer("total_submissions").default(0),
 });
 
-// ---------------------------------------------------------------------------
-// tournament_events  (PK: block_number + tx_hash + event_index)
-// The PK is already globally unique per event, so it doubles as idColumn.
-// Surrogate id added for Apibara cursor invalidation (simpler than
-// composite column tracking).
-// ---------------------------------------------------------------------------
-export const tournamentEvents = pgTable(
-  "tournament_events",
-  {
-    id: serial("id").notNull(),
-    eventType: text("event_type").notNull(),
-    tournamentId: bigint("tournament_id", { mode: "bigint" }),
-    playerAddress: text("player_address"),
-    data: jsonb("data"),
-    blockNumber: bigint("block_number", { mode: "bigint" }).notNull(),
-    txHash: text("tx_hash").notNull(),
-    eventIndex: integer("event_index").notNull(),
-  },
-  (table) => ({
-    pk: primaryKey({
-      columns: [table.blockNumber, table.txHash, table.eventIndex],
-    }),
-    idIdx: unique("tournament_events_id_unique").on(table.id),
-  }),
-);

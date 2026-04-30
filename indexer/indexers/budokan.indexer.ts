@@ -16,7 +16,6 @@ import {
   rewardClaims,
   qualificationEntries,
   platformStats,
-  tournamentEvents,
 } from "../src/lib/schema.js";
 import {
   getEventSelectors,
@@ -26,7 +25,6 @@ import {
   decodePrizeAdded,
   decodeRewardClaimed,
   decodeQualificationEntriesUpdated,
-  stringifyWithBigInt,
 } from "../src/lib/decoder.js";
 
 // ---------------------------------------------------------------------------
@@ -74,7 +72,6 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
       rewardClaims,
       qualificationEntries,
       platformStats,
-      tournamentEvents,
     },
   });
 
@@ -94,7 +91,6 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
           reward_claims: "id",
           qualification_entries: "id",
           platform_stats: "key",
-          tournament_events: "id",
         },
         migrate: { migrationsFolder: "./drizzle" },
       }),
@@ -160,7 +156,6 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
       const prizeRows: (typeof prizes.$inferInsert)[] = [];
       const rewardClaimRows: (typeof rewardClaims.$inferInsert)[] = [];
       const qualificationEntryRows: (typeof qualificationEntries.$inferInsert)[] = [];
-      const eventLogRows: (typeof tournamentEvents.$inferInsert)[] = [];
 
       // Track affected tournament IDs for idempotent counter recomputation
       const affectedTournamentIds = new Set<bigint>();
@@ -272,15 +267,6 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
               txHash,
             });
 
-            eventLogRows.push({
-              eventType: "TournamentCreated",
-              tournamentId: decoded.tournamentId,
-              data: JSON.parse(stringifyWithBigInt(decoded)),
-              blockNumber,
-              txHash: txHash!,
-              eventIndex: eventIdx!,
-            });
-
             newTournaments++;
             logger.info(`  TournamentCreated row queued for insert`);
           } catch (err) {
@@ -310,15 +296,6 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
               isBanned: false,
             });
 
-            eventLogRows.push({
-              eventType: "TournamentRegistration",
-              tournamentId: decoded.tournamentId,
-              playerAddress: decoded.playerAddress,
-              data: JSON.parse(stringifyWithBigInt(decoded)),
-              blockNumber,
-              txHash: txHash!,
-              eventIndex: eventIdx!,
-            });
 
             affectedTournamentIds.add(decoded.tournamentId);
             newRegistrations++;
@@ -348,16 +325,6 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
               entryNumber: null,
               hasSubmitted: decoded.hasSubmitted,
               isBanned: decoded.isBanned,
-            });
-
-            eventLogRows.push({
-              eventType: "TournamentEntryStateChanged",
-              tournamentId: decoded.tournamentId,
-              playerAddress: null,
-              data: JSON.parse(stringifyWithBigInt(decoded)),
-              blockNumber,
-              txHash: txHash!,
-              eventIndex: eventIdx!,
             });
 
             affectedTournamentIds.add(decoded.tournamentId);
@@ -399,15 +366,6 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
               txHash,
             });
 
-            eventLogRows.push({
-              eventType: "PrizeAdded",
-              tournamentId: decoded.tournamentId,
-              data: JSON.parse(stringifyWithBigInt(decoded)),
-              blockNumber,
-              txHash: txHash!,
-              eventIndex: eventIdx!,
-            });
-
             affectedTournamentIds.add(decoded.tournamentId);
             newPrizes++;
           } catch (err) {
@@ -429,21 +387,17 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
 
             rewardClaimRows.push({
               tournamentId: decoded.tournamentId,
-              rewardType: decoded.rewardType,
+              claimKind: decoded.claimKind,
+              prizeId: decoded.prizeId != null ? BigInt(decoded.prizeId) : null,
+              payoutIndex: decoded.payoutIndex,
+              position: decoded.position,
+              refundTokenId: decoded.refundTokenId,
               claimed: decoded.claimed,
               createdAtBlock: blockNumber,
               txHash: txHash!,
               eventIndex: eventIdx!,
             });
 
-            eventLogRows.push({
-              eventType: "RewardClaimed",
-              tournamentId: decoded.tournamentId,
-              data: JSON.parse(stringifyWithBigInt(decoded)),
-              blockNumber,
-              txHash: txHash!,
-              eventIndex: eventIdx!,
-            });
           } catch (err) {
             logger.warn(
               `Failed to decode RewardClaimed at block ${blockNumber}: ${err}`,
@@ -470,14 +424,6 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
               eventIndex: eventIdx!,
             });
 
-            eventLogRows.push({
-              eventType: "QualificationEntriesUpdated",
-              tournamentId: decoded.tournamentId,
-              data: JSON.parse(stringifyWithBigInt(decoded)),
-              blockNumber,
-              txHash: txHash!,
-              eventIndex: eventIdx!,
-            });
           } catch (err) {
             logger.warn(
               `Failed to decode QualificationEntriesUpdated at block ${blockNumber}: ${err}`,
@@ -547,13 +493,6 @@ export default async function (runtimeConfig: ApibaraRuntimeConfig) {
         logger.info(
           `  Inserted ${qualificationEntryRows.length} qualification entry/entries`,
         );
-      }
-
-      if (eventLogRows.length > 0) {
-        await db
-          .insert(tournamentEvents)
-          .values(eventLogRows)
-          .onConflictDoNothing();
       }
 
       // -------------------------------------------------------------------

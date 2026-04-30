@@ -823,10 +823,57 @@ function serializePrize(p: typeof prizes.$inferSelect) {
   };
 }
 
+/**
+ * Rebuild the legacy `rewardType` JSONB shape from the structured columns
+ * so the API response stays a drop-in for existing SDK consumers. Mirrors
+ * the shape that the indexer used to write into `reward_claims.reward_type`
+ * before it was split into columns.
+ */
+function buildRewardTypeShape(r: typeof rewardClaims.$inferSelect) {
+  switch (r.claimKind) {
+    case "prize_single":
+      return {
+        type: "Prize",
+        prize_type: { type: "Single", prize_id: r.prizeId?.toString() ?? null },
+      };
+    case "prize_distributed":
+      return {
+        type: "Prize",
+        prize_type: {
+          type: "Distributed",
+          prize_id: r.prizeId?.toString() ?? null,
+          payout_index: r.payoutIndex,
+        },
+      };
+    case "entry_fee_position":
+      return {
+        type: "EntryFee",
+        entry_fee_type: { type: "Position", position: r.position },
+      };
+    case "entry_fee_tournament_creator":
+      return {
+        type: "EntryFee",
+        entry_fee_type: { type: "TournamentCreator" },
+      };
+    case "entry_fee_game_creator":
+      return {
+        type: "EntryFee",
+        entry_fee_type: { type: "GameCreator" },
+      };
+    case "entry_fee_refund":
+      return {
+        type: "EntryFee",
+        entry_fee_type: { type: "Refund", token_id: r.refundTokenId },
+      };
+    default:
+      return { type: "Unknown", claim_kind: r.claimKind };
+  }
+}
+
 function serializeRewardClaim(r: typeof rewardClaims.$inferSelect) {
   return {
     tournamentId: r.tournamentId.toString(),
-    rewardType: r.rewardType,
+    rewardType: buildRewardTypeShape(r),
     claimed: r.claimed,
     createdAtBlock: r.createdAtBlock?.toString() ?? null,
     txHash: r.txHash,
