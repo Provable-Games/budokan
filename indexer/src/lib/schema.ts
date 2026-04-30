@@ -19,7 +19,6 @@
  * 4. reward_claims - Reward claim records from RewardClaimed events
  * 5. qualification_entries - Entry requirement tracking from QualificationEntriesUpdated events
  * 6. platform_stats - Aggregated platform-wide statistics
- * 7. tournament_events - Raw event audit log for replay/debugging
  *
  * Live leaderboard data is sourced from the denshokan SDK
  * (`useLiveLeaderboard`) — there is no leaderboard table here.
@@ -253,28 +252,3 @@ export const platformStats = pgTable("platform_stats", {
   totalSubmissions: integer("total_submissions").default(0),
 });
 
-// ---------------------------------------------------------------------------
-// tournament_events  (PK: block_number + tx_hash + event_index)
-// The PK is already globally unique per event, so it doubles as idColumn.
-// Surrogate id added for Apibara cursor invalidation (simpler than
-// composite column tracking).
-// ---------------------------------------------------------------------------
-export const tournamentEvents = pgTable(
-  "tournament_events",
-  {
-    id: serial("id").notNull(),
-    eventType: text("event_type").notNull(),
-    tournamentId: bigint("tournament_id", { mode: "bigint" }),
-    playerAddress: text("player_address"),
-    data: jsonb("data"),
-    blockNumber: bigint("block_number", { mode: "bigint" }).notNull(),
-    txHash: text("tx_hash").notNull(),
-    eventIndex: integer("event_index").notNull(),
-  },
-  (table) => ({
-    pk: primaryKey({
-      columns: [table.blockNumber, table.txHash, table.eventIndex],
-    }),
-    idIdx: unique("tournament_events_id_unique").on(table.id),
-  }),
-);

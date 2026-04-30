@@ -1,68 +1,9 @@
 import { Hono } from "hono";
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { tournamentEvents, platformStats, prizes } from "../db/schema.js";
-import {
-  isValidAddress,
-  parseLimit,
-  parseOffset,
-  parseTournamentId,
-} from "../utils/validation.js";
+import { platformStats } from "../db/schema.js";
 
 const app = new Hono();
-
-// ─── GET / ── Event timeline ─────────────────────────────────────────────────
-// Query params: event_type, tournament_id, player_address, limit, offset
-app.get("/", async (c) => {
-  try {
-    const eventType = c.req.query("event_type") || null;
-    const tournamentId = parseTournamentId(c.req.query("tournament_id"));
-    const playerAddress = isValidAddress(c.req.query("player_address"));
-    const limit = parseLimit(c.req.query("limit"), 50, 100);
-    const offset = parseOffset(c.req.query("offset"));
-
-    const conditions = [];
-    if (eventType) conditions.push(eq(tournamentEvents.eventType, eventType));
-    if (tournamentId !== null) conditions.push(eq(tournamentEvents.tournamentId, tournamentId));
-    if (playerAddress) conditions.push(eq(tournamentEvents.playerAddress, playerAddress));
-
-    const where = conditions.length > 0 ? and(...conditions) : undefined;
-
-    const [rows, countResult] = await Promise.all([
-      db
-        .select()
-        .from(tournamentEvents)
-        .where(where)
-        .orderBy(desc(tournamentEvents.blockNumber))
-        .limit(limit)
-        .offset(offset),
-      db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(tournamentEvents)
-        .where(where),
-    ]);
-
-    return c.json({
-      data: rows.map((ev) => ({
-        eventType: ev.eventType,
-        tournamentId: ev.tournamentId?.toString() ?? null,
-        playerAddress: ev.playerAddress,
-        txHash: ev.txHash,
-        blockNumber: ev.blockNumber.toString(),
-        eventIndex: ev.eventIndex,
-        data: ev.data,
-      })),
-      pagination: {
-        total: countResult[0]?.count ?? 0,
-        limit,
-        offset,
-      },
-    });
-  } catch (err) {
-    console.error("[activity] list error:", err);
-    return c.json({ error: "Internal server error" }, 500);
-  }
-});
 
 // ─── GET /stats ── Platform-level aggregate stats ────────────────────────────
 app.get("/stats", async (c) => {

@@ -22,6 +22,13 @@
       "when": 1777766400000,
       "tag": "0002_fix_registration_trigger_drop_player_address",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1777852800000,
+      "tag": "0003_drop_tournament_events",
+      "breakpoints": true
     }
   ]
 }
