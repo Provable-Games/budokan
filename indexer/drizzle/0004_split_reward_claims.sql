@@ -68,6 +68,14 @@ SET
       THEN ("reward_type"->'entry_fee_type'->>'token_id')
   END;
 
+-- Drain any deferred constraint trigger events queued by the UPDATE above
+-- before running ALTER TABLE on the same table. The Apibara drizzle storage
+-- plugin maintains cursor-invalidation FKs against indexed tables, and
+-- mixing `UPDATE … ; ALTER TABLE …` against `reward_claims` inside a single
+-- migration transaction otherwise hits Postgres error 55006:
+--   cannot ALTER TABLE "reward_claims" because it has pending trigger events
+SET CONSTRAINTS ALL IMMEDIATE;
+
 -- 3. Enforce NOT NULL + CHECK on the discriminator.
 ALTER TABLE "reward_claims" ALTER COLUMN "claim_kind" SET NOT NULL;
 ALTER TABLE "reward_claims" ADD CONSTRAINT "reward_claims_claim_kind_check"
