@@ -975,24 +975,37 @@ export function EnterTournamentDialog({
     return [];
   }, [qualificationEntriesRaw]);
 
-  // Build token entry counts from qualificationEntries
+  // Build token entry counts from qualificationEntries.
+  // The SDK 0.2.0 surface returns flat fields: qualificationKind ("nft" |
+  // "extension") + nftTokenId (decimal string). Match per-token by
+  // normalising both sides to the same BigInt-decimal form so we don't
+  // care whether the input id is hex (`0x…`) or decimal.
   const tokenEntryCounts = useMemo(() => {
+    const nftEntries = (qualificationEntries ?? []).filter(
+      (entry: any) => entry?.qualificationKind === "nft" && entry?.nftTokenId != null,
+    );
+    const findEntryFor = (rawTokenId: string) => {
+      let normalised: string;
+      try {
+        normalised = BigInt(rawTokenId).toString();
+      } catch {
+        return undefined;
+      }
+      return nftEntries.find((entry: any) => {
+        try {
+          return BigInt(entry.nftTokenId).toString() === normalised;
+        } catch {
+          return false;
+        }
+      });
+    };
+
     const counts: Record<string, number> = {};
     for (const tokenId of ownedTokenIds ?? []) {
-      counts[tokenId] =
-        qualificationEntries?.find(
-          (entry: any) =>
-            entry["qualification_proof.NFT.token_id"] ===
-            addAddressPadding(tokenId),
-        )?.entry_count ?? 0;
+      counts[tokenId] = findEntryFor(tokenId)?.entryCount ?? 0;
     }
-    // Also handle manual token
     if (manualTokenOwnershipVerified && manualTokenId) {
-      counts[manualTokenId] =
-        qualificationEntries?.find(
-          (entry: any) =>
-            entry["qualification_proof.NFT.token_id"] === manualTokenId,
-        )?.entry_count ?? 0;
+      counts[manualTokenId] = findEntryFor(manualTokenId)?.entryCount ?? 0;
     }
     return counts;
   }, [
