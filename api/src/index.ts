@@ -12,6 +12,7 @@ import { createWSEvents, initWebSocket, shutdownWebSocket } from "./ws/subscript
 import tournamentRoutes from "./routes/tournaments.js";
 import gameRoutes from "./routes/games.js";
 import activityRoutes from "./routes/activity.js";
+import playerRoutes from "./routes/players.js";
 
 // ─── App setup ───────────────────────────────────────────────────────────────
 
@@ -56,6 +57,7 @@ app.get("/health", async (c) => {
 app.route("/tournaments", tournamentRoutes);
 app.route("/games", gameRoutes);
 app.route("/activity", activityRoutes);
+app.route("/players", playerRoutes);
 
 // ─── WebSocket ───────────────────────────────────────────────────────────────
 

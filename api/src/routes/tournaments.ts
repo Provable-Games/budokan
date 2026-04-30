@@ -800,7 +800,7 @@ function serializeRegistration(r: typeof registrations.$inferSelect) {
   };
 }
 
-function serializePrize(p: typeof prizes.$inferSelect) {
+export function serializePrize(p: typeof prizes.$inferSelect) {
   return {
     prizeId: p.prizeId.toString(),
     tournamentId: p.tournamentId.toString(),
@@ -823,7 +823,7 @@ function serializePrize(p: typeof prizes.$inferSelect) {
   };
 }
 
-function serializeRewardClaim(r: typeof rewardClaims.$inferSelect) {
+export function serializeRewardClaim(r: typeof rewardClaims.$inferSelect) {
   return {
     tournamentId: r.tournamentId.toString(),
     rewardType: r.rewardType,
